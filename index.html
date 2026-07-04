@@ -5,20 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>AlphaTrade | 手動量化操盤指揮中心</title>
     
-    <!-- Chart.js & FontAwesome -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
     <style>
         /* ========================================================
-           1. 全域設定與純粹淨黑中性色階 (無透藍)
+           1. 全域設定與純粹淨黑中性色階 (完全不透藍)
            ======================================================== */
         :root {
             --bg-color: #030303;
-            --bg-gradient: radial-gradient(circle at 50% 0%, #141414 0%, #030303 85%);
-            --border-color: rgba(255, 255, 255, 0.07);
-            --text-main: #e6e6e6;
-            --text-sub: #666;
+            --bg-gradient: radial-gradient(circle at 50% 0%, #121212 0%, #030303 80%);
+            --border-color: rgba(255, 255, 255, 0.06);
+            --text-main: #e0e0e0;
+            --text-sub: #555;
             
             --color-buy: #00ffaa;
             --color-sell: #ff4560;
@@ -28,7 +27,6 @@
 
         * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
         
-        /* 隱藏原生 input 數字箭頭 */
         input[type="number"]::-webkit-inner-spin-button,
         input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         input[type="number"] { -moz-appearance: textfield; }
@@ -55,22 +53,22 @@
         }
 
         .glass-panel {
-            position: relative; background: rgba(18, 18, 18, 0.5);
-            border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px;
-            backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
-            box-shadow: 0 10px 35px rgba(0, 0, 0, 0.7); transition: border-color 0.3s;
+            position: relative; background: rgba(18, 18, 18, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 10px;
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6); transition: border-color 0.3s;
         }
 
         /* ========================================================
            2. 側邊欄與極簡選單
            ======================================================== */
         #sidebar {
-            width: 250px; border-right: 1px solid var(--border-color);
-            display: flex; flex-direction: column; padding: 20px 15px;
-            background: rgba(6, 6, 6, 0.75); z-index: 1000; flex-shrink: 0; height: 100dvh;
+            width: 260px; border-right: 1px solid var(--border-color);
+            display: flex; flex-direction: column; padding: 20px;
+            background: rgba(5, 5, 5, 0.7); z-index: 1000; flex-shrink: 0; height: 100dvh;
         }
         .menu-item {
-            padding: 13px 16px; margin-bottom: 6px; border-radius: 8px; cursor: pointer;
+            padding: 13px 16px; margin-bottom: 6px; border-radius: 6px; cursor: pointer;
             transition: all 0.2s; color: #777; display: flex; align-items: center; gap: 12px; font-size: 13px; font-weight: 600;
         }
         .menu-item:hover, .menu-item.active { background: rgba(255, 255, 255, 0.05); color: #fff; }
@@ -82,17 +80,17 @@
         .view-section {
             position: absolute; inset: 0; padding: 16px; display: flex; flex-direction: column; gap: 14px;
             opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
-            overflow-y: auto; overflow-x: hidden;
+            overflow-y: auto; overflow-x: hidden; overscroll-behavior-y: contain;
         }
         .view-section.active { opacity: 1; pointer-events: auto; }
 
         /* ========================================================
            3. 頂部數據概覽卡片
            ======================================================== */
-        .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; flex-shrink: 0; }
-        .stat-card { padding: 14px 18px; }
+        .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; height: 96px; flex-shrink: 0; }
+        .stat-card { padding: 16px; }
         .stat-title { font-size: 11px; color: #777; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; font-weight: 600; }
-        .stat-value { font-size: 19px; font-weight: 800; font-family: monospace; letter-spacing: -0.5px; }
+        .stat-value { font-size: 20px; font-weight: 800; font-family: monospace; letter-spacing: -0.5px; }
 
         /* ========================================================
            4. 電腦版黃金分割：左邊 3/4 (圖表+詢問區)，右邊 1/4 (下單延伸)
@@ -102,31 +100,31 @@
             flex: 1; min-height: 0;
         }
         .dashboard-left-col {
-            display: flex; flex-direction: column; gap: 14px; min-height: 0;
+            display: flex; flex-direction: column; gap: 14px; min-height: 0; flex: 1;
         }
-        #chart-container { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 14px 18px; }
-        .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-shrink: 0; }
+        #chart-container { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 16px 20px; }
+        .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-shrink: 0; }
         .chart-wrapper { flex: 1; min-height: 0; position: relative; }
 
         /* ========================================================
-           5. 彈性浮動時間軸選擇器 (找回原本流暢滑動效果)
+           5. 彈性浮動時間軸選擇器 (流暢就近點亮滑塊)
            ======================================================== */
         .timeframe-selector {
-            position: relative; display: flex; gap: 4px; background: rgba(0,0,0,0.6);
-            padding: 3px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.04); touch-action: pan-y;
+            position: relative; display: flex; gap: 4px; background: rgba(0,0,0,0.4);
+            padding: 3px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.03); touch-action: pan-y;
         }
         .tf-active-bg {
-            position: absolute; top: 3px; bottom: 3px; left: 0; background: rgba(255,255,255,0.15);
+            position: absolute; top: 3px; bottom: 3px; left: 0; background: rgba(255,255,255,0.12);
             border-radius: 4px; transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 1;
         }
         .tf-btn {
-            position: relative; z-index: 2; background: transparent; border: none; color: #666;
-            padding: 4px 11px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; transition: color 0.2s;
+            position: relative; z-index: 2; background: transparent; border: none; color: #555;
+            padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; transition: color 0.2s;
         }
         .tf-btn.active { color: #fff; }
 
         /* ========================================================
-           6. 下單櫃檯面板與不透明下拉選單
+           6. 下單櫃檯面板與高不透明實體黑選單
            ======================================================== */
         .trade-panel { display: flex; flex-direction: column; padding: 16px; gap: 12px; height: 100%; overflow-y: auto; }
         .panel-header { font-size: 13px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
@@ -143,10 +141,9 @@
         }
         .select-dropdown-btn { background: transparent; border: none; color: #888; cursor: pointer; padding: 8px; font-size: 14px; }
         
-        /* 實體高阻光不透明黑選單 */
         .opaque-dropdown-list {
             position: absolute; top: calc(100% + 5px); left: 0; width: 100%;
-            background: #0d0d0d; border: 1px solid rgba(255,255,255,0.18); border-radius: 8px;
+            background: #0a0a0a; border: 1px solid rgba(255,255,255,0.18); border-radius: 8px;
             box-shadow: 0 15px 40px rgba(0,0,0,0.95); z-index: 9999;
             max-height: 220px; overflow-y: auto; display: none;
         }
@@ -181,20 +178,20 @@
         button:disabled { opacity: 0.3; cursor: not-allowed; }
 
         /* ========================================================
-           7. AI 戰略討論與操盤詢問區
+           7. AI 操盤顧問室
            ======================================================== */
         #ai-commander {
-            height: 180px; flex-shrink: 0; display: flex; flex-direction: column;
-            background: rgba(12, 12, 12, 0.7); border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); overflow: hidden;
+            height: 190px; flex-shrink: 0; display: flex; flex-direction: column;
+            background: rgba(10, 10, 10, 0.6); border-radius: 10px; border: 1px solid rgba(255,255,255,0.05); overflow: hidden;
         }
-        .ai-header { padding: 8px 16px; background: rgba(255,255,255,0.02); border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: bold; }
-        .chat-display { flex: 1; padding: 10px 16px; font-size: 12.5px; color: #aaa; overflow-y: auto; line-height: 1.6; font-family: monospace; }
-        .chat-input-area { padding: 10px 16px; border-top: 1px solid rgba(255,255,255,0.05); display: flex; gap: 10px; background: rgba(0,0,0,0.3); }
-        .chat-input-area input { flex: 1; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); padding: 8px 12px; border-radius: 6px; color: #fff; font-size: 12px; outline: none; }
-        .send-btn { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 0 16px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: bold; }
+        .ai-header { padding: 10px 20px; background: rgba(255,255,255,0.02); border-bottom: 1px solid rgba(255,255,255,0.03); display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: bold; }
+        .chat-display { flex: 1; padding: 12px 20px; font-size: 12.5px; color: #aaa; overflow-y: auto; line-height: 1.6; font-family: monospace; }
+        .chat-input-area { padding: 10px 20px; border-top: 1px solid rgba(255,255,255,0.03); display: flex; gap: 10px; background: rgba(0,0,0,0.3); }
+        .chat-input-area input { flex: 1; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.08); padding: 8px 14px; border-radius: 6px; color: #fff; font-size: 12px; outline: none; }
+        .send-btn { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #fff; padding: 0 16px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: bold; }
 
         /* ========================================================
-           8. 表格與系統設定果凍滑桿
+           8. 表格與設定果凍滑桿
            ======================================================== */
         table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12.5px; font-family: monospace; }
         th { color: #777; padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,0.08); position: sticky; top: 0; background: #0c0c0c; z-index: 5; font-weight: 600; }
@@ -225,7 +222,7 @@
         .setting-item.disabled { opacity: 0.3; pointer-events: none; }
 
         /* ========================================================
-           9. 📱 完美手機版專屬規範 (右滑選單、Logo返航、隱形重置)
+           9. 📱 100% 參照 index (6).html 的手機排版與圖表彈性配比
            ======================================================== */
         #mobile-header { display: none; }
         #sidebar-overlay { display: none; }
@@ -234,44 +231,48 @@
             .mobile-only { display: flex; }
             #mobile-header {
                 display: flex; justify-content: space-between; align-items: center;
-                height: 56px; padding: 0 16px; background: rgba(6, 6, 6, 0.95);
+                height: 60px; padding: 0 20px; background: rgba(10, 10, 10, 0.95);
                 border-bottom: 1px solid rgba(255,255,255,0.06);
                 z-index: 50; position: absolute; top: 0; left: 0; width: 100%;
             }
-            .mobile-menu-btn { background: transparent; border: none; color: #fff; font-size: 20px; cursor: pointer; padding: 10px; z-index: 2; }
+            .mobile-menu-btn { background: transparent; border: none; color: #fff; font-size: 20px; cursor: pointer; padding: 10px; margin-left: -10px; z-index: 2; }
             .mobile-header-title {
                 position: absolute; left: 50%; transform: translateX(-50%);
-                font-weight: 900; letter-spacing: 3px; font-size: 15px; color: #fff; cursor: pointer;
+                font-weight: 900; letter-spacing: 3px; font-size: 16px; color: #fff; cursor: pointer;
                 white-space: nowrap; z-index: 1;
             }
-            /* 右上角隱形觸控重置熱區 */
             .mobile-reload-btn { width: 50px; height: 100%; cursor: pointer; z-index: 2; position: absolute; right: 0; top: 0; }
             
             #sidebar-overlay.active {
-                display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.75);
-                z-index: 900; backdrop-filter: blur(3px);
+                display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+                z-index: 900; backdrop-filter: blur(2px);
             }
             #sidebar {
                 position: fixed; left: 0; top: 0; bottom: 0; height: 100dvh;
                 transform: translateX(-100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                box-shadow: 5px 0 25px rgba(0,0,0,0.8);
+                box-shadow: 5px 0 20px rgba(0,0,0,0.7); background: rgba(10, 10, 10, 0.95); backdrop-filter: blur(20px);
             }
             #sidebar.open { transform: translateX(0); }
             #sidebar.dragging { transition: none; }
             
+            /* 完全參照 index(6) 的 100% 彈性對接 */
             .view-section {
-                top: 56px; height: calc(100dvh - 56px);
-                padding: 12px; padding-bottom: max(12px, env(safe-area-inset-bottom));
+                top: 60px; height: calc(100dvh - 60px);
+                padding: 15px; padding-bottom: max(15px, env(safe-area-inset-bottom));
+                display: flex; flex-direction: column; gap: 15px;
             }
-            .stat-grid { grid-template-columns: repeat(2, 1fr); height: auto; }
+            .stat-grid { grid-template-columns: repeat(2, 1fr); height: auto; flex-shrink: 0; }
             .stat-card { padding: 12px; }
             .stat-value { font-size: 16px; }
             
-            /* 手機版儀表板改為單行直列，且不顯示桌面版下單槽 */
-            .dashboard-body { display: flex; flex-direction: column; }
+            /* 在手機版，.dashboard-body 與其左側欄徹底繼承 flex: 1; min-height: 0，
+               這樣 #chart-container 才能如 index(6) 般吃滿剩下的所有高度！ */
+            .dashboard-body { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 15px; }
+            .dashboard-left-col { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 15px; }
             #desktop-trade-col { display: none; }
-            #ai-commander { height: 210px; }
-            .chart-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+            
+            #ai-commander { height: 210px; flex-shrink: 0; margin-bottom: 5px; }
+            .chart-header { flex-direction: column; align-items: flex-start; gap: 10px; }
         }
     </style>
 </head>
@@ -281,27 +282,22 @@
 
 <aside id="sidebar">
     <div class="glass-title-text"><i class="fa-solid fa-cube" style="color: var(--color-acc)"></i> ALPHATRADE</div>
-    <div class="menu-item active" onclick="switchView('view-dashboard', this)"><i class="fa-solid fa-chart-line"></i> 指揮操盤中心</div>
-    <!-- 僅在手機版出現的獨立下單頁面導航 -->
+    <div class="menu-item active" onclick="switchView('view-dashboard', this)"><i class="fa-solid fa-chart-line"></i> 指揮中心</div>
     <div class="menu-item mobile-only" onclick="switchView('view-mobile-trade', this)"><i class="fa-solid fa-hand-holding-dollar"></i> 手動下單櫃檯</div>
     <div class="menu-item" onclick="switchView('view-holdings', this)"><i class="fa-solid fa-wallet"></i> 庫存與資產損益</div>
-    <div class="menu-item" onclick="switchView('view-ledger', this)"><i class="fa-solid fa-file-invoice-dollar"></i> 歷史交易帳本</div>
-    <div class="menu-item" style="margin-top: auto;" onclick="switchView('view-settings', this)"><i class="fa-solid fa-sliders"></i> 系統與抽成設定</div>
+    <div class="menu-item" onclick="switchView('view-ledger', this)"><i class="fa-solid fa-list-ul"></i> 歷史交易帳本</div>
+    <div class="menu-item" style="margin-top: auto;" onclick="switchView('view-settings', this)"><i class="fa-solid fa-gear"></i> 系統設定</div>
 </aside>
 
 <div id="content-area">
-    <!-- 手機版專屬頂部導航條 -->
     <div id="mobile-header">
         <button class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
-        <!-- 點擊 Logo 即刻返回首頁 -->
         <div class="mobile-header-title" onclick="switchView('view-dashboard', document.querySelectorAll('.menu-item')[0])">
             <i class="fa-solid fa-cube"></i> ALPHATRADE
         </div>
-        <!-- 右上角隱形重置觸控區 (雙擊重新整理) -->
-        <div class="mobile-reload-btn" onclick="location.reload()" title="隱形重置點"></div>
+        <div class="mobile-reload-btn" onclick="location.reload()" title="重置載入點"></div>
     </div>
 
-    <!-- 主儀表板：電腦版 3:1 佈局 -->
     <main id="view-dashboard" class="view-section active">
         <div class="stat-grid">
             <div class="glass-panel stat-card">
@@ -323,11 +319,10 @@
         </div>
 
         <div class="dashboard-body">
-            <!-- 左側 3/4：走勢圖 + AI 操盤室 -->
             <div class="dashboard-left-col">
                 <div class="glass-panel" id="chart-container">
                     <div class="chart-header">
-                        <span style="font-weight: bold; font-size: 13px;"><i class="fa-solid fa-chart-area" style="color: var(--color-acc)"></i> 淨值歷史走勢</span>
+                        <div style="font-weight: bold; font-size: 13px; letter-spacing: 1px;"><i class="fa-solid fa-chart-area" style="color: var(--color-acc)"></i> 總資產走勢 (NAV)</div>
                         <div class="timeframe-selector" id="tf-group">
                             <div class="tf-active-bg" id="tf-active-bg"></div>
                             <button class="tf-btn active" data-tf="1D">1D</button>
@@ -343,50 +338,44 @@
                     </div>
                 </div>
 
-                <!-- 頂掉部分空間的 AI 操盤室 -->
                 <div id="ai-commander">
                     <div class="ai-header">
-                        <span><i class="fa-solid fa-robot" style="color: var(--color-acc)"></i> GEMINI 戰略操盤顧問室</span>
-                        <span style="color:#666; font-size:11px;">進退場策略連線中</span>
+                        <span><i class="fa-solid fa-terminal" style="color: var(--color-acc)"></i> GEMINI 戰略操盤室</span>
+                        <span style="color:#666; font-size:11px;">STATUS: CONNECTED</span>
                     </div>
                     <div class="chat-display" id="chat-output">
-                        <span style="color: rgba(255,255,255,0.4)">[SYSTEM]</span> 操盤助理連線成功。可依據當前 <strong style="color:#fff" id="ai-current-ticker">NVDA</strong> 報價與帳戶部位為你評估估值與籌碼。<br>
-                        <span style="color: #666;">試問：「以目前現金配置，這個價位適合追價 NVDA 嗎？」</span>
+                        <span style="color: rgba(255,255,255,0.4)">[SYSTEM]</span> 操盤助理連線成功。可依據當前 <strong style="color:#fff" id="ai-current-ticker">NVDA</strong> 報價與帳戶部位進行評估。<br>
+                        <span style="color: #666;">等待詢問指令...</span>
                     </div>
                     <div class="chat-input-area">
-                        <input type="text" id="chat-input" placeholder="詢問 AI 關於當前標的策略建議..." onkeypress="if(event.key==='Enter') askAI()">
-                        <button class="send-btn" onclick="askAI()">發送</button>
+                        <input type="text" id="chat-input" placeholder="詢問當前聚焦標的的進退場戰略..." onkeypress="if(event.key==='Enter') askAI()">
+                        <button class="send-btn" onclick="askAI()">EXECUTE</button>
                     </div>
                 </div>
             </div>
 
-            <!-- 右側 1/4：電腦版專屬槽位 (手動下單櫃檯向下延伸) -->
             <div id="desktop-trade-col"></div>
         </div>
     </main>
 
-    <!-- 手機版獨立下單頁面 -->
     <main id="view-mobile-trade" class="view-section">
-        <h2 style="margin:0 0 6px 0; font-size:16px; letter-spacing:1px;"><i class="fa-solid fa-hand-holding-dollar" style="color:var(--color-buy)"></i> 手動即時下單櫃檯</h2>
-        <!-- 手機切換時，JS 會把下單核心 DOM 移動到這裡 -->
-        <div id="mobile-trade-col"></div>
+        <h2 style="margin:0 0 4px 0; font-size:16px; letter-spacing:1px;"><i class="fa-solid fa-hand-holding-dollar" style="color:var(--color-buy)"></i> 手動下單櫃檯</h2>
+        <div id="mobile-trade-col" style="flex:1; display:flex; flex-direction:column; min-height:0;"></div>
     </main>
 
-    <!-- 庫存與資產損益 -->
     <main id="view-holdings" class="view-section">
         <div class="glass-panel" style="padding:16px;">
             <div style="font-weight:bold; font-size:15px; margin-bottom:12px;"><i class="fa-solid fa-briefcase"></i> 當前證券持倉帳務</div>
             <table>
-                <thead><tr><th>代號</th><th>持有股數</th><th>平均成本</th><th>當前現價</th><th>市值</th><th>未實現損益</th><th>操作</th></tr></thead>
+                <thead><tr><th>代號</th><th>股數</th><th>平均成本</th><th>當前現價</th><th>市值</th><th>未實現損益</th><th>操作</th></tr></thead>
                 <tbody id="holdings-table-body"></tbody>
             </table>
         </div>
     </main>
 
-    <!-- 歷史交易帳本 -->
     <main id="view-ledger" class="view-section">
         <div class="glass-panel" style="padding:16px;">
-            <div style="font-weight:bold; font-size:15px; margin-bottom:12px;"><i class="fa-solid fa-clock-rotate-left"></i> 歷史手動交易帳本</div>
+            <div style="font-weight:bold; font-size:15px; margin-bottom:12px;"><i class="fa-solid fa-list-ul"></i> 歷史手動交易帳本</div>
             <table>
                 <thead><tr><th>時間</th><th>動作</th><th>代號</th><th>成交均價</th><th>股數</th><th>手續費/稅</th><th>交割金額</th></tr></thead>
                 <tbody id="ledger-table-body"></tbody>
@@ -394,7 +383,6 @@
         </div>
     </main>
 
-    <!-- 系統與抽成設定 (找回圖表節點開關與果凍設定) -->
     <main id="view-settings" class="view-section">
         <div class="settings-list">
             <div class="glass-panel setting-item">
@@ -413,20 +401,18 @@
                 <input type="number" id="cfg-tax-rate" value="0.30" step="0.05" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
             </div>
 
-            <!-- 🌟 找回圖表節點顯示開關 -->
             <div class="glass-panel setting-item">
                 <div>
                     <div style="font-weight:bold;">圖表節點顯示</div>
-                    <div style="font-size:11px; color:#777; margin-top:2px;">開啟以在折線圖上方渲染數據圓點</div>
+                    <div style="font-size:11px; color:#777; margin-top:2px;">顯示折線圖上的數據圓點</div>
                 </div>
                 <label class="switch"><input type="checkbox" id="cfg-node-show" checked><span class="slider"></span></label>
             </div>
 
-            <!-- 🌟 找回節點數量上限果凍物理滑桿 -->
             <div class="glass-panel setting-item" id="node-settings-wrapper">
                 <div>
                     <div style="font-weight:bold;">節點渲染上限</div>
-                    <div style="font-size:11px; color:#777; margin-top:2px;">智慧過濾平緩區間，保留重要轉折</div>
+                    <div style="font-size:11px; color:#777; margin-top:2px;">智慧過濾平緩區間，保留轉折</div>
                 </div>
                 <div style="display:flex; align-items:center; gap:12px;">
                     <div class="jelly-slider-container">
@@ -441,7 +427,7 @@
             <div class="glass-panel setting-item" style="border-color: rgba(255,69,96,0.3); margin-top:10px;">
                 <div>
                     <div style="font-weight:bold; color:var(--color-sell);">重置初始帳戶資金</div>
-                    <div style="font-size:11px; color:#777; margin-top:2px;">清空歷史帳本，還原現金 100 萬起始金額</div>
+                    <div style="font-size:11px; color:#777; margin-top:2px;">還原現金 100 萬起始金額</div>
                 </div>
                 <button onclick="resetAccount()" style="background:var(--color-sell); border:none; color:#fff; padding:8px 14px; border-radius:6px; font-weight:bold; cursor:pointer;">執行重置</button>
             </div>
@@ -449,15 +435,14 @@
     </main>
 </div>
 
-<!-- 核心共用下單櫃檯 DOM (由 JS 依據行動或電腦環境動態放置) -->
 <div id="shared-trade-panel" class="glass-panel trade-panel">
     <div class="panel-header">
-        <span><i class="fa-solid fa-terminal" style="color: var(--color-buy)"></i> 即時報價與下單</span>
-        <span id="market-status" style="font-size:11px; color:#00ffaa;">● 市場連線中</span>
+        <span><i class="fa-solid fa-terminal" style="color: var(--color-buy)"></i> 即時下單櫃檯</span>
+        <span id="market-status" style="font-size:11px; color:#00ffaa;">● 連線正常</span>
     </div>
 
     <div>
-        <label style="font-size:11px; color:#888; display:block; margin-bottom:4px;">股票代號 (可搜尋或直接輸入)</label>
+        <label style="font-size:11px; color:#888; display:block; margin-bottom:4px;">股票代號 (可直接輸入或搜尋)</label>
         <div class="custom-select-wrapper" id="ticker-select-wrapper">
             <div class="select-input-box">
                 <i class="fa-solid fa-magnifying-glass" style="color:#666; font-size:12px; margin-right:8px;"></i>
@@ -517,7 +502,7 @@
 
 <script>
     /* ========================================================
-       1. 響應式排版遷移：區分手機版與電腦版下單槽
+       1. 響應式排版自動遷移
        ======================================================== */
     const isMobileDevice = window.innerWidth <= 768;
     function adaptTradeLayout() {
@@ -532,55 +517,82 @@
     window.addEventListener("resize", adaptTradeLayout);
 
     /* ========================================================
-       2. 找回手機版完美物理手勢與側滑開啟
+       2. 🌟 完全參照 index (6).html 的手機右滑物理引擎
        ======================================================== */
     const sidebarEl = document.getElementById('sidebar');
     const overlayEl = document.getElementById('sidebar-overlay');
-    let sStartX = 0, sCurrentX = 0, sIsDragging = false;
-    const SIDEBAR_WIDTH = 250;
+    let sStartX = 0; let sStartY = 0; 
+    let sCurrentX = 0; let sIsDragging = false; let sIsDetermined = false;
+    
+    const SIDEBAR_WIDTH = 260; 
+    const SWIPE_THRESHOLD = SIDEBAR_WIDTH * 0.25; 
 
     function toggleSidebar() {
-        sidebarEl.classList.toggle('open');
-        overlayEl.classList.toggle('active');
-        sidebarEl.style.transform = '';
+        const isOpen = sidebarEl.classList.contains('open');
+        if (isOpen) {
+            sidebarEl.classList.remove('open'); overlayEl.classList.remove('active');
+        } else {
+            sidebarEl.classList.add('open'); overlayEl.classList.add('active');
+        }
+        sidebarEl.style.transform = ''; 
     }
 
     document.addEventListener('touchstart', (e) => {
-        if (window.innerWidth > 768 || e.target.closest('canvas, .jelly-slider-input')) return;
-        sStartX = e.touches[0].clientX;
-        if (!sidebarEl.classList.contains('open') && sStartX > 50) return;
-        sIsDragging = true;
+        if (window.innerWidth > 768) return; 
+        
+        const ignoreSwipeSelectors = ['canvas', '.tf-btn', '.modal-top-box', '.jelly-slider-input', '.jelly-slider-container'];
+        if (e.target.closest(ignoreSwipeSelectors.join(', '))) {
+            sIsDragging = false; return;
+        }
+
+        sStartX = e.touches[0].clientX; sStartY = e.touches[0].clientY;
+        sIsDragging = true; sIsDetermined = false;
+
+        const isOpen = sidebarEl.classList.contains('open');
+        if (!isOpen && sStartX > window.innerWidth * 0.66) { sIsDragging = false; }
     }, {passive: true});
 
     document.addEventListener('touchmove', (e) => {
-        if (!sIsDragging) return;
-        sCurrentX = e.touches[0].clientX;
-        const diffX = sCurrentX - sStartX;
-        const isOpen = sidebarEl.classList.contains('open');
+        if (!sIsDragging || window.innerWidth > 768) return;
+        sCurrentX = e.touches[0].clientX; const sCurrentY = e.touches[0].clientY;
+        const diffX = sCurrentX - sStartX; const diffY = sCurrentY - sStartY;
 
+        if (!sIsDetermined) {
+            if (Math.abs(diffX) > Math.abs(diffY)) sIsDetermined = true; 
+            else { sIsDragging = false; return; }
+        }
+
+        const isOpen = sidebarEl.classList.contains('open');
         if (!isOpen && diffX > 0) {
+            if (e.cancelable) e.preventDefault(); 
             sidebarEl.classList.add('dragging');
             sidebarEl.style.transform = `translateX(${Math.min(diffX - SIDEBAR_WIDTH, 0)}px)`;
         } else if (isOpen && diffX < 0) {
+            if (e.cancelable) e.preventDefault();
             sidebarEl.classList.add('dragging');
             sidebarEl.style.transform = `translateX(${Math.max(diffX, -SIDEBAR_WIDTH)}px)`;
         }
-    }, {passive: true});
+    }, {passive: false});
 
     function snapSidebar() {
-        if (!sIsDragging) return;
-        sIsDragging = false;
-        sidebarEl.classList.remove('dragging');
+        if (!sIsDragging || window.innerWidth > 768) return;
+        sIsDragging = false; sidebarEl.classList.remove('dragging');
+        
         const diffX = sCurrentX - sStartX;
+        const absDiff = Math.abs(diffX);
         const isOpen = sidebarEl.classList.contains('open');
+
         if (sCurrentX !== 0) {
-            if (!isOpen && diffX > 70) { sidebarEl.classList.add('open'); overlayEl.classList.add('active'); }
-            else if (isOpen && diffX < -70) { sidebarEl.classList.remove('open'); overlayEl.classList.remove('active'); }
+            if (!isOpen && diffX > SWIPE_THRESHOLD) { sidebarEl.classList.add('open'); overlayEl.classList.add('active'); } 
+            else if (isOpen && diffX < 0 && absDiff > SWIPE_THRESHOLD) { sidebarEl.classList.remove('open'); overlayEl.classList.remove('active'); }
         }
-        sidebarEl.style.transform = '';
-        sStartX = sCurrentX = 0;
+        sidebarEl.style.transform = ''; 
+        sStartX = 0; sStartY = 0; sCurrentX = 0;
     }
+
     document.addEventListener('touchend', snapSidebar);
+    document.addEventListener('touchcancel', snapSidebar); 
+    window.addEventListener('blur', snapSidebar);
 
     function switchView(id, btn) {
         document.querySelectorAll(".view-section").forEach(v => v.classList.remove("active"));
@@ -591,13 +603,11 @@
     }
 
     /* ========================================================
-       3. 找回時間軸滑塊 (1D~All) 就近吸附與拖曳效果
+       3. 就近吸附點亮時間軸滑塊 (1D~All)
        ======================================================== */
     const tfGroup = document.getElementById('tf-group');
     const tfBg = document.getElementById('tf-active-bg');
     const tfBtns = Array.from(document.querySelectorAll('.tf-btn'));
-    let activeTfIndex = 0;
-
     function updateTfBg(index, animate = true) {
         const btn = tfBtns[index];
         tfBg.style.transition = animate ? 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1)' : 'none';
@@ -605,23 +615,14 @@
         tfBg.style.transform = `translateX(${btn.offsetLeft}px)`;
         tfBtns.forEach((b, i) => b.classList.toggle('active', i === index));
     }
-
-    tfBtns.forEach((btn, index) => {
-        btn.addEventListener('click', () => {
-            activeTfIndex = index;
-            updateTfBg(index);
-        });
-    });
+    tfBtns.forEach((btn, index) => btn.addEventListener('click', () => updateTfBg(index)));
     setTimeout(() => updateTfBg(0, false), 100);
 
     /* ========================================================
-       4. 帳本狀態庫與即時報價機制
+       4. 報價與下單業務邏輯
        ======================================================== */
     const DATA_KEY = "ALPHATRADE_MANUAL_DATA";
-    let state = {
-        cash: 1000000, holdings: {}, ledger: [], recentTickers: ["NVDA", "TSLA", "AAPL"],
-        navHistory: { labels: [], data: [] }
-    };
+    let state = { cash: 1000000, holdings: {}, ledger: [], recentTickers: ["NVDA", "TSLA", "AAPL"], navHistory: { labels: [], data: [] } };
 
     function initData() {
         const saved = localStorage.getItem(DATA_KEY);
@@ -629,9 +630,8 @@
         else { recordNavSnapshot(); saveData(); }
         renderRecentTickers();
     }
-
     function saveData() { localStorage.setItem(DATA_KEY, JSON.stringify(state)); updateAllViews(); }
-    function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { localStorage.removeItem(DATA_KEY); state = { cash: 1000000, holdings: {}, ledger: [], recentTickers: ["NVDA", "TSLA"], navHistory: { labels: [], data: [] } }; initData(); } }
+    function resetAccount() { if(confirm("確定還原為 100 萬初始資金？")) { localStorage.removeItem(DATA_KEY); state = { cash: 1000000, holdings: {}, ledger: [], recentTickers: ["NVDA", "TSLA"], navHistory: { labels: [], data: [] } }; initData(); } }
 
     let currentTicker = "NVDA", currentRealPrice = 125.40;
     async function fetchRealPrice(ticker) {
@@ -713,7 +713,7 @@
     }
 
     /* ========================================================
-       5. 找回節點顯示開關與 Chart.js 畫布連動
+       5. 繪製圖表與連動
        ======================================================== */
     function recordNavSnapshot() {
         let holdingsVal = 0;
@@ -730,8 +730,7 @@
             holdingsVal += state.holdings[t].shares * price;
             totalCost += state.holdings[t].shares * state.holdings[t].avgPrice;
         }
-        const nav = state.cash + holdingsVal;
-        const pnl = holdingsVal - totalCost;
+        const nav = state.cash + holdingsVal, pnl = holdingsVal - totalCost;
         document.getElementById("nav-total").innerText = `$ ${Math.floor(nav).toLocaleString()}`;
         document.getElementById("nav-cash").innerText = `$ ${Math.floor(state.cash).toLocaleString()}`;
         document.getElementById("nav-holdings").innerText = `$ ${Math.floor(holdingsVal).toLocaleString()}`;
@@ -739,14 +738,12 @@
         pnlEl.innerText = `${pnl >= 0 ? '+' : ''}$ ${Math.floor(pnl).toLocaleString()} (${totalCost > 0 ? ((pnl/totalCost)*100).toFixed(1) : 0}%)`;
         pnlEl.style.color = pnl >= 0 ? "var(--color-buy)" : "var(--color-sell)";
 
-        // 渲染持倉表
         const hTbody = document.getElementById("holdings-table-body");
         hTbody.innerHTML = Object.keys(state.holdings).length ? Object.keys(state.holdings).map(t => {
             const h = state.holdings[t], curP = (t === currentTicker) ? currentRealPrice : h.avgPrice, val = h.shares * curP, pnl = val - (h.shares * h.avgPrice);
             return `<tr><td style="font-weight:bold; color:var(--color-acc)">${t}</td><td>${h.shares}</td><td>$${h.avgPrice.toFixed(1)}</td><td>$${curP.toFixed(1)}</td><td>$${Math.floor(val).toLocaleString()}</td><td style="color:${pnl>=0?'var(--color-buy)':'var(--color-sell)'}">${pnl>=0?'+':''}$${Math.floor(pnl)}</td><td><button onclick="selectTicker('${t}')" style="background:rgba(255,255,255,0.08); border:none; color:#fff; padding:4px 8px; border-radius:4px;">交易</button></td></tr>`;
         }).join("") : `<tr><td colspan="7" style="text-align:center; color:#555; padding:30px;">尚無任何持股</td></tr>`;
 
-        // 渲染帳本
         const lTbody = document.getElementById("ledger-table-body");
         lTbody.innerHTML = state.ledger.length ? state.ledger.map(r => `<tr><td>${r.time}</td><td><span class="badge ${r.action==='BUY'?'badge-buy':'badge-sell'}">${r.action}</span></td><td style="font-weight:bold;">${r.ticker}</td><td>$${r.price.toFixed(1)}</td><td>${r.shares}</td><td>$${r.fee.toFixed(1)}</td><td style="font-weight:bold;">$${Math.floor(r.total).toLocaleString()}</td></tr>`).join("") : `<tr><td colspan="7" style="text-align:center; color:#555; padding:30px;">尚無紀錄</td></tr>`;
 
@@ -768,7 +765,6 @@
         navChart.update();
     }
 
-    // 綁定節點開關與果凍滑桿
     document.getElementById("cfg-node-show").addEventListener("change", (e) => {
         document.getElementById("node-settings-wrapper").classList.toggle("disabled", !e.target.checked);
         updateChartData();
