@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" class="notranslate" translate="no">
+<head>
+    <script src="env.js" onerror="console.warn('未找到 env.js')"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="google" content="notranslate">
+    <title>TERMINAL-X | 頂級手動操盤室</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <style>
+        :root {
+            --bg-gradient: radial-gradient(circle at 50% 0%, #16181c 0%, #050505 80%);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --color-buy: #00ffaa;
+            --color-sell: #ff4560;
+            --color-accent: #00d4ff;
+        }
+
+        /* 消除原生數字輸入框醜陋的上下箭頭 */
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; }
+
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
+
+        body, html {
+            background: var(--bg-gradient); color: #e0e0e0;
+            font-family: "Inter", "Microsoft JhengHei", sans-serif;
+            margin: 0; padding: 0; height: 100dvh; width: 100vw;
+            overflow: hidden; display: flex;
+        }
+
+        .glass-panel {
+            background: rgba(18, 20, 24, 0.45);
+            border: 1px solid var(--border-color); border-radius: 12px;
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); position: relative;
+        }
+
+        #sidebar { width: 250px; border-right: 1px solid var(--border-color); padding: 20px; display: flex; flex-direction: column; background: rgba(5,5,5,0.6); z-index: 100; flex-shrink: 0; }
+        .logo-text { font-size: 20px; font-weight: 900; letter-spacing: 3px; color: #fff; margin-bottom: 30px; text-align: center; }
+        .menu-item { padding: 14px 16px; margin-bottom: 8px; border-radius: 8px; cursor: pointer; color: #777; display: flex; align-items: center; gap: 12px; font-size: 13px; font-weight: bold; transition: 0.2s; }
+        .menu-item.active, .menu-item:hover { background: rgba(255,255,255,0.05); color: #fff; }
+
+        #main-content { flex: 1; display: flex; flex-direction: column; padding: 15px 20px; gap: 15px; height: 100dvh; overflow: hidden; }
+
+        /* 頂部資產數據面板 */
+        .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; flex-shrink: 0; }
+        .stat-card { padding: 14px 18px; }
+        .stat-label { font-size: 11px; color: #777; font-weight: bold; margin-bottom: 4px; }
+        .stat-val { font-size: 20px; font-weight: 900; font-family: monospace; color: #fff; }
+
+        /* 中間工作區：左圖表 + 右下單 */
+        .workspace { display: grid; grid-template-columns: 1fr 380px; gap: 15px; flex: 1; min-height: 0; }
+
+        /* 圖表區域 */
+        .chart-box { display: flex; flex-direction: column; padding: 15px; }
+        .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .timeframe-selector { display: flex; gap: 4px; background: rgba(0,0,0,0.5); padding: 3px; border-radius: 6px; position: relative; }
+        .tf-btn { background: transparent; border: none; color: #666; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; z-index: 2; }
+        .tf-btn.active { color: #fff; }
+        .tf-active-bg { position: absolute; top: 3px; bottom: 3px; left: 0; background: rgba(255,255,255,0.15); border-radius: 4px; transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 1; }
+        .chart-canvas-wrapper { flex: 1; position: relative; min-height: 0; }
+
+        /* 🌟 手動下單櫃台 */
+        .order-desk { padding: 18px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+        .desk-title { font-size: 14px; font-weight: 900; color: #fff; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
+        
+        /* 不透明股票搜尋框區塊 */
+        .search-container { position: relative; width: 100%; }
+        .search-input-box { display: flex; align-items: center; background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 0 12px; }
+        .search-input-box input { flex: 1; background: transparent; border: none; padding: 10px 0; color: #fff; font-size: 14px; font-weight: bold; font-family: monospace; outline: none; }
+        .dropdown-toggle-btn { background: transparent; border: none; color: #888; cursor: pointer; padding: 8px; }
+        
+        /* 🌟 絕對不透明下拉選單 (杜絕文字重疊) */
+        .opaque-dropdown {
+            position: absolute; top: 100%; left: 0; right: 0; margin-top: 5px;
+            background: #121418; /* 完全實體純色背景 */
+            border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.9); z-index: 999;
+            max-height: 200px; overflow-y: auto; display: none;
+        }
+        .opaque-dropdown.show { display: block; }
+        .dropdown-item { padding: 10px 14px; font-size: 13px; font-family: monospace; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.04); display: flex; justify-content: space-between; color: #ccc; }
+        .dropdown-item:hover { background: var(--color-accent); color: #000; font-weight: bold; }
+
+        /* 買賣切換標籤 */
+        .action-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .action-tab { padding: 10px; text-align: center; font-weight: 900; font-size: 13px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; background: rgba(255,255,255,0.03); color: #666; }
+        .action-tab.buy.active { background: rgba(0, 255, 170, 0.15); color: var(--color-buy); border-color: var(--color-buy); }
+        .action-tab.sell.active { background: rgba(255, 69, 96, 0.15); color: var(--color-sell); border-color: var(--color-sell); }
+
+        /* 客製化數量調整控制列 */
+        .qty-stepper { display: flex; align-items: center; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; overflow: hidden; }
+        .stepper-btn { width: 44px; height: 42px; background: rgba(255,255,255,0.05); border: none; color: #fff; font-size: 18px; cursor: pointer; transition: 0.1s; }
+        .stepper-btn:hover { background: rgba(255,255,255,0.15); }
+        .stepper-input { flex: 1; background: transparent; border: none; text-align: center; color: #fff; font-size: 16px; font-weight: bold; font-family: monospace; }
+        
+        .quick-pct { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+        .pct-btn { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: #aaa; border-radius: 4px; padding: 6px 0; font-size: 11px; font-weight: bold; cursor: pointer; }
+        .pct-btn:hover { border-color: #fff; color: #fff; }
+
+        /* 費用與抽成明細表 */
+        .fee-details { background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; font-size: 12px; font-family: monospace; display: flex; flex-direction: column; gap: 6px; }
+        .fee-row { display: flex; justify-content: space-between; color: #888; }
+        .fee-row.total { color: #fff; font-weight: bold; font-size: 13px; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 6px; }
+
+        .submit-order-btn { width: 100%; padding: 14px; border-radius: 8px; border: none; font-size: 14px; font-weight: 900; letter-spacing: 2px; cursor: pointer; transition: 0.2s; }
+        .submit-order-btn.buy { background: var(--color-buy); color: #000; box-shadow: 0 0 20px rgba(0,255,170,0.3); }
+        .submit-order-btn.sell { background: var(--color-sell); color: #fff; box-shadow: 0 0 20px rgba(255,69,96,0.3); }
+        .submit-order-btn:disabled { background: #333 !important; color: #666 !important; box-shadow: none !important; cursor: not-allowed; }
+
+        /* 🌟 Gemini 討論操作區 */
+        .ai-advisor-box { height: 160px; display: flex; flex-direction: column; flex-shrink: 0; }
+        .ai-header { padding: 8px 15px; background: rgba(255,255,255,0.02); border-bottom: 1px solid var(--border-color); font-size: 12px; font-weight: bold; color: var(--color-accent); display: flex; justify-content: space-between; }
+        .ai-chat-log { flex: 1; padding: 10px 15px; font-size: 12.5px; font-family: monospace; overflow-y: auto; color: #ccc; line-height: 1.5; }
+        .ai-input-bar { display: flex; gap: 8px; padding: 8px 15px; border-top: 1px solid var(--border-color); background: rgba(0,0,0,0.3); }
+        .ai-input-bar input { flex: 1; background: rgba(0,0,0,0.5); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 12px; color: #fff; font-size: 12px; }
+        .ai-send-btn { background: var(--color-accent); color: #000; border: none; font-weight: bold; padding: 0 15px; border-radius: 6px; cursor: pointer; font-size: 11px; }
+
+        /* 果凍設定元件 */
+        .jelly-slider-container { position: relative; width: 100%; height: 24px; display: flex; align-items: center; }
+        .jelly-slider-track { position: absolute; left: 0; right: 0; height: 6px; border-radius: 4px; background: rgba(255,255,255,0.08); }
+        .jelly-slider-thumb { position: absolute; top: 50%; left: 0; width: 18px; height: 18px; margin-top: -9px; border-radius: 50%; background: rgba(255,255,255,0.4); backdrop-filter: blur(5px); border: 1.5px solid #fff; pointer-events: none; transition: transform 0.4s cubic-bezier(0.4, 2.5, 0.4, 0.9); }
+        .jelly-input-range { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; z-index: 10; margin: 0; }
+    </style>
+</head>
+<body>
+
+<aside id="sidebar">
+    <div class="logo-text"><i class="fa-solid fa-terminal" style="color:var(--color-accent)"></i> TERMINAL-X</div>
+    <div class="menu-item active"><i class="fa-solid fa-crosshairs"></i> 手動操盤室</div>
+    <div class="menu-item"><i class="fa-solid fa-folder-open"></i> 庫存帳務明細</div>
+    <div class="menu-item" style="margin-top:auto;"><i class="fa-solid fa-sliders"></i> 系統節點設定</div>
+</aside>
+
+<main id="main-content">
+    <div class="stat-grid">
+        <div class="glass-panel stat-card">
+            <div class="stat-label">帳戶總資產現值 (TOTAL EQUITY)</div>
+            <div class="stat-val" id="val-equity">$ 100,000</div>
+        </div>
+        <div class="glass-panel stat-card">
+            <div class="stat-label">可用手動下單現金 (CASH LEFT)</div>
+            <div class="stat-val" style="color:var(--color-accent)" id="val-cash">$ 100,000</div>
+        </div>
+        <div class="glass-panel stat-card">
+            <div class="stat-label">當前持股市值 (MARKET VALUE)</div>
+            <div class="stat-val" id="val-market">$ 0</div>
+        </div>
+        <div class="glass-panel stat-card">
+            <div class="stat-label">累計手動損益 (TOTAL P&L)</div>
+            <div class="stat-val" style="color:var(--color-buy)" id="val-pnl">+ $ 0 (0.00%)</div>
+        </div>
+    </div>
+
+    <div class="workspace">
+        <div class="glass-panel chart-box">
+            <div class="chart-header">
+                <div style="font-weight:900; font-size:14px;" id="chart-title"><i class="fa-solid fa-chart-line"></i> 2330.TW 即時走勢與持股成本線</div>
+                <div class="timeframe-selector" id="tf-group">
+                    <div class="tf-active-bg" id="tf-bg"></div>
+                    <button class="tf-btn active" data-tf="1D">1D</button>
+                    <button class="tf-btn" data-tf="1W">1W</button>
+                    <button class="tf-btn" data-tf="1M">1M</button>
+                    <button class="tf-btn" data-tf="3M">3M</button>
+                    <button class="tf-btn" data-tf="1Y">1Y</button>
+                    <button class="tf-btn" data-tf="All">All</button>
+                </div>
+            </div>
+            <div class="chart-canvas-wrapper"><canvas id="mainChart"></canvas></div>
+        </div>
+
+        <div class="glass-panel order-desk">
+            <div class="desk-title">
+                <span>手動下單櫃台</span>
+                <span id="live-price" style="color:var(--color-buy); font-family:monospace;">現價: $1,050.0</span>
+            </div>
+
+            <div>
+                <div style="font-size:11px; color:#888; margin-bottom:4px;">標的代號 (直接輸入或點選推薦)</div>
+                <div class="search-container">
+                    <div class="search-input-box">
+                        <input type="text" id="ticker-input" value="2330.TW" autocomplete="off">
+                        <button class="dropdown-toggle-btn" onclick="toggleTickerMenu()"><i class="fa-solid fa-chevron-down"></i></button>
+                    </div>
+                    <div class="opaque-dropdown" id="ticker-menu">
+                        <div class="dropdown-item" onclick="selectTicker('2330.TW', 1050.0)"><span>台積電</span><span>2330.TW ($1050)</span></div>
+                        <div class="dropdown-item" onclick="selectTicker('2454.TW', 1280.0)"><span>聯發科</span><span>2454.TW ($1280)</span></div>
+                        <div class="dropdown-item" onclick="selectTicker('2002.TW', 19.10)"><span>中鋼</span><span>2002.TW ($19.1)</span></div>
+                        <div class="dropdown-item" onclick="selectTicker('2603.TW', 185.5)"><span>長榮海運</span><span>2603.TW ($185.5)</span></div>
+                        <div class="dropdown-item" onclick="selectTicker('NVDA', 125.40)"><span>NVIDIA</span><span>NVDA ($125.4)</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="action-tabs">
+                <div class="action-tab buy active" onclick="switchSide('BUY')">買進 (BUY)</div>
+                <div class="action-tab sell" onclick="switchSide('SELL')">賣出 (SELL)</div>
+            </div>
+
+            <div>
+                <div style="display:flex; justify-content:space-between; font-size:11px; color:#888; margin-bottom:4px;">
+                    <span>交易股數 (SHARES)</span>
+                    <span id="max-shares-hint" style="color:var(--color-accent)">可買上限: 95 股</span>
+                </div>
+                <div class="qty-stepper">
+                    <button class="stepper-btn" onclick="adjustQty(-10)"><i class="fa-solid fa-minus"></i></button>
+                    <input type="number" class="stepper-input" id="order-qty" value="10" oninput="calcFees()">
+                    <button class="stepper-btn" onclick="adjustQty(10)"><i class="fa-solid fa-plus"></i></button>
+                </div>
+            </div>
+
+            <div class="quick-pct">
+                <button class="pct-btn" onclick="setPct(0.25)">25%</button>
+                <button class="pct-btn" onclick="setPct(0.50)">50%</button>
+                <button class="pct-btn" onclick="setPct(0.75)">75%</button>
+                <button class="pct-btn" onclick="setPct(1.00)">MAX</button>
+            </div>
+
+            <div class="fee-details">
+                <div class="fee-row"><span>成交小計:</span><span id="fee-subtotal">$ 10,500.0</span></div>
+                <div class="fee-row"><span>券商手續費 (0.1425%):</span><span id="fee-broker">$ 14.9</span></div>
+                <div class="fee-row"><span>證券交易稅 (0.3%):</span><span id="fee-tax">$ 0.0</span></div>
+                <div class="fee-row total"><span>交割總金額:</span><span id="fee-total" style="color:var(--color-accent)">$ 10,514.9</span></div>
+            </div>
+
+            <button class="submit-order-btn buy" id="submit-btn" onclick="executeOrder()">確定手動買進 2330.TW</button>
+        </div>
+    </div>
+
+    <div class="glass-panel ai-advisor-box">
+        <div class="ai-header">
+            <span><i class="fa-solid fa-robot"></i> GEMINI 操盤參謀 — 即時戰略諮詢</span>
+            <span>STATUS: READY</span>
+        </div>
+        <div class="ai-chat-log" id="ai-log">
+            <div style="color:#777">[參謀就位] 請問想討論當前標的的買賣時機，或是詢問操作策略？我會結合現在現金餘額為您分析。</div>
+        </div>
+        <div class="ai-input-bar">
+            <input type="text" id="ai-input" placeholder="例如：以現在 1050 的現價，我買進 30 股台積電勝率高嗎？" onkeypress="if(event.key==='Enter')askGemini()">
+            <button class="ai-send-btn" onclick="askGemini()">送出諮詢</button>
+        </div>
+    </div>
+</main>
+
+<script>
+    /* ========================================================
+       1. 狀態庫與資料永久化 (自動建立 manual_portfolio.json)
+       ======================================================== */
+    let CURRENT_SIDE = 'BUY';
+    let CURRENT_PRICE = 1050.0;
+    let CASH_LEFT = 100000.0;
+    let POSITIONS = {}; // 格式: { "2330.TW": { shares: 0, avgPrice: 0 } }
+    
+    // 初始化或自動建立檔案邏輯
+    function initPortfolio() {
+        const saved = localStorage.getItem('MANUAL_PORTFOLIO_V1');
+        if (saved) {
+            const data = JSON.parse(saved);
+            CASH_LEFT = data.cash;
+            POSITIONS = data.positions || {};
+        } else {
+            // 自動新增初始帳本
+            savePortfolio();
+        }
+        updatePortfolioUI();
+        calcFees();
+    }
+
+    function savePortfolio() {
+        const data = { cash: CASH_LEFT, positions: POSITIONS, lastUpdate: new Date().toISOString() };
+        localStorage.setItem('MANUAL_PORTFOLIO_V1', JSON.stringify(data));
+        updatePortfolioUI();
+    }
+
+    /* ========================================================
+       2. 下單櫃台計算引擎 (含嚴格現鈔上限鎖死與手續費抽成)
+       ======================================================== */
+    function switchSide(side) {
+        CURRENT_SIDE = side;
+        document.querySelector('.action-tab.buy').classList.toggle('active', side === 'BUY');
+        document.querySelector('.action-tab.sell').classList.toggle('active', side === 'SELL');
+        
+        const btn = document.getElementById('submit-btn');
+        btn.className = `submit-order-btn ${side.toLowerCase()}`;
+        calcFees();
+    }
+
+    function selectTicker(ticker, price) {
+        document.getElementById('ticker-input').value = ticker;
+        CURRENT_PRICE = price;
+        document.getElementById('live-price').innerText = `現價: $${price.toLocaleString()}`;
+        document.getElementById('chart-title').innerHTML = `<i class="fa-solid fa-chart-line"></i> ${ticker} 即時走勢與持股成本線`;
+        document.getElementById('ticker-menu').classList.remove('show');
+        calcFees();
+        generateMockChart(price);
+    }
+
+    function toggleTickerMenu() {
+        document.getElementById('ticker-menu').classList.toggle('show');
+    }
+
+    function adjustQty(step) {
+        const input = document.getElementById('order-qty');
+        let val = parseInt(input.value) || 0;
+        val = Math.max(0, val + step);
+        input.value = val;
+        calcFees();
+    }
+
+    function setPct(pct) {
+        const ticker = document.getElementById('ticker-input').value;
+        if (CURRENT_SIDE === 'BUY') {
+            // 不超過現金的真實購買極限
+            const maxShares = Math.floor((CASH_LEFT / CURRENT_PRICE) / 1.001425);
+            document.getElementById('order-qty').value = Math.max(1, Math.floor(maxShares * pct));
+        } else {
+            const held = POSITIONS[ticker]?.shares || 0;
+            document.getElementById('order-qty').value = Math.floor(held * pct);
+        }
+        calcFees();
+    }
+
+    function calcFees() {
+        const ticker = document.getElementById('ticker-input').value;
+        let qty = parseInt(document.getElementById('order-qty').value) || 0;
+        
+        // 上限鎖死防呆機制
+        if (CURRENT_SIDE === 'BUY') {
+            const maxBuy = Math.floor((CASH_LEFT / CURRENT_PRICE) / 1.001425);
+            document.getElementById('max-shares-hint').innerText = `現金限購: ${maxBuy} 股`;
+            if (qty > maxBuy) { qty = maxBuy; document.getElementById('order-qty').value = qty; }
+        } else {
+            const maxSell = POSITIONS[ticker]?.shares || 0;
+            document.getElementById('max-shares-hint').innerText = `庫存上限: ${maxSell} 股`;
+            if (qty > maxSell) { qty = maxSell; document.getElementById('order-qty').value = qty; }
+        }
+
+        const subtotal = qty * CURRENT_PRICE;
+        const brokerFee = Math.round(subtotal * 0.001425); // 台灣券商手續費
+        const taxFee = CURRENT_SIDE === 'SELL' ? Math.round(subtotal * 0.003) : 0; // 台灣證交稅
+        const total = CURRENT_SIDE === 'BUY' ? (subtotal + brokerFee) : (subtotal - brokerFee - taxFee);
+
+        document.getElementById('fee-subtotal').innerText = `$ ${subtotal.toLocaleString()}`;
+        document.getElementById('fee-broker').innerText = `$ ${brokerFee.toLocaleString()}`;
+        document.getElementById('fee-tax').innerText = `$ ${taxFee.toLocaleString()}`;
+        document.getElementById('fee-total').innerText = `$ ${total.toLocaleString()}`;
+
+        const submitBtn = document.getElementById('submit-btn');
+        submitBtn.innerText = `確定手動${CURRENT_SIDE === 'BUY' ? '買進' : '賣出'} ${qty} 股`;
+        submitBtn.disabled = qty <= 0;
+    }
+
+    function executeOrder() {
+        const ticker = document.getElementById('ticker-input').value;
+        const qty = parseInt(document.getElementById('order-qty').value);
+        if (qty <= 0) return;
+
+        const subtotal = qty * CURRENT_PRICE;
+        const brokerFee = Math.round(subtotal * 0.001425);
+        const taxFee = CURRENT_SIDE === 'SELL' ? Math.round(subtotal * 0.003) : 0;
+        
+        if (CURRENT_SIDE === 'BUY') {
+            const cost = subtotal + brokerFee;
+            if (CASH_LEFT < cost) return alert("現金不足以支付手續費！");
+            CASH_LEFT -= cost;
+            
+            if (!POSITIONS[ticker]) POSITIONS[ticker] = { shares: 0, avgPrice: 0 };
+            const oldTotal = POSITIONS[ticker].shares * POSITIONS[ticker].avgPrice;
+            POSITIONS[ticker].shares += qty;
+            POSITIONS[ticker].avgPrice = (oldTotal + cost) / POSITIONS[ticker].shares;
+        } else {
+            const revenue = subtotal - brokerFee - taxFee;
+            POSITIONS[ticker].shares -= qty;
+            CASH_LEFT += revenue;
+            if (POSITIONS[ticker].shares <= 0) delete POSITIONS[ticker];
+        }
+
+        savePortfolio();
+        calcFees();
+        alert(`✅ 手動成交紀錄已更新！`);
+    }
+
+    function updatePortfolioUI() {
+        let marketVal = 0;
+        for (let t in POSITIONS) {
+            marketVal += POSITIONS[t].shares * CURRENT_PRICE; // 估算現值
+        }
+        const equity = CASH_LEFT + marketVal;
+        const pnl = equity - 100000;
+        const roi = (pnl / 100000) * 100;
+
+        document.getElementById('val-equity').innerText = `$ ${Math.round(equity).toLocaleString()}`;
+        document.getElementById('val-cash').innerText = `$ ${Math.round(CASH_LEFT).toLocaleString()}`;
+        document.getElementById('val-market').innerText = `$ ${Math.round(marketVal).toLocaleString()}`;
+        
+        const pnlEl = document.getElementById('val-pnl');
+        pnlEl.innerText = `${pnl >= 0 ? '+' : ''}$ ${Math.round(pnl).toLocaleString()} (${roi.toFixed(2)}%)`;
+        pnlEl.style.color = pnl >= 0 ? 'var(--color-buy)' : 'var(--color-sell)';
+    }
+
+    /* ========================================================
+       3. Gemini 操盤參謀互動連線
+       ======================================================== */
+    async function askGemini() {
+        const input = document.getElementById('ai-input');
+        const log = document.getElementById('ai-log');
+        const q = input.value.trim();
+        if (!q) return;
+
+        let apiKey = localStorage.getItem('MY_GEMINI_KEY');
+        if (!apiKey) {
+            apiKey = prompt("請輸入 Gemini API 金鑰啟用操盤參謀：");
+            if (apiKey) localStorage.setItem('MY_GEMINI_KEY', apiKey);
+            else return;
+        }
+
+        log.innerHTML += `<div style="color:#fff; margin-top:8px;">> ${q}</div>`;
+        input.value = "";
+        log.scrollTop = log.scrollHeight;
+
+        const msgId = "ai-" + Date.now();
+        log.innerHTML += `<div id="${msgId}" style="color:var(--color-accent)">[AI 思考戰略中...]</div>`;
+        
+        const ticker = document.getElementById('ticker-input').value;
+        const promptText = `你是一位資深的華爾街操盤參謀。目前正在協助用戶手動交易台灣與全球股市。
+用戶目前的現金現況：${CASH_LEFT.toFixed(0)} 元。
+當前關注標的：${ticker}，即時現價：${CURRENT_PRICE} 元。
+用戶詢問：${q}
+請用 60 字內、極其俐落專業的「繁體中文」給出具體的手動操盤建議（考慮現有現金能負擔多少股，以及技術型態切入點）。`;
+
+        try {
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] })
+            });
+            const data = await res.json();
+            const ans = data.candidates[0].content.parts[0].text;
+            document.getElementById(msgId).innerHTML = `<span style="color:var(--color-buy)">[戰略分析]</span> <span style="color:#e0e0e0">${ans}</span>`;
+        } catch (e) {
+            document.getElementById(msgId).innerHTML = `<span style="color:var(--color-sell)">連線失敗：${e.message}</span>`;
+        }
+        log.scrollTop = log.scrollHeight;
+    }
+
+    /* ========================================================
+       4. 圖表引擎與時間軸按鈕
+       ======================================================== */
+    let mainChart;
+    function generateMockChart(basePrice) {
+        const ctx = document.getElementById('mainChart').getContext('2d');
+        if (mainChart) mainChart.destroy();
+
+        let data = [];
+        let p = basePrice * 0.9;
+        for (let i=0; i<40; i++) { p += (Math.random() - 0.45) * (basePrice * 0.02); data.push(p); }
+        data.push(basePrice);
+
+        mainChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: new Array(data.length).fill(''),
+                datasets: [{ data: data, borderColor: '#00ffaa', tension: 0.1, borderWidth: 2, pointRadius: 2 }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.04)' } } }
+            }
+        });
+    }
+
+    // 初始化執行
+    initPortfolio();
+    generateMockChart(1050.0);
+</script>
+</body>
+</html>
