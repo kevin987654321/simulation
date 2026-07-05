@@ -121,7 +121,15 @@
         .dashboard-left-col { display: flex; flex-direction: column; gap: 14px; flex: 1; min-height: 0; }
         #chart-container { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 14px 18px; position: relative; }
         .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-shrink: 0; }
-        .chart-wrapper { flex: 1; min-height: 0; position: relative; }
+        
+        /* 🌟 確保所有畫布完全封鎖瀏覽器選取與長按彈窗 */
+        .chart-wrapper, canvas {
+            flex: 1; min-height: 0; position: relative;
+            -webkit-touch-callout: none !important;
+            -webkit-user-select: none !important;
+            user-select: none !important;
+            touch-action: none !important;
+        }
 
         .header-controls { display: flex; align-items: center; gap: 8px; }
         .timeframe-selector {
@@ -171,8 +179,10 @@
         .price-rsi-container { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
         .rsi-badge { font-size: 11px; font-family: monospace; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
 
-        /* 🌟 手機專屬 K 線區域 (確保滑動預覽支援) */
-        .mobile-stock-chart-box { display: none; flex-direction: column; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 10px 12px; }
+        .mobile-stock-chart-box {
+            display: none; flex-direction: column; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 10px 12px;
+            -webkit-touch-callout: none !important; -webkit-user-select: none !important; user-select: none !important; touch-action: none !important;
+        }
         .mobile-chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
 
         .stepper-row { display: flex; gap: 8px; align-items: center; }
@@ -238,6 +248,7 @@
         #mobile-header { display: none; }
         #sidebar-overlay { display: none; }
 
+        /* 🌟 手機規範與完全消除雙層卷軸 */
         @media (max-width: 768px) {
             .mobile-only { display: flex; }
             #mobile-header { display: flex; justify-content: space-between; align-items: center; height: 60px; padding: 0 20px; background: rgba(10, 10, 10, 0.95); border-bottom: 1px solid rgba(255,255,255,0.06); z-index: 50; position: absolute; top: 0; left: 0; width: 100%; }
@@ -250,7 +261,11 @@
             #sidebar.open { transform: translateX(0); }
             #sidebar.dragging { transition: none; }
             
-            .view-section { top: 60px; height: calc(100dvh - 60px); padding: 15px; padding-bottom: max(15px, env(safe-area-inset-bottom)); }
+            /* 隱藏行動裝置所有原生丑陋卷軸 */
+            .view-section::-webkit-scrollbar, .trade-panel::-webkit-scrollbar { display: none !important; width: 0 !important; }
+            .view-section, .trade-panel { scrollbar-width: none !important; }
+
+            .view-section { top: 60px; height: calc(100dvh - 60px); padding: 12px; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
             .stat-grid { grid-template-columns: repeat(2, 1fr); height: auto; margin-bottom: 5px; }
             .stat-card { padding: 12px; }
             .stat-value { font-size: 16px; }
@@ -259,6 +274,9 @@
             .dashboard-left-col { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 12px; }
             #desktop-trade-col { display: none; }
             .standalone-mode-btn { display: none; }
+            
+            /* 徹底消滅雙層卷軸與溢出：行動端下單面板改為自適應高度 */
+            #shared-trade-panel { height: auto !important; overflow-y: visible !important; padding: 12px !important; gap: 10px !important; }
             
             .mobile-stock-chart-box { display: flex; }
             #chart-container { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -391,7 +409,7 @@
                 <label class="switch"><input type="checkbox" id="cfg-node-show"><span class="slider"></span></label>
             </div>
             <div class="glass-panel setting-item" id="node-settings-wrapper">
-                <div><div style="font-weight:bold;">轉折節點密度篩選</div><div style="font-size:11px; color:#777; margin-top:2px;">隱藏平緩區間圓圈，僅突顯關鍵走勢轉折</div></div>
+                <div><div style="font-weight:bold;">轉折節點密度篩選</div><div style="font-size:11px; color:#777; margin-top:2px;">隱藏平緩區間圓圈，拉到上限顯示 All</div></div>
                 <div style="display:flex; align-items:center; gap:12px;">
                     <div class="jelly-slider-container">
                         <div class="jelly-slider-track"></div>
@@ -466,7 +484,7 @@
                 <button class="tf-btn" data-tf="All" style="padding:3px 6px;">All</button>
             </div>
         </div>
-        <div style="height: 110px; position:relative; width:100%; touch-action: none;"><canvas id="mobileStockChart"></canvas></div>
+        <div style="height: 110px; position:relative; width:100%;"><canvas id="mobileStockChart"></canvas></div>
     </div>
 
     <div>
@@ -578,12 +596,33 @@
         if(window.innerWidth <= 768 && sidebarEl.classList.contains('open')) toggleSidebar();
     }
 
-    /* 🌟 核心控制參數與狀態 */
+    /* 🌟 註冊全域 Chart.js 「按住顯示、放開消失」觸控預覽外掛 */
+    const holdToPreviewPlugin = {
+        id: 'holdToPreviewPlugin',
+        beforeEvent(chart, args) {
+            const e = args.event;
+            const type = e.type;
+            if (type === 'mousedown' || type === 'touchstart') {
+                chart._isPointerHolding = true;
+            } else if (type === 'mouseup' || type === 'touchend' || type === 'touchcancel' || type === 'mouseout') {
+                chart._isPointerHolding = false;
+                chart.tooltip.setActiveElements([], {x: 0, y: 0});
+                chart.update();
+                return false;
+            }
+            if (type === 'mousemove' || type === 'touchmove') {
+                if (!chart._isPointerHolding) {
+                    return false; // 未按住不放時，一律阻擋 hover 顯示 tooltip
+                }
+            }
+        }
+    };
+    Chart.register(holdToPreviewPlugin);
+
     const DATA_KEY = "ALPHATRADE_MANUAL_DATA";
     let state = { cash: 1000000, holdings: {}, ledger: [], recentTickers: ["NVDA", "2330.TW", "TSLA"], navHistory: { labels: [], data: [] } };
     let currentTicker = localStorage.getItem('LAST_SELECTED_TICKER') || "NVDA";
-    let currentRealPrice = null; // 🌟 預設設為 null 避免假交易偷跑
-    let isPriceLoading = true;   // 🌟 價格載入鎖定器
+    let currentRealPrice = null, isPriceLoading = true;
     let currentStockTF = '1D', searchDebounceTimer = null, desktopChartMode = 'NAV';
     let stockHistData = { labels: [], prices: [] };
 
@@ -597,8 +636,11 @@
         
         const savedVal = localStorage.getItem('SETTING_NODE_VAL');
         if (savedVal !== null) {
-            document.getElementById("cfg-node-slider").value = savedVal;
+            document.getElementById("cfg-node-slider").value = (savedVal === 'All') ? 60 : savedVal;
             document.getElementById("cfg-node-val").value = savedVal;
+            const valNum = (savedVal === 'All') ? 60 : parseInt(savedVal);
+            const pct = (valNum - 5) / (60 - 5);
+            document.getElementById("jelly-thumb").style.left = `${pct * 162}px`;
         }
         
         document.getElementById("node-settings-wrapper").classList.toggle("disabled", !document.getElementById("cfg-node-show").checked);
@@ -650,7 +692,6 @@
     function toggleTickerDropdown() { document.getElementById("ticker-dropdown").classList.toggle("show"); }
     document.addEventListener("click", (e) => { if(!document.getElementById("ticker-select-wrapper").contains(e.target)) document.getElementById("ticker-dropdown").classList.remove("show"); });
 
-    // 🌟 嚴格選擇股票：立即鎖定按鈕並進入載入狀態
     function selectTicker(t) {
         currentTicker = t; localStorage.setItem('LAST_SELECTED_TICKER', t);
         document.getElementById("trade-ticker").value = t; document.getElementById("m-chart-ticker").innerText = t;
@@ -658,7 +699,6 @@
         document.getElementById("recent-group-title").style.display = 'block'; document.getElementById("recent-tickers-list").style.display = 'block';
         addToRecentlySelected(t); 
         
-        // 鎖定狀態
         isPriceLoading = true; currentRealPrice = null;
         document.getElementById("trade-price-display").innerHTML = `<span style="font-size:14px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> 報價連線中...</span>`;
         document.getElementById("exec-buy-btn").disabled = true;
@@ -668,7 +708,6 @@
     }
 
     async function fetchRealPrice(ticker) {
-        isPriceLoading = true;
         try {
             const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}`)}`;
             const res = await fetch(proxyUrl, { cache: "no-store" });
@@ -677,17 +716,18 @@
                 const price = json.chart.result[0].meta.regularMarketPrice; 
                 if(price) {
                     currentRealPrice = price;
-                    isPriceLoading = false; // 成功獲得真實報價才解鎖
+                    isPriceLoading = false;
                 }
             }
         } catch(e) {}
         finally {
+            // 🌟 移除紅字失敗報錯，持續保持耐心連線與輪詢
             if (currentRealPrice !== null && !isPriceLoading) {
                 document.getElementById("trade-price-display").innerText = `$ ${currentRealPrice.toFixed(2)}`;
                 document.getElementById("ai-current-ticker").innerText = currentTicker;
-                validateSharesInput(); // 解鎖並重新驗證按鈕
+                validateSharesInput();
             } else {
-                document.getElementById("trade-price-display").innerHTML = `<span style="font-size:14px; color:#ff4560;">獲取失敗，正在重試...</span>`;
+                document.getElementById("trade-price-display").innerHTML = `<span style="font-size:14px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> 報價連線中...</span>`;
             }
             updateAllViews();
         }
@@ -774,7 +814,6 @@
         sharesInput.value = Math.max(1, Math.floor(Math.floor(state.cash / (currentRealPrice * (1 + feeRate))) * pct)); validateSharesInput();
     }
     
-    // 🌟 嚴格驗證：若價格未載入成功，強制鎖死按鈕！
     function validateSharesInput() {
         if (isPriceLoading || currentRealPrice === null) {
             document.getElementById("exec-buy-btn").disabled = true;
@@ -846,12 +885,12 @@
         renderAllCharts();
     }
 
-    // 🌟 圖表初始化設定強制開啟 interaction: { mode: 'index', intersect: false } 支援手機觸控按動預覽
     const navChart = new Chart(document.getElementById('navChart').getContext('2d'), {
         type: 'line',
         data: { labels: [], datasets: [{ data: [], borderColor: '#00d4ff', backgroundColor: 'rgba(0, 212, 255, 0.05)', borderWidth: 2, tension: 0.2, fill: true }] },
         options: {
             responsive: true, maintainAspectRatio: false,
+            events: ['mousedown', 'mouseup', 'mousemove', 'mouseout', 'touchstart', 'touchmove', 'touchend', 'touchcancel'],
             interaction: { mode: 'index', intersect: false },
             plugins: { legend: { display: false }, tooltip: { enabled: true, mode: 'index', intersect: false } },
             scales: { x: { grid: { display: false } }, y: { grid: { color: 'rgba(255,255,255,0.04)' } } }
@@ -863,6 +902,7 @@
         data: { labels: [], datasets: [{ data: [], borderColor: '#00ffaa', backgroundColor: 'rgba(0,255,170,0.05)', borderWidth: 1.5, tension: 0.2, fill: true, pointRadius: 0 }] },
         options: {
             responsive: true, maintainAspectRatio: false,
+            events: ['mousedown', 'mouseup', 'mousemove', 'mouseout', 'touchstart', 'touchmove', 'touchend', 'touchcancel'],
             interaction: { mode: 'index', intersect: false },
             plugins: { legend: { display: false }, tooltip: { enabled: true, mode: 'index', intersect: false } },
             scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { font: { size: 9 }, color: '#666' } } }
@@ -878,13 +918,15 @@
 
     function computePointRadiusArray(dataLength, showNodes, densityVal) {
         if (!showNodes) return new Array(dataLength).fill(0);
+        if (densityVal === 'All' || densityVal >= 60) return new Array(dataLength).fill(4);
         const step = Math.max(1, Math.ceil(dataLength / densityVal));
         return Array.from({ length: dataLength }, (_, i) => (i % step === 0 || i === dataLength - 1) ? 4 : 0);
     }
 
     function renderAllCharts() {
         const showNodes = document.getElementById("cfg-node-show").checked;
-        const densityVal = parseInt(document.getElementById("cfg-node-slider").value) || 20;
+        const rawVal = document.getElementById("cfg-node-val").value;
+        const densityVal = (rawVal === 'All') ? 'All' : parseInt(rawVal) || 20;
 
         if (desktopChartMode === 'NAV') {
             document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-area" style="color:var(--color-acc)"></i> 投資組合總淨值走勢`;
@@ -905,7 +947,8 @@
 
         mobileChart.data.labels = stockHistData.labels;
         mobileChart.data.datasets[0].data = stockHistData.prices;
-        mobileChart.data.datasets[0].pointRadius = computePointRadiusArray(stockHistData.prices.length, showNodes, Math.floor(densityVal / 2));
+        const mDensity = (densityVal === 'All') ? 'All' : Math.floor(densityVal / 2);
+        mobileChart.data.datasets[0].pointRadius = computePointRadiusArray(stockHistData.prices.length, showNodes, mDensity);
         mobileChart.update();
     }
 
@@ -914,10 +957,14 @@
         document.getElementById("node-settings-wrapper").classList.toggle("disabled", !e.target.checked);
         renderAllCharts();
     });
+    
+    // 🌟 果凍滑桿拉到上限 60 時，自動轉為 All 顯示
     document.getElementById("cfg-node-slider").addEventListener("input", (e) => {
-        document.getElementById("cfg-node-val").value = e.target.value;
-        localStorage.setItem('SETTING_NODE_VAL', e.target.value);
-        const pct = (e.target.value - e.target.min) / (e.target.max - e.target.min);
+        const val = parseInt(e.target.value);
+        const displayVal = (val >= 60) ? 'All' : val;
+        document.getElementById("cfg-node-val").value = displayVal;
+        localStorage.setItem('SETTING_NODE_VAL', displayVal);
+        const pct = (val - e.target.min) / (e.target.max - e.target.min);
         document.getElementById("jelly-thumb").style.left = `${pct * 162}px`;
         renderAllCharts();
     });
