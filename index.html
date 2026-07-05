@@ -51,8 +51,9 @@
             backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
             box-shadow: 0 10px 35px rgba(0, 0, 0, 0.7); transition: border-color 0.4s ease, box-shadow 0.4s ease;
         }
+        .panel-flash-buy { border-color: var(--color-buy) !important; box-shadow: 0 0 25px rgba(0, 255, 170, 0.3) !important; }
+        .panel-flash-sell { border-color: var(--color-sell) !important; box-shadow: 0 0 25px rgba(255, 69, 96, 0.3) !important; }
 
-        /* 🌟 絲滑通知卡片與進度條 */
         #toast-container {
             position: fixed; top: 20px; right: 20px; z-index: 10000;
             display: flex; flex-direction: column; gap: 10px; pointer-events: none;
@@ -67,16 +68,12 @@
         }
         .toast.buy { border-color: rgba(0,255,170,0.4); color: var(--color-buy); }
         .toast.sell { border-color: rgba(255,69,96,0.4); color: var(--color-sell); }
-        .toast-progress {
-            position: absolute; bottom: 0; left: 0; height: 3px; width: 100%;
-            animation: toastBar 3s linear forwards;
-        }
+        .toast-progress { position: absolute; bottom: 0; left: 0; height: 3px; width: 100%; animation: toastBar 3s linear forwards; }
         .toast.buy .toast-progress { background: var(--color-buy); box-shadow: 0 0 10px var(--color-buy); }
         .toast.sell .toast-progress { background: var(--color-sell); box-shadow: 0 0 10px var(--color-sell); }
         @keyframes toastEnter { from { opacity: 0; transform: translateY(-20px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
         @keyframes toastBar { from { width: 100%; } to { width: 0%; } }
 
-        /* 🌟 漂浮金流特效 */
         .float-popup {
             position: fixed; z-index: 9999; font-family: monospace; font-weight: 900; font-size: 15px;
             pointer-events: none; animation: floatUpFade 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
@@ -88,7 +85,6 @@
             100% { opacity: 0; transform: translateY(-60px) scale(0.9); }
         }
 
-        /* 🌟 資產脈衝光暈 */
         .value-pulse { animation: navPulse 0.6s ease; }
         @keyframes navPulse {
             0% { transform: scale(1); }
@@ -127,7 +123,6 @@
         .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-shrink: 0; }
         .chart-wrapper { flex: 1; min-height: 0; position: relative; }
 
-        /* 時間軸與純圖示獨立切換按鍵 */
         .header-controls { display: flex; align-items: center; gap: 8px; }
         .timeframe-selector {
             position: relative; display: flex; align-items: center; gap: 4px; background: rgba(0,0,0,0.6);
@@ -143,7 +138,6 @@
         }
         .tf-btn.active { color: #fff; }
         
-        /* 🌟 無字純圖示獨立切換按鈕 */
         .standalone-mode-btn {
             width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
             background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.12); color: #aaa;
@@ -152,7 +146,6 @@
         .standalone-mode-btn:hover { color: var(--color-acc); border-color: var(--color-acc); background: rgba(0,212,255,0.1); }
         .standalone-mode-btn i { transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
 
-        /* 下單面板 */
         .trade-panel { display: flex; flex-direction: column; padding: 16px; gap: 12px; height: 100%; overflow-y: auto; }
         .panel-header { font-size: 13px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
         
@@ -178,6 +171,7 @@
         .price-rsi-container { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
         .rsi-badge { font-size: 11px; font-family: monospace; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
 
+        /* 🌟 手機專屬 K 線區域 (確保滑動預覽支援) */
         .mobile-stock-chart-box { display: none; flex-direction: column; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 10px 12px; }
         .mobile-chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
 
@@ -193,7 +187,6 @@
         .fee-row { display: flex; justify-content: space-between; color: #888; }
         .fee-row.total { border-top: 1px solid rgba(255,255,255,0.06); padding-top: 6px; color: #fff; font-size: 13px; font-weight: bold; }
 
-        /* 🌟 彈性物理按鍵 */
         .action-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: auto; }
         .btn-buy {
             background: rgba(0,255,170,0.15); border: 1px solid var(--color-buy); color: var(--color-buy);
@@ -210,7 +203,7 @@
         }
         .btn-sell:hover:not(:disabled) { background: var(--color-sell); color: #fff; box-shadow: 0 0 18px rgba(255,69,96,0.5); }
         .btn-sell:active:not(:disabled) { transform: scale(0.93); }
-        button:disabled { opacity: 0.3; cursor: not-allowed; }
+        button:disabled { opacity: 0.25; cursor: not-allowed; border-color: rgba(255,255,255,0.1) !important; color: #666 !important; background: rgba(255,255,255,0.02) !important; box-shadow: none !important; }
 
         #ai-commander { height: 180px; flex-shrink: 0; display: flex; flex-direction: column; background: rgba(12, 12, 12, 0.7); border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); overflow: hidden; }
         .ai-header { padding: 8px 16px; background: rgba(255,255,255,0.02); border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: bold; }
@@ -445,7 +438,7 @@
         <div style="display:flex; justify-content:space-between; align-items:center;">
             <div>
                 <div style="font-size:11px; color:#888;">當前真實現價</div>
-                <div id="trade-price-display" style="font-size:20px; font-weight:800; font-family:monospace; color:#fff;">$ 0.00</div>
+                <div id="trade-price-display" style="font-size:20px; font-weight:800; font-family:monospace; color:#fff;">$ ----</div>
             </div>
             <div style="text-align:right;">
                 <div style="font-size:11px; color:#888;">持股 / 可買上限</div>
@@ -473,7 +466,7 @@
                 <button class="tf-btn" data-tf="All" style="padding:3px 6px;">All</button>
             </div>
         </div>
-        <div style="height: 110px; position:relative; width:100%;"><canvas id="mobileStockChart"></canvas></div>
+        <div style="height: 110px; position:relative; width:100%; touch-action: none;"><canvas id="mobileStockChart"></canvas></div>
     </div>
 
     <div>
@@ -499,8 +492,8 @@
     </div>
 
     <div class="action-buttons">
-        <button class="btn-buy" id="exec-buy-btn" onclick="executeTrade('BUY')">買進 BUY</button>
-        <button class="btn-sell" id="exec-sell-btn" onclick="executeTrade('SELL')">賣出 SELL</button>
+        <button class="btn-buy" id="exec-buy-btn" onclick="executeTrade('BUY')" disabled>買進 BUY</button>
+        <button class="btn-sell" id="exec-sell-btn" onclick="executeTrade('SELL')" disabled>賣出 SELL</button>
     </div>
 </div>
 
@@ -510,9 +503,7 @@
         return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
     }
 
-    // 🌟 電影級回饋：Toast 與漂浮數字
     function triggerDynamicFeedback(msg, type, targetBtn, valueText) {
-        // 1. Toast 通知卡片
         const container = document.getElementById('toast-container');
         const toast = document.createElement('div');
         toast.className = `toast ${type}`;
@@ -524,7 +515,6 @@
         container.appendChild(toast);
         setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateY(-20px) scale(0.9)'; toast.style.transition = 'all 0.35s'; setTimeout(() => toast.remove(), 350); }, 3000);
 
-        // 2. 漂浮數字特效
         if (targetBtn) {
             const rect = targetBtn.getBoundingClientRect();
             const floatEl = document.createElement('div');
@@ -537,7 +527,6 @@
             setTimeout(() => floatEl.remove(), 1200);
         }
 
-        // 3. 數據卡片呼吸脈衝
         const navEl = document.getElementById('nav-total');
         navEl.classList.remove('value-pulse');
         void navEl.offsetWidth;
@@ -589,11 +578,13 @@
         if(window.innerWidth <= 768 && sidebarEl.classList.contains('open')) toggleSidebar();
     }
 
-    /* 持久化與狀態 */
+    /* 🌟 核心控制參數與狀態 */
     const DATA_KEY = "ALPHATRADE_MANUAL_DATA";
     let state = { cash: 1000000, holdings: {}, ledger: [], recentTickers: ["NVDA", "2330.TW", "TSLA"], navHistory: { labels: [], data: [] } };
     let currentTicker = localStorage.getItem('LAST_SELECTED_TICKER') || "NVDA";
-    let currentRealPrice = 125.40, currentStockTF = '1D', searchDebounceTimer = null, desktopChartMode = 'NAV';
+    let currentRealPrice = null; // 🌟 預設設為 null 避免假交易偷跑
+    let isPriceLoading = true;   // 🌟 價格載入鎖定器
+    let currentStockTF = '1D', searchDebounceTimer = null, desktopChartMode = 'NAV';
     let stockHistData = { labels: [], prices: [] };
 
     function initData() {
@@ -659,28 +650,49 @@
     function toggleTickerDropdown() { document.getElementById("ticker-dropdown").classList.toggle("show"); }
     document.addEventListener("click", (e) => { if(!document.getElementById("ticker-select-wrapper").contains(e.target)) document.getElementById("ticker-dropdown").classList.remove("show"); });
 
+    // 🌟 嚴格選擇股票：立即鎖定按鈕並進入載入狀態
     function selectTicker(t) {
         currentTicker = t; localStorage.setItem('LAST_SELECTED_TICKER', t);
         document.getElementById("trade-ticker").value = t; document.getElementById("m-chart-ticker").innerText = t;
         document.getElementById("ticker-dropdown").classList.remove("show");
         document.getElementById("recent-group-title").style.display = 'block'; document.getElementById("recent-tickers-list").style.display = 'block';
-        addToRecentlySelected(t); fetchRealPrice(t); fetchStockHistoryData(t, currentStockTF);
+        addToRecentlySelected(t); 
+        
+        // 鎖定狀態
+        isPriceLoading = true; currentRealPrice = null;
+        document.getElementById("trade-price-display").innerHTML = `<span style="font-size:14px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> 報價連線中...</span>`;
+        document.getElementById("exec-buy-btn").disabled = true;
+        document.getElementById("exec-sell-btn").disabled = true;
+        
+        fetchRealPrice(t); fetchStockHistoryData(t, currentStockTF);
     }
 
     async function fetchRealPrice(ticker) {
+        isPriceLoading = true;
         try {
             const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}`)}`;
             const res = await fetch(proxyUrl, { cache: "no-store" });
-            if(res.ok) { const json = await res.json(); const price = json.chart.result[0].meta.regularMarketPrice; if(price) currentRealPrice = price; }
+            if(res.ok) { 
+                const json = await res.json(); 
+                const price = json.chart.result[0].meta.regularMarketPrice; 
+                if(price) {
+                    currentRealPrice = price;
+                    isPriceLoading = false; // 成功獲得真實報價才解鎖
+                }
+            }
         } catch(e) {}
         finally {
-            document.getElementById("trade-price-display").innerText = `$ ${currentRealPrice.toFixed(2)}`;
-            document.getElementById("ai-current-ticker").innerText = currentTicker;
-            recalculateOrder(); updateAllViews();
+            if (currentRealPrice !== null && !isPriceLoading) {
+                document.getElementById("trade-price-display").innerText = `$ ${currentRealPrice.toFixed(2)}`;
+                document.getElementById("ai-current-ticker").innerText = currentTicker;
+                validateSharesInput(); // 解鎖並重新驗證按鈕
+            } else {
+                document.getElementById("trade-price-display").innerHTML = `<span style="font-size:14px; color:#ff4560;">獲取失敗，正在重試...</span>`;
+            }
+            updateAllViews();
         }
     }
 
-    /* 時間軸與歷史請求連動 */
     const tfGroup = document.getElementById('tf-group'), tfBg = document.getElementById('tf-active-bg'), tfBtns = Array.from(document.querySelectorAll('#tf-group .tf-btn'));
     function updateTfBg(index, animate = true) {
         const btn = tfBtns[index];
@@ -757,17 +769,30 @@
     const sharesInput = document.getElementById("trade-shares");
     function stepShares(delta) { sharesInput.value = Math.max(1, (parseInt(sharesInput.value) || 0) + delta); validateSharesInput(); }
     function applyPercentShares(pct) {
+        if (isPriceLoading || currentRealPrice === null) return;
         const feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100 || 0.001425;
         sharesInput.value = Math.max(1, Math.floor(Math.floor(state.cash / (currentRealPrice * (1 + feeRate))) * pct)); validateSharesInput();
     }
+    
+    // 🌟 嚴格驗證：若價格未載入成功，強制鎖死按鈕！
     function validateSharesInput() {
+        if (isPriceLoading || currentRealPrice === null) {
+            document.getElementById("exec-buy-btn").disabled = true;
+            document.getElementById("exec-sell-btn").disabled = true;
+            return;
+        }
         let s = parseInt(sharesInput.value) || 0;
         const feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100;
         const maxBuy = Math.max(0, Math.floor(state.cash / (currentRealPrice * (1 + feeRate)))), holding = state.holdings[currentTicker]?.shares || 0;
         document.getElementById("max-buy-display").innerText = maxBuy.toLocaleString(); document.getElementById("holding-shares-display").innerText = holding.toLocaleString();
-        document.getElementById("exec-sell-btn").disabled = (holding <= 0 || s > holding); recalculateOrder();
+        
+        document.getElementById("exec-buy-btn").disabled = (s <= 0 || s > maxBuy);
+        document.getElementById("exec-sell-btn").disabled = (holding <= 0 || s > holding); 
+        recalculateOrder();
     }
+
     function recalculateOrder() {
+        if (isPriceLoading || currentRealPrice === null) return;
         let s = parseInt(sharesInput.value) || 0;
         const subtotal = s * currentRealPrice, fee = subtotal * (parseFloat(document.getElementById("cfg-fee-rate").value) / 100), tax = subtotal * (parseFloat(document.getElementById("cfg-tax-rate").value) / 100);
         document.getElementById("calc-subtotal").innerText = `$ ${subtotal.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
@@ -776,6 +801,7 @@
     }
 
     function executeTrade(action) {
+        if (isPriceLoading || currentRealPrice === null) { alert("報價連線中，請稍候！"); return; }
         let s = parseInt(sharesInput.value); if(!s || s <= 0) return;
         const subtotal = s * currentRealPrice, fee = subtotal * (parseFloat(document.getElementById("cfg-fee-rate").value) / 100), tradeTime = getFormattedTime();
         
@@ -792,10 +818,11 @@
             state.ledger.unshift({ time: tradeTime, action: "SELL", ticker: currentTicker, price: currentRealPrice, shares: s, fee: fee + tax, total: totalGet });
             triggerDynamicFeedback(`成功賣出 ${s} 股 ${currentTicker}`, 'sell', document.getElementById('exec-sell-btn'), `+$${Math.floor(totalGet).toLocaleString()}`);
         }
-        recordNavSnapshot(); saveData();
+        recordNavSnapshot(); saveData(); validateSharesInput();
     }
 
     function recordNavSnapshot() {
+        if (currentRealPrice === null) return;
         let holdingsVal = 0; for(let t in state.holdings) holdingsVal += state.holdings[t].shares * ((t === currentTicker) ? currentRealPrice : state.holdings[t].avgPrice);
         state.navHistory.labels.push(getFormattedTime()); state.navHistory.data.push(state.cash + holdingsVal);
         if(state.navHistory.data.length > 60) { state.navHistory.labels.shift(); state.navHistory.data.shift(); }
@@ -803,7 +830,7 @@
 
     function updateAllViews() {
         let holdingsVal = 0, totalCost = 0;
-        for(let t in state.holdings) { let price = (t === currentTicker) ? currentRealPrice : state.holdings[t].avgPrice; holdingsVal += state.holdings[t].shares * price; totalCost += state.holdings[t].shares * state.holdings[t].avgPrice; }
+        for(let t in state.holdings) { let price = (t === currentTicker && currentRealPrice !== null) ? currentRealPrice : state.holdings[t].avgPrice; holdingsVal += state.holdings[t].shares * price; totalCost += state.holdings[t].shares * state.holdings[t].avgPrice; }
         const nav = state.cash + holdingsVal, pnl = holdingsVal - totalCost;
         document.getElementById("nav-total").innerText = `$ ${Math.floor(nav).toLocaleString()}`; document.getElementById("nav-cash").innerText = `$ ${Math.floor(state.cash).toLocaleString()}`;
         document.getElementById("nav-holdings").innerText = `$ ${Math.floor(holdingsVal).toLocaleString()}`;
@@ -811,7 +838,7 @@
         document.getElementById("nav-pnl").style.color = pnl >= 0 ? "var(--color-buy)" : "var(--color-sell)";
 
         document.getElementById("holdings-table-body").innerHTML = Object.keys(state.holdings).length ? Object.keys(state.holdings).map(t => {
-            const h = state.holdings[t], curP = (t === currentTicker) ? currentRealPrice : h.avgPrice, val = h.shares * curP, pnl = val - (h.shares * h.avgPrice);
+            const h = state.holdings[t], curP = (t === currentTicker && currentRealPrice !== null) ? currentRealPrice : h.avgPrice, val = h.shares * curP, pnl = val - (h.shares * h.avgPrice);
             return `<tr><td style="font-weight:bold; color:var(--color-acc)">${t}</td><td>${h.shares}</td><td>$${h.avgPrice.toFixed(1)}</td><td>$${curP.toFixed(1)}</td><td>$${Math.floor(val).toLocaleString()}</td><td style="color:${pnl>=0?'var(--color-buy)':'var(--color-sell)'}">${pnl>=0?'+':''}$${Math.floor(pnl)}</td><td><button onclick="selectTicker('${t}')" style="background:rgba(255,255,255,0.08); border:none; color:#fff; padding:4px 8px; border-radius:4px;">交易</button></td></tr>`;
         }).join("") : `<tr><td colspan="7" style="text-align:center; color:#555; padding:30px;">尚無持股</td></tr>`;
 
@@ -819,8 +846,28 @@
         renderAllCharts();
     }
 
-    const navChart = new Chart(document.getElementById('navChart').getContext('2d'), { type: 'line', data: { labels: [], datasets: [{ data: [], borderColor: '#00d4ff', backgroundColor: 'rgba(0, 212, 255, 0.05)', borderWidth: 2, tension: 0.2, fill: true }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { grid: { color: 'rgba(255,255,255,0.04)' } } } } });
-    const mobileChart = new Chart(document.getElementById('mobileStockChart').getContext('2d'), { type: 'line', data: { labels: [], datasets: [{ data: [], borderColor: '#00ffaa', backgroundColor: 'rgba(0,255,170,0.05)', borderWidth: 1.5, tension: 0.2, fill: true, pointRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { font: { size: 9 }, color: '#666' } } } } });
+    // 🌟 圖表初始化設定強制開啟 interaction: { mode: 'index', intersect: false } 支援手機觸控按動預覽
+    const navChart = new Chart(document.getElementById('navChart').getContext('2d'), {
+        type: 'line',
+        data: { labels: [], datasets: [{ data: [], borderColor: '#00d4ff', backgroundColor: 'rgba(0, 212, 255, 0.05)', borderWidth: 2, tension: 0.2, fill: true }] },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: { legend: { display: false }, tooltip: { enabled: true, mode: 'index', intersect: false } },
+            scales: { x: { grid: { display: false } }, y: { grid: { color: 'rgba(255,255,255,0.04)' } } }
+        }
+    });
+
+    const mobileChart = new Chart(document.getElementById('mobileStockChart').getContext('2d'), {
+        type: 'line',
+        data: { labels: [], datasets: [{ data: [], borderColor: '#00ffaa', backgroundColor: 'rgba(0,255,170,0.05)', borderWidth: 1.5, tension: 0.2, fill: true, pointRadius: 0 }] },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: { legend: { display: false }, tooltip: { enabled: true, mode: 'index', intersect: false } },
+            scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { font: { size: 9 }, color: '#666' } } }
+        }
+    });
 
     function toggleDesktopChartMode() {
         desktopChartMode = (desktopChartMode === 'NAV') ? 'STOCK' : 'NAV';
@@ -887,7 +934,7 @@
         out.scrollTop = out.scrollHeight;
     }
 
-    initData(); fetchRealPrice(currentTicker); fetchStockHistoryData(currentTicker, currentStockTF); setInterval(() => fetchRealPrice(currentTicker), 8000);
+    initData(); selectTicker(currentTicker); setInterval(() => fetchRealPrice(currentTicker), 8000);
 </script>
 </body>
 </html>
