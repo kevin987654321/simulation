@@ -6,6 +6,7 @@
     <title>AlphaTrade | 手動量化操盤指揮中心</title>
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
     <style>
@@ -87,12 +88,9 @@
 
         .dashboard-body { display: grid; grid-template-columns: 3fr 1fr; gap: 14px; flex: 1; min-height: 0; }
         .dashboard-left-col { display: flex; flex-direction: column; gap: 14px; flex: 1; min-height: 0; }
-        
-        /* 修復電腦版溢出捲軸 */
-        #desktop-trade-col { display: flex; flex-direction: column; min-height: 0; height: 100%; }
-
         #chart-container { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 14px 18px; position: relative; }
         .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-shrink: 0; }
+        
         .chart-wrapper, canvas { flex: 1; min-height: 0; position: relative; -webkit-touch-callout: none !important; -webkit-user-select: none !important; user-select: none !important; touch-action: none !important; }
 
         .header-controls { display: flex; align-items: center; gap: 8px; }
@@ -105,16 +103,15 @@
         .standalone-mode-btn:hover { color: var(--color-acc); border-color: var(--color-acc); background: rgba(0,212,255,0.1); }
         .standalone-mode-btn i { transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
 
-        /* 下單面板內部捲動設定 */
-        .trade-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 16px; gap: 12px; overflow-y: auto; }
-        .panel-header { font-size: 13px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+        .trade-panel { display: flex; flex-direction: column; padding: 16px; gap: 12px; height: 100%; overflow-y: auto; }
+        .panel-header { font-size: 13px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
         
-        .mode-toggle-group { display: flex; gap: 8px; background: rgba(0,0,0,0.5); padding: 5px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 4px; flex-shrink: 0;}
+        .mode-toggle-group { display: flex; gap: 8px; background: rgba(0,0,0,0.5); padding: 5px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 4px; }
         .mode-toggle-btn { flex: 1; padding: 8px; border-radius: 6px; border: none; background: transparent; color: #888; font-weight: bold; cursor: pointer; transition: all 0.2s; font-size: 12px; }
         .mode-toggle-btn.buy.active { background: rgba(0,255,170,0.15); color: var(--color-buy); box-shadow: 0 0 10px rgba(0,255,170,0.2); }
         .mode-toggle-btn.sell.active { background: rgba(255,69,96,0.15); color: var(--color-sell); box-shadow: 0 0 10px rgba(255,69,96,0.2); }
 
-        .custom-select-wrapper { position: relative; width: 100%; flex-shrink: 0;}
+        .custom-select-wrapper { position: relative; width: 100%; }
         .select-input-box { display: flex; align-items: center; background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; padding: 0 12px; transition: border-color 0.2s; }
         .select-input-box:focus-within { border-color: var(--color-acc); }
         .select-input-box input { flex: 1; background: transparent; border: none; color: #fff; padding: 10px 0; font-size: 14px; font-weight: bold; font-family: monospace; outline: none; }
@@ -126,31 +123,31 @@
         .dropdown-item { padding: 9px 12px; font-size: 13px; font-family: monospace; color: #ccc; cursor: pointer; display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); }
         .dropdown-item:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
 
-        .price-rsi-container { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0;}
+        .price-rsi-container { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
         .rsi-badge { font-size: 11px; font-family: monospace; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
 
-        .mobile-stock-chart-box { display: none; flex-direction: column; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 10px 12px; flex-shrink: 0; -webkit-touch-callout: none !important; -webkit-user-select: none !important; user-select: none !important; touch-action: none !important; }
+        .mobile-stock-chart-box { display: none; flex-direction: column; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 10px 12px; -webkit-touch-callout: none !important; -webkit-user-select: none !important; user-select: none !important; touch-action: none !important; }
         .mobile-chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
 
         .stepper-row { display: flex; gap: 8px; align-items: center; }
-        .stepper-btn { width: 38px; height: 38px; border-radius: 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 16px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink:0;}
+        .stepper-btn { width: 38px; height: 38px; border-radius: 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 16px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         .stepper-input { flex: 1; height: 38px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; text-align: center; color: #fff; font-size: 15px; font-weight: bold; font-family: monospace; outline: none; }
         
-        .quick-percent-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; flex-shrink: 0;}
+        .quick-percent-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
         .qp-btn { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); color: #888; border-radius: 6px; padding: 5px 0; font-size: 11px; font-weight: bold; cursor: pointer; transition: all 0.2s; }
         .qp-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
 
-        .fee-breakdown { background: rgba(0,0,0,0.4); border-radius: 8px; padding: 10px 12px; font-size: 11px; display: flex; flex-direction: column; gap: 6px; flex-shrink: 0;}
+        .fee-breakdown { background: rgba(0,0,0,0.4); border-radius: 8px; padding: 10px 12px; font-size: 11px; display: flex; flex-direction: column; gap: 6px; }
         .fee-row { display: flex; justify-content: space-between; color: #888; }
         .fee-row.total { border-top: 1px solid rgba(255,255,255,0.06); padding-top: 6px; color: #fff; font-size: 13px; font-weight: bold; }
 
-        .exec-btn { margin-top: auto; padding: 14px; border-radius: 8px; font-weight: 900; font-size: 15px; cursor: pointer; transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s, box-shadow 0.2s; flex-shrink: 0;}
+        .exec-btn { margin-top: auto; padding: 14px; border-radius: 8px; font-weight: 900; font-size: 15px; cursor: pointer; transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s, box-shadow 0.2s; }
         .exec-btn.buy { background: var(--color-buy); border: none; color: #000; box-shadow: 0 0 15px rgba(0,255,170,0.3); }
         .exec-btn.buy:hover:not(:disabled) { box-shadow: 0 0 25px rgba(0,255,170,0.6); }
         .exec-btn.sell { background: var(--color-sell); border: none; color: #fff; box-shadow: 0 0 15px rgba(255,69,96,0.3); }
         .exec-btn.sell:hover:not(:disabled) { box-shadow: 0 0 25px rgba(255,69,96,0.6); }
         .exec-btn:active:not(:disabled) { transform: scale(0.95); }
-        .exec-btn:disabled { opacity: 0.25; cursor: not-allowed; border-color: rgba(255,255,255,0.1) !important; color: #666 !important; background: rgba(255,255,255,0.02) !important; box-shadow: none !important; }
+        .exec-btn:disabled { opacity: 0.3; cursor: not-allowed; border-color: rgba(255,255,255,0.1) !important; color: #666 !important; background: rgba(255,255,255,0.05) !important; box-shadow: none !important; }
 
         #ai-commander { height: 180px; flex-shrink: 0; display: flex; flex-direction: column; background: rgba(12, 12, 12, 0.7); border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); overflow: hidden; }
         .ai-header { padding: 8px 16px; background: rgba(255,255,255,0.02); border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: bold; }
@@ -162,18 +159,12 @@
         /* 🌟 表格與橫向捲軸優化 */
         .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
         .table-responsive::-webkit-scrollbar { display: none; }
-        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12.5px; font-family: monospace; min-width: 680px; }
+        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12.5px; font-family: monospace; min-width: 650px; }
         th { color: #777; padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,0.08); background: #0c0c0c; font-weight: 600; white-space: nowrap; }
         td { padding: 12px 14px; color: #ddd; border-bottom: 1px solid rgba(255,255,255,0.03); white-space: nowrap; }
-        
         .badge { padding: 3px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; }
         .badge-buy { background: rgba(0,255,170,0.12); color: var(--color-buy); border: 1px solid rgba(0,255,170,0.3); }
         .badge-sell { background: rgba(255,69,96,0.12); color: var(--color-sell); border: 1px solid rgba(255,69,96,0.3); }
-
-        /* 卡片拖曳樣式 */
-        .card-item { transition: box-shadow 0.3s; }
-        .card-item.edit-mode { cursor: grab; border: 1px solid rgba(255,255,255,0.15); }
-        .card-item.edit-mode:active { cursor: grabbing; }
 
         .settings-list { max-width: 650px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; width: 100%; }
         .setting-item { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; }
@@ -191,8 +182,20 @@
         .jelly-input { width: 48px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 4px; border-radius: 6px; text-align: center; font-family: monospace; font-size: 12px; }
         .setting-item.disabled { opacity: 0.3; pointer-events: none; }
 
+        /* 🌟 SortableJS 動畫輔助類別 */
+        .sortable-ghost { opacity: 0.3; transform: scale(0.95); }
+
         #mobile-header { display: none; }
         #sidebar-overlay { display: none; }
+
+        /* 🌟 電腦版嚴格防捲動鎖死 */
+        @media (min-width: 769px) {
+            #view-dashboard { overflow: hidden !important; }
+            .dashboard-body { overflow: hidden !important; min-height: 0; }
+            .dashboard-left-col { overflow: hidden !important; min-height: 0; }
+            #desktop-trade-col { display: flex; flex-direction: column; overflow: hidden !important; min-height: 0; }
+            #shared-trade-panel { flex: 1; overflow-y: auto !important; min-height: 0; }
+        }
 
         /* 🌟 手機規範與完全消除雙層卷軸 */
         @media (max-width: 768px) {
@@ -220,7 +223,6 @@
             #desktop-trade-col { display: none; }
             .standalone-mode-btn { display: none; }
             
-            /* 徹底消滅雙層卷軸與溢出：行動端下單面板改為自適應高度 */
             #shared-trade-panel { height: auto !important; overflow-y: visible !important; padding: 12px !important; gap: 10px !important; }
             
             .mobile-stock-chart-box { display: flex; }
@@ -328,7 +330,7 @@
                 編輯
             </button>
         </div>
-        <div id="cards-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:14px; position:relative;">
+        <div id="cards-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:14px; padding-bottom: 30px;">
             </div>
     </main>
 
@@ -390,11 +392,6 @@
 </div>
 
 <div id="shared-trade-panel" class="glass-panel trade-panel">
-    <div class="panel-header">
-        <span><i class="fa-solid fa-terminal" style="color: var(--color-buy)"></i> 即時報價與下單</span>
-        <span id="market-status" style="font-size:11px; color:#00ffaa;">● 市場連線中</span>
-    </div>
-
     <div>
         <div class="custom-select-wrapper" id="ticker-select-wrapper">
             <div class="select-input-box">
@@ -468,9 +465,9 @@
     </div>
 
     <div class="fee-breakdown">
-        <div class="fee-row"><span>預算總計:</span><span id="calc-subtotal" style="color:#fff;">$ 0.00</span></div>
-        <div class="fee-row"><span>券商手續費:</span><span id="calc-fee" style="color:#fff;">$ 0.00</span></div>
-        <div class="fee-row"><span>預估證交稅:</span><span id="calc-tax" style="color:#fff;">$ 0.00</span></div>
+        <div class="fee-row"><span style="color:#fff;">預算總計:</span><span id="calc-subtotal" style="color:#fff;">$ 0.00</span></div>
+        <div class="fee-row"><span style="color:#fff;">券商手續費:</span><span id="calc-fee" style="color:#fff;">$ 0.00</span></div>
+        <div class="fee-row"><span style="color:#fff;">預估證交稅:</span><span id="calc-tax" style="color:#fff;">$ 0.00</span></div>
         <div class="fee-row total"><span id="total-label" style="color:#fff;">預估交割金:</span><span id="calc-total" style="color:#fff;">$ 0.00</span></div>
     </div>
 
@@ -516,7 +513,7 @@
     function toggleSidebar() { sidebarEl.classList.toggle('open'); overlayEl.classList.toggle('active'); sidebarEl.style.transform = ''; }
     document.addEventListener('touchstart', (e) => {
         if (window.innerWidth > 768) return;
-        if (e.target.closest('canvas, .tf-btn, .jelly-slider-input, .jelly-slider-container, .table-responsive, .card-item')) { sIsDragging = false; return; }
+        if (e.target.closest('canvas, .tf-btn, .jelly-slider-input, .jelly-slider-container, .table-responsive')) { sIsDragging = false; return; }
         sStartX = e.touches[0].clientX; sStartY = e.touches[0].clientY; sIsDragging = true; sIsDetermined = false;
         if (!sidebarEl.classList.contains('open') && sStartX > window.innerWidth * 0.66) sIsDragging = false;
     }, {passive: true});
@@ -570,10 +567,8 @@
     let stockHistData = { labels: [], prices: [] };
     let tradeMode = 'BUY';
     
-    // 🌟 卡片資料快取與長按拖曳控制
     let cardsDataCache = {};
     let isCardEditMode = false;
-    let dnd = { timer: null, isDragging: false, el: null, placeholder: null, startX: 0, startY: 0, initX: 0, initY: 0 };
 
     function initData() {
         const saved = localStorage.getItem(DATA_KEY);
@@ -594,96 +589,10 @@
         document.getElementById("trade-ticker").value = currentTicker; document.getElementById("m-chart-ticker").innerText = currentTicker;
         renderRecentTickers(); renderCards();
     }
-    function saveData() { localStorage.setItem(DATA_KEY, JSON.stringify(state)); updateAllViews(); renderCards(); }
+    function saveData() { localStorage.setItem(DATA_KEY, JSON.stringify(state)); updateAllViews(); }
     function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { localStorage.removeItem(DATA_KEY); state = { cash: 1000000, holdings: {}, ledger: [], recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { labels: [], data: [] } }; initData(); } }
 
-    /* 🌟 卡片長按拖曳排序引擎 */
-    function onCardDragStart(e, ticker, el) {
-        if (!isCardEditMode) return;
-        const isTouch = e.type === 'touchstart';
-        if (!isTouch && e.button !== 0) return;
-        if (e.target.closest('.del-btn')) return; // 點擊刪除按鈕時不觸發拖曳
-
-        dnd.el = el;
-        dnd.startX = isTouch ? e.touches[0].clientX : e.clientX;
-        dnd.startY = isTouch ? e.touches[0].clientY : e.clientY;
-
-        dnd.timer = setTimeout(() => {
-            dnd.isDragging = true;
-            if(navigator.vibrate) try { navigator.vibrate(50); } catch(err){}
-            
-            const rect = dnd.el.getBoundingClientRect();
-            dnd.initX = rect.left; dnd.initY = rect.top;
-
-            dnd.placeholder = document.createElement('div');
-            dnd.placeholder.className = 'glass-panel card-item';
-            dnd.placeholder.style.height = rect.height + 'px';
-            dnd.placeholder.style.border = '2px dashed var(--color-acc)';
-            dnd.placeholder.style.background = 'rgba(0,212,255,0.05)';
-            dnd.el.parentNode.insertBefore(dnd.placeholder, dnd.el);
-
-            dnd.el.style.position = 'fixed';
-            dnd.el.style.top = dnd.initY + 'px'; dnd.el.style.left = dnd.initX + 'px';
-            dnd.el.style.width = rect.width + 'px'; dnd.el.style.height = rect.height + 'px';
-            dnd.el.style.zIndex = 10000; dnd.el.style.transform = 'scale(1.05) rotate(1deg)';
-            dnd.el.style.pointerEvents = 'none'; dnd.el.style.boxShadow = '0 20px 50px rgba(0,0,0,0.9)';
-        }, 300); // 300ms 長按判定
-    }
-
-    function handleGlobalMove(e) {
-        if (dnd.timer && !dnd.isDragging) {
-            const isTouch = e.type === 'touchmove';
-            const cx = isTouch ? e.touches[0].clientX : e.clientX;
-            const cy = isTouch ? e.touches[0].clientY : e.clientY;
-            if (Math.abs(cx - dnd.startX) > 10 || Math.abs(cy - dnd.startY) > 10) { clearTimeout(dnd.timer); dnd.timer = null; }
-        }
-        if (dnd.isDragging) {
-            e.preventDefault(); // 阻止畫面滾動
-            const isTouch = e.type === 'touchmove';
-            const cx = isTouch ? e.touches[0].clientX : e.clientX;
-            const cy = isTouch ? e.touches[0].clientY : e.clientY;
-            
-            dnd.el.style.top = (dnd.initY + (cy - dnd.startY)) + 'px';
-            dnd.el.style.left = (dnd.initX + (cx - dnd.startX)) + 'px';
-
-            const overEl = document.elementFromPoint(cx, cy);
-            const overCard = overEl ? overEl.closest('.card-item:not([style*="fixed"])') : null;
-            if (overCard && overCard !== dnd.placeholder && overCard.id !== 'add-card-box') {
-                const grid = document.getElementById('cards-grid');
-                const children = Array.from(grid.children);
-                const overIndex = children.indexOf(overCard);
-                const placeholderIndex = children.indexOf(dnd.placeholder);
-                if (overIndex > placeholderIndex) grid.insertBefore(dnd.placeholder, overCard.nextSibling);
-                else grid.insertBefore(dnd.placeholder, overCard);
-            }
-        }
-    }
-
-    function handleGlobalEnd() {
-        if (dnd.timer) { clearTimeout(dnd.timer); dnd.timer = null; }
-        if (dnd.isDragging) {
-            dnd.isDragging = false;
-            dnd.placeholder.parentNode.insertBefore(dnd.el, dnd.placeholder);
-            dnd.placeholder.remove();
-            
-            dnd.el.style.position = ''; dnd.el.style.top = ''; dnd.el.style.left = '';
-            dnd.el.style.width = ''; dnd.el.style.height = ''; dnd.el.style.zIndex = '';
-            dnd.el.style.transform = ''; dnd.el.style.pointerEvents = ''; dnd.el.style.boxShadow = '';
-
-            const newTickers = [];
-            document.querySelectorAll('#cards-grid .card-item[data-ticker]').forEach(el => newTickers.push(el.getAttribute('data-ticker')));
-            state.cardTickers = newTickers;
-            saveData(); // 儲存排序
-        }
-    }
-    
-    document.addEventListener('touchmove', handleGlobalMove, {passive: false});
-    document.addEventListener('mousemove', handleGlobalMove, {passive: false});
-    document.addEventListener('touchend', handleGlobalEnd);
-    document.addEventListener('touchcancel', handleGlobalEnd);
-    document.addEventListener('mouseup', handleGlobalEnd);
-
-    /* 卡片編輯與渲染 */
+    /* 🌟 卡片排序與編輯邏輯 */
     function toggleCardEditMode() {
         isCardEditMode = !isCardEditMode;
         const btn = document.getElementById('edit-cards-btn');
@@ -693,38 +602,36 @@
         renderCards();
     }
 
-    function removeCard(ticker) {
-        state.cardTickers = state.cardTickers.filter(t => t !== ticker);
-        saveData();
-    }
+    function removeCard(ticker) { state.cardTickers = state.cardTickers.filter(t => t !== ticker); saveData(); renderCards(); }
 
     function addCardPrompt() {
         const grid = document.getElementById('cards-grid');
-        const box = document.createElement('div');
-        box.style = "border: 2px dashed var(--color-acc); border-radius: 12px; background: rgba(0,212,255,0.05); display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 220px; padding: 20px;";
-        box.innerHTML = `
-            <input type="text" id="new-card-input" placeholder="輸入代號 (如 AAPL)" autocomplete="off" style="width:80%; padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:rgba(0,0,0,0.6); color:#fff; text-align:center; font-weight:bold; font-size:14px; outline:none; text-transform:uppercase; margin-bottom:12px;">
-            <div style="display:flex; gap:10px;">
-                <button onclick="confirmAddCard()" style="background:var(--color-acc); color:#000; border:none; padding:6px 16px; border-radius:6px; font-weight:bold; cursor:pointer;">新增</button>
-                <button onclick="renderCards()" style="background:rgba(255,255,255,0.1); color:#fff; border:none; padding:6px 16px; border-radius:6px; cursor:pointer;">取消</button>
-            </div>
-        `;
-        const addButton = document.getElementById('add-card-box');
-        grid.replaceChild(box, addButton);
-        document.getElementById('new-card-input').focus();
+        const addBtn = grid.querySelector('.add-card-btn');
+        if (addBtn) {
+            addBtn.style.borderStyle = 'solid'; addBtn.style.borderColor = 'var(--color-acc)';
+            addBtn.innerHTML = `
+                <input type="text" id="new-card-input" placeholder="代號 (如 AAPL)" autocomplete="off" style="width:80%; padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:rgba(0,0,0,0.6); color:#fff; text-align:center; font-weight:bold; font-size:14px; outline:none; text-transform:uppercase; margin-bottom:12px;">
+                <div style="display:flex; gap:10px;">
+                    <button onclick="confirmAddCard(event)" style="background:var(--color-acc); color:#000; border:none; padding:6px 16px; border-radius:6px; font-weight:bold; cursor:pointer;">新增</button>
+                    <button onclick="renderCards(event)" style="background:rgba(255,255,255,0.1); color:#fff; border:none; padding:6px 16px; border-radius:6px; cursor:pointer;">取消</button>
+                </div>
+            `;
+            document.getElementById('new-card-input').focus();
+        }
     }
 
-    function confirmAddCard() {
+    function confirmAddCard(e) {
+        if(e) e.stopPropagation();
         const val = document.getElementById('new-card-input').value.trim().toUpperCase();
-        if(val && !state.cardTickers.includes(val)) { state.cardTickers.push(val); saveData(); fetchAllCardsData(); } 
-        else { renderCards(); }
+        if(val && !state.cardTickers.includes(val)) { state.cardTickers.push(val); saveData(); fetchAllCardsData(); } else { renderCards(); }
     }
 
     async function fetchAllCardsData() {
         if (!document.getElementById('view-cards').classList.contains('active')) return;
         for (const t of state.cardTickers) {
             try {
-                const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${t}?range=1mo&interval=1d`)}`, { cache: "no-store" });
+                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${t}?range=1mo&interval=1d`)}`;
+                const res = await fetch(proxyUrl, { cache: "no-store" });
                 if(res.ok) { 
                     const json = await res.json(), result = json.chart.result[0];
                     const price = result.meta.regularMarketPrice, prices = result.indicators.quote[0].close || [];
@@ -743,18 +650,18 @@
             const cData = cardsDataCache[t] || { price: 0, rsi: null };
             const h = state.holdings[t] || { shares: 0, avgPrice: 0 };
             const gross = h.shares * cData.price;
-            const feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100, taxRate = parseFloat(document.getElementById("cfg-tax-rate").value) / 100;
+            const feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100;
+            const taxRate = parseFloat(document.getElementById("cfg-tax-rate").value) / 100;
             const netValue = gross > 0 ? (gross - (gross * feeRate) - (gross * taxRate)) : 0;
-            const totalCost = h.shares * h.avgPrice, pnl = netValue - totalCost;
+            const totalCost = h.shares * h.avgPrice;
+            const pnl = netValue - totalCost;
             const pnlColor = pnl >= 0 ? 'var(--color-buy)' : 'var(--color-sell)';
             
-            const deleteBtn = isCardEditMode ? `<div class="del-btn" onclick="removeCard('${t}')" style="position:absolute; top:-8px; right:-8px; background:var(--color-sell); color:#fff; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:10; box-shadow:0 0 10px rgba(0,0,0,0.5);"><i class="fa-solid fa-minus"></i></div>` : '';
-            const dragHandle = isCardEditMode ? `<div style="position:absolute; left:18px; top:18px; color:rgba(255,255,255,0.2);"><i class="fa-solid fa-grip-lines"></i></div>` : '';
-            const paddingLeft = isCardEditMode ? '40px' : '18px';
+            const deleteBtn = isCardEditMode ? `<div onclick="removeCard('${t}')" style="position:absolute; top:-8px; right:-8px; background:var(--color-sell); color:#fff; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:10; box-shadow:0 0 10px rgba(0,0,0,0.5);"><i class="fa-solid fa-minus"></i></div>` : '';
+            const dragStyle = isCardEditMode ? 'cursor: grab;' : '';
 
             html += `
-            <div class="glass-panel card-item ${isCardEditMode ? 'edit-mode' : ''}" data-ticker="${t}" style="padding: 18px; padding-left: ${paddingLeft}; display:flex; flex-direction:column; gap:12px;" ${isCardEditMode ? `onmousedown="onCardDragStart(event, '${t}', this)" ontouchstart="onCardDragStart(event, '${t}', this)"` : ''}>
-                ${dragHandle}
+            <div class="glass-panel card-item" data-ticker="${t}" style="padding: 18px; display:flex; flex-direction:column; gap:12px; ${dragStyle}">
                 ${deleteBtn}
                 <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:10px;">
                     <span style="font-size:18px; font-weight:900; color:var(--color-acc); letter-spacing:0.5px;">${t}</span>
@@ -793,33 +700,37 @@
 
         if (isCardEditMode) {
             html += `
-            <div id="add-card-box" onclick="addCardPrompt()" style="border: 2px dashed rgba(255,255,255,0.15); border-radius: 12px; background: rgba(0,0,0,0.2); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; min-height: 220px; color: #888; transition: all 0.2s;">
+            <div class="add-card-btn" onclick="addCardPrompt()" style="border: 2px dashed rgba(255,255,255,0.15); border-radius: 12px; background: rgba(0,0,0,0.2); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; min-height: 220px; color: #888; transition: all 0.2s;">
                 <i class="fa-solid fa-plus" style="font-size:35px; margin-bottom:12px; color:var(--color-acc);"></i>
                 <span style="font-weight:bold; font-size:14px; letter-spacing:1px;">新增自選資產</span>
             </div>`;
         }
-
         grid.innerHTML = html || (!isCardEditMode ? '<div style="color:#666; font-size:14px; grid-column:1/-1; text-align:center; padding:50px;">目前無監控卡片，請點擊右上角「編輯」進行新增</div>' : '');
+
+        if (window.cardSortable) { window.cardSortable.destroy(); window.cardSortable = null; }
+        if (isCardEditMode) {
+            window.cardSortable = new Sortable(grid, {
+                animation: 250, delay: 200, delayOnTouchOnly: true, filter: '.add-card-btn', ghostClass: 'sortable-ghost',
+                onEnd: function () {
+                    const newTickers = [];
+                    grid.querySelectorAll('.card-item').forEach(el => newTickers.push(el.getAttribute('data-ticker')));
+                    state.cardTickers = newTickers;
+                    localStorage.setItem(DATA_KEY, JSON.stringify(state));
+                }
+            });
+        }
     }
 
-    function addToRecentlySelected(t) {
-        state.recentTickers = [t, ...state.recentTickers.filter(item => item !== t)].slice(0, 5);
-        saveData(); renderRecentTickers();
-    }
+    function addToRecentlySelected(t) { state.recentTickers = [t, ...state.recentTickers.filter(item => item !== t)].slice(0, 5); saveData(); renderRecentTickers(); }
     function renderRecentTickers() {
-        document.getElementById("recent-tickers-list").innerHTML = state.recentTickers.map(t => `
-            <div class="dropdown-item" onclick="selectTicker('${t}')">
-                <span style="font-weight:bold; color:var(--color-buy)">${t}</span>
-                <span style="color:#888; font-size:11px;">最近選取</span>
-            </div>`).join("");
+        document.getElementById("recent-tickers-list").innerHTML = state.recentTickers.map(t => `<div class="dropdown-item" onclick="selectTicker('${t}')"><span style="font-weight:bold; color:var(--color-buy)">${t}</span><span style="color:#888; font-size:11px;">最近選取</span></div>`).join("");
     }
 
     const tickerInput = document.getElementById("trade-ticker");
     tickerInput.addEventListener("input", (e) => {
         const query = e.target.value.trim().toUpperCase();
         document.getElementById("ticker-dropdown").classList.add("show");
-        document.getElementById("recent-group-title").style.display = 'none';
-        document.getElementById("recent-tickers-list").style.display = 'none';
+        document.getElementById("recent-group-title").style.display = 'none'; document.getElementById("recent-tickers-list").style.display = 'none';
 
         clearTimeout(searchDebounceTimer);
         searchDebounceTimer = setTimeout(async () => {
@@ -827,14 +738,9 @@
             document.getElementById("live-search-list").innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> 搜尋 ${query}...</div>`;
             try {
                 const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query2.finance.yahoo.com/v1/finance/search?q=${query}&quotesCount=6`)}`;
-                const res = await fetch(proxyUrl, { cache: "no-store" });
-                const json = await res.json();
+                const res = await fetch(proxyUrl, { cache: "no-store" }); const json = await res.json();
                 if(json.quotes && json.quotes.length > 0) {
-                    document.getElementById("live-search-list").innerHTML = json.quotes.map(q => `
-                        <div class="dropdown-item" onclick="selectTicker('${q.symbol}')">
-                            <div><strong style="color:#fff">${q.symbol}</strong> <span style="color:#888; font-size:11px">${q.shortname || ''}</span></div>
-                            <span style="color:var(--color-acc); font-size:11px">${q.exchDisp || ''}</span>
-                        </div>`).join("");
+                    document.getElementById("live-search-list").innerHTML = json.quotes.map(q => `<div class="dropdown-item" onclick="selectTicker('${q.symbol}')"><div><strong style="color:#fff">${q.symbol}</strong> <span style="color:#888; font-size:11px">${q.shortname || ''}</span></div><span style="color:var(--color-acc); font-size:11px">${q.exchDisp || ''}</span></div>`).join("");
                 } else document.getElementById("live-search-list").innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#ff4560;">查無符合標的</div>`;
             } catch(err) { document.getElementById("live-search-list").innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#ff4560;">連線異常</div>`; }
         }, 300);
@@ -853,7 +759,6 @@
         isPriceLoading = true; currentRealPrice = null;
         document.getElementById("trade-price-display").innerHTML = `<span style="font-size:14px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> 報價連線中...</span>`;
         document.getElementById("exec-trade-btn").disabled = true;
-        
         fetchRealPrice(t); fetchStockHistoryData(t, currentStockTF);
     }
 
@@ -861,19 +766,13 @@
         try {
             const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}`)}`;
             const res = await fetch(proxyUrl, { cache: "no-store" });
-            if(res.ok) { 
-                const json = await res.json(), price = json.chart.result[0].meta.regularMarketPrice; 
-                if(price) { currentRealPrice = price; isPriceLoading = false; }
-            }
+            if(res.ok) { const json = await res.json(), price = json.chart.result[0].meta.regularMarketPrice; if(price) { currentRealPrice = price; isPriceLoading = false; } }
         } catch(e) {}
         finally {
             if (currentRealPrice !== null && !isPriceLoading) {
                 document.getElementById("trade-price-display").innerText = `$ ${currentRealPrice.toFixed(2)}`;
-                document.getElementById("ai-current-ticker").innerText = currentTicker;
-                validateSharesInput();
-            } else {
-                document.getElementById("trade-price-display").innerHTML = `<span style="font-size:14px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> 報價連線中...</span>`;
-            }
+                document.getElementById("ai-current-ticker").innerText = currentTicker; validateSharesInput();
+            } else { document.getElementById("trade-price-display").innerHTML = `<span style="font-size:14px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> 報價連線中...</span>`; }
             updateAllViews();
         }
     }
@@ -885,9 +784,7 @@
         tfBg.style.width = `${btn.offsetWidth}px`; tfBg.style.transform = `translateX(${btn.offsetLeft}px)`;
         tfBtns.forEach((b, i) => b.classList.toggle('active', i === index));
     }
-    tfBtns.forEach((btn, index) => btn.addEventListener('click', () => {
-        updateTfBg(index); currentStockTF = btn.dataset.tf; fetchStockHistoryData(currentTicker, currentStockTF);
-    }));
+    tfBtns.forEach((btn, index) => btn.addEventListener('click', () => { updateTfBg(index); currentStockTF = btn.dataset.tf; fetchStockHistoryData(currentTicker, currentStockTF); }));
     setTimeout(() => updateTfBg(0, false), 100);
 
     document.querySelectorAll("#m-tf-group .tf-btn").forEach(btn => {
@@ -989,6 +886,7 @@
         const total = tradeMode === 'BUY' ? (subtotal + fee) : (subtotal - fee - tax), totalEl = document.getElementById("calc-total");
         document.getElementById("total-label").innerText = tradeMode === 'BUY' ? '預估總付出:' : '預估總收入:';
         totalEl.innerText = `$ ${total.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+        totalEl.style.color = '#fff';
     }
 
     function executeTrade() {
@@ -1019,6 +917,7 @@
         if(state.navHistory.data.length > 60) { state.navHistory.labels.shift(); state.navHistory.data.shift(); }
     }
 
+    /* 🌟 重構表格色彩與橫向滾動 */
     function updateAllViews() {
         let holdingsVal = 0, totalCost = 0;
         for(let t in state.holdings) { let price = (t === currentTicker && currentRealPrice !== null) ? currentRealPrice : state.holdings[t].avgPrice; holdingsVal += state.holdings[t].shares * price; totalCost += state.holdings[t].shares * state.holdings[t].avgPrice; }
@@ -1028,13 +927,12 @@
         document.getElementById("nav-pnl").innerText = `${pnl >= 0 ? '+' : ''}$ ${Math.floor(pnl).toLocaleString()} (${totalCost > 0 ? ((pnl/totalCost)*100).toFixed(1) : 0}%)`;
         document.getElementById("nav-pnl").style.color = pnl >= 0 ? "var(--color-buy)" : "var(--color-sell)";
 
-        // 表格維持原始獨立上色
         document.getElementById("holdings-table-body").innerHTML = Object.keys(state.holdings).length ? Object.keys(state.holdings).map(t => {
             const h = state.holdings[t], curP = (t === currentTicker && currentRealPrice !== null) ? currentRealPrice : h.avgPrice, val = h.shares * curP, pnl = val - (h.shares * h.avgPrice);
-            return `<tr><td style="font-weight:bold; color:var(--color-acc)">${t}</td><td>${h.shares}</td><td>$${h.avgPrice.toFixed(1)}</td><td>$${curP.toFixed(1)}</td><td>$${Math.floor(val).toLocaleString()}</td><td style="color:${pnl>=0?'var(--color-buy)':'var(--color-sell)'}">${pnl>=0?'+':''}$${Math.floor(pnl)}</td><td><button onclick="selectTicker('${t}')" style="background:rgba(255,255,255,0.08); border:none; color:#fff; padding:4px 8px; border-radius:4px;">交易</button></td></tr>`;
+            return `<tr><td style="font-weight:bold; color:var(--color-acc)">${t}</td><td>${h.shares}</td><td>$${h.avgPrice.toFixed(2)}</td><td>$${curP.toFixed(2)}</td><td>$${Math.floor(val).toLocaleString()}</td><td style="color:${pnl>=0?'var(--color-buy)':'var(--color-sell)'}; font-weight:bold;">${pnl>=0?'+':''}$${Math.floor(pnl).toLocaleString()}</td><td><button onclick="selectTicker('${t}')" style="background:rgba(255,255,255,0.08); border:none; color:#fff; padding:4px 8px; border-radius:4px; cursor:pointer;">交易</button></td></tr>`;
         }).join("") : `<tr><td colspan="7" style="text-align:center; color:#555; padding:30px;">尚無持股</td></tr>`;
 
-        document.getElementById("ledger-table-body").innerHTML = state.ledger.length ? state.ledger.map(r => `<tr><td>${r.time}</td><td><span class="badge ${r.action==='BUY'?'badge-buy':'badge-sell'}">${r.action}</span></td><td style="font-weight:bold;">${r.ticker}</td><td>$${r.price.toFixed(1)}</td><td>${r.shares}</td><td>$${r.fee.toFixed(1)}</td><td style="font-weight:bold;">$${Math.floor(r.total).toLocaleString()}</td></tr>`).join("") : `<tr><td colspan="7" style="text-align:center; color:#555; padding:30px;">尚無紀錄</td></tr>`;
+        document.getElementById("ledger-table-body").innerHTML = state.ledger.length ? state.ledger.map(r => `<tr><td style="color:#888;">${r.time}</td><td><span class="badge ${r.action==='BUY'?'badge-buy':'badge-sell'}">${r.action}</span></td><td style="font-weight:bold; color:var(--color-acc);">${r.ticker}</td><td>$${r.price.toFixed(2)}</td><td>${r.shares}</td><td style="color:#aaa;">$${r.fee.toFixed(2)}</td><td style="font-weight:bold; color:${r.action==='BUY'?'var(--color-warn)':'var(--color-buy)'};">$${Math.floor(r.total).toLocaleString()}</td></tr>`).join("") : `<tr><td colspan="7" style="text-align:center; color:#555; padding:30px;">尚無紀錄</td></tr>`;
         renderAllCharts();
     }
 
