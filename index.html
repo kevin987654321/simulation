@@ -6,8 +6,8 @@
     <title>AlphaTrade | 手動量化操盤指揮中心</title>
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
     
     <style>
         :root {
@@ -156,15 +156,20 @@
         .chat-input-area input { flex: 1; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); padding: 8px 12px; border-radius: 6px; color: #fff; font-size: 12px; outline: none; }
         .send-btn { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 0 16px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: bold; }
 
-        /* 🌟 表格與橫向捲軸優化 */
         .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
         .table-responsive::-webkit-scrollbar { display: none; }
-        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12.5px; font-family: monospace; min-width: 650px; }
+        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12.5px; font-family: monospace; min-width: 680px; }
         th { color: #777; padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,0.08); background: #0c0c0c; font-weight: 600; white-space: nowrap; }
         td { padding: 12px 14px; color: #ddd; border-bottom: 1px solid rgba(255,255,255,0.03); white-space: nowrap; }
+        
         .badge { padding: 3px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; }
         .badge-buy { background: rgba(0,255,170,0.12); color: var(--color-buy); border: 1px solid rgba(0,255,170,0.3); }
         .badge-sell { background: rgba(255,69,96,0.12); color: var(--color-sell); border: 1px solid rgba(255,69,96,0.3); }
+
+        /* 🌟 卡片排序專用拖曳視覺效果 */
+        .sortable-ghost { opacity: 0.2; }
+        .sortable-chosen { transform: scale(1.03); box-shadow: 0 15px 40px rgba(0,0,0,0.9); z-index: 100; border-color: var(--color-acc) !important; }
+        .sortable-drag { cursor: grabbing !important; }
 
         .settings-list { max-width: 650px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; width: 100%; }
         .setting-item { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; }
@@ -182,22 +187,9 @@
         .jelly-input { width: 48px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 4px; border-radius: 6px; text-align: center; font-family: monospace; font-size: 12px; }
         .setting-item.disabled { opacity: 0.3; pointer-events: none; }
 
-        /* 🌟 SortableJS 動畫輔助類別 */
-        .sortable-ghost { opacity: 0.3; transform: scale(0.95); }
-
         #mobile-header { display: none; }
         #sidebar-overlay { display: none; }
 
-        /* 🌟 電腦版嚴格防捲動鎖死 */
-        @media (min-width: 769px) {
-            #view-dashboard { overflow: hidden !important; }
-            .dashboard-body { overflow: hidden !important; min-height: 0; }
-            .dashboard-left-col { overflow: hidden !important; min-height: 0; }
-            #desktop-trade-col { display: flex; flex-direction: column; overflow: hidden !important; min-height: 0; }
-            #shared-trade-panel { flex: 1; overflow-y: auto !important; min-height: 0; }
-        }
-
-        /* 🌟 手機規範與完全消除雙層卷軸 */
         @media (max-width: 768px) {
             .mobile-only { display: flex; }
             #mobile-header { display: flex; justify-content: space-between; align-items: center; height: 60px; padding: 0 20px; background: rgba(10, 10, 10, 0.95); border-bottom: 1px solid rgba(255,255,255,0.06); z-index: 50; position: absolute; top: 0; left: 0; width: 100%; }
@@ -241,12 +233,10 @@
     <div class="glass-title-text"><i class="fa-solid fa-cube" style="color: var(--color-acc)"></i> ALPHATRADE</div>
     <div class="menu-item active" onclick="switchView('view-dashboard', this)"><i class="fa-solid fa-chart-line"></i> 指揮操盤中心</div>
     <div class="menu-item mobile-only" onclick="switchView('view-mobile-trade', this)"><i class="fa-solid fa-hand-holding-dollar"></i> 下單櫃檯</div>
-    
     <div class="menu-item" onclick="switchView('view-cards', this)"><i class="fa-solid fa-address-card"></i> 自選資產卡片</div>
-    
     <div class="menu-item" onclick="switchView('view-holdings', this)"><i class="fa-solid fa-wallet"></i> 庫存與資產損益</div>
     <div class="menu-item" onclick="switchView('view-ledger', this)"><i class="fa-solid fa-file-invoice-dollar"></i> 歷史交易帳本</div>
-    <div class="menu-item" style="margin-top: auto;" onclick="switchView('view-settings', this)"><i class="fa-solid fa-sliders"></i> 系統與抽成設定</div>
+    <div class="menu-item" style="margin-top: auto;" onclick="switchView('view-settings', this)"><i class="fa-solid fa-sliders"></i> 系統設定</div>
 </aside>
 
 <div id="content-area">
@@ -330,7 +320,7 @@
                 編輯
             </button>
         </div>
-        <div id="cards-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:14px; padding-bottom: 30px;">
+        <div id="cards-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:14px; align-items:start;">
             </div>
     </main>
 
@@ -396,7 +386,7 @@
         <div class="custom-select-wrapper" id="ticker-select-wrapper">
             <div class="select-input-box">
                 <i class="fa-solid fa-magnifying-glass" style="color:#666; font-size:12px; margin-right:8px;"></i>
-                <input type="text" id="trade-ticker" value="NVDA" autocomplete="off" placeholder="搜尋代號">
+                <input type="text" id="trade-ticker" value="NVDA" autocomplete="off" placeholder="搜尋全球代號">
                 <button class="select-dropdown-btn" onclick="toggleTickerDropdown()"><i class="fa-solid fa-chevron-down"></i></button>
             </div>
             <div class="opaque-dropdown-list" id="ticker-dropdown">
@@ -404,7 +394,7 @@
                 <div id="recent-tickers-list"></div>
                 <div class="dropdown-group-title" style="border-top:1px solid rgba(255,255,255,0.05);">⚡ 即時搜尋結果</div>
                 <div id="live-search-list">
-                    <div style="padding:10px 12px; font-size:11px; color:#666;">輸入代號或名稱以搜尋全球市場...</div>
+                    <div style="padding:10px 12px; font-size:11px; color:#666;">輸入代號自動撈取全球市場標的...</div>
                 </div>
             </div>
         </div>
@@ -513,7 +503,7 @@
     function toggleSidebar() { sidebarEl.classList.toggle('open'); overlayEl.classList.toggle('active'); sidebarEl.style.transform = ''; }
     document.addEventListener('touchstart', (e) => {
         if (window.innerWidth > 768) return;
-        if (e.target.closest('canvas, .tf-btn, .jelly-slider-input, .jelly-slider-container, .table-responsive')) { sIsDragging = false; return; }
+        if (e.target.closest('canvas, .tf-btn, .jelly-slider-input, .jelly-slider-container, .table-responsive, .no-drag')) { sIsDragging = false; return; }
         sStartX = e.touches[0].clientX; sStartY = e.touches[0].clientY; sIsDragging = true; sIsDetermined = false;
         if (!sidebarEl.classList.contains('open') && sStartX > window.innerWidth * 0.66) sIsDragging = false;
     }, {passive: true});
@@ -542,7 +532,6 @@
         document.querySelectorAll(".menu-item").forEach(m => m.classList.remove("active"));
         document.getElementById(id).classList.add("active"); if(btn) btn.classList.add("active");
         if(window.innerWidth <= 768 && sidebarEl.classList.contains('open')) toggleSidebar();
-        
         if(id === 'view-cards') { fetchAllCardsData(); renderCards(); }
     }
 
@@ -567,8 +556,7 @@
     let stockHistData = { labels: [], prices: [] };
     let tradeMode = 'BUY';
     
-    let cardsDataCache = {};
-    let isCardEditMode = false;
+    let cardsDataCache = {}, isCardEditMode = false, sortableCards = null;
 
     function initData() {
         const saved = localStorage.getItem(DATA_KEY);
@@ -589,10 +577,9 @@
         document.getElementById("trade-ticker").value = currentTicker; document.getElementById("m-chart-ticker").innerText = currentTicker;
         renderRecentTickers(); renderCards();
     }
-    function saveData() { localStorage.setItem(DATA_KEY, JSON.stringify(state)); updateAllViews(); }
+    function saveData() { localStorage.setItem(DATA_KEY, JSON.stringify(state)); updateAllViews(); renderCards(); }
     function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { localStorage.removeItem(DATA_KEY); state = { cash: 1000000, holdings: {}, ledger: [], recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { labels: [], data: [] } }; initData(); } }
 
-    /* 🌟 卡片排序與編輯邏輯 */
     function toggleCardEditMode() {
         isCardEditMode = !isCardEditMode;
         const btn = document.getElementById('edit-cards-btn');
@@ -602,36 +589,40 @@
         renderCards();
     }
 
-    function removeCard(ticker) { state.cardTickers = state.cardTickers.filter(t => t !== ticker); saveData(); renderCards(); }
+    function removeCard(ticker) {
+        state.cardTickers = state.cardTickers.filter(t => t !== ticker);
+        saveData();
+    }
 
     function addCardPrompt() {
         const grid = document.getElementById('cards-grid');
-        const addBtn = grid.querySelector('.add-card-btn');
-        if (addBtn) {
-            addBtn.style.borderStyle = 'solid'; addBtn.style.borderColor = 'var(--color-acc)';
-            addBtn.innerHTML = `
-                <input type="text" id="new-card-input" placeholder="代號 (如 AAPL)" autocomplete="off" style="width:80%; padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:rgba(0,0,0,0.6); color:#fff; text-align:center; font-weight:bold; font-size:14px; outline:none; text-transform:uppercase; margin-bottom:12px;">
-                <div style="display:flex; gap:10px;">
-                    <button onclick="confirmAddCard(event)" style="background:var(--color-acc); color:#000; border:none; padding:6px 16px; border-radius:6px; font-weight:bold; cursor:pointer;">新增</button>
-                    <button onclick="renderCards(event)" style="background:rgba(255,255,255,0.1); color:#fff; border:none; padding:6px 16px; border-radius:6px; cursor:pointer;">取消</button>
-                </div>
-            `;
-            document.getElementById('new-card-input').focus();
-        }
+        const box = document.createElement('div');
+        box.className = 'no-drag';
+        box.style = "border: 2px dashed var(--color-acc); border-radius: 12px; background: rgba(0,212,255,0.05); display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 220px; padding: 20px;";
+        box.innerHTML = `
+            <input type="text" id="new-card-input" placeholder="輸入代號" autocomplete="off" style="width:80%; padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:rgba(0,0,0,0.6); color:#fff; text-align:center; font-weight:bold; font-size:14px; outline:none; text-transform:uppercase; margin-bottom:12px;">
+            <div style="display:flex; gap:10px;">
+                <button onclick="confirmAddCard()" style="background:var(--color-acc); color:#000; border:none; padding:6px 16px; border-radius:6px; font-weight:bold; cursor:pointer;">新增</button>
+                <button onclick="renderCards()" style="background:rgba(255,255,255,0.1); color:#fff; border:none; padding:6px 16px; border-radius:6px; cursor:pointer;">取消</button>
+            </div>
+        `;
+        const addButton = grid.lastElementChild;
+        grid.replaceChild(box, addButton);
+        document.getElementById('new-card-input').focus();
     }
 
-    function confirmAddCard(e) {
-        if(e) e.stopPropagation();
+    function confirmAddCard() {
         const val = document.getElementById('new-card-input').value.trim().toUpperCase();
-        if(val && !state.cardTickers.includes(val)) { state.cardTickers.push(val); saveData(); fetchAllCardsData(); } else { renderCards(); }
+        if(val && !state.cardTickers.includes(val)) {
+            state.cardTickers.push(val); saveData(); fetchAllCardsData();
+        } else { renderCards(); }
     }
 
     async function fetchAllCardsData() {
         if (!document.getElementById('view-cards').classList.contains('active')) return;
         for (const t of state.cardTickers) {
             try {
-                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${t}?range=1mo&interval=1d`)}`;
-                const res = await fetch(proxyUrl, { cache: "no-store" });
+                const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${t}?range=1mo&interval=1d`)}`, { cache: "no-store" });
                 if(res.ok) { 
                     const json = await res.json(), result = json.chart.result[0];
                     const price = result.meta.regularMarketPrice, prices = result.indicators.quote[0].close || [];
@@ -647,21 +638,15 @@
         const grid = document.getElementById('cards-grid');
         let html = '';
         state.cardTickers.forEach(t => {
-            const cData = cardsDataCache[t] || { price: 0, rsi: null };
-            const h = state.holdings[t] || { shares: 0, avgPrice: 0 };
-            const gross = h.shares * cData.price;
-            const feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100;
-            const taxRate = parseFloat(document.getElementById("cfg-tax-rate").value) / 100;
+            const cData = cardsDataCache[t] || { price: 0, rsi: null }, h = state.holdings[t] || { shares: 0, avgPrice: 0 };
+            const gross = h.shares * cData.price, feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100, taxRate = parseFloat(document.getElementById("cfg-tax-rate").value) / 100;
             const netValue = gross > 0 ? (gross - (gross * feeRate) - (gross * taxRate)) : 0;
-            const totalCost = h.shares * h.avgPrice;
-            const pnl = netValue - totalCost;
+            const totalCost = h.shares * h.avgPrice, pnl = netValue - totalCost;
             const pnlColor = pnl >= 0 ? 'var(--color-buy)' : 'var(--color-sell)';
-            
             const deleteBtn = isCardEditMode ? `<div onclick="removeCard('${t}')" style="position:absolute; top:-8px; right:-8px; background:var(--color-sell); color:#fff; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:10; box-shadow:0 0 10px rgba(0,0,0,0.5);"><i class="fa-solid fa-minus"></i></div>` : '';
-            const dragStyle = isCardEditMode ? 'cursor: grab;' : '';
 
             html += `
-            <div class="glass-panel card-item" data-ticker="${t}" style="padding: 18px; display:flex; flex-direction:column; gap:12px; ${dragStyle}">
+            <div class="glass-panel card-item" data-ticker="${t}" style="padding: 18px; display:flex; flex-direction:column; gap:12px; cursor: ${isCardEditMode ? 'grab' : 'default'};">
                 ${deleteBtn}
                 <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:10px;">
                     <span style="font-size:18px; font-weight:900; color:var(--color-acc); letter-spacing:0.5px;">${t}</span>
@@ -700,30 +685,44 @@
 
         if (isCardEditMode) {
             html += `
-            <div class="add-card-btn" onclick="addCardPrompt()" style="border: 2px dashed rgba(255,255,255,0.15); border-radius: 12px; background: rgba(0,0,0,0.2); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; min-height: 220px; color: #888; transition: all 0.2s;">
+            <div class="no-drag" onclick="addCardPrompt()" style="border: 2px dashed rgba(255,255,255,0.15); border-radius: 12px; background: rgba(0,0,0,0.2); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; min-height: 220px; color: #888; transition: all 0.2s;">
                 <i class="fa-solid fa-plus" style="font-size:35px; margin-bottom:12px; color:var(--color-acc);"></i>
                 <span style="font-weight:bold; font-size:14px; letter-spacing:1px;">新增自選資產</span>
             </div>`;
         }
         grid.innerHTML = html || (!isCardEditMode ? '<div style="color:#666; font-size:14px; grid-column:1/-1; text-align:center; padding:50px;">目前無監控卡片，請點擊右上角「編輯」進行新增</div>' : '');
+        initSortable();
+    }
 
-        if (window.cardSortable) { window.cardSortable.destroy(); window.cardSortable = null; }
+    function initSortable() {
+        const grid = document.getElementById('cards-grid');
         if (isCardEditMode) {
-            window.cardSortable = new Sortable(grid, {
-                animation: 250, delay: 200, delayOnTouchOnly: true, filter: '.add-card-btn', ghostClass: 'sortable-ghost',
-                onEnd: function () {
-                    const newTickers = [];
-                    grid.querySelectorAll('.card-item').forEach(el => newTickers.push(el.getAttribute('data-ticker')));
-                    state.cardTickers = newTickers;
-                    localStorage.setItem(DATA_KEY, JSON.stringify(state));
-                }
-            });
+            if (!sortableCards) {
+                sortableCards = new Sortable(grid, {
+                    animation: 250, delay: 250, delayOnTouchOnly: true, touchStartThreshold: 5,
+                    filter: '.no-drag', ghostClass: 'sortable-ghost', chosenClass: 'sortable-chosen', dragClass: 'sortable-drag',
+                    onEnd: function () {
+                        const newOrder = [];
+                        grid.querySelectorAll('.card-item').forEach(el => { const t = el.getAttribute('data-ticker'); if (t) newOrder.push(t); });
+                        state.cardTickers = newOrder; saveData();
+                    }
+                });
+            }
+        } else {
+            if (sortableCards) { sortableCards.destroy(); sortableCards = null; }
         }
     }
 
-    function addToRecentlySelected(t) { state.recentTickers = [t, ...state.recentTickers.filter(item => item !== t)].slice(0, 5); saveData(); renderRecentTickers(); }
+    function addToRecentlySelected(t) {
+        state.recentTickers = [t, ...state.recentTickers.filter(item => item !== t)].slice(0, 5);
+        saveData(); renderRecentTickers();
+    }
     function renderRecentTickers() {
-        document.getElementById("recent-tickers-list").innerHTML = state.recentTickers.map(t => `<div class="dropdown-item" onclick="selectTicker('${t}')"><span style="font-weight:bold; color:var(--color-buy)">${t}</span><span style="color:#888; font-size:11px;">最近選取</span></div>`).join("");
+        document.getElementById("recent-tickers-list").innerHTML = state.recentTickers.map(t => `
+            <div class="dropdown-item" onclick="selectTicker('${t}')">
+                <span style="font-weight:bold; color:var(--color-buy)">${t}</span>
+                <span style="color:#888; font-size:11px;">最近選取</span>
+            </div>`).join("");
     }
 
     const tickerInput = document.getElementById("trade-ticker");
@@ -738,9 +737,14 @@
             document.getElementById("live-search-list").innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> 搜尋 ${query}...</div>`;
             try {
                 const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query2.finance.yahoo.com/v1/finance/search?q=${query}&quotesCount=6`)}`;
-                const res = await fetch(proxyUrl, { cache: "no-store" }); const json = await res.json();
+                const res = await fetch(proxyUrl, { cache: "no-store" });
+                const json = await res.json();
                 if(json.quotes && json.quotes.length > 0) {
-                    document.getElementById("live-search-list").innerHTML = json.quotes.map(q => `<div class="dropdown-item" onclick="selectTicker('${q.symbol}')"><div><strong style="color:#fff">${q.symbol}</strong> <span style="color:#888; font-size:11px">${q.shortname || ''}</span></div><span style="color:var(--color-acc); font-size:11px">${q.exchDisp || ''}</span></div>`).join("");
+                    document.getElementById("live-search-list").innerHTML = json.quotes.map(q => `
+                        <div class="dropdown-item" onclick="selectTicker('${q.symbol}')">
+                            <div><strong style="color:#fff">${q.symbol}</strong> <span style="color:#888; font-size:11px">${q.shortname || ''}</span></div>
+                            <span style="color:var(--color-acc); font-size:11px">${q.exchDisp || ''}</span>
+                        </div>`).join("");
                 } else document.getElementById("live-search-list").innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#ff4560;">查無符合標的</div>`;
             } catch(err) { document.getElementById("live-search-list").innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#ff4560;">連線異常</div>`; }
         }, 300);
@@ -759,6 +763,7 @@
         isPriceLoading = true; currentRealPrice = null;
         document.getElementById("trade-price-display").innerHTML = `<span style="font-size:14px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> 報價連線中...</span>`;
         document.getElementById("exec-trade-btn").disabled = true;
+        
         fetchRealPrice(t); fetchStockHistoryData(t, currentStockTF);
     }
 
@@ -766,13 +771,19 @@
         try {
             const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}`)}`;
             const res = await fetch(proxyUrl, { cache: "no-store" });
-            if(res.ok) { const json = await res.json(), price = json.chart.result[0].meta.regularMarketPrice; if(price) { currentRealPrice = price; isPriceLoading = false; } }
+            if(res.ok) { 
+                const json = await res.json(), price = json.chart.result[0].meta.regularMarketPrice; 
+                if(price) { currentRealPrice = price; isPriceLoading = false; }
+            }
         } catch(e) {}
         finally {
             if (currentRealPrice !== null && !isPriceLoading) {
                 document.getElementById("trade-price-display").innerText = `$ ${currentRealPrice.toFixed(2)}`;
-                document.getElementById("ai-current-ticker").innerText = currentTicker; validateSharesInput();
-            } else { document.getElementById("trade-price-display").innerHTML = `<span style="font-size:14px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> 報價連線中...</span>`; }
+                document.getElementById("ai-current-ticker").innerText = currentTicker;
+                validateSharesInput();
+            } else {
+                document.getElementById("trade-price-display").innerHTML = `<span style="font-size:14px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> 報價連線中...</span>`;
+            }
             updateAllViews();
         }
     }
@@ -784,7 +795,9 @@
         tfBg.style.width = `${btn.offsetWidth}px`; tfBg.style.transform = `translateX(${btn.offsetLeft}px)`;
         tfBtns.forEach((b, i) => b.classList.toggle('active', i === index));
     }
-    tfBtns.forEach((btn, index) => btn.addEventListener('click', () => { updateTfBg(index); currentStockTF = btn.dataset.tf; fetchStockHistoryData(currentTicker, currentStockTF); }));
+    tfBtns.forEach((btn, index) => btn.addEventListener('click', () => {
+        updateTfBg(index); currentStockTF = btn.dataset.tf; fetchStockHistoryData(currentTicker, currentStockTF);
+    }));
     setTimeout(() => updateTfBg(0, false), 100);
 
     document.querySelectorAll("#m-tf-group .tf-btn").forEach(btn => {
@@ -886,7 +899,6 @@
         const total = tradeMode === 'BUY' ? (subtotal + fee) : (subtotal - fee - tax), totalEl = document.getElementById("calc-total");
         document.getElementById("total-label").innerText = tradeMode === 'BUY' ? '預估總付出:' : '預估總收入:';
         totalEl.innerText = `$ ${total.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
-        totalEl.style.color = '#fff';
     }
 
     function executeTrade() {
@@ -907,7 +919,7 @@
             state.ledger.unshift({ time: tradeTime, action: "SELL", ticker: currentTicker, price: currentRealPrice, shares: s, fee: fee + tax, total: totalGet });
             triggerDynamicFeedback(`成功賣出 ${s} 股 ${currentTicker}`, 'sell', document.getElementById('exec-trade-btn'), `+$${Math.floor(totalGet).toLocaleString()}`);
         }
-        recordNavSnapshot(); saveData(); validateSharesInput();
+        recordNavSnapshot(); saveData(); validateSharesInput(); fetchAllCardsData(); // 交易完更新卡片
     }
 
     function recordNavSnapshot() {
@@ -917,7 +929,6 @@
         if(state.navHistory.data.length > 60) { state.navHistory.labels.shift(); state.navHistory.data.shift(); }
     }
 
-    /* 🌟 重構表格色彩與橫向滾動 */
     function updateAllViews() {
         let holdingsVal = 0, totalCost = 0;
         for(let t in state.holdings) { let price = (t === currentTicker && currentRealPrice !== null) ? currentRealPrice : state.holdings[t].avgPrice; holdingsVal += state.holdings[t].shares * price; totalCost += state.holdings[t].shares * state.holdings[t].avgPrice; }
@@ -929,10 +940,10 @@
 
         document.getElementById("holdings-table-body").innerHTML = Object.keys(state.holdings).length ? Object.keys(state.holdings).map(t => {
             const h = state.holdings[t], curP = (t === currentTicker && currentRealPrice !== null) ? currentRealPrice : h.avgPrice, val = h.shares * curP, pnl = val - (h.shares * h.avgPrice);
-            return `<tr><td style="font-weight:bold; color:var(--color-acc)">${t}</td><td>${h.shares}</td><td>$${h.avgPrice.toFixed(2)}</td><td>$${curP.toFixed(2)}</td><td>$${Math.floor(val).toLocaleString()}</td><td style="color:${pnl>=0?'var(--color-buy)':'var(--color-sell)'}; font-weight:bold;">${pnl>=0?'+':''}$${Math.floor(pnl).toLocaleString()}</td><td><button onclick="selectTicker('${t}')" style="background:rgba(255,255,255,0.08); border:none; color:#fff; padding:4px 8px; border-radius:4px; cursor:pointer;">交易</button></td></tr>`;
+            return `<tr><td style="font-weight:bold; color:var(--color-acc)">${t}</td><td>${h.shares}</td><td>$${h.avgPrice.toFixed(1)}</td><td>$${curP.toFixed(1)}</td><td>$${Math.floor(val).toLocaleString()}</td><td style="color:${pnl>=0?'var(--color-buy)':'var(--color-sell)'}; font-weight:bold;">${pnl>=0?'+':''}$${Math.floor(pnl)}</td><td><button onclick="selectTicker('${t}')" style="background:rgba(255,255,255,0.08); border:none; color:#fff; padding:4px 8px; border-radius:4px; cursor:pointer;">交易</button></td></tr>`;
         }).join("") : `<tr><td colspan="7" style="text-align:center; color:#555; padding:30px;">尚無持股</td></tr>`;
 
-        document.getElementById("ledger-table-body").innerHTML = state.ledger.length ? state.ledger.map(r => `<tr><td style="color:#888;">${r.time}</td><td><span class="badge ${r.action==='BUY'?'badge-buy':'badge-sell'}">${r.action}</span></td><td style="font-weight:bold; color:var(--color-acc);">${r.ticker}</td><td>$${r.price.toFixed(2)}</td><td>${r.shares}</td><td style="color:#aaa;">$${r.fee.toFixed(2)}</td><td style="font-weight:bold; color:${r.action==='BUY'?'var(--color-warn)':'var(--color-buy)'};">$${Math.floor(r.total).toLocaleString()}</td></tr>`).join("") : `<tr><td colspan="7" style="text-align:center; color:#555; padding:30px;">尚無紀錄</td></tr>`;
+        document.getElementById("ledger-table-body").innerHTML = state.ledger.length ? state.ledger.map(r => `<tr><td>${r.time}</td><td><span class="badge ${r.action==='BUY'?'badge-buy':'badge-sell'}">${r.action}</span></td><td style="font-weight:bold; color:var(--color-acc);">${r.ticker}</td><td>$${r.price.toFixed(1)}</td><td>${r.shares}</td><td>$${r.fee.toFixed(1)}</td><td style="font-weight:bold; color:${r.action==='BUY' ? '#fff' : '#fff'};">$${Math.floor(r.total).toLocaleString()}</td></tr>`).join("") : `<tr><td colspan="7" style="text-align:center; color:#555; padding:30px;">尚無紀錄</td></tr>`;
         renderAllCharts();
     }
 
