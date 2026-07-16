@@ -7,7 +7,6 @@
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
     
     <style>
         :root {
@@ -52,8 +51,6 @@
             backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
             box-shadow: 0 10px 35px rgba(0, 0, 0, 0.7); transition: border-color 0.4s ease, box-shadow 0.4s ease;
         }
-        .panel-flash-buy { border-color: var(--color-buy) !important; box-shadow: 0 0 25px rgba(0, 255, 170, 0.3) !important; }
-        .panel-flash-sell { border-color: var(--color-sell) !important; box-shadow: 0 0 25px rgba(255, 69, 96, 0.3) !important; }
 
         #toast-container { position: fixed; top: 20px; right: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
         .toast { position: relative; overflow: hidden; background: rgba(15, 15, 18, 0.92); border: 1px solid rgba(255,255,255,0.12); padding: 14px 20px; border-radius: 10px; font-size: 13px; font-weight: bold; box-shadow: 0 15px 35px rgba(0,0,0,0.8); display: flex; align-items: center; gap: 12px; backdrop-filter: blur(15px); pointer-events: auto; animation: toastEnter 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
@@ -156,20 +153,20 @@
         .chat-input-area input { flex: 1; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); padding: 8px 12px; border-radius: 6px; color: #fff; font-size: 12px; outline: none; }
         .send-btn { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 0 16px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: bold; }
 
+        /* 🌟 表格與橫向捲軸優化 */
         .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
         .table-responsive::-webkit-scrollbar { display: none; }
         table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12.5px; font-family: monospace; min-width: 680px; }
         th { color: #777; padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,0.08); background: #0c0c0c; font-weight: 600; white-space: nowrap; }
         td { padding: 12px 14px; color: #ddd; border-bottom: 1px solid rgba(255,255,255,0.03); white-space: nowrap; }
-        
         .badge { padding: 3px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; }
         .badge-buy { background: rgba(0,255,170,0.12); color: var(--color-buy); border: 1px solid rgba(0,255,170,0.3); }
         .badge-sell { background: rgba(255,69,96,0.12); color: var(--color-sell); border: 1px solid rgba(255,69,96,0.3); }
 
-        /* 🌟 卡片排序專用拖曳視覺效果 */
-        .sortable-ghost { opacity: 0.2; }
-        .sortable-chosen { transform: scale(1.03); box-shadow: 0 15px 40px rgba(0,0,0,0.9); z-index: 100; border-color: var(--color-acc) !important; }
-        .sortable-drag { cursor: grabbing !important; }
+        /* 🌟 卡片無縫拖拉設定 */
+        .card-wrapper { transition: transform 0.3s ease; user-select: none; -webkit-user-select: none; }
+        .card-placeholder { border: 2px dashed rgba(255,255,255,0.2); border-radius: 12px; background: rgba(0,0,0,0.2); min-height: 220px; }
+        .card-wrapper.dragging { position: fixed; z-index: 9999; pointer-events: none; transition: none !important; transform: scale(1.05); box-shadow: 0 20px 40px rgba(0,0,0,0.8); }
 
         .settings-list { max-width: 650px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; width: 100%; }
         .setting-item { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; }
@@ -233,7 +230,9 @@
     <div class="glass-title-text"><i class="fa-solid fa-cube" style="color: var(--color-acc)"></i> ALPHATRADE</div>
     <div class="menu-item active" onclick="switchView('view-dashboard', this)"><i class="fa-solid fa-chart-line"></i> 指揮操盤中心</div>
     <div class="menu-item mobile-only" onclick="switchView('view-mobile-trade', this)"><i class="fa-solid fa-hand-holding-dollar"></i> 下單櫃檯</div>
+    
     <div class="menu-item" onclick="switchView('view-cards', this)"><i class="fa-solid fa-address-card"></i> 自選資產卡片</div>
+    
     <div class="menu-item" onclick="switchView('view-holdings', this)"><i class="fa-solid fa-wallet"></i> 庫存與資產損益</div>
     <div class="menu-item" onclick="switchView('view-ledger', this)"><i class="fa-solid fa-file-invoice-dollar"></i> 歷史交易帳本</div>
     <div class="menu-item" style="margin-top: auto;" onclick="switchView('view-settings', this)"><i class="fa-solid fa-sliders"></i> 系統設定</div>
@@ -320,7 +319,7 @@
                 編輯
             </button>
         </div>
-        <div id="cards-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:14px; align-items:start;">
+        <div id="cards-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:14px; padding-bottom:30px;">
             </div>
     </main>
 
@@ -382,11 +381,16 @@
 </div>
 
 <div id="shared-trade-panel" class="glass-panel trade-panel">
+    <div class="panel-header">
+        <span><i class="fa-solid fa-terminal" style="color: var(--color-buy)"></i> 即時報價與下單</span>
+        <span id="market-status" style="font-size:11px; color:#00ffaa;">● 市場連線中</span>
+    </div>
+
     <div>
         <div class="custom-select-wrapper" id="ticker-select-wrapper">
             <div class="select-input-box">
                 <i class="fa-solid fa-magnifying-glass" style="color:#666; font-size:12px; margin-right:8px;"></i>
-                <input type="text" id="trade-ticker" value="NVDA" autocomplete="off" placeholder="搜尋全球代號">
+                <input type="text" id="trade-ticker" value="NVDA" autocomplete="off" placeholder="搜尋代號">
                 <button class="select-dropdown-btn" onclick="toggleTickerDropdown()"><i class="fa-solid fa-chevron-down"></i></button>
             </div>
             <div class="opaque-dropdown-list" id="ticker-dropdown">
@@ -394,7 +398,7 @@
                 <div id="recent-tickers-list"></div>
                 <div class="dropdown-group-title" style="border-top:1px solid rgba(255,255,255,0.05);">⚡ 即時搜尋結果</div>
                 <div id="live-search-list">
-                    <div style="padding:10px 12px; font-size:11px; color:#666;">輸入代號自動撈取全球市場標的...</div>
+                    <div style="padding:10px 12px; font-size:11px; color:#666;">輸入代號或名稱以搜尋全球市場...</div>
                 </div>
             </div>
         </div>
@@ -455,9 +459,9 @@
     </div>
 
     <div class="fee-breakdown">
-        <div class="fee-row"><span style="color:#fff;">預算總計:</span><span id="calc-subtotal" style="color:#fff;">$ 0.00</span></div>
-        <div class="fee-row"><span style="color:#fff;">券商手續費:</span><span id="calc-fee" style="color:#fff;">$ 0.00</span></div>
-        <div class="fee-row"><span style="color:#fff;">預估證交稅:</span><span id="calc-tax" style="color:#fff;">$ 0.00</span></div>
+        <div class="fee-row"><span>預算總計:</span><span id="calc-subtotal" style="color:#fff;">$ 0.00</span></div>
+        <div class="fee-row"><span>券商手續費:</span><span id="calc-fee" style="color:#fff;">$ 0.00</span></div>
+        <div class="fee-row"><span>預估證交稅:</span><span id="calc-tax" style="color:#fff;">$ 0.00</span></div>
         <div class="fee-row total"><span id="total-label" style="color:#fff;">預估交割金:</span><span id="calc-total" style="color:#fff;">$ 0.00</span></div>
     </div>
 
@@ -465,6 +469,9 @@
 </div>
 
 <script>
+    /* =======================================
+       🌟 全域通用工具與 UI 狀態管理
+       ======================================= */
     function getFormattedTime() {
         const d = new Date();
         return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -503,7 +510,7 @@
     function toggleSidebar() { sidebarEl.classList.toggle('open'); overlayEl.classList.toggle('active'); sidebarEl.style.transform = ''; }
     document.addEventListener('touchstart', (e) => {
         if (window.innerWidth > 768) return;
-        if (e.target.closest('canvas, .tf-btn, .jelly-slider-input, .jelly-slider-container, .table-responsive, .no-drag')) { sIsDragging = false; return; }
+        if (e.target.closest('canvas, .tf-btn, .jelly-slider-input, .jelly-slider-container, .table-responsive')) { sIsDragging = false; return; }
         sStartX = e.touches[0].clientX; sStartY = e.touches[0].clientY; sIsDragging = true; sIsDetermined = false;
         if (!sidebarEl.classList.contains('open') && sStartX > window.innerWidth * 0.66) sIsDragging = false;
     }, {passive: true});
@@ -532,6 +539,7 @@
         document.querySelectorAll(".menu-item").forEach(m => m.classList.remove("active"));
         document.getElementById(id).classList.add("active"); if(btn) btn.classList.add("active");
         if(window.innerWidth <= 768 && sidebarEl.classList.contains('open')) toggleSidebar();
+        
         if(id === 'view-cards') { fetchAllCardsData(); renderCards(); }
     }
 
@@ -548,6 +556,111 @@
     };
     Chart.register(holdToPreviewPlugin);
 
+    /* =======================================
+       🌟 卡片系統無縫拖曳排序 (FLIP)
+       ======================================= */
+    let dragEl = null, dragPlaceholder = null;
+    let dragStartX, dragStartY, dragInitLeft, dragInitTop;
+    let dragTimer = null, isCardDragging = false;
+
+    function onCardDragStart(e, ticker) {
+        if (!isCardEditMode) return;
+        if (e.target.closest('.delete-btn')) return;
+        
+        const touch = e.type.includes('mouse') ? e : e.touches[0];
+        const wrapper = e.currentTarget;
+        clearTimeout(dragTimer);
+        
+        dragTimer = setTimeout(() => {
+            isCardDragging = true;
+            if ("vibrate" in navigator) navigator.vibrate(50);
+            
+            dragEl = wrapper;
+            dragStartX = touch.clientX; dragStartY = touch.clientY;
+            const rect = wrapper.getBoundingClientRect();
+            dragInitLeft = rect.left; dragInitTop = rect.top;
+            
+            dragPlaceholder = document.createElement('div');
+            dragPlaceholder.className = 'card-placeholder';
+            dragPlaceholder.style.width = `${rect.width}px`; dragPlaceholder.style.height = `${rect.height}px`;
+            
+            wrapper.before(dragPlaceholder);
+            wrapper.style.width = `${rect.width}px`; wrapper.style.height = `${rect.height}px`;
+            wrapper.style.left = `${dragInitLeft}px`; wrapper.style.top = `${dragInitTop}px`;
+            wrapper.classList.add('dragging');
+            document.body.style.overflow = 'hidden';
+        }, 250); 
+    }
+
+    document.addEventListener('mousemove', onGlobalCardMove, {passive: false});
+    document.addEventListener('touchmove', onGlobalCardMove, {passive: false});
+    document.addEventListener('mouseup', onGlobalCardEnd);
+    document.addEventListener('touchend', onGlobalCardEnd);
+    document.addEventListener('touchcancel', onGlobalCardEnd);
+
+    function onGlobalCardMove(e) {
+        if (!isCardDragging) { clearTimeout(dragTimer); return; }
+        e.preventDefault();
+        const touch = e.type.includes('mouse') ? e : e.touches[0];
+        dragEl.style.left = `${dragInitLeft + touch.clientX - dragStartX}px`;
+        dragEl.style.top = `${dragInitTop + touch.clientY - dragStartY}px`;
+        
+        dragEl.style.display = 'none';
+        const overEl = document.elementFromPoint(touch.clientX, touch.clientY);
+        dragEl.style.display = '';
+        
+        if (overEl) {
+            const targetWrapper = overEl.closest('.card-wrapper');
+            if (targetWrapper && targetWrapper !== dragEl && targetWrapper !== dragPlaceholder) {
+                const rect = targetWrapper.getBoundingClientRect();
+                const isAfter = (touch.clientX > rect.left + rect.width / 2);
+                
+                const grid = document.getElementById('cards-grid');
+                const wrappers = Array.from(grid.querySelectorAll('.card-wrapper:not(.dragging)'));
+                const rects = wrappers.map(w => ({ el: w, rect: w.getBoundingClientRect() }));
+                
+                if (isAfter) targetWrapper.after(dragPlaceholder);
+                else targetWrapper.before(dragPlaceholder);
+                
+                wrappers.forEach(w => {
+                    const oldRect = rects.find(r => r.el === w).rect;
+                    const newRect = w.getBoundingClientRect();
+                    const dx = oldRect.left - newRect.left; const dy = oldRect.top - newRect.top;
+                    if (dx !== 0 || dy !== 0) {
+                        w.style.transform = `translate(${dx}px, ${dy}px)`; w.style.transition = 'none';
+                        requestAnimationFrame(() => { w.style.transform = ''; w.style.transition = 'transform 0.3s ease'; });
+                    }
+                });
+                updateTickerArrayFromDOM();
+            }
+        }
+    }
+
+    function onGlobalCardEnd(e) {
+        clearTimeout(dragTimer);
+        if (!isCardDragging || !dragEl) return;
+        const rect = dragPlaceholder.getBoundingClientRect();
+        dragEl.style.transition = 'all 0.3s ease';
+        dragEl.style.left = `${rect.left}px`; dragEl.style.top = `${rect.top}px`; dragEl.style.transform = 'scale(1)';
+        
+        setTimeout(() => {
+            dragEl.classList.remove('dragging'); dragEl.style.cssText = '';
+            dragPlaceholder.replaceWith(dragEl); dragEl = null; dragPlaceholder = null;
+            isCardDragging = false; document.body.style.overflow = '';
+            updateTickerArrayFromDOM(); saveData();
+        }, 300);
+    }
+
+    function updateTickerArrayFromDOM() {
+        const wrappers = document.getElementById('cards-grid').querySelectorAll('.card-wrapper');
+        const newTickers = [];
+        wrappers.forEach(w => { if (w.dataset.ticker) newTickers.push(w.dataset.ticker); });
+        state.cardTickers = newTickers;
+    }
+
+    /* =======================================
+       🌟 核心系統與資料庫邏輯
+       ======================================= */
     const DATA_KEY = "ALPHATRADE_MANUAL_DATA";
     let state = { cash: 1000000, holdings: {}, ledger: [], recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW", "TSLA"], navHistory: { labels: [], data: [] } };
     let currentTicker = localStorage.getItem('LAST_SELECTED_TICKER') || "NVDA";
@@ -556,7 +669,8 @@
     let stockHistData = { labels: [], prices: [] };
     let tradeMode = 'BUY';
     
-    let cardsDataCache = {}, isCardEditMode = false, sortableCards = null;
+    let cardsDataCache = {};
+    let isCardEditMode = false;
 
     function initData() {
         const saved = localStorage.getItem(DATA_KEY);
@@ -589,33 +703,26 @@
         renderCards();
     }
 
-    function removeCard(ticker) {
-        state.cardTickers = state.cardTickers.filter(t => t !== ticker);
-        saveData();
-    }
+    function removeCard(ticker) { state.cardTickers = state.cardTickers.filter(t => t !== ticker); saveData(); }
 
     function addCardPrompt() {
         const grid = document.getElementById('cards-grid');
         const box = document.createElement('div');
-        box.className = 'no-drag';
         box.style = "border: 2px dashed var(--color-acc); border-radius: 12px; background: rgba(0,212,255,0.05); display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 220px; padding: 20px;";
         box.innerHTML = `
-            <input type="text" id="new-card-input" placeholder="輸入代號" autocomplete="off" style="width:80%; padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:rgba(0,0,0,0.6); color:#fff; text-align:center; font-weight:bold; font-size:14px; outline:none; text-transform:uppercase; margin-bottom:12px;">
+            <input type="text" id="new-card-input" placeholder="代號" autocomplete="off" style="width:80%; padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:rgba(0,0,0,0.6); color:#fff; text-align:center; font-weight:bold; font-size:14px; outline:none; text-transform:uppercase; margin-bottom:12px;">
             <div style="display:flex; gap:10px;">
                 <button onclick="confirmAddCard()" style="background:var(--color-acc); color:#000; border:none; padding:6px 16px; border-radius:6px; font-weight:bold; cursor:pointer;">新增</button>
                 <button onclick="renderCards()" style="background:rgba(255,255,255,0.1); color:#fff; border:none; padding:6px 16px; border-radius:6px; cursor:pointer;">取消</button>
             </div>
         `;
-        const addButton = grid.lastElementChild;
-        grid.replaceChild(box, addButton);
+        grid.replaceChild(box, grid.lastElementChild);
         document.getElementById('new-card-input').focus();
     }
 
     function confirmAddCard() {
         const val = document.getElementById('new-card-input').value.trim().toUpperCase();
-        if(val && !state.cardTickers.includes(val)) {
-            state.cardTickers.push(val); saveData(); fetchAllCardsData();
-        } else { renderCards(); }
+        if(val && !state.cardTickers.includes(val)) { state.cardTickers.push(val); saveData(); fetchAllCardsData(); } else { renderCards(); }
     }
 
     async function fetchAllCardsData() {
@@ -638,45 +745,51 @@
         const grid = document.getElementById('cards-grid');
         let html = '';
         state.cardTickers.forEach(t => {
-            const cData = cardsDataCache[t] || { price: 0, rsi: null }, h = state.holdings[t] || { shares: 0, avgPrice: 0 };
-            const gross = h.shares * cData.price, feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100, taxRate = parseFloat(document.getElementById("cfg-tax-rate").value) / 100;
+            const cData = cardsDataCache[t] || { price: 0, rsi: null };
+            const h = state.holdings[t] || { shares: 0, avgPrice: 0 };
+            const gross = h.shares * cData.price;
+            const feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100, taxRate = parseFloat(document.getElementById("cfg-tax-rate").value) / 100;
             const netValue = gross > 0 ? (gross - (gross * feeRate) - (gross * taxRate)) : 0;
-            const totalCost = h.shares * h.avgPrice, pnl = netValue - totalCost;
+            const totalCost = h.shares * h.avgPrice;
+            const pnl = netValue - totalCost;
             const pnlColor = pnl >= 0 ? 'var(--color-buy)' : 'var(--color-sell)';
-            const deleteBtn = isCardEditMode ? `<div onclick="removeCard('${t}')" style="position:absolute; top:-8px; right:-8px; background:var(--color-sell); color:#fff; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:10; box-shadow:0 0 10px rgba(0,0,0,0.5);"><i class="fa-solid fa-minus"></i></div>` : '';
+            
+            const deleteBtn = isCardEditMode ? `<div class="delete-btn" onclick="removeCard('${t}')" style="position:absolute; top:-8px; right:-8px; background:var(--color-sell); color:#fff; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:10; box-shadow:0 0 10px rgba(0,0,0,0.5);"><i class="fa-solid fa-minus"></i></div>` : '';
 
             html += `
-            <div class="glass-panel card-item" data-ticker="${t}" style="padding: 18px; display:flex; flex-direction:column; gap:12px; cursor: ${isCardEditMode ? 'grab' : 'default'};">
+            <div class="card-wrapper" data-ticker="${t}" style="position:relative;" onmousedown="onCardDragStart(event, '${t}')" ontouchstart="onCardDragStart(event, '${t}')">
                 ${deleteBtn}
-                <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:10px;">
-                    <span style="font-size:18px; font-weight:900; color:var(--color-acc); letter-spacing:0.5px;">${t}</span>
-                    <span style="font-size:22px; font-weight:bold; font-family:monospace;">$${cData.price > 0 ? cData.price.toFixed(2) : '----'}</span>
-                </div>
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; font-size:12px;">
-                    <div style="display:flex; flex-direction:column; gap:4px;">
-                        <span style="color:#777;">14日 RSI</span>
-                        <span style="font-family:monospace; font-weight:bold; font-size:13px; color:${cData.rsi >= 70 ? 'var(--color-sell)' : cData.rsi <= 30 ? 'var(--color-buy)' : 'var(--color-acc)'}">${cData.rsi !== null ? cData.rsi.toFixed(1) : '--'}</span>
+                <div class="glass-panel" style="padding: 18px; display:flex; flex-direction:column; gap:12px; transition: transform 0.2s; ${isCardEditMode ? 'cursor: grab;' : ''}">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:10px;">
+                        <span style="font-size:18px; font-weight:900; color:var(--color-acc); letter-spacing:0.5px;">${t}</span>
+                        <span style="font-size:22px; font-weight:bold; font-family:monospace;">$${cData.price > 0 ? cData.price.toFixed(2) : '----'}</span>
                     </div>
-                    <div style="display:flex; flex-direction:column; gap:4px; text-align:right;">
-                        <span style="color:#777;">持有數量</span>
-                        <span style="font-family:monospace; font-weight:bold; font-size:13px;">${h.shares} 股</span>
-                    </div>
-                    <div style="display:flex; flex-direction:column; gap:4px;">
-                        <span style="color:#777;">買入均價</span>
-                        <span style="font-family:monospace; font-weight:bold; font-size:13px;">$${h.avgPrice.toFixed(2)}</span>
-                    </div>
-                    <div style="display:flex; flex-direction:column; gap:4px; text-align:right;">
-                        <span style="color:#777;">買入總成本</span>
-                        <span style="font-family:monospace; font-weight:bold; font-size:13px;">$${totalCost.toLocaleString(undefined, {minimumFractionDigits:2})}</span>
-                    </div>
-                    <div style="display:flex; flex-direction:column; gap:6px; grid-column: span 2; background:rgba(0,0,0,0.4); padding:10px 12px; border-radius:8px; margin-top:4px;">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <span style="color:#888;">實收總價值 <span style="font-size:10px">(扣稅費)</span></span>
-                            <span style="font-family:monospace; font-weight:bold; font-size:14px; color:${netValue > 0 ? '#fff' : '#888'};">$${netValue.toLocaleString(undefined, {minimumFractionDigits:2})}</span>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; font-size:12px;">
+                        <div style="display:flex; flex-direction:column; gap:4px;">
+                            <span style="color:#777;">14日 RSI</span>
+                            <span style="font-family:monospace; font-weight:bold; font-size:13px; color:${cData.rsi >= 70 ? 'var(--color-sell)' : cData.rsi <= 30 ? 'var(--color-buy)' : 'var(--color-acc)'}">${cData.rsi !== null ? cData.rsi.toFixed(1) : '--'}</span>
                         </div>
-                        <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid rgba(255,255,255,0.05); padding-top:6px;">
-                            <span style="color:#888;">預估淨損益</span>
-                            <span style="font-family:monospace; font-weight:bold; font-size:14px; color:${pnlColor};">${pnl >= 0 ? '+' : ''}$${pnl.toLocaleString(undefined, {minimumFractionDigits:2})}</span>
+                        <div style="display:flex; flex-direction:column; gap:4px; text-align:right;">
+                            <span style="color:#777;">持有數量</span>
+                            <span style="font-family:monospace; font-weight:bold; font-size:13px; color:#fff;">${h.shares} 股</span>
+                        </div>
+                        <div style="display:flex; flex-direction:column; gap:4px;">
+                            <span style="color:#777;">買入均價</span>
+                            <span style="font-family:monospace; font-weight:bold; font-size:13px; color:#fff;">$${h.avgPrice.toFixed(2)}</span>
+                        </div>
+                        <div style="display:flex; flex-direction:column; gap:4px; text-align:right;">
+                            <span style="color:#777;">買入總成本</span>
+                            <span style="font-family:monospace; font-weight:bold; font-size:13px; color:#fff;">$${totalCost.toLocaleString(undefined, {minimumFractionDigits:2})}</span>
+                        </div>
+                        <div style="display:flex; flex-direction:column; gap:6px; grid-column: span 2; background:rgba(0,0,0,0.4); padding:10px 12px; border-radius:8px; margin-top:4px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <span style="color:#888;">實收總價值 <span style="font-size:10px">(扣稅費)</span></span>
+                                <span style="font-family:monospace; font-weight:bold; font-size:14px; color:${netValue > 0 ? '#fff' : '#888'};">$${netValue.toLocaleString(undefined, {minimumFractionDigits:2})}</span>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid rgba(255,255,255,0.05); padding-top:6px;">
+                                <span style="color:#888;">預估淨損益</span>
+                                <span style="font-family:monospace; font-weight:bold; font-size:14px; color:${pnlColor};">${pnl >= 0 ? '+' : ''}$${pnl.toLocaleString(undefined, {minimumFractionDigits:2})}</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -685,32 +798,13 @@
 
         if (isCardEditMode) {
             html += `
-            <div class="no-drag" onclick="addCardPrompt()" style="border: 2px dashed rgba(255,255,255,0.15); border-radius: 12px; background: rgba(0,0,0,0.2); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; min-height: 220px; color: #888; transition: all 0.2s;">
+            <div onclick="addCardPrompt()" style="border: 2px dashed rgba(255,255,255,0.15); border-radius: 12px; background: rgba(0,0,0,0.2); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; min-height: 220px; color: #888; transition: all 0.2s;">
                 <i class="fa-solid fa-plus" style="font-size:35px; margin-bottom:12px; color:var(--color-acc);"></i>
-                <span style="font-weight:bold; font-size:14px; letter-spacing:1px;">新增自選資產</span>
+                <span style="font-weight:bold; font-size:14px; letter-spacing:1px;">新增</span>
             </div>`;
         }
-        grid.innerHTML = html || (!isCardEditMode ? '<div style="color:#666; font-size:14px; grid-column:1/-1; text-align:center; padding:50px;">目前無監控卡片，請點擊右上角「編輯」進行新增</div>' : '');
-        initSortable();
-    }
 
-    function initSortable() {
-        const grid = document.getElementById('cards-grid');
-        if (isCardEditMode) {
-            if (!sortableCards) {
-                sortableCards = new Sortable(grid, {
-                    animation: 250, delay: 250, delayOnTouchOnly: true, touchStartThreshold: 5,
-                    filter: '.no-drag', ghostClass: 'sortable-ghost', chosenClass: 'sortable-chosen', dragClass: 'sortable-drag',
-                    onEnd: function () {
-                        const newOrder = [];
-                        grid.querySelectorAll('.card-item').forEach(el => { const t = el.getAttribute('data-ticker'); if (t) newOrder.push(t); });
-                        state.cardTickers = newOrder; saveData();
-                    }
-                });
-            }
-        } else {
-            if (sortableCards) { sortableCards.destroy(); sortableCards = null; }
-        }
+        grid.innerHTML = html || (!isCardEditMode ? '<div style="color:#666; font-size:14px; grid-column:1/-1; text-align:center; padding:50px;">目前無監控卡片，請點擊右上角「編輯」進行新增</div>' : '');
     }
 
     function addToRecentlySelected(t) {
@@ -729,7 +823,8 @@
     tickerInput.addEventListener("input", (e) => {
         const query = e.target.value.trim().toUpperCase();
         document.getElementById("ticker-dropdown").classList.add("show");
-        document.getElementById("recent-group-title").style.display = 'none'; document.getElementById("recent-tickers-list").style.display = 'none';
+        document.getElementById("recent-group-title").style.display = 'none';
+        document.getElementById("recent-tickers-list").style.display = 'none';
 
         clearTimeout(searchDebounceTimer);
         searchDebounceTimer = setTimeout(async () => {
@@ -919,7 +1014,7 @@
             state.ledger.unshift({ time: tradeTime, action: "SELL", ticker: currentTicker, price: currentRealPrice, shares: s, fee: fee + tax, total: totalGet });
             triggerDynamicFeedback(`成功賣出 ${s} 股 ${currentTicker}`, 'sell', document.getElementById('exec-trade-btn'), `+$${Math.floor(totalGet).toLocaleString()}`);
         }
-        recordNavSnapshot(); saveData(); validateSharesInput(); fetchAllCardsData(); // 交易完更新卡片
+        recordNavSnapshot(); saveData(); validateSharesInput();
     }
 
     function recordNavSnapshot() {
@@ -929,6 +1024,7 @@
         if(state.navHistory.data.length > 60) { state.navHistory.labels.shift(); state.navHistory.data.shift(); }
     }
 
+    // 🌟 表格高對比原色回歸
     function updateAllViews() {
         let holdingsVal = 0, totalCost = 0;
         for(let t in state.holdings) { let price = (t === currentTicker && currentRealPrice !== null) ? currentRealPrice : state.holdings[t].avgPrice; holdingsVal += state.holdings[t].shares * price; totalCost += state.holdings[t].shares * state.holdings[t].avgPrice; }
@@ -940,10 +1036,27 @@
 
         document.getElementById("holdings-table-body").innerHTML = Object.keys(state.holdings).length ? Object.keys(state.holdings).map(t => {
             const h = state.holdings[t], curP = (t === currentTicker && currentRealPrice !== null) ? currentRealPrice : h.avgPrice, val = h.shares * curP, pnl = val - (h.shares * h.avgPrice);
-            return `<tr><td style="font-weight:bold; color:var(--color-acc)">${t}</td><td>${h.shares}</td><td>$${h.avgPrice.toFixed(1)}</td><td>$${curP.toFixed(1)}</td><td>$${Math.floor(val).toLocaleString()}</td><td style="color:${pnl>=0?'var(--color-buy)':'var(--color-sell)'}; font-weight:bold;">${pnl>=0?'+':''}$${Math.floor(pnl)}</td><td><button onclick="selectTicker('${t}')" style="background:rgba(255,255,255,0.08); border:none; color:#fff; padding:4px 8px; border-radius:4px; cursor:pointer;">交易</button></td></tr>`;
+            return `<tr>
+                <td style="font-weight:bold; color:var(--color-acc)">${t}</td>
+                <td style="color:#fff;">${h.shares}</td>
+                <td style="color:#fff;">$${h.avgPrice.toFixed(2)}</td>
+                <td style="color:#fff;">$${curP.toFixed(2)}</td>
+                <td style="color:#fff;">$${Math.floor(val).toLocaleString()}</td>
+                <td style="color:${pnl>=0?'var(--color-buy)':'var(--color-sell)'}; font-weight:bold;">${pnl>=0?'+':''}$${Math.floor(pnl)}</td>
+                <td><button onclick="selectTicker('${t}')" style="background:rgba(255,255,255,0.08); border:none; color:#fff; padding:4px 8px; border-radius:4px; cursor:pointer;">交易</button></td>
+            </tr>`;
         }).join("") : `<tr><td colspan="7" style="text-align:center; color:#555; padding:30px;">尚無持股</td></tr>`;
 
-        document.getElementById("ledger-table-body").innerHTML = state.ledger.length ? state.ledger.map(r => `<tr><td>${r.time}</td><td><span class="badge ${r.action==='BUY'?'badge-buy':'badge-sell'}">${r.action}</span></td><td style="font-weight:bold; color:var(--color-acc);">${r.ticker}</td><td>$${r.price.toFixed(1)}</td><td>${r.shares}</td><td>$${r.fee.toFixed(1)}</td><td style="font-weight:bold; color:${r.action==='BUY' ? '#fff' : '#fff'};">$${Math.floor(r.total).toLocaleString()}</td></tr>`).join("") : `<tr><td colspan="7" style="text-align:center; color:#555; padding:30px;">尚無紀錄</td></tr>`;
+        document.getElementById("ledger-table-body").innerHTML = state.ledger.length ? state.ledger.map(r => `<tr>
+            <td style="color:#888;">${r.time}</td>
+            <td><span class="badge ${r.action==='BUY'?'badge-buy':'badge-sell'}">${r.action}</span></td>
+            <td style="font-weight:bold; color:var(--color-acc);">${r.ticker}</td>
+            <td style="color:#fff;">$${r.price.toFixed(2)}</td>
+            <td style="color:#fff;">${r.shares}</td>
+            <td style="color:#888;">$${r.fee.toFixed(2)}</td>
+            <td style="font-weight:bold; color:#fff;">$${Math.floor(r.total).toLocaleString()}</td>
+        </tr>`).join("") : `<tr><td colspan="7" style="text-align:center; color:#555; padding:30px;">尚無紀錄</td></tr>`;
+        
         renderAllCharts();
     }
 
