@@ -137,8 +137,8 @@
         .qp-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
 
         .fee-breakdown { background: rgba(0,0,0,0.4); border-radius: 8px; padding: 10px 12px; font-size: 11px; display: flex; flex-direction: column; gap: 6px; }
-        .fee-row { display: flex; justify-content: space-between; color: #888; }
-        .fee-row.total { border-top: 1px solid rgba(255,255,255,0.06); padding-top: 6px; color: #fff; font-size: 13px; font-weight: bold; }
+        .fee-row { display: flex; justify-content: space-between; color: #fff; }
+        .fee-row.total { border-top: 1px solid rgba(255,255,255,0.06); padding-top: 6px; font-size: 13px; font-weight: bold; }
 
         .exec-btn { margin-top: auto; padding: 14px; border-radius: 8px; font-weight: 900; font-size: 15px; cursor: pointer; transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s, box-shadow 0.2s; }
         .exec-btn.buy { background: var(--color-buy); border: none; color: #000; box-shadow: 0 0 15px rgba(0,255,170,0.3); }
@@ -226,9 +226,7 @@
     <div class="glass-title-text"><i class="fa-solid fa-cube" style="color: var(--color-acc)"></i> ALPHATRADE</div>
     <div class="menu-item active" onclick="switchView('view-dashboard', this)"><i class="fa-solid fa-chart-line"></i> 指揮操盤中心</div>
     <div class="menu-item mobile-only" onclick="switchView('view-mobile-trade', this)"><i class="fa-solid fa-hand-holding-dollar"></i> 下單櫃檯</div>
-    
     <div class="menu-item" onclick="switchView('view-cards', this)"><i class="fa-solid fa-address-card"></i> 自選資產卡片</div>
-    
     <div class="menu-item" onclick="switchView('view-holdings', this)"><i class="fa-solid fa-wallet"></i> 庫存與資產損益</div>
     <div class="menu-item" onclick="switchView('view-ledger', this)"><i class="fa-solid fa-file-invoice-dollar"></i> 歷史交易帳本</div>
     <div class="menu-item" style="margin-top: auto;" onclick="switchView('view-settings', this)"><i class="fa-solid fa-sliders"></i> 系統設定</div>
@@ -345,6 +343,18 @@
 
     <main id="view-settings" class="view-section">
         <div class="settings-list">
+            <div class="glass-panel setting-item">
+                <div>
+                    <div style="font-weight:bold;"><i class="fa-solid fa-floppy-disk" style="color:var(--color-acc)"></i> 帳本資料備份與還原</div>
+                    <div style="font-size:11px; color:#777; margin-top:2px;">將所有交易紀錄、自選卡片匯出為本機檔案，或從檔案還原</div>
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <button onclick="exportData()" style="background:rgba(0,212,255,0.15); border:1px solid var(--color-acc); color:var(--color-acc); padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s;">匯出</button>
+                    <label style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:#fff; padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s;">
+                        匯入 <input type="file" style="display:none" accept=".json" onchange="importData(event)">
+                    </label>
+                </div>
+            </div>
             <div class="glass-panel setting-item">
                 <div><div style="font-weight:bold;">手續費費率設定 (%)</div><div style="font-size:11px; color:#777; margin-top:2px;">預設折扣 0.1425%</div></div>
                 <input type="number" id="cfg-fee-rate" value="0.1425" step="0.01" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
@@ -465,24 +475,16 @@
 </div>
 
 <script>
-    function getFormattedTime() {
-        const d = new Date();
-        return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-    }
+    function getFormattedTime() { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; }
 
     function triggerDynamicFeedback(msg, type, targetBtn, valueText) {
-        const container = document.getElementById('toast-container');
-        const toast = document.createElement('div');
-        toast.className = `toast ${type}`;
-        toast.innerHTML = `<i class="fa-solid ${type === 'buy' ? 'fa-circle-arrow-up' : 'fa-circle-arrow-down'}" style="font-size:18px;"></i> <span>${msg}</span> <div class="toast-progress"></div>`;
-        container.appendChild(toast);
-        setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateY(-20px) scale(0.9)'; toast.style.transition = 'all 0.35s'; setTimeout(() => toast.remove(), 350); }, 3000);
+        const container = document.getElementById('toast-container'), toast = document.createElement('div');
+        toast.className = `toast ${type}`; toast.innerHTML = `<i class="fa-solid ${type === 'buy' ? 'fa-circle-arrow-up' : 'fa-circle-arrow-down'}" style="font-size:18px;"></i> <span>${msg}</span> <div class="toast-progress"></div>`;
+        container.appendChild(toast); setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateY(-20px) scale(0.9)'; toast.style.transition = 'all 0.35s'; setTimeout(() => toast.remove(), 350); }, 3000);
 
         if (targetBtn) {
-            const rect = targetBtn.getBoundingClientRect();
-            const floatEl = document.createElement('div'); floatEl.className = 'float-popup';
-            floatEl.style.color = type === 'buy' ? 'var(--color-buy)' : 'var(--color-sell)';
-            floatEl.style.left = `${rect.left + rect.width / 2 - 40}px`; floatEl.style.top = `${rect.top - 10}px`;
+            const rect = targetBtn.getBoundingClientRect(), floatEl = document.createElement('div'); floatEl.className = 'float-popup';
+            floatEl.style.color = type === 'buy' ? 'var(--color-buy)' : 'var(--color-sell)'; floatEl.style.left = `${rect.left + rect.width / 2 - 40}px`; floatEl.style.top = `${rect.top - 10}px`;
             floatEl.innerText = valueText; document.body.appendChild(floatEl); setTimeout(() => floatEl.remove(), 1200);
         }
         const navEl = document.getElementById('nav-total'); navEl.classList.remove('value-pulse'); void navEl.offsetWidth; navEl.classList.add('value-pulse');
@@ -557,8 +559,7 @@
         const savedShow = localStorage.getItem('SETTING_NODE_SHOW'); if (savedShow !== null) document.getElementById("cfg-node-show").checked = savedShow === 'true'; else document.getElementById("cfg-node-show").checked = true;
         const savedVal = localStorage.getItem('SETTING_NODE_VAL');
         if (savedVal !== null) {
-            document.getElementById("cfg-node-slider").value = (savedVal === 'All') ? 60 : savedVal;
-            document.getElementById("cfg-node-val").value = savedVal;
+            document.getElementById("cfg-node-slider").value = (savedVal === 'All') ? 60 : savedVal; document.getElementById("cfg-node-val").value = savedVal;
             const valNum = (savedVal === 'All') ? 60 : parseInt(savedVal); const pct = (valNum - 5) / (60 - 5); document.getElementById("jelly-thumb").style.left = `${pct * 162}px`;
         }
         document.getElementById("node-settings-wrapper").classList.toggle("disabled", !document.getElementById("cfg-node-show").checked);
@@ -568,99 +569,85 @@
     function saveData() { localStorage.setItem(DATA_KEY, JSON.stringify(state)); updateAllViews(); renderCards(); }
     function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { localStorage.removeItem(DATA_KEY); state = { cash: 1000000, holdings: {}, ledger: [], recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { labels: [], data: [] } }; initData(); } }
 
-    /* 🌟 FLIP 無殘影拖曳引擎 */
-    let cDragTimer, cIsDragging = false, cDragCard = null, cPlaceholder = null;
-    let cStartX = 0, cStartY = 0, cElemStartX = 0, cElemStartY = 0;
+    /* 🌟 JSON 備份與還原功能 */
+    function exportData() {
+        const dataStr = JSON.stringify(state, null, 2);
+        const blob = new Blob([dataStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+        a.href = url;
+        a.download = `AlphaTrade_Backup_${date}.json`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+        triggerDynamicFeedback("已成功匯出備份檔案", "buy", null, "EXPORTED");
+    }
+
+    function importData(event) {
+        const file = event.target.files[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const importedState = JSON.parse(e.target.result);
+                if (importedState && typeof importedState.cash === 'number') {
+                    state = importedState;
+                    state.cardTickers = state.cardTickers || []; state.recentTickers = state.recentTickers || [];
+                    state.holdings = state.holdings || {}; state.ledger = state.ledger || [];
+                    saveData(); fetchAllCardsData();
+                    triggerDynamicFeedback("資料已成功還原！", "buy", null, "RESTORED");
+                } else alert("檔案格式錯誤或損毀！");
+            } catch (err) { alert("檔案解析失敗！"); }
+            event.target.value = ''; 
+        };
+        reader.readAsText(file);
+    }
+
+    let cDragTimer, cIsDragging = false, cDragCard = null, cPlaceholder = null, cStartX = 0, cStartY = 0, cElemStartX = 0, cElemStartY = 0;
 
     function attachCardDragEvents() {
-        document.querySelectorAll('.draggable-card').forEach(card => {
-            card.addEventListener('touchstart', handleCardPointerDown, {passive: false});
-            card.addEventListener('mousedown', handleCardPointerDown);
-        });
+        document.querySelectorAll('.draggable-card').forEach(card => { card.addEventListener('touchstart', handleCardPointerDown, {passive: false}); card.addEventListener('mousedown', handleCardPointerDown); });
     }
 
     function handleCardPointerDown(e) {
-        if (!isCardEditMode) return;
-        if (e.target.closest('.delete-btn')) return;
-        
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        const card = e.currentTarget;
-
+        if (!isCardEditMode) return; if (e.target.closest('.delete-btn')) return;
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX, clientY = e.touches ? e.touches[0].clientY : e.clientY, card = e.currentTarget;
         cDragTimer = setTimeout(() => { startCardDrag(card, clientX, clientY); }, 300);
-
         const cancelDrag = () => { clearTimeout(cDragTimer); document.removeEventListener('touchend', cancelDrag); document.removeEventListener('mouseup', cancelDrag); document.removeEventListener('touchmove', cancelMove); document.removeEventListener('mousemove', cancelMove); };
         const cancelMove = (eMove) => { const mx = eMove.touches ? eMove.touches[0].clientX : eMove.clientX, my = eMove.touches ? eMove.touches[0].clientY : eMove.clientY; if(Math.abs(mx - clientX) > 10 || Math.abs(my - clientY) > 10) cancelDrag(); };
-
-        document.addEventListener('touchend', cancelDrag); document.addEventListener('mouseup', cancelDrag);
-        document.addEventListener('touchmove', cancelMove, {passive: true}); document.addEventListener('mousemove', cancelMove);
+        document.addEventListener('touchend', cancelDrag); document.addEventListener('mouseup', cancelDrag); document.addEventListener('touchmove', cancelMove, {passive: true}); document.addEventListener('mousemove', cancelMove);
     }
 
     function startCardDrag(card, startX, startY) {
         if(navigator.vibrate) navigator.vibrate(50);
-        cIsDragging = true; cPlaceholder = card;
-        
-        const rect = card.getBoundingClientRect();
+        cIsDragging = true; cPlaceholder = card; const rect = card.getBoundingClientRect();
         cDragCard = card.cloneNode(true);
-        cDragCard.style.position = 'fixed'; cDragCard.style.top = rect.top + 'px'; cDragCard.style.left = rect.left + 'px';
-        cDragCard.style.width = rect.width + 'px'; cDragCard.style.height = rect.height + 'px';
-        cDragCard.style.zIndex = '10000'; cDragCard.style.margin = '0';
-        cDragCard.style.boxShadow = '0 20px 40px rgba(0,0,0,0.8), 0 0 0 2px var(--color-acc)';
-        cDragCard.style.transform = 'scale(1.05)'; cDragCard.style.transition = 'transform 0.2s';
-        cDragCard.style.pointerEvents = 'none';
-        document.body.appendChild(cDragCard);
-
-        cPlaceholder.style.opacity = '0';
-        cStartX = startX; cStartY = startY; cElemStartX = rect.left; cElemStartY = rect.top;
-
-        document.addEventListener('touchmove', handleCardPointerMove, {passive: false});
-        document.addEventListener('mousemove', handleCardPointerMove);
-        document.addEventListener('touchend', handleCardPointerUp);
-        document.addEventListener('mouseup', handleCardPointerUp);
+        cDragCard.style.position = 'fixed'; cDragCard.style.top = rect.top + 'px'; cDragCard.style.left = rect.left + 'px'; cDragCard.style.width = rect.width + 'px'; cDragCard.style.height = rect.height + 'px'; cDragCard.style.zIndex = '10000'; cDragCard.style.margin = '0'; cDragCard.style.boxShadow = '0 20px 40px rgba(0,0,0,0.8), 0 0 0 2px var(--color-acc)'; cDragCard.style.transform = 'scale(1.05)'; cDragCard.style.transition = 'transform 0.2s'; cDragCard.style.pointerEvents = 'none';
+        document.body.appendChild(cDragCard); cPlaceholder.style.opacity = '0'; cStartX = startX; cStartY = startY; cElemStartX = rect.left; cElemStartY = rect.top;
+        document.addEventListener('touchmove', handleCardPointerMove, {passive: false}); document.addEventListener('mousemove', handleCardPointerMove); document.addEventListener('touchend', handleCardPointerUp); document.addEventListener('mouseup', handleCardPointerUp);
     }
 
     function handleCardPointerMove(e) {
-        if (!cIsDragging) return;
-        e.preventDefault();
+        if (!cIsDragging) return; e.preventDefault();
         const clientX = e.touches ? e.touches[0].clientX : e.clientX, clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        
-        cDragCard.style.left = (cElemStartX + (clientX - cStartX)) + 'px';
-        cDragCard.style.top = (cElemStartY + (clientY - cStartY)) + 'px';
-
-        const elementsBelow = document.elementsFromPoint(clientX, clientY);
-        const targetCard = elementsBelow.find(el => el.classList.contains('draggable-card') && el !== cPlaceholder);
+        cDragCard.style.left = (cElemStartX + (clientX - cStartX)) + 'px'; cDragCard.style.top = (cElemStartY + (clientY - cStartY)) + 'px';
+        const targetCard = document.elementsFromPoint(clientX, clientY).find(el => el.classList.contains('draggable-card') && el !== cPlaceholder);
         if (targetCard) swapCardNodes(cPlaceholder, targetCard);
     }
 
     function swapCardNodes(nodeA, nodeB) {
-        const parent = nodeA.parentNode, rectB = nodeB.getBoundingClientRect();
-        const siblingA = nodeA.nextSibling === nodeB ? nodeA : nodeA.nextSibling;
+        const parent = nodeA.parentNode, rectB = nodeB.getBoundingClientRect(), siblingA = nodeA.nextSibling === nodeB ? nodeA : nodeA.nextSibling;
         nodeB.parentNode.insertBefore(nodeA, nodeB); parent.insertBefore(nodeB, siblingA);
-        
-        const newRectB = nodeB.getBoundingClientRect();
-        const diffX = rectB.left - newRectB.left, diffY = rectB.top - newRectB.top;
-        
+        const newRectB = nodeB.getBoundingClientRect(), diffX = rectB.left - newRectB.left, diffY = rectB.top - newRectB.top;
         nodeB.style.transform = `translate(${diffX}px, ${diffY}px)`; nodeB.style.transition = 'none';
         requestAnimationFrame(() => { nodeB.style.transform = ''; nodeB.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)'; });
     }
 
     function handleCardPointerUp(e) {
-        if (!cIsDragging) return;
-        cIsDragging = false;
-        
-        const rect = cPlaceholder.getBoundingClientRect();
-        cDragCard.style.transition = 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)';
-        cDragCard.style.left = rect.left + 'px'; cDragCard.style.top = rect.top + 'px'; cDragCard.style.transform = 'scale(1)';
-        
-        document.removeEventListener('touchmove', handleCardPointerMove); document.removeEventListener('mousemove', handleCardPointerMove);
-        document.removeEventListener('touchend', handleCardPointerUp); document.removeEventListener('mouseup', handleCardPointerUp);
-        
+        if (!cIsDragging) return; cIsDragging = false; const rect = cPlaceholder.getBoundingClientRect();
+        cDragCard.style.transition = 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)'; cDragCard.style.left = rect.left + 'px'; cDragCard.style.top = rect.top + 'px'; cDragCard.style.transform = 'scale(1)';
+        document.removeEventListener('touchmove', handleCardPointerMove); document.removeEventListener('mousemove', handleCardPointerMove); document.removeEventListener('touchend', handleCardPointerUp); document.removeEventListener('mouseup', handleCardPointerUp);
         setTimeout(() => {
-            if (cDragCard) cDragCard.remove();
-            if (cPlaceholder) cPlaceholder.style.opacity = '1';
-            
-            const newOrder = [];
-            document.querySelectorAll('.draggable-card').forEach(el => { const ticker = el.getAttribute('data-ticker'); if(ticker) newOrder.push(ticker); });
+            if (cDragCard) cDragCard.remove(); if (cPlaceholder) cPlaceholder.style.opacity = '1';
+            const newOrder = []; document.querySelectorAll('.draggable-card').forEach(el => { const ticker = el.getAttribute('data-ticker'); if(ticker) newOrder.push(ticker); });
             state.cardTickers = newOrder; saveData();
         }, 300);
     }
@@ -769,7 +756,10 @@
         try {
             const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}`)}`;
             const res = await fetch(proxyUrl, { cache: "no-store" });
-            if(res.ok) { const json = await res.json(); const price = json.chart.result[0].meta.regularMarketPrice; if(price) { currentRealPrice = price; isPriceLoading = false; } }
+            if(res.ok) { 
+                const json = await res.json(), price = json.chart.result[0].meta.regularMarketPrice; 
+                if(price) { currentRealPrice = price; isPriceLoading = false; }
+            }
         } catch(e) {}
         finally {
             if (currentRealPrice !== null && !isPriceLoading) {
