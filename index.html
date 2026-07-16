@@ -51,6 +51,8 @@
             backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
             box-shadow: 0 10px 35px rgba(0, 0, 0, 0.7); transition: border-color 0.4s ease, box-shadow 0.4s ease;
         }
+        .panel-flash-buy { border-color: var(--color-buy) !important; box-shadow: 0 0 25px rgba(0, 255, 170, 0.3) !important; }
+        .panel-flash-sell { border-color: var(--color-sell) !important; box-shadow: 0 0 25px rgba(255, 69, 96, 0.3) !important; }
 
         #toast-container { position: fixed; top: 20px; right: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
         .toast { position: relative; overflow: hidden; background: rgba(15, 15, 18, 0.92); border: 1px solid rgba(255,255,255,0.12); padding: 14px 20px; border-radius: 10px; font-size: 13px; font-weight: bold; box-shadow: 0 15px 35px rgba(0,0,0,0.8); display: flex; align-items: center; gap: 12px; backdrop-filter: blur(15px); pointer-events: auto; animation: toastEnter 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
@@ -153,7 +155,6 @@
         .chat-input-area input { flex: 1; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); padding: 8px 12px; border-radius: 6px; color: #fff; font-size: 12px; outline: none; }
         .send-btn { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 0 16px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: bold; }
 
-        /* 🌟 表格與橫向捲軸優化 */
         .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
         .table-responsive::-webkit-scrollbar { display: none; }
         table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12.5px; font-family: monospace; min-width: 680px; }
@@ -162,11 +163,6 @@
         .badge { padding: 3px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; }
         .badge-buy { background: rgba(0,255,170,0.12); color: var(--color-buy); border: 1px solid rgba(0,255,170,0.3); }
         .badge-sell { background: rgba(255,69,96,0.12); color: var(--color-sell); border: 1px solid rgba(255,69,96,0.3); }
-
-        /* 🌟 卡片無縫拖拉設定 */
-        .card-wrapper { transition: transform 0.3s ease; user-select: none; -webkit-user-select: none; }
-        .card-placeholder { border: 2px dashed rgba(255,255,255,0.2); border-radius: 12px; background: rgba(0,0,0,0.2); min-height: 220px; }
-        .card-wrapper.dragging { position: fixed; z-index: 9999; pointer-events: none; transition: none !important; transform: scale(1.05); box-shadow: 0 20px 40px rgba(0,0,0,0.8); }
 
         .settings-list { max-width: 650px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; width: 100%; }
         .setting-item { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; }
@@ -319,7 +315,7 @@
                 編輯
             </button>
         </div>
-        <div id="cards-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:14px; padding-bottom:30px;">
+        <div id="cards-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:14px; position:relative;">
             </div>
     </main>
 
@@ -398,7 +394,7 @@
                 <div id="recent-tickers-list"></div>
                 <div class="dropdown-group-title" style="border-top:1px solid rgba(255,255,255,0.05);">⚡ 即時搜尋結果</div>
                 <div id="live-search-list">
-                    <div style="padding:10px 12px; font-size:11px; color:#666;">輸入代號或名稱以搜尋全球市場...</div>
+                    <div style="padding:10px 12px; font-size:11px; color:#666;">輸入代號以搜尋全球市場...</div>
                 </div>
             </div>
         </div>
@@ -469,9 +465,6 @@
 </div>
 
 <script>
-    /* =======================================
-       🌟 全域通用工具與 UI 狀態管理
-       ======================================= */
     function getFormattedTime() {
         const d = new Date();
         return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -492,7 +485,6 @@
             floatEl.style.left = `${rect.left + rect.width / 2 - 40}px`; floatEl.style.top = `${rect.top - 10}px`;
             floatEl.innerText = valueText; document.body.appendChild(floatEl); setTimeout(() => floatEl.remove(), 1200);
         }
-
         const navEl = document.getElementById('nav-total'); navEl.classList.remove('value-pulse'); void navEl.offsetWidth; navEl.classList.add('value-pulse');
     }
 
@@ -539,7 +531,6 @@
         document.querySelectorAll(".menu-item").forEach(m => m.classList.remove("active"));
         document.getElementById(id).classList.add("active"); if(btn) btn.classList.add("active");
         if(window.innerWidth <= 768 && sidebarEl.classList.contains('open')) toggleSidebar();
-        
         if(id === 'view-cards') { fetchAllCardsData(); renderCards(); }
     }
 
@@ -548,145 +539,28 @@
         beforeEvent(chart, args) {
             const e = args.event; const type = e.type;
             if (type === 'mousedown' || type === 'touchstart') chart._isPointerHolding = true;
-            else if (type === 'mouseup' || type === 'touchend' || type === 'touchcancel' || type === 'mouseout') {
-                chart._isPointerHolding = false; chart.tooltip.setActiveElements([], {x: 0, y: 0}); chart.update(); return false;
-            }
+            else if (type === 'mouseup' || type === 'touchend' || type === 'touchcancel' || type === 'mouseout') { chart._isPointerHolding = false; chart.tooltip.setActiveElements([], {x: 0, y: 0}); chart.update(); return false; }
             if (type === 'mousemove' || type === 'touchmove') { if (!chart._isPointerHolding) return false; }
         }
     };
     Chart.register(holdToPreviewPlugin);
 
-    /* =======================================
-       🌟 卡片系統無縫拖曳排序 (FLIP)
-       ======================================= */
-    let dragEl = null, dragPlaceholder = null;
-    let dragStartX, dragStartY, dragInitLeft, dragInitTop;
-    let dragTimer = null, isCardDragging = false;
-
-    function onCardDragStart(e, ticker) {
-        if (!isCardEditMode) return;
-        if (e.target.closest('.delete-btn')) return;
-        
-        const touch = e.type.includes('mouse') ? e : e.touches[0];
-        const wrapper = e.currentTarget;
-        clearTimeout(dragTimer);
-        
-        dragTimer = setTimeout(() => {
-            isCardDragging = true;
-            if ("vibrate" in navigator) navigator.vibrate(50);
-            
-            dragEl = wrapper;
-            dragStartX = touch.clientX; dragStartY = touch.clientY;
-            const rect = wrapper.getBoundingClientRect();
-            dragInitLeft = rect.left; dragInitTop = rect.top;
-            
-            dragPlaceholder = document.createElement('div');
-            dragPlaceholder.className = 'card-placeholder';
-            dragPlaceholder.style.width = `${rect.width}px`; dragPlaceholder.style.height = `${rect.height}px`;
-            
-            wrapper.before(dragPlaceholder);
-            wrapper.style.width = `${rect.width}px`; wrapper.style.height = `${rect.height}px`;
-            wrapper.style.left = `${dragInitLeft}px`; wrapper.style.top = `${dragInitTop}px`;
-            wrapper.classList.add('dragging');
-            document.body.style.overflow = 'hidden';
-        }, 250); 
-    }
-
-    document.addEventListener('mousemove', onGlobalCardMove, {passive: false});
-    document.addEventListener('touchmove', onGlobalCardMove, {passive: false});
-    document.addEventListener('mouseup', onGlobalCardEnd);
-    document.addEventListener('touchend', onGlobalCardEnd);
-    document.addEventListener('touchcancel', onGlobalCardEnd);
-
-    function onGlobalCardMove(e) {
-        if (!isCardDragging) { clearTimeout(dragTimer); return; }
-        e.preventDefault();
-        const touch = e.type.includes('mouse') ? e : e.touches[0];
-        dragEl.style.left = `${dragInitLeft + touch.clientX - dragStartX}px`;
-        dragEl.style.top = `${dragInitTop + touch.clientY - dragStartY}px`;
-        
-        dragEl.style.display = 'none';
-        const overEl = document.elementFromPoint(touch.clientX, touch.clientY);
-        dragEl.style.display = '';
-        
-        if (overEl) {
-            const targetWrapper = overEl.closest('.card-wrapper');
-            if (targetWrapper && targetWrapper !== dragEl && targetWrapper !== dragPlaceholder) {
-                const rect = targetWrapper.getBoundingClientRect();
-                const isAfter = (touch.clientX > rect.left + rect.width / 2);
-                
-                const grid = document.getElementById('cards-grid');
-                const wrappers = Array.from(grid.querySelectorAll('.card-wrapper:not(.dragging)'));
-                const rects = wrappers.map(w => ({ el: w, rect: w.getBoundingClientRect() }));
-                
-                if (isAfter) targetWrapper.after(dragPlaceholder);
-                else targetWrapper.before(dragPlaceholder);
-                
-                wrappers.forEach(w => {
-                    const oldRect = rects.find(r => r.el === w).rect;
-                    const newRect = w.getBoundingClientRect();
-                    const dx = oldRect.left - newRect.left; const dy = oldRect.top - newRect.top;
-                    if (dx !== 0 || dy !== 0) {
-                        w.style.transform = `translate(${dx}px, ${dy}px)`; w.style.transition = 'none';
-                        requestAnimationFrame(() => { w.style.transform = ''; w.style.transition = 'transform 0.3s ease'; });
-                    }
-                });
-                updateTickerArrayFromDOM();
-            }
-        }
-    }
-
-    function onGlobalCardEnd(e) {
-        clearTimeout(dragTimer);
-        if (!isCardDragging || !dragEl) return;
-        const rect = dragPlaceholder.getBoundingClientRect();
-        dragEl.style.transition = 'all 0.3s ease';
-        dragEl.style.left = `${rect.left}px`; dragEl.style.top = `${rect.top}px`; dragEl.style.transform = 'scale(1)';
-        
-        setTimeout(() => {
-            dragEl.classList.remove('dragging'); dragEl.style.cssText = '';
-            dragPlaceholder.replaceWith(dragEl); dragEl = null; dragPlaceholder = null;
-            isCardDragging = false; document.body.style.overflow = '';
-            updateTickerArrayFromDOM(); saveData();
-        }, 300);
-    }
-
-    function updateTickerArrayFromDOM() {
-        const wrappers = document.getElementById('cards-grid').querySelectorAll('.card-wrapper');
-        const newTickers = [];
-        wrappers.forEach(w => { if (w.dataset.ticker) newTickers.push(w.dataset.ticker); });
-        state.cardTickers = newTickers;
-    }
-
-    /* =======================================
-       🌟 核心系統與資料庫邏輯
-       ======================================= */
     const DATA_KEY = "ALPHATRADE_MANUAL_DATA";
-    let state = { cash: 1000000, holdings: {}, ledger: [], recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW", "TSLA"], navHistory: { labels: [], data: [] } };
+    let state = { cash: 1000000, holdings: {}, ledger: [], recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { labels: [], data: [] } };
     let currentTicker = localStorage.getItem('LAST_SELECTED_TICKER') || "NVDA";
-    let currentRealPrice = null, isPriceLoading = true;
-    let currentStockTF = '1D', searchDebounceTimer = null, desktopChartMode = 'NAV';
-    let stockHistData = { labels: [], prices: [] };
-    let tradeMode = 'BUY';
-    
-    let cardsDataCache = {};
-    let isCardEditMode = false;
+    let currentRealPrice = null, isPriceLoading = true, currentStockTF = '1D', searchDebounceTimer = null, desktopChartMode = 'NAV', tradeMode = 'BUY';
+    let stockHistData = { labels: [], prices: [] }, cardsDataCache = {}, isCardEditMode = false;
 
     function initData() {
         const saved = localStorage.getItem(DATA_KEY);
         if (saved) { try { state = JSON.parse(saved); state.cardTickers = state.cardTickers || ["NVDA", "2330.TW"]; } catch(e) {} } else { recordNavSnapshot(); saveData(); }
-        
-        const savedShow = localStorage.getItem('SETTING_NODE_SHOW');
-        if (savedShow !== null) document.getElementById("cfg-node-show").checked = savedShow === 'true'; else document.getElementById("cfg-node-show").checked = true;
-        
+        const savedShow = localStorage.getItem('SETTING_NODE_SHOW'); if (savedShow !== null) document.getElementById("cfg-node-show").checked = savedShow === 'true'; else document.getElementById("cfg-node-show").checked = true;
         const savedVal = localStorage.getItem('SETTING_NODE_VAL');
         if (savedVal !== null) {
             document.getElementById("cfg-node-slider").value = (savedVal === 'All') ? 60 : savedVal;
             document.getElementById("cfg-node-val").value = savedVal;
-            const valNum = (savedVal === 'All') ? 60 : parseInt(savedVal); const pct = (valNum - 5) / (60 - 5);
-            document.getElementById("jelly-thumb").style.left = `${pct * 162}px`;
+            const valNum = (savedVal === 'All') ? 60 : parseInt(savedVal); const pct = (valNum - 5) / (60 - 5); document.getElementById("jelly-thumb").style.left = `${pct * 162}px`;
         }
-        
         document.getElementById("node-settings-wrapper").classList.toggle("disabled", !document.getElementById("cfg-node-show").checked);
         document.getElementById("trade-ticker").value = currentTicker; document.getElementById("m-chart-ticker").innerText = currentTicker;
         renderRecentTickers(); renderCards();
@@ -694,36 +568,117 @@
     function saveData() { localStorage.setItem(DATA_KEY, JSON.stringify(state)); updateAllViews(); renderCards(); }
     function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { localStorage.removeItem(DATA_KEY); state = { cash: 1000000, holdings: {}, ledger: [], recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { labels: [], data: [] } }; initData(); } }
 
+    /* 🌟 FLIP 無殘影拖曳引擎 */
+    let cDragTimer, cIsDragging = false, cDragCard = null, cPlaceholder = null;
+    let cStartX = 0, cStartY = 0, cElemStartX = 0, cElemStartY = 0;
+
+    function attachCardDragEvents() {
+        document.querySelectorAll('.draggable-card').forEach(card => {
+            card.addEventListener('touchstart', handleCardPointerDown, {passive: false});
+            card.addEventListener('mousedown', handleCardPointerDown);
+        });
+    }
+
+    function handleCardPointerDown(e) {
+        if (!isCardEditMode) return;
+        if (e.target.closest('.delete-btn')) return;
+        
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const card = e.currentTarget;
+
+        cDragTimer = setTimeout(() => { startCardDrag(card, clientX, clientY); }, 300);
+
+        const cancelDrag = () => { clearTimeout(cDragTimer); document.removeEventListener('touchend', cancelDrag); document.removeEventListener('mouseup', cancelDrag); document.removeEventListener('touchmove', cancelMove); document.removeEventListener('mousemove', cancelMove); };
+        const cancelMove = (eMove) => { const mx = eMove.touches ? eMove.touches[0].clientX : eMove.clientX, my = eMove.touches ? eMove.touches[0].clientY : eMove.clientY; if(Math.abs(mx - clientX) > 10 || Math.abs(my - clientY) > 10) cancelDrag(); };
+
+        document.addEventListener('touchend', cancelDrag); document.addEventListener('mouseup', cancelDrag);
+        document.addEventListener('touchmove', cancelMove, {passive: true}); document.addEventListener('mousemove', cancelMove);
+    }
+
+    function startCardDrag(card, startX, startY) {
+        if(navigator.vibrate) navigator.vibrate(50);
+        cIsDragging = true; cPlaceholder = card;
+        
+        const rect = card.getBoundingClientRect();
+        cDragCard = card.cloneNode(true);
+        cDragCard.style.position = 'fixed'; cDragCard.style.top = rect.top + 'px'; cDragCard.style.left = rect.left + 'px';
+        cDragCard.style.width = rect.width + 'px'; cDragCard.style.height = rect.height + 'px';
+        cDragCard.style.zIndex = '10000'; cDragCard.style.margin = '0';
+        cDragCard.style.boxShadow = '0 20px 40px rgba(0,0,0,0.8), 0 0 0 2px var(--color-acc)';
+        cDragCard.style.transform = 'scale(1.05)'; cDragCard.style.transition = 'transform 0.2s';
+        cDragCard.style.pointerEvents = 'none';
+        document.body.appendChild(cDragCard);
+
+        cPlaceholder.style.opacity = '0';
+        cStartX = startX; cStartY = startY; cElemStartX = rect.left; cElemStartY = rect.top;
+
+        document.addEventListener('touchmove', handleCardPointerMove, {passive: false});
+        document.addEventListener('mousemove', handleCardPointerMove);
+        document.addEventListener('touchend', handleCardPointerUp);
+        document.addEventListener('mouseup', handleCardPointerUp);
+    }
+
+    function handleCardPointerMove(e) {
+        if (!cIsDragging) return;
+        e.preventDefault();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX, clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        
+        cDragCard.style.left = (cElemStartX + (clientX - cStartX)) + 'px';
+        cDragCard.style.top = (cElemStartY + (clientY - cStartY)) + 'px';
+
+        const elementsBelow = document.elementsFromPoint(clientX, clientY);
+        const targetCard = elementsBelow.find(el => el.classList.contains('draggable-card') && el !== cPlaceholder);
+        if (targetCard) swapCardNodes(cPlaceholder, targetCard);
+    }
+
+    function swapCardNodes(nodeA, nodeB) {
+        const parent = nodeA.parentNode, rectB = nodeB.getBoundingClientRect();
+        const siblingA = nodeA.nextSibling === nodeB ? nodeA : nodeA.nextSibling;
+        nodeB.parentNode.insertBefore(nodeA, nodeB); parent.insertBefore(nodeB, siblingA);
+        
+        const newRectB = nodeB.getBoundingClientRect();
+        const diffX = rectB.left - newRectB.left, diffY = rectB.top - newRectB.top;
+        
+        nodeB.style.transform = `translate(${diffX}px, ${diffY}px)`; nodeB.style.transition = 'none';
+        requestAnimationFrame(() => { nodeB.style.transform = ''; nodeB.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)'; });
+    }
+
+    function handleCardPointerUp(e) {
+        if (!cIsDragging) return;
+        cIsDragging = false;
+        
+        const rect = cPlaceholder.getBoundingClientRect();
+        cDragCard.style.transition = 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)';
+        cDragCard.style.left = rect.left + 'px'; cDragCard.style.top = rect.top + 'px'; cDragCard.style.transform = 'scale(1)';
+        
+        document.removeEventListener('touchmove', handleCardPointerMove); document.removeEventListener('mousemove', handleCardPointerMove);
+        document.removeEventListener('touchend', handleCardPointerUp); document.removeEventListener('mouseup', handleCardPointerUp);
+        
+        setTimeout(() => {
+            if (cDragCard) cDragCard.remove();
+            if (cPlaceholder) cPlaceholder.style.opacity = '1';
+            
+            const newOrder = [];
+            document.querySelectorAll('.draggable-card').forEach(el => { const ticker = el.getAttribute('data-ticker'); if(ticker) newOrder.push(ticker); });
+            state.cardTickers = newOrder; saveData();
+        }, 300);
+    }
+
     function toggleCardEditMode() {
-        isCardEditMode = !isCardEditMode;
-        const btn = document.getElementById('edit-cards-btn');
+        isCardEditMode = !isCardEditMode; const btn = document.getElementById('edit-cards-btn');
         btn.innerText = isCardEditMode ? '完成' : '編輯';
-        btn.style.background = isCardEditMode ? 'var(--color-sell)' : 'transparent';
-        btn.style.borderColor = isCardEditMode ? 'var(--color-sell)' : 'rgba(255,255,255,0.2)';
+        btn.style.background = isCardEditMode ? 'var(--color-sell)' : 'transparent'; btn.style.borderColor = isCardEditMode ? 'var(--color-sell)' : 'rgba(255,255,255,0.2)';
         renderCards();
     }
-
     function removeCard(ticker) { state.cardTickers = state.cardTickers.filter(t => t !== ticker); saveData(); }
-
     function addCardPrompt() {
-        const grid = document.getElementById('cards-grid');
-        const box = document.createElement('div');
+        const grid = document.getElementById('cards-grid'), box = document.createElement('div');
         box.style = "border: 2px dashed var(--color-acc); border-radius: 12px; background: rgba(0,212,255,0.05); display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 220px; padding: 20px;";
-        box.innerHTML = `
-            <input type="text" id="new-card-input" placeholder="代號" autocomplete="off" style="width:80%; padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:rgba(0,0,0,0.6); color:#fff; text-align:center; font-weight:bold; font-size:14px; outline:none; text-transform:uppercase; margin-bottom:12px;">
-            <div style="display:flex; gap:10px;">
-                <button onclick="confirmAddCard()" style="background:var(--color-acc); color:#000; border:none; padding:6px 16px; border-radius:6px; font-weight:bold; cursor:pointer;">新增</button>
-                <button onclick="renderCards()" style="background:rgba(255,255,255,0.1); color:#fff; border:none; padding:6px 16px; border-radius:6px; cursor:pointer;">取消</button>
-            </div>
-        `;
-        grid.replaceChild(box, grid.lastElementChild);
-        document.getElementById('new-card-input').focus();
+        box.innerHTML = `<input type="text" id="new-card-input" placeholder="代號 (如 AAPL)" autocomplete="off" style="width:80%; padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:rgba(0,0,0,0.6); color:#fff; text-align:center; font-weight:bold; font-size:14px; outline:none; text-transform:uppercase; margin-bottom:12px;"> <div style="display:flex; gap:10px;"><button onclick="confirmAddCard()" style="background:var(--color-acc); color:#000; border:none; padding:6px 16px; border-radius:6px; font-weight:bold; cursor:pointer;">新增</button><button onclick="renderCards()" style="background:rgba(255,255,255,0.1); color:#fff; border:none; padding:6px 16px; border-radius:6px; cursor:pointer;">取消</button></div>`;
+        grid.replaceChild(box, grid.lastElementChild); document.getElementById('new-card-input').focus();
     }
-
-    function confirmAddCard() {
-        const val = document.getElementById('new-card-input').value.trim().toUpperCase();
-        if(val && !state.cardTickers.includes(val)) { state.cardTickers.push(val); saveData(); fetchAllCardsData(); } else { renderCards(); }
-    }
+    function confirmAddCard() { const val = document.getElementById('new-card-input').value.trim().toUpperCase(); if(val && !state.cardTickers.includes(val)) { state.cardTickers.push(val); saveData(); fetchAllCardsData(); } else { renderCards(); } }
 
     async function fetchAllCardsData() {
         if (!document.getElementById('view-cards').classList.contains('active')) return;
@@ -731,9 +686,7 @@
             try {
                 const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${t}?range=1mo&interval=1d`)}`, { cache: "no-store" });
                 if(res.ok) { 
-                    const json = await res.json(), result = json.chart.result[0];
-                    const price = result.meta.regularMarketPrice, prices = result.indicators.quote[0].close || [];
-                    const rsi = calculateRSI(prices.filter(p => p !== null), 14);
+                    const json = await res.json(), result = json.chart.result[0], price = result.meta.regularMarketPrice, prices = result.indicators.quote[0].close || [], rsi = calculateRSI(prices.filter(p => p !== null), 14);
                     cardsDataCache[t] = { price, rsi };
                 }
             } catch(e) {}
@@ -742,104 +695,54 @@
     }
 
     function renderCards() {
-        const grid = document.getElementById('cards-grid');
-        let html = '';
+        const grid = document.getElementById('cards-grid'); let html = '';
         state.cardTickers.forEach(t => {
-            const cData = cardsDataCache[t] || { price: 0, rsi: null };
-            const h = state.holdings[t] || { shares: 0, avgPrice: 0 };
-            const gross = h.shares * cData.price;
-            const feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100, taxRate = parseFloat(document.getElementById("cfg-tax-rate").value) / 100;
-            const netValue = gross > 0 ? (gross - (gross * feeRate) - (gross * taxRate)) : 0;
-            const totalCost = h.shares * h.avgPrice;
-            const pnl = netValue - totalCost;
+            const cData = cardsDataCache[t] || { price: 0, rsi: null }, h = state.holdings[t] || { shares: 0, avgPrice: 0 };
+            const gross = h.shares * cData.price, feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100, taxRate = parseFloat(document.getElementById("cfg-tax-rate").value) / 100;
+            const netValue = gross > 0 ? (gross - (gross * feeRate) - (gross * taxRate)) : 0, totalCost = h.shares * h.avgPrice, pnl = netValue - totalCost;
             const pnlColor = pnl >= 0 ? 'var(--color-buy)' : 'var(--color-sell)';
-            
             const deleteBtn = isCardEditMode ? `<div class="delete-btn" onclick="removeCard('${t}')" style="position:absolute; top:-8px; right:-8px; background:var(--color-sell); color:#fff; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:10; box-shadow:0 0 10px rgba(0,0,0,0.5);"><i class="fa-solid fa-minus"></i></div>` : '';
 
             html += `
-            <div class="card-wrapper" data-ticker="${t}" style="position:relative;" onmousedown="onCardDragStart(event, '${t}')" ontouchstart="onCardDragStart(event, '${t}')">
+            <div class="glass-panel draggable-card" data-ticker="${t}" style="padding: 18px; display:flex; flex-direction:column; gap:12px; touch-action:${isCardEditMode ? 'none' : 'auto'}; cursor:${isCardEditMode ? 'grab' : 'default'};">
                 ${deleteBtn}
-                <div class="glass-panel" style="padding: 18px; display:flex; flex-direction:column; gap:12px; transition: transform 0.2s; ${isCardEditMode ? 'cursor: grab;' : ''}">
-                    <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:10px;">
-                        <span style="font-size:18px; font-weight:900; color:var(--color-acc); letter-spacing:0.5px;">${t}</span>
-                        <span style="font-size:22px; font-weight:bold; font-family:monospace;">$${cData.price > 0 ? cData.price.toFixed(2) : '----'}</span>
-                    </div>
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; font-size:12px;">
-                        <div style="display:flex; flex-direction:column; gap:4px;">
-                            <span style="color:#777;">14日 RSI</span>
-                            <span style="font-family:monospace; font-weight:bold; font-size:13px; color:${cData.rsi >= 70 ? 'var(--color-sell)' : cData.rsi <= 30 ? 'var(--color-buy)' : 'var(--color-acc)'}">${cData.rsi !== null ? cData.rsi.toFixed(1) : '--'}</span>
-                        </div>
-                        <div style="display:flex; flex-direction:column; gap:4px; text-align:right;">
-                            <span style="color:#777;">持有數量</span>
-                            <span style="font-family:monospace; font-weight:bold; font-size:13px; color:#fff;">${h.shares} 股</span>
-                        </div>
-                        <div style="display:flex; flex-direction:column; gap:4px;">
-                            <span style="color:#777;">買入均價</span>
-                            <span style="font-family:monospace; font-weight:bold; font-size:13px; color:#fff;">$${h.avgPrice.toFixed(2)}</span>
-                        </div>
-                        <div style="display:flex; flex-direction:column; gap:4px; text-align:right;">
-                            <span style="color:#777;">買入總成本</span>
-                            <span style="font-family:monospace; font-weight:bold; font-size:13px; color:#fff;">$${totalCost.toLocaleString(undefined, {minimumFractionDigits:2})}</span>
-                        </div>
-                        <div style="display:flex; flex-direction:column; gap:6px; grid-column: span 2; background:rgba(0,0,0,0.4); padding:10px 12px; border-radius:8px; margin-top:4px;">
-                            <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <span style="color:#888;">實收總價值 <span style="font-size:10px">(扣稅費)</span></span>
-                                <span style="font-family:monospace; font-weight:bold; font-size:14px; color:${netValue > 0 ? '#fff' : '#888'};">$${netValue.toLocaleString(undefined, {minimumFractionDigits:2})}</span>
-                            </div>
-                            <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid rgba(255,255,255,0.05); padding-top:6px;">
-                                <span style="color:#888;">預估淨損益</span>
-                                <span style="font-family:monospace; font-weight:bold; font-size:14px; color:${pnlColor};">${pnl >= 0 ? '+' : ''}$${pnl.toLocaleString(undefined, {minimumFractionDigits:2})}</span>
-                            </div>
-                        </div>
+                <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:10px;">
+                    <span style="font-size:18px; font-weight:900; color:var(--color-acc); letter-spacing:0.5px;">${t}</span>
+                    <span style="font-size:22px; font-weight:bold; font-family:monospace;">$${cData.price > 0 ? cData.price.toFixed(2) : '----'}</span>
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; font-size:12px;">
+                    <div style="display:flex; flex-direction:column; gap:4px;"><span style="color:#777;">14日 RSI</span><span style="font-family:monospace; font-weight:bold; font-size:13px; color:${cData.rsi >= 70 ? 'var(--color-sell)' : cData.rsi <= 30 ? 'var(--color-buy)' : 'var(--color-acc)'}">${cData.rsi !== null ? cData.rsi.toFixed(1) : '--'}</span></div>
+                    <div style="display:flex; flex-direction:column; gap:4px; text-align:right;"><span style="color:#777;">持有數量</span><span style="font-family:monospace; font-weight:bold; font-size:13px;">${h.shares} 股</span></div>
+                    <div style="display:flex; flex-direction:column; gap:4px;"><span style="color:#777;">買入均價</span><span style="font-family:monospace; font-weight:bold; font-size:13px;">$${h.avgPrice.toFixed(2)}</span></div>
+                    <div style="display:flex; flex-direction:column; gap:4px; text-align:right;"><span style="color:#777;">買入總成本</span><span style="font-family:monospace; font-weight:bold; font-size:13px;">$${totalCost.toLocaleString(undefined, {minimumFractionDigits:2})}</span></div>
+                    <div style="display:flex; flex-direction:column; gap:6px; grid-column: span 2; background:rgba(0,0,0,0.4); padding:10px 12px; border-radius:8px; margin-top:4px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;"><span style="color:#888;">實收總價值 <span style="font-size:10px">(扣稅費)</span></span><span style="font-family:monospace; font-weight:bold; font-size:14px; color:${netValue > 0 ? '#fff' : '#888'};">$${netValue.toLocaleString(undefined, {minimumFractionDigits:2})}</span></div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid rgba(255,255,255,0.05); padding-top:6px;"><span style="color:#888;">預估淨損益</span><span style="font-family:monospace; font-weight:bold; font-size:14px; color:${pnlColor};">${pnl >= 0 ? '+' : ''}$${pnl.toLocaleString(undefined, {minimumFractionDigits:2})}</span></div>
                     </div>
                 </div>
             </div>`;
         });
-
-        if (isCardEditMode) {
-            html += `
-            <div onclick="addCardPrompt()" style="border: 2px dashed rgba(255,255,255,0.15); border-radius: 12px; background: rgba(0,0,0,0.2); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; min-height: 220px; color: #888; transition: all 0.2s;">
-                <i class="fa-solid fa-plus" style="font-size:35px; margin-bottom:12px; color:var(--color-acc);"></i>
-                <span style="font-weight:bold; font-size:14px; letter-spacing:1px;">新增</span>
-            </div>`;
-        }
-
+        if (isCardEditMode) html += `<div onclick="addCardPrompt()" style="border: 2px dashed rgba(255,255,255,0.15); border-radius: 12px; background: rgba(0,0,0,0.2); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; min-height: 220px; color: #888; transition: all 0.2s;"><i class="fa-solid fa-plus" style="font-size:35px; margin-bottom:12px; color:var(--color-acc);"></i><span style="font-weight:bold; font-size:14px; letter-spacing:1px;">新增自選資產</span></div>`;
         grid.innerHTML = html || (!isCardEditMode ? '<div style="color:#666; font-size:14px; grid-column:1/-1; text-align:center; padding:50px;">目前無監控卡片，請點擊右上角「編輯」進行新增</div>' : '');
+        attachCardDragEvents();
     }
 
-    function addToRecentlySelected(t) {
-        state.recentTickers = [t, ...state.recentTickers.filter(item => item !== t)].slice(0, 5);
-        saveData(); renderRecentTickers();
-    }
-    function renderRecentTickers() {
-        document.getElementById("recent-tickers-list").innerHTML = state.recentTickers.map(t => `
-            <div class="dropdown-item" onclick="selectTicker('${t}')">
-                <span style="font-weight:bold; color:var(--color-buy)">${t}</span>
-                <span style="color:#888; font-size:11px;">最近選取</span>
-            </div>`).join("");
-    }
+    function addToRecentlySelected(t) { state.recentTickers = [t, ...state.recentTickers.filter(item => item !== t)].slice(0, 5); saveData(); renderRecentTickers(); }
+    function renderRecentTickers() { document.getElementById("recent-tickers-list").innerHTML = state.recentTickers.map(t => `<div class="dropdown-item" onclick="selectTicker('${t}')"><span style="font-weight:bold; color:var(--color-buy)">${t}</span><span style="color:#888; font-size:11px;">最近選取</span></div>`).join(""); }
 
     const tickerInput = document.getElementById("trade-ticker");
     tickerInput.addEventListener("input", (e) => {
-        const query = e.target.value.trim().toUpperCase();
-        document.getElementById("ticker-dropdown").classList.add("show");
-        document.getElementById("recent-group-title").style.display = 'none';
-        document.getElementById("recent-tickers-list").style.display = 'none';
-
+        const query = e.target.value.trim().toUpperCase(); document.getElementById("ticker-dropdown").classList.add("show");
+        document.getElementById("recent-group-title").style.display = 'none'; document.getElementById("recent-tickers-list").style.display = 'none';
         clearTimeout(searchDebounceTimer);
         searchDebounceTimer = setTimeout(async () => {
             if(!query) { document.getElementById("live-search-list").innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#666;">輸入代號自動撈取標的...</div>`; return; }
             document.getElementById("live-search-list").innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> 搜尋 ${query}...</div>`;
             try {
                 const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query2.finance.yahoo.com/v1/finance/search?q=${query}&quotesCount=6`)}`;
-                const res = await fetch(proxyUrl, { cache: "no-store" });
-                const json = await res.json();
+                const res = await fetch(proxyUrl, { cache: "no-store" }); const json = await res.json();
                 if(json.quotes && json.quotes.length > 0) {
-                    document.getElementById("live-search-list").innerHTML = json.quotes.map(q => `
-                        <div class="dropdown-item" onclick="selectTicker('${q.symbol}')">
-                            <div><strong style="color:#fff">${q.symbol}</strong> <span style="color:#888; font-size:11px">${q.shortname || ''}</span></div>
-                            <span style="color:var(--color-acc); font-size:11px">${q.exchDisp || ''}</span>
-                        </div>`).join("");
+                    document.getElementById("live-search-list").innerHTML = json.quotes.map(q => `<div class="dropdown-item" onclick="selectTicker('${q.symbol}')"><div><strong style="color:#fff">${q.symbol}</strong> <span style="color:#888; font-size:11px">${q.shortname || ''}</span></div><span style="color:var(--color-acc); font-size:11px">${q.exchDisp || ''}</span></div>`).join("");
                 } else document.getElementById("live-search-list").innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#ff4560;">查無符合標的</div>`;
             } catch(err) { document.getElementById("live-search-list").innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#ff4560;">連線異常</div>`; }
         }, 300);
@@ -866,19 +769,13 @@
         try {
             const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}`)}`;
             const res = await fetch(proxyUrl, { cache: "no-store" });
-            if(res.ok) { 
-                const json = await res.json(), price = json.chart.result[0].meta.regularMarketPrice; 
-                if(price) { currentRealPrice = price; isPriceLoading = false; }
-            }
+            if(res.ok) { const json = await res.json(); const price = json.chart.result[0].meta.regularMarketPrice; if(price) { currentRealPrice = price; isPriceLoading = false; } }
         } catch(e) {}
         finally {
             if (currentRealPrice !== null && !isPriceLoading) {
                 document.getElementById("trade-price-display").innerText = `$ ${currentRealPrice.toFixed(2)}`;
-                document.getElementById("ai-current-ticker").innerText = currentTicker;
-                validateSharesInput();
-            } else {
-                document.getElementById("trade-price-display").innerHTML = `<span style="font-size:14px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> 報價連線中...</span>`;
-            }
+                document.getElementById("ai-current-ticker").innerText = currentTicker; validateSharesInput();
+            } else { document.getElementById("trade-price-display").innerHTML = `<span style="font-size:14px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> 報價連線中...</span>`; }
             updateAllViews();
         }
     }
@@ -890,9 +787,7 @@
         tfBg.style.width = `${btn.offsetWidth}px`; tfBg.style.transform = `translateX(${btn.offsetLeft}px)`;
         tfBtns.forEach((b, i) => b.classList.toggle('active', i === index));
     }
-    tfBtns.forEach((btn, index) => btn.addEventListener('click', () => {
-        updateTfBg(index); currentStockTF = btn.dataset.tf; fetchStockHistoryData(currentTicker, currentStockTF);
-    }));
+    tfBtns.forEach((btn, index) => btn.addEventListener('click', () => { updateTfBg(index); currentStockTF = btn.dataset.tf; fetchStockHistoryData(currentTicker, currentStockTF); }));
     setTimeout(() => updateTfBg(0, false), 100);
 
     document.querySelectorAll("#m-tf-group .tf-btn").forEach(btn => {
@@ -903,8 +798,7 @@
     });
 
     function calculateRSI(prices, period = 14) {
-        if (!prices || prices.length <= period) return null;
-        let gains = 0, losses = 0;
+        if (!prices || prices.length <= period) return null; let gains = 0, losses = 0;
         for (let i = 1; i <= period; i++) { const diff = prices[i] - prices[i - 1]; if (diff >= 0) gains += diff; else losses -= diff; }
         let avgGain = gains / period, avgLoss = losses / period;
         for (let i = period + 1; i < prices.length; i++) {
@@ -958,13 +852,8 @@
     
     function applyPercentShares(pct) {
         if (isPriceLoading || currentRealPrice === null) return;
-        if (tradeMode === 'BUY') {
-            const feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100 || 0.001425;
-            sharesInput.value = Math.max(1, Math.floor(Math.floor(state.cash / (currentRealPrice * (1 + feeRate))) * pct));
-        } else {
-            const holding = state.holdings[currentTicker]?.shares || 0;
-            sharesInput.value = Math.max(1, Math.floor(holding * pct));
-        }
+        if (tradeMode === 'BUY') { const feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100 || 0.001425; sharesInput.value = Math.max(1, Math.floor(Math.floor(state.cash / (currentRealPrice * (1 + feeRate))) * pct)); } 
+        else { const holding = state.holdings[currentTicker]?.shares || 0; sharesInput.value = Math.max(1, Math.floor(holding * pct)); }
         validateSharesInput();
     }
     
@@ -990,7 +879,6 @@
         const subtotal = s * currentRealPrice, fee = subtotal * (parseFloat(document.getElementById("cfg-fee-rate").value) / 100), tax = tradeMode === 'SELL' ? subtotal * (parseFloat(document.getElementById("cfg-tax-rate").value) / 100) : 0;
         document.getElementById("calc-subtotal").innerText = `$ ${subtotal.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
         document.getElementById("calc-fee").innerText = `$ ${fee.toFixed(2)}`; document.getElementById("calc-tax").innerText = `$ ${tax.toFixed(2)}`;
-        
         const total = tradeMode === 'BUY' ? (subtotal + fee) : (subtotal - fee - tax), totalEl = document.getElementById("calc-total");
         document.getElementById("total-label").innerText = tradeMode === 'BUY' ? '預估總付出:' : '預估總收入:';
         totalEl.innerText = `$ ${total.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
@@ -1024,7 +912,6 @@
         if(state.navHistory.data.length > 60) { state.navHistory.labels.shift(); state.navHistory.data.shift(); }
     }
 
-    // 🌟 表格高對比原色回歸
     function updateAllViews() {
         let holdingsVal = 0, totalCost = 0;
         for(let t in state.holdings) { let price = (t === currentTicker && currentRealPrice !== null) ? currentRealPrice : state.holdings[t].avgPrice; holdingsVal += state.holdings[t].shares * price; totalCost += state.holdings[t].shares * state.holdings[t].avgPrice; }
@@ -1036,27 +923,10 @@
 
         document.getElementById("holdings-table-body").innerHTML = Object.keys(state.holdings).length ? Object.keys(state.holdings).map(t => {
             const h = state.holdings[t], curP = (t === currentTicker && currentRealPrice !== null) ? currentRealPrice : h.avgPrice, val = h.shares * curP, pnl = val - (h.shares * h.avgPrice);
-            return `<tr>
-                <td style="font-weight:bold; color:var(--color-acc)">${t}</td>
-                <td style="color:#fff;">${h.shares}</td>
-                <td style="color:#fff;">$${h.avgPrice.toFixed(2)}</td>
-                <td style="color:#fff;">$${curP.toFixed(2)}</td>
-                <td style="color:#fff;">$${Math.floor(val).toLocaleString()}</td>
-                <td style="color:${pnl>=0?'var(--color-buy)':'var(--color-sell)'}; font-weight:bold;">${pnl>=0?'+':''}$${Math.floor(pnl)}</td>
-                <td><button onclick="selectTicker('${t}')" style="background:rgba(255,255,255,0.08); border:none; color:#fff; padding:4px 8px; border-radius:4px; cursor:pointer;">交易</button></td>
-            </tr>`;
+            return `<tr><td style="font-weight:bold; color:var(--color-acc)">${t}</td><td>${h.shares}</td><td>$${h.avgPrice.toFixed(1)}</td><td>$${curP.toFixed(1)}</td><td>$${Math.floor(val).toLocaleString()}</td><td style="color:${pnl>=0?'var(--color-buy)':'var(--color-sell)'}">${pnl>=0?'+':''}$${Math.floor(pnl)}</td><td><button onclick="selectTicker('${t}')" style="background:rgba(255,255,255,0.08); border:none; color:#fff; padding:4px 8px; border-radius:4px; cursor:pointer;">交易</button></td></tr>`;
         }).join("") : `<tr><td colspan="7" style="text-align:center; color:#555; padding:30px;">尚無持股</td></tr>`;
 
-        document.getElementById("ledger-table-body").innerHTML = state.ledger.length ? state.ledger.map(r => `<tr>
-            <td style="color:#888;">${r.time}</td>
-            <td><span class="badge ${r.action==='BUY'?'badge-buy':'badge-sell'}">${r.action}</span></td>
-            <td style="font-weight:bold; color:var(--color-acc);">${r.ticker}</td>
-            <td style="color:#fff;">$${r.price.toFixed(2)}</td>
-            <td style="color:#fff;">${r.shares}</td>
-            <td style="color:#888;">$${r.fee.toFixed(2)}</td>
-            <td style="font-weight:bold; color:#fff;">$${Math.floor(r.total).toLocaleString()}</td>
-        </tr>`).join("") : `<tr><td colspan="7" style="text-align:center; color:#555; padding:30px;">尚無紀錄</td></tr>`;
-        
+        document.getElementById("ledger-table-body").innerHTML = state.ledger.length ? state.ledger.map(r => `<tr><td>${r.time}</td><td><span class="badge ${r.action==='BUY'?'badge-buy':'badge-sell'}">${r.action}</span></td><td style="font-weight:bold;">${r.ticker}</td><td>$${r.price.toFixed(1)}</td><td>${r.shares}</td><td>$${r.fee.toFixed(1)}</td><td style="font-weight:bold;">$${Math.floor(r.total).toLocaleString()}</td></tr>`).join("") : `<tr><td colspan="7" style="text-align:center; color:#555; padding:30px;">尚無紀錄</td></tr>`;
         renderAllCharts();
     }
 
