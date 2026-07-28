@@ -338,19 +338,16 @@
         </div>
     </main>
 
-    <!-- 🌟 時光機與帳本頁面 -->
     <main id="view-ledger" class="view-section">
         <div class="glass-panel" style="padding:16px; margin-bottom:14px;">
             <div style="font-weight:bold; font-size:14px; margin-bottom:12px;"><i class="fa-solid fa-plus-circle" style="color:var(--color-acc)"></i> 補登歷史交易 (時光機回溯)</div>
             <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
                 <div>
                     <div style="font-size:11px; color:#888; margin-bottom:4px;">日期</div>
-                    <!-- 🌟 點擊時自動全選 (輔助) -->
                     <input type="date" id="tm-date" onfocus="this.select()" onchange="autoFetchHistoricalPrice()" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-family:monospace;">
                 </div>
                 <div>
                     <div style="font-size:11px; color:#888; margin-bottom:4px;">時間 (24H)</div>
-                    <!-- 🌟 點擊即反白全選、自動跳轉的 UX 升級版 -->
                     <div style="display:flex; align-items:center; gap:2px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); border-radius:6px; padding:0 8px; width:fit-content;">
                         <input type="text" id="tm-hour" inputmode="numeric" maxlength="2" onfocus="this.select()" oninput="handleHourInput(this)" onblur="padHour(this)" placeholder="00" style="width:22px; background:transparent; border:none; color:#fff; padding:6px 0; font-family:monospace; text-align:center; outline:none; font-size:14px;">
                         <span style="color:#888; font-weight:bold; padding-bottom:2px;">:</span>
@@ -359,7 +356,6 @@
                 </div>
                 <div>
                     <div style="font-size:11px; color:#888; margin-bottom:4px;">代號</div>
-                    <!-- 🌟 移除了預設代號，並加上點擊反白 -->
                     <input type="text" id="tm-ticker" onfocus="this.select()" oninput="autoFetchHistoricalPrice()" placeholder="" style="width:90px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-transform:uppercase; font-family:monospace; font-weight:bold;">
                 </div>
                 <div>
@@ -550,15 +546,17 @@
         return (ticker.endsWith('.TW') || ticker.endsWith('.TWO')) ? 1 : currentUSDTWD;
     }
 
-    function getFormattedTimeFromDate(d) {
-        return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-    }
+    // 🌟 全域轉換日期為完整格式 "YYYY/MM/DD HH:MM"
     function getFullFormattedTimeFromDate(timestamp) {
         let d = new Date(timestamp);
         return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
     }
+    // 🌟 圖表適用的精簡版日期格式 "MM/DD HH:MM"
+    function getShortFormattedTimeFromDate(timestamp) {
+        let d = new Date(timestamp);
+        return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    }
 
-    // 🌟 時光機：時/分 無縫跳轉輸入與防呆邏輯
     function handleHourInput(el) {
         let val = el.value.replace(/\D/g, '');
         if (val.length === 1) {
@@ -602,7 +600,6 @@
         autoFetchHistoricalPrice();
     }
 
-    // 🌟 時光機：預設帶入當前的「日期」與分離的「24H 時間」
     function initTimeMachineDefault() {
         const d = new Date();
         const year = d.getFullYear();
@@ -615,7 +612,6 @@
         document.getElementById('tm-minute').value = minutes;
     }
 
-    // 🌟 時光機：防抖保護的「動態高精準度」歷史價格撈取
     let fetchPriceTimer = null;
     function autoFetchHistoricalPrice() {
         clearTimeout(fetchPriceTimer);
@@ -627,7 +623,6 @@
             const ticker = document.getElementById("tm-ticker").value.trim().toUpperCase();
             const priceInput = document.getElementById("tm-price");
 
-            // 確保所有必要欄位皆已輸入
             if (!dateVal || !ticker || hVal.length !== 2 || mVal.length !== 2) return;
 
             const timeVal = `${hVal}:${mVal}`;
@@ -638,15 +633,14 @@
             priceInput.placeholder = "查詢中...";
             priceInput.value = ""; 
 
-            // 🌟 核心：自動判斷需要的精準度區間
+            // 🌟 動態 K 線精準度引擎：依據回溯天數切換 API Interval
             const nowSec = Math.floor(Date.now() / 1000);
             const daysDiff = (nowSec - targetSec) / 86400;
-            let interval = '1m';
-            if (daysDiff > 59) interval = '1d';
-            else if (daysDiff > 6) interval = '5m';
+            let interval = '1m'; // 7 天內強制啟用 1 分鐘極高精度
+            if (daysDiff > 59) interval = '1d'; // 超過 60 天退回日 K 線
+            else if (daysDiff > 6) interval = '5m'; // 超過 7 天啟用 5 分鐘線
 
             try {
-                // 抓取目標日前後約 4 天的資料確保跨假日也能找到
                 const p1 = targetSec - (86400 * 4); 
                 const p2 = targetSec + (86400 * 4); 
                 const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?period1=${p1}&period2=${p2}&interval=${interval}`)}`;
@@ -663,7 +657,6 @@
                         let closestIdx = -1;
                         let minDiff = Infinity;
                         
-                        // 找尋與輸入時間最接近的那一個報價點
                         for(let i = 0; i < timestamps.length; i++) {
                             if(closes[i] === null || closes[i] === undefined) continue;
                             const diff = Math.abs(timestamps[i] - targetSec);
@@ -677,10 +670,9 @@
                             priceInput.value = closes[closestIdx].toFixed(2);
                             priceInput.placeholder = "";
                             
-                            // 提示抓到的實際報價時間
                             const fetchedDate = new Date(timestamps[closestIdx] * 1000);
                             const tStr = `${fetchedDate.getMonth()+1}/${fetchedDate.getDate()} ${String(fetchedDate.getHours()).padStart(2, '0')}:${String(fetchedDate.getMinutes()).padStart(2, '0')}`;
-                            triggerDynamicFeedback(`精準抓取 ${tStr} 報價`, 'buy', priceInput, closes[closestIdx].toFixed(2));
+                            triggerDynamicFeedback(`精準撈取 ${tStr} 報價`, 'buy', priceInput, closes[closestIdx].toFixed(2));
                             return;
                         }
                     }
@@ -689,7 +681,7 @@
             } catch(e) {
                 priceInput.placeholder = "查詢失敗";
             }
-        }, 600); // 延遲 0.6 秒發送，體驗更絲滑
+        }, 600);
     }
 
     function triggerDynamicFeedback(msg, type, targetBtn, valueText) {
@@ -839,6 +831,8 @@
                         if (parts.length === 2) {
                             d.setHours(parseInt(parts[0]), parseInt(parts[1]), 0, 0);
                             r.timestamp = d.getTime();
+                        } else if (r.time && r.time.includes('/')) {
+                            r.timestamp = new Date(r.time).getTime();
                         } else {
                             r.timestamp = Date.now();
                         }
@@ -861,9 +855,7 @@
         document.getElementById("node-settings-wrapper").classList.toggle("disabled", !document.getElementById("cfg-node-show").checked);
         document.getElementById("trade-ticker").value = currentTicker; document.getElementById("m-chart-ticker").innerText = currentTicker;
         
-        // 初始化帶入當前時間到時光機面板
         initTimeMachineDefault();
-
         renderRecentTickers(); renderCards();
     }
     
@@ -960,7 +952,7 @@
         const twdTax = origTax * rate;
         
         let newTrade = {
-            time: getFormattedTimeFromDate(new Date(timestamp)),
+            time: getFullFormattedTimeFromDate(timestamp),
             timestamp: timestamp,
             action: action,
             ticker: ticker,
@@ -1327,7 +1319,7 @@
         const twdTax = origTax * rate;
         
         const timestamp = Date.now();
-        const tradeTime = getFormattedTimeFromDate(new Date(timestamp));
+        const tradeTime = getFullFormattedTimeFromDate(timestamp);
         
         if(tradeMode === 'BUY') {
             if(twdTotalSpend > state.cash) { alert("現有現金不足！"); return; }
@@ -1362,7 +1354,7 @@
             const rate = getCurrencyMultiplier(t);
             holdingsVal += state.holdings[t].shares * ((t === currentTicker) ? currentRealPrice : state.holdings[t].avgPrice) * rate;
         }
-        state.navHistory.labels.push(getFormattedTimeFromDate(new Date())); 
+        state.navHistory.labels.push(getShortFormattedTimeFromDate(Date.now())); 
         state.navHistory.data.push(state.cash + holdingsVal);
         if(state.navHistory.data.length > 60) { state.navHistory.labels.shift(); state.navHistory.data.shift(); }
     }
