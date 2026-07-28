@@ -546,9 +546,15 @@
         return (ticker.endsWith('.TW') || ticker.endsWith('.TWO')) ? 1 : currentUSDTWD;
     }
 
+    // 🌟 全域轉換日期為完整格式 "YYYY/MM/DD HH:MM"
     function getFullFormattedTimeFromDate(timestamp) {
         let d = new Date(timestamp);
         return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    }
+    // 🌟 圖表適用的精簡版日期格式 "MM/DD HH:MM"
+    function getShortFormattedTimeFromDate(timestamp) {
+        let d = new Date(timestamp);
+        return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
     }
 
     function handleHourInput(el) {
@@ -627,11 +633,12 @@
             priceInput.placeholder = "查詢中...";
             priceInput.value = ""; 
 
+            // 🌟 動態 K 線精準度引擎：依據回溯天數切換 API Interval
             const nowSec = Math.floor(Date.now() / 1000);
             const daysDiff = (nowSec - targetSec) / 86400;
-            let interval = '1m'; 
-            if (daysDiff > 59) interval = '1d'; 
-            else if (daysDiff > 6) interval = '5m'; 
+            let interval = '1m'; // 7 天內強制啟用 1 分鐘極高精度
+            if (daysDiff > 59) interval = '1d'; // 超過 60 天退回日 K 線
+            else if (daysDiff > 6) interval = '5m'; // 超過 7 天啟用 5 分鐘線
 
             try {
                 const p1 = targetSec - (86400 * 4); 
@@ -674,7 +681,7 @@
             } catch(e) {
                 priceInput.placeholder = "查詢失敗";
             }
-        }, 600);
+        }, 600); // 延遲 0.6 秒發送，體驗更絲滑
     }
 
     function triggerDynamicFeedback(msg, type, targetBtn, valueText) {
@@ -806,10 +813,72 @@
     Chart.register(smoothCrosshairPlugin);
 
     const DATA_KEY = "ALPHATRADE_MANUAL_DATA";
-    let state = { cash: 1000000, holdings: {}, ledger: [], recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"] };
+    let state = { cash: 1000000, holdings: {}, ledger: [], recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] } };
     let currentTicker = localStorage.getItem('LAST_SELECTED_TICKER') || "NVDA";
     let currentRealPrice = null, isPriceLoading = true, currentStockTF = '1D', searchDebounceTimer = null, desktopChartMode = 'NAV', tradeMode = 'BUY';
     let stockHistData = { labels: [], prices: [] }, cardsDataCache = {}, isCardEditMode = false;
+
+    // 🌟 時光機核心：強制從 Ledger 重建最精確的圖表時間軸
+    function rebuildNavHistoryFromLedger() {
+        let tempCash = 1000000;
+        let tempHoldings = {};
+        let newTimestamps = [];
+        let newLabels = [];
+        let newData = [];
+
+        let reversedLedger = [...state.ledger].sort((a,b) => a.timestamp - b.timestamp);
+
+        if (reversedLedger.length > 0) {
+            let t0 = reversedLedger[0].timestamp - 60000;
+            newTimestamps.push(t0);
+            newLabels.push(getShortFormattedTimeFromDate(t0));
+            newData.push(1000000);
+        }
+
+        reversedLedger.forEach(r => {
+            let rate = r.rate || 1;
+            if (r.ticker && !r.ticker.includes('.TW') && !r.rate) rate = 32.5; 
+            
+            if (r.action === 'BUY') {
+                tempCash -= r.total;
+                if (!tempHoldings[r.ticker]) tempHoldings[r.ticker] = { shares: 0, avgPrice: 0 };
+                let h = tempHoldings[r.ticker];
+                let origTotalSpend = r.origTotalSpend || (r.total / rate);
+                h.avgPrice = ((h.shares * h.avgPrice) + origTotalSpend) / (h.shares + r.shares);
+                h.shares += r.shares;
+            } else if (r.action === 'SELL') {
+                if(tempHoldings[r.ticker]) {
+                    tempCash += r.total;
+                    tempHoldings[r.ticker].shares -= r.shares;
+                    if (tempHoldings[r.ticker].shares <= 0) delete tempHoldings[r.ticker];
+                }
+            }
+
+            let holdingsVal = 0;
+            for(let t in tempHoldings) {
+                let rateT = (t.endsWith('.TW') || t.endsWith('.TWO')) ? 1 : currentUSDTWD;
+                let priceToUse = (t === r.ticker) ? r.price : tempHoldings[t].avgPrice;
+                holdingsVal += tempHoldings[t].shares * priceToUse * rateT;
+            }
+
+            newTimestamps.push(r.timestamp);
+            newLabels.push(getShortFormattedTimeFromDate(r.timestamp));
+            newData.push(tempCash + holdingsVal);
+        });
+
+        let currentHoldingsVal = 0;
+        for(let t in state.holdings) {
+            let rateT = (t.endsWith('.TW') || t.endsWith('.TWO')) ? 1 : currentUSDTWD;
+            let price = (t === currentTicker && currentRealPrice !== null) ? currentRealPrice : state.holdings[t].avgPrice;
+            currentHoldingsVal += state.holdings[t].shares * price * rateT;
+        }
+        let now = Date.now();
+        newTimestamps.push(now);
+        newLabels.push(getShortFormattedTimeFromDate(now));
+        newData.push(state.cash + currentHoldingsVal);
+
+        state.navHistory = { timestamps: newTimestamps, labels: newLabels, data: newData };
+    }
 
     function initData() {
         const saved = localStorage.getItem(DATA_KEY);
@@ -817,6 +886,8 @@
             try { 
                 state = JSON.parse(saved); 
                 state.cardTickers = state.cardTickers || ["NVDA", "2330.TW"]; 
+                
+                // 🌟 時區與毫秒校正：補齊舊資料遺失的 timestamp
                 state.ledger.forEach(r => {
                     if (!r.timestamp) {
                         let d = new Date();
@@ -832,9 +903,14 @@
                     }
                 });
                 state.ledger.sort((a, b) => b.timestamp - a.timestamp);
+
+                // 🌟 如果圖表沒有時間戳記憶，強制根據帳本重建 (這能解決匯入後圖表擠壓的問題)
+                if (!state.navHistory || !state.navHistory.timestamps || state.navHistory.timestamps.length === 0) {
+                    rebuildNavHistoryFromLedger();
+                }
             } catch(e) {} 
         } else { 
-            saveData(); 
+            recordNavSnapshot(); saveData(); 
         }
         
         const savedShow = localStorage.getItem('SETTING_NODE_SHOW'); if (savedShow !== null) document.getElementById("cfg-node-show").checked = savedShow === 'true'; else document.getElementById("cfg-node-show").checked = true;
@@ -853,7 +929,7 @@
     }
     
     function saveData() { localStorage.setItem(DATA_KEY, JSON.stringify(state)); updateAllViews(); renderCards(); }
-    function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { localStorage.removeItem(DATA_KEY); state = { cash: 1000000, holdings: {}, ledger: [], recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"] }; initData(); } }
+    function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { localStorage.removeItem(DATA_KEY); state = { cash: 1000000, holdings: {}, ledger: [], recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] } }; initData(); } }
 
     function exportData() {
         const dataStr = JSON.stringify(state, null, 2), blob = new Blob([dataStr], { type: "application/json" }), url = URL.createObjectURL(blob), a = document.createElement("a");
@@ -868,61 +944,37 @@
             try {
                 const importedState = JSON.parse(e.target.result);
                 if (importedState && typeof importedState.cash === 'number') {
-                    state = importedState; state.cardTickers = state.cardTickers || []; state.recentTickers = state.recentTickers || []; state.holdings = state.holdings || {}; state.ledger = state.ledger || [];
-                    saveData(); fetchAllCardsData(); triggerDynamicFeedback("資料已成功還原！", "buy", null, "RESTORED");
+                    state = importedState; 
+                    state.cardTickers = state.cardTickers || []; 
+                    state.recentTickers = state.recentTickers || []; 
+                    state.holdings = state.holdings || {}; 
+                    state.ledger = state.ledger || [];
+                    
+                    state.ledger.forEach(r => {
+                        if (!r.timestamp) {
+                            let d = new Date();
+                            let parts = r.time ? r.time.split(':') : [];
+                            if (parts.length === 2) {
+                                d.setHours(parseInt(parts[0]), parseInt(parts[1]), 0, 0);
+                                r.timestamp = d.getTime();
+                            } else if (r.time && r.time.includes('/')) {
+                                r.timestamp = new Date(r.time).getTime();
+                            } else {
+                                r.timestamp = Date.now();
+                            }
+                        }
+                    });
+                    state.ledger.sort((a, b) => b.timestamp - a.timestamp);
+                    
+                    rebuildNavHistoryFromLedger(); // 強制重建圖表解決匯入擠壓問題
+                    
+                    saveData(); fetchAllCardsData(); 
+                    triggerDynamicFeedback("資料已成功還原！", "buy", null, "RESTORED");
                 } else alert("檔案格式錯誤或損毀！");
             } catch (err) { alert("檔案解析失敗！請確保貼上完整無重複內容。"); }
             event.target.value = ''; 
         };
         reader.readAsText(file);
-    }
-
-    // 🌟 全新動態 NAV 計算引擎：徹底解決時間對不上的問題
-    function buildNavHistory() {
-        let tempCash = 1000000;
-        let tempHoldings = {};
-        let history = []; 
-        
-        for(let i = state.ledger.length - 1; i >= 0; i--) {
-            let r = state.ledger[i];
-            let rate = r.rate || getCurrencyMultiplier(r.ticker); 
-            
-            if (r.action === 'BUY') {
-                tempCash -= r.total;
-                if (!tempHoldings[r.ticker]) tempHoldings[r.ticker] = { shares: 0, avgPrice: 0 };
-                let h = tempHoldings[r.ticker];
-                let origTotalSpend = r.origTotalSpend || (r.total / rate);
-                h.avgPrice = ((h.shares * h.avgPrice) + origTotalSpend) / (h.shares + r.shares);
-                h.shares += r.shares;
-            } else if (r.action === 'SELL') {
-                if (tempHoldings[r.ticker] && tempHoldings[r.ticker].shares >= r.shares) {
-                    tempCash += r.total;
-                    tempHoldings[r.ticker].shares -= r.shares;
-                    if (tempHoldings[r.ticker].shares === 0) delete tempHoldings[r.ticker];
-                }
-            }
-            
-            let holdingsVal = 0;
-            for (let t in tempHoldings) {
-                let h = tempHoldings[t];
-                let price = (t === r.ticker) ? r.price : h.avgPrice; 
-                let tRate = getCurrencyMultiplier(t); 
-                holdingsVal += h.shares * price * tRate;
-            }
-            
-            history.push({ timestamp: r.timestamp, nav: tempCash + holdingsVal });
-        }
-        
-        let currentHoldingsVal = 0;
-        for(let t in state.holdings) {
-            let h = state.holdings[t];
-            let rate = getCurrencyMultiplier(t);
-            let price = (t === currentTicker && currentRealPrice !== null) ? currentRealPrice : h.avgPrice;
-            currentHoldingsVal += h.shares * price * rate;
-        }
-        history.push({ timestamp: Date.now(), nav: state.cash + currentHoldingsVal });
-        
-        return history;
     }
 
     function recalculateState(ledgerArray) {
@@ -1028,6 +1080,7 @@
         document.getElementById("tm-price").value = '';
         document.getElementById("tm-shares").value = '';
         
+        rebuildNavHistoryFromLedger(); // 強制重建圖表
         saveData();
         triggerDynamicFeedback("已成功補登時光機交易", "buy", null, "INSERTED");
     }
@@ -1051,6 +1104,8 @@
         state.ledger = testLedger;
         state.cash = result.cash;
         state.holdings = result.holdings;
+        
+        rebuildNavHistoryFromLedger(); // 強制重建圖表
         saveData();
         triggerDynamicFeedback("交易已成功撤銷", "buy", null, "UNDONE");
     }
@@ -1230,13 +1285,13 @@
         tfBg.style.width = `${btn.offsetWidth}px`; tfBg.style.transform = `translateX(${btn.offsetLeft}px)`;
         tfBtns.forEach((b, i) => b.classList.toggle('active', i === index));
     }
-    tfBtns.forEach((btn, index) => btn.addEventListener('click', () => { updateTfBg(index); currentStockTF = btn.dataset.tf; fetchStockHistoryData(currentTicker, currentStockTF); }));
+    tfBtns.forEach((btn, index) => btn.addEventListener('click', () => { updateTfBg(index); currentStockTF = btn.dataset.tf; fetchStockHistoryData(currentTicker, currentStockTF); renderAllCharts(); }));
     setTimeout(() => updateTfBg(0, false), 100);
 
     document.querySelectorAll("#m-tf-group .tf-btn").forEach(btn => {
         btn.addEventListener("click", () => {
             document.querySelectorAll("#m-tf-group .tf-btn").forEach(b => b.classList.remove("active"));
-            btn.classList.add("active"); currentStockTF = btn.dataset.tf; fetchStockHistoryData(currentTicker, currentStockTF);
+            btn.classList.add("active"); currentStockTF = btn.dataset.tf; fetchStockHistoryData(currentTicker, currentStockTF); renderAllCharts();
         });
     });
 
@@ -1385,7 +1440,27 @@
             state.ledger.unshift({ time: tradeTime, timestamp: timestamp, action: "SELL", ticker: currentTicker, price: currentRealPrice, shares: s, fee: twdFee + twdTax, total: twdTotalGet, realizedPnL: realizedPnL, rate: rate });
             triggerDynamicFeedback(`成功賣出 ${s} 股 ${currentTicker}`, 'sell', document.getElementById('exec-trade-btn'), `+$${Math.floor(twdTotalGet).toLocaleString()}`);
         }
-        saveData(); validateSharesInput();
+        recordNavSnapshot(); saveData(); validateSharesInput();
+    }
+
+    function recordNavSnapshot() {
+        if (currentRealPrice === null) return;
+        let holdingsVal = 0; 
+        for(let t in state.holdings) {
+            const rate = getCurrencyMultiplier(t);
+            holdingsVal += state.holdings[t].shares * ((t === currentTicker) ? currentRealPrice : state.holdings[t].avgPrice) * rate;
+        }
+        const now = Date.now();
+        if (!state.navHistory.timestamps) state.navHistory.timestamps = [];
+        state.navHistory.timestamps.push(now);
+        state.navHistory.labels.push(getShortFormattedTimeFromDate(now)); 
+        state.navHistory.data.push(state.cash + holdingsVal);
+        
+        if(state.navHistory.data.length > 5000) { 
+            state.navHistory.timestamps.shift();
+            state.navHistory.labels.shift(); 
+            state.navHistory.data.shift(); 
+        }
     }
 
     function updateAllViews() {
@@ -1455,60 +1530,46 @@
         return Array.from({ length: dataLength }, (_, i) => (i % step === 0 || i === dataLength - 1) ? 4 : 0);
     }
 
-    // 🌟 關鍵渲染更新：動態 NAV 計算與自動填平區間
     function renderAllCharts() {
         const showNodes = document.getElementById("cfg-node-show").checked, rawVal = document.getElementById("cfg-node-val").value, densityVal = (rawVal === 'All') ? 'All' : parseInt(rawVal) || 20;
         
         if (desktopChartMode === 'NAV') {
             document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-area" style="color:var(--color-acc)"></i> 投資組合總淨值走勢`;
             
-            const fullHistory = buildNavHistory();
-            const now = Date.now();
+            // 🌟 讓 NAV 完美連動時間篩選器 (1D, 1W, 1M...)
             let cutoff = 0;
-            
-            switch(currentStockTF) {
-                case '1D': cutoff = now - 86400 * 1000; break;
-                case '1W': cutoff = now - 7 * 86400 * 1000; break;
-                case '1M': cutoff = now - 30 * 86400 * 1000; break;
-                case '3M': cutoff = now - 90 * 86400 * 1000; break;
-                case '1Y': cutoff = now - 365 * 86400 * 1000; break;
-                case 'All': cutoff = 0; break;
-            }
-            
-            let filteredHistory = fullHistory.filter(item => item.timestamp >= cutoff);
-            
-            let lastBefore = null;
-            for(let i = fullHistory.length - 1; i >= 0; i--) {
-                if (fullHistory[i].timestamp < cutoff) {
-                    lastBefore = fullHistory[i];
-                    break;
+            const now = Date.now();
+            if (currentStockTF === '1D') cutoff = now - 86400000;
+            else if (currentStockTF === '1W') cutoff = now - 86400000 * 7;
+            else if (currentStockTF === '1M') cutoff = now - 86400000 * 30;
+            else if (currentStockTF === '3M') cutoff = now - 86400000 * 90;
+            else if (currentStockTF === '1Y') cutoff = now - 86400000 * 365;
+
+            let fLabels = [], fData = [];
+            if (state.navHistory && state.navHistory.timestamps) {
+                for (let i = 0; i < state.navHistory.timestamps.length; i++) {
+                    if (state.navHistory.timestamps[i] >= cutoff) {
+                        fLabels.push(state.navHistory.labels[i]);
+                        fData.push(state.navHistory.data[i]);
+                    }
                 }
             }
-            if (lastBefore) filteredHistory.unshift({ timestamp: cutoff, nav: lastBefore.nav });
-            
-            if (filteredHistory.length === 0 || (filteredHistory.length === 1 && filteredHistory[0].timestamp >= now - 5000)) {
-                let baseNav = fullHistory.length > 0 ? fullHistory[fullHistory.length-1].nav : 1000000;
-                filteredHistory = [
-                    { timestamp: cutoff || (now - 86400*1000), nav: baseNav },
-                    { timestamp: now, nav: baseNav }
-                ];
+
+            // 避免完全沒點時畫面空白，補上一條水平線
+            if (fData.length === 0 && state.navHistory && state.navHistory.data && state.navHistory.data.length > 0) {
+                let lastVal = state.navHistory.data[state.navHistory.data.length - 1];
+                fLabels = [currentStockTF === '1D' ? '00:00' : 'Start', 'Now'];
+                fData = [lastVal, lastVal];
+            } else if (fData.length === 1) {
+                fLabels.push('Now');
+                fData.push(fData[0]);
             }
 
-            let navLabels = filteredHistory.map(item => {
-                let d = new Date(item.timestamp);
-                if (currentStockTF === '1D') {
-                    return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-                } else {
-                    return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-                }
-            });
-            let navData = filteredHistory.map(item => item.nav);
-
-            navChart.data.labels = navLabels;
-            navChart.data.datasets[0].data = navData;
-            navChart.data.datasets[0].borderColor = '#00d4ff';
-            navChart.data.datasets[0].backgroundColor = 'rgba(0, 212, 255, 0.05)';
-            navChart.data.datasets[0].pointRadius = computePointRadiusArray(navData.length, showNodes, densityVal);
+            navChart.data.labels = fLabels; 
+            navChart.data.datasets[0].data = fData; 
+            navChart.data.datasets[0].borderColor = '#00d4ff'; 
+            navChart.data.datasets[0].backgroundColor = 'rgba(0, 212, 255, 0.05)'; 
+            navChart.data.datasets[0].pointRadius = computePointRadiusArray(fData.length, showNodes, densityVal);
         } else {
             document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> ${currentTicker} 個股歷史走勢`;
             navChart.data.labels = stockHistData.labels; 
@@ -1519,7 +1580,8 @@
         }
         navChart.update();
 
-        mobileChart.data.labels = stockHistData.labels; mobileChart.data.datasets[0].data = stockHistData.prices;
+        mobileChart.data.labels = stockHistData.labels; 
+        mobileChart.data.datasets[0].data = stockHistData.prices;
         const mDensity = (densityVal === 'All') ? 'All' : Math.floor(densityVal / 2);
         mobileChart.data.datasets[0].pointRadius = computePointRadiusArray(stockHistData.prices.length, showNodes, mDensity);
         mobileChart.update();
