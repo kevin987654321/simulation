@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>AlphaTrade | 手動量化操盤指揮中心</title>
+    <title>AlphaTrade</title>
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -133,7 +133,7 @@
         .stepper-input { flex: 1; height: 38px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; text-align: center; color: #fff; font-size: 15px; font-weight: bold; font-family: monospace; outline: none; }
         
         .quick-percent-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-        .qp-btn { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); color: #888; border-radius: 6px; padding: 5px 0; font-size: 11px; font-weight: bold; cursor: pointer; transition: all 0.2s; }
+        .qp-btn { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); color: #888; border-radius: 6px; padding: 5px 0; font-size: 11px; font-weight: bold; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
         .qp-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
 
         .fee-breakdown { background: rgba(0,0,0,0.4); border-radius: 8px; padding: 10px 12px; font-size: 11px; display: flex; flex-direction: column; gap: 6px; }
@@ -148,7 +148,7 @@
         .exec-btn:active:not(:disabled) { transform: scale(0.95); }
         .exec-btn:disabled { opacity: 0.3; cursor: not-allowed; border-color: rgba(255,255,255,0.1) !important; color: #666 !important; background: rgba(255,255,255,0.05) !important; box-shadow: none !important; }
 
-        #ai-commander { height: 180px; flex-shrink: 0; display: flex; flex-direction: column; background: rgba(12, 12, 12, 0.7); border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); overflow: hidden; }
+        #ai-commander { height: 230px; flex-shrink: 0; display: flex; flex-direction: column; background: rgba(12, 12, 12, 0.7); border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); overflow: hidden; }
         .ai-header { padding: 8px 16px; background: rgba(255,255,255,0.02); border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: bold; }
         .chat-display { flex: 1; padding: 10px 16px; font-size: 12.5px; color: #aaa; overflow-y: auto; line-height: 1.6; font-family: monospace; }
         .chat-input-area { padding: 10px 16px; border-top: 1px solid rgba(255,255,255,0.05); display: flex; gap: 10px; background: rgba(0,0,0,0.3); }
@@ -212,7 +212,7 @@
             
             .mobile-stock-chart-box { display: flex; }
             #chart-container { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-            #ai-commander { height: 210px; flex-shrink: 0; }
+            #ai-commander { height: 260px; flex-shrink: 0; }
             .chart-header { flex-direction: column; align-items: flex-start; gap: 10px; }
         }
     </style>
@@ -228,7 +228,7 @@
     <div class="menu-item mobile-only" onclick="switchView('view-mobile-trade', this)"><i class="fa-solid fa-hand-holding-dollar"></i> 下單櫃檯</div>
     <div class="menu-item" onclick="switchView('view-cards', this)"><i class="fa-solid fa-address-card"></i> 自選資產卡片</div>
     <div class="menu-item" onclick="switchView('view-holdings', this)"><i class="fa-solid fa-wallet"></i> 庫存與資產損益</div>
-    <div class="menu-item" onclick="switchView('view-ledger', this)"><i class="fa-solid fa-file-invoice-dollar"></i> 歷史交易帳本</div>
+    <div class="menu-item" onclick="switchView('view-ledger', this)"><i class="fa-solid fa-clock-rotate-left"></i> 時光機與歷史帳本</div>
     <div class="menu-item" style="margin-top: auto;" onclick="switchView('view-settings', this)"><i class="fa-solid fa-sliders"></i> 系統設定</div>
 </aside>
 
@@ -241,6 +241,7 @@
         <div class="mobile-reload-btn" onclick="location.reload()"></div>
     </div>
 
+    <!-- 主儀表板 -->
     <main id="view-dashboard" class="view-section active">
         <div class="stat-grid">
             <div class="glass-panel stat-card">
@@ -287,11 +288,19 @@
                 <div id="ai-commander">
                     <div class="ai-header">
                         <span><i class="fa-solid fa-robot" style="color: var(--color-acc)"></i> GEMINI 戰略操盤顧問室</span>
-                        <span style="color:#666; font-size:11px;">進退場策略連線中</span>
+                        <span style="color:#666; font-size:11px;">深度數據連線中</span>
                     </div>
+                    
+                    <div style="display:flex; gap:6px; padding:6px 12px; background:rgba(0,0,0,0.2); overflow-x:auto;">
+                        <button class="qp-btn" onclick="quickAskAI('diagnostic')" style="padding: 4px 10px;">📊 綜合體檢</button>
+                        <button class="qp-btn" onclick="quickAskAI('risk')" style="padding: 4px 10px;">🛡️ 風險診斷</button>
+                        <button class="qp-btn" onclick="quickAskAI('strategy')" style="padding: 4px 10px;">💡 加減碼策略</button>
+                    </div>
+
                     <div class="chat-display" id="chat-output">
-                        <span style="color: rgba(255,255,255,0.4)">[SYSTEM]</span> 操盤助理連線成功。可依據當前 <strong style="color:#fff" id="ai-current-ticker">NVDA</strong> 報價與帳戶部位評估戰略。<br>
+                        <span style="color: rgba(255,255,255,0.4)">[SYSTEM]</span> 戰略助理連線成功。已同步 <strong style="color:#fff" id="ai-current-ticker">NVDA</strong> 之 RSI、持倉成本與帳戶資金。<br>
                     </div>
+                    
                     <div class="chat-input-area">
                         <input type="text" id="chat-input" placeholder="請輸入欲諮詢之戰略問題..." onkeypress="if(event.key==='Enter') askAI()">
                         <button class="send-btn" onclick="askAI()">發送</button>
@@ -314,7 +323,7 @@
             </button>
         </div>
         <div id="cards-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:14px; position:relative;">
-            </div>
+        </div>
     </main>
 
     <main id="view-holdings" class="view-section">
@@ -322,19 +331,63 @@
             <div style="font-weight:bold; font-size:15px; margin-bottom:12px; white-space:nowrap;"><i class="fa-solid fa-briefcase"></i> 當前證券持倉帳務</div>
             <div class="table-responsive">
                 <table>
-                    <thead><tr><th>代號</th><th>持有股數</th><th>平均成本</th><th>當前現價</th><th>市值</th><th>未實現損益</th><th>操作</th></tr></thead>
+                    <thead><tr><th>代號</th><th>持有股數</th><th>買入均價<br><span style="font-size:10px; font-weight:normal; color:#888;">(損平賣價)</span></th><th>當前現價</th><th>市值</th><th>未實現損益</th><th>操作</th></tr></thead>
                     <tbody id="holdings-table-body"></tbody>
                 </table>
             </div>
         </div>
     </main>
 
+    <!-- 🌟 時光機與帳本頁面 -->
     <main id="view-ledger" class="view-section">
+        <div class="glass-panel" style="padding:16px; margin-bottom:14px;">
+            <div style="font-weight:bold; font-size:14px; margin-bottom:12px;"><i class="fa-solid fa-plus-circle" style="color:var(--color-acc)"></i> 補登歷史交易 (時光機回溯)</div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+                <div>
+                    <div style="font-size:11px; color:#888; margin-bottom:4px;">日期</div>
+                    <!-- 🌟 點擊時自動全選 (輔助) -->
+                    <input type="date" id="tm-date" onfocus="this.select()" onchange="autoFetchHistoricalPrice()" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-family:monospace;">
+                </div>
+                <div>
+                    <div style="font-size:11px; color:#888; margin-bottom:4px;">時間 (24H)</div>
+                    <!-- 🌟 點擊即反白全選、自動跳轉的 UX 升級版 -->
+                    <div style="display:flex; align-items:center; gap:2px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); border-radius:6px; padding:0 8px; width:fit-content;">
+                        <input type="text" id="tm-hour" inputmode="numeric" maxlength="2" onfocus="this.select()" oninput="handleHourInput(this)" onblur="padHour(this)" placeholder="00" style="width:22px; background:transparent; border:none; color:#fff; padding:6px 0; font-family:monospace; text-align:center; outline:none; font-size:14px;">
+                        <span style="color:#888; font-weight:bold; padding-bottom:2px;">:</span>
+                        <input type="text" id="tm-minute" inputmode="numeric" maxlength="2" onfocus="this.select()" oninput="handleMinuteInput(this)" onblur="padMinute(this)" placeholder="00" style="width:22px; background:transparent; border:none; color:#fff; padding:6px 0; font-family:monospace; text-align:center; outline:none; font-size:14px;">
+                    </div>
+                </div>
+                <div>
+                    <div style="font-size:11px; color:#888; margin-bottom:4px;">代號</div>
+                    <!-- 🌟 移除了預設代號，並加上點擊反白 -->
+                    <input type="text" id="tm-ticker" onfocus="this.select()" oninput="autoFetchHistoricalPrice()" placeholder="" style="width:90px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-transform:uppercase; font-family:monospace; font-weight:bold;">
+                </div>
+                <div>
+                    <div style="font-size:11px; color:#888; margin-bottom:4px;">動作</div>
+                    <select id="tm-action" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-weight:bold;">
+                        <option value="BUY">買進</option>
+                        <option value="SELL">賣出</option>
+                    </select>
+                </div>
+                <div>
+                    <div style="font-size:11px; color:#888; margin-bottom:4px;">單價</div>
+                    <input type="number" id="tm-price" onfocus="this.select()" placeholder="自動查詢中..." style="width:100px; background:rgba(0,0,0,0.5); border:1px solid var(--color-acc); color:var(--color-acc); padding:6px; border-radius:6px; font-family:monospace; font-weight:bold;">
+                </div>
+                <div>
+                    <div style="font-size:11px; color:#888; margin-bottom:4px;">股數</div>
+                    <input type="number" id="tm-shares" onfocus="this.select()" placeholder="10" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-family:monospace;">
+                </div>
+                <button onclick="insertHistoricalTrade()" style="background:var(--color-acc); color:#000; border:none; padding:8px 16px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:12px; transition:all 0.2s;">
+                    確認插入
+                </button>
+            </div>
+        </div>
+
         <div class="glass-panel" style="padding:16px;">
-            <div style="font-weight:bold; font-size:15px; margin-bottom:12px; white-space:nowrap;"><i class="fa-solid fa-clock-rotate-left"></i> 歷史手動交易帳本</div>
+            <div style="font-weight:bold; font-size:15px; margin-bottom:12px; white-space:nowrap;"><i class="fa-solid fa-list-ul"></i> 歷史帳本與撤銷管理</div>
             <div class="table-responsive">
                 <table>
-                    <thead><tr><th>時間</th><th>動作</th><th>代號</th><th>成交均價</th><th>股數</th><th>手續費/稅</th><th>交割金額</th></tr></thead>
+                    <thead><tr><th>時間</th><th>動作</th><th>代號</th><th>成交均價</th><th>股數</th><th>手續費/稅</th><th>交割金額(TWD)</th><th>已實現損益(TWD)</th><th>操作</th></tr></thead>
                     <tbody id="ledger-table-body"></tbody>
                 </table>
             </div>
@@ -362,6 +415,10 @@
             <div class="glass-panel setting-item">
                 <div><div style="font-weight:bold;">證交稅率設定 (%)</div><div style="font-size:11px; color:#777; margin-top:2px;">賣出徵收，預設 0.3%</div></div>
                 <input type="number" id="cfg-tax-rate" value="0.30" step="0.05" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
+            </div>
+            <div class="glass-panel setting-item">
+                <div><div style="font-weight:bold;">圖表動態十字輔助線</div><div style="font-size:11px; color:#777; margin-top:2px;">按住圖表滑動時，顯示絲滑跟隨的垂直輔助線</div></div>
+                <label class="switch"><input type="checkbox" id="cfg-crosshair-show" checked><span class="slider"></span></label>
             </div>
             <div class="glass-panel setting-item">
                 <div><div style="font-weight:bold;">圖表轉折節點顯示</div><div style="font-size:11px; color:#777; margin-top:2px;">開啟以在折線圖上方顯示數據圓點</div></div>
@@ -475,14 +532,172 @@
 </div>
 
 <script>
-    function getFormattedTime() { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; }
+    let currentUSDTWD = 32.5;
+
+    async function fetchExchangeRate() {
+        try {
+            const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/TWD=X')}`, { cache: "no-store" });
+            if (res.ok) {
+                const json = await res.json();
+                if (json.chart.result[0].meta.regularMarketPrice) {
+                    currentUSDTWD = json.chart.result[0].meta.regularMarketPrice;
+                }
+            }
+        } catch (e) { console.warn("匯率抓取失敗，使用預設值", e); }
+    }
+
+    function getCurrencyMultiplier(ticker) {
+        return (ticker.endsWith('.TW') || ticker.endsWith('.TWO')) ? 1 : currentUSDTWD;
+    }
+
+    function getFormattedTimeFromDate(d) {
+        return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    }
+    function getFullFormattedTimeFromDate(timestamp) {
+        let d = new Date(timestamp);
+        return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    }
+
+    // 🌟 時光機：時/分 無縫跳轉輸入與防呆邏輯
+    function handleHourInput(el) {
+        let val = el.value.replace(/\D/g, '');
+        if (val.length === 1) {
+            if (parseInt(val) > 2) {
+                el.value = '0' + val;
+                document.getElementById('tm-minute').focus();
+            } else {
+                el.value = val;
+            }
+        } else if (val.length >= 2) {
+            val = val.substring(0, 2);
+            if (parseInt(val) > 23) val = '23';
+            el.value = val;
+            document.getElementById('tm-minute').focus();
+        } else {
+            el.value = '';
+        }
+        if (el.value.length === 2) autoFetchHistoricalPrice();
+    }
+
+    function padHour(el) {
+        if (el.value.length === 1) el.value = '0' + el.value;
+        autoFetchHistoricalPrice();
+    }
+
+    function handleMinuteInput(el) {
+        let val = el.value.replace(/\D/g, '');
+        if (val.length >= 2) {
+            val = val.substring(0, 2);
+            if (parseInt(val) > 59) val = '59';
+            el.value = val;
+            document.getElementById('tm-ticker').focus(); 
+        } else {
+            el.value = val;
+        }
+        if (el.value.length === 2) autoFetchHistoricalPrice();
+    }
+
+    function padMinute(el) {
+        if (el.value.length === 1) el.value = '0' + el.value;
+        autoFetchHistoricalPrice();
+    }
+
+    // 🌟 時光機：預設帶入當前的「日期」與分離的「24H 時間」
+    function initTimeMachineDefault() {
+        const d = new Date();
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const hours = String(d.getHours()).padStart(2, '0');
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        document.getElementById('tm-date').value = `${year}-${month}-${day}`;
+        document.getElementById('tm-hour').value = hours;
+        document.getElementById('tm-minute').value = minutes;
+    }
+
+    // 🌟 時光機：防抖保護的「動態高精準度」歷史價格撈取
+    let fetchPriceTimer = null;
+    function autoFetchHistoricalPrice() {
+        clearTimeout(fetchPriceTimer);
+        
+        fetchPriceTimer = setTimeout(async () => {
+            const dateVal = document.getElementById("tm-date").value;
+            const hVal = document.getElementById("tm-hour").value;
+            const mVal = document.getElementById("tm-minute").value;
+            const ticker = document.getElementById("tm-ticker").value.trim().toUpperCase();
+            const priceInput = document.getElementById("tm-price");
+
+            // 確保所有必要欄位皆已輸入
+            if (!dateVal || !ticker || hVal.length !== 2 || mVal.length !== 2) return;
+
+            const timeVal = `${hVal}:${mVal}`;
+            const targetTime = new Date(`${dateVal}T${timeVal}`).getTime();
+            if(isNaN(targetTime)) return;
+            const targetSec = Math.floor(targetTime / 1000);
+
+            priceInput.placeholder = "查詢中...";
+            priceInput.value = ""; 
+
+            // 🌟 核心：自動判斷需要的精準度區間
+            const nowSec = Math.floor(Date.now() / 1000);
+            const daysDiff = (nowSec - targetSec) / 86400;
+            let interval = '1m';
+            if (daysDiff > 59) interval = '1d';
+            else if (daysDiff > 6) interval = '5m';
+
+            try {
+                // 抓取目標日前後約 4 天的資料確保跨假日也能找到
+                const p1 = targetSec - (86400 * 4); 
+                const p2 = targetSec + (86400 * 4); 
+                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?period1=${p1}&period2=${p2}&interval=${interval}`)}`;
+                
+                const res = await fetch(proxyUrl, { cache: "no-store" });
+                const json = await res.json();
+                
+                if(json.chart && json.chart.result && json.chart.result[0]) {
+                    const result = json.chart.result[0];
+                    const timestamps = result.timestamp || [];
+                    const closes = result.indicators.quote[0].close || [];
+                    
+                    if (timestamps.length > 0) {
+                        let closestIdx = -1;
+                        let minDiff = Infinity;
+                        
+                        // 找尋與輸入時間最接近的那一個報價點
+                        for(let i = 0; i < timestamps.length; i++) {
+                            if(closes[i] === null || closes[i] === undefined) continue;
+                            const diff = Math.abs(timestamps[i] - targetSec);
+                            if (diff < minDiff) {
+                                minDiff = diff;
+                                closestIdx = i;
+                            }
+                        }
+                        
+                        if(closestIdx !== -1) {
+                            priceInput.value = closes[closestIdx].toFixed(2);
+                            priceInput.placeholder = "";
+                            
+                            // 提示抓到的實際報價時間
+                            const fetchedDate = new Date(timestamps[closestIdx] * 1000);
+                            const tStr = `${fetchedDate.getMonth()+1}/${fetchedDate.getDate()} ${String(fetchedDate.getHours()).padStart(2, '0')}:${String(fetchedDate.getMinutes()).padStart(2, '0')}`;
+                            triggerDynamicFeedback(`精準抓取 ${tStr} 報價`, 'buy', priceInput, closes[closestIdx].toFixed(2));
+                            return;
+                        }
+                    }
+                }
+                priceInput.placeholder = "查無此時段報價";
+            } catch(e) {
+                priceInput.placeholder = "查詢失敗";
+            }
+        }, 600); // 延遲 0.6 秒發送，體驗更絲滑
+    }
 
     function triggerDynamicFeedback(msg, type, targetBtn, valueText) {
         const container = document.getElementById('toast-container'), toast = document.createElement('div');
         toast.className = `toast ${type}`; toast.innerHTML = `<i class="fa-solid ${type === 'buy' ? 'fa-circle-arrow-up' : 'fa-circle-arrow-down'}" style="font-size:18px;"></i> <span>${msg}</span> <div class="toast-progress"></div>`;
         container.appendChild(toast); setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateY(-20px) scale(0.9)'; toast.style.transition = 'all 0.35s'; setTimeout(() => toast.remove(), 350); }, 3000);
 
-        if (targetBtn) {
+        if (targetBtn && valueText) {
             const rect = targetBtn.getBoundingClientRect(), floatEl = document.createElement('div'); floatEl.className = 'float-popup';
             floatEl.style.color = type === 'buy' ? 'var(--color-buy)' : 'var(--color-sell)'; floatEl.style.left = `${rect.left + rect.width / 2 - 40}px`; floatEl.style.top = `${rect.top - 10}px`;
             floatEl.innerText = valueText; document.body.appendChild(floatEl); setTimeout(() => floatEl.remove(), 1200);
@@ -541,11 +756,69 @@
         beforeEvent(chart, args) {
             const e = args.event; const type = e.type;
             if (type === 'mousedown' || type === 'touchstart') chart._isPointerHolding = true;
-            else if (type === 'mouseup' || type === 'touchend' || type === 'touchcancel' || type === 'mouseout') { chart._isPointerHolding = false; chart.tooltip.setActiveElements([], {x: 0, y: 0}); chart.update(); return false; }
-            if (type === 'mousemove' || type === 'touchmove') { if (!chart._isPointerHolding) return false; }
+            else if (type === 'mouseup' || type === 'touchend' || type === 'touchcancel' || type === 'mouseout' || type === 'mouseleave') { 
+                chart._isPointerHolding = false; 
+                chart.setActiveElements([]);
+                chart.tooltip.setActiveElements([], {x: 0, y: 0}); 
+                chart.update(); 
+                return false; 
+            }
+            if (type === 'mousemove' || type === 'touchmove') { 
+                if (!chart._isPointerHolding) {
+                    chart.setActiveElements([]);
+                    chart.tooltip.setActiveElements([], {x: 0, y: 0});
+                    return false;
+                }
+            }
         }
     };
     Chart.register(holdToPreviewPlugin);
+
+    const smoothCrosshairPlugin = {
+        id: 'smoothCrosshairPlugin',
+        afterDraw(chart) {
+            const toggle = document.getElementById("cfg-crosshair-show");
+            if (!toggle || !toggle.checked) return;
+
+            const activeElements = chart.getActiveElements();
+            let targetX = null;
+            let activeColor = null;
+
+            if (activeElements.length > 0 && chart._isPointerHolding) {
+                targetX = activeElements[0].element.x;
+                activeColor = chart.data.datasets[activeElements[0].datasetIndex].borderColor;
+                chart._crosshairTargetOpacity = 1;
+            } else {
+                chart._crosshairTargetOpacity = 0;
+            }
+
+            if (chart._crosshairX === undefined) chart._crosshairX = targetX;
+            if (chart._crosshairOpacity === undefined) chart._crosshairOpacity = 0;
+
+            if (targetX !== null && chart._crosshairX === null) chart._crosshairX = targetX;
+            else if (targetX !== null) chart._crosshairX += (targetX - chart._crosshairX) * 0.25;
+
+            chart._crosshairOpacity += (chart._crosshairTargetOpacity - chart._crosshairOpacity) * 0.2;
+
+            if (chart._crosshairOpacity > 0.01 && chart._crosshairX !== null) {
+                const ctx = chart.ctx;
+                ctx.save();
+                ctx.beginPath();
+                ctx.moveTo(chart._crosshairX, chart.chartArea.top);
+                ctx.lineTo(chart._crosshairX, chart.chartArea.bottom);
+                ctx.lineWidth = 1;
+                ctx.strokeStyle = activeColor || '#fff';
+                ctx.globalAlpha = chart._crosshairOpacity * 0.8;
+                ctx.stroke();
+                ctx.restore();
+
+                if (Math.abs(chart._crosshairX - targetX) > 0.5 || Math.abs(chart._crosshairOpacity - chart._crosshairTargetOpacity) > 0.05) {
+                    requestAnimationFrame(() => chart.draw());
+                }
+            }
+        }
+    };
+    Chart.register(smoothCrosshairPlugin);
 
     const DATA_KEY = "ALPHATRADE_MANUAL_DATA";
     let state = { cash: 1000000, holdings: {}, ledger: [], recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { labels: [], data: [] } };
@@ -555,8 +828,31 @@
 
     function initData() {
         const saved = localStorage.getItem(DATA_KEY);
-        if (saved) { try { state = JSON.parse(saved); state.cardTickers = state.cardTickers || ["NVDA", "2330.TW"]; } catch(e) {} } else { recordNavSnapshot(); saveData(); }
+        if (saved) { 
+            try { 
+                state = JSON.parse(saved); 
+                state.cardTickers = state.cardTickers || ["NVDA", "2330.TW"]; 
+                state.ledger.forEach(r => {
+                    if (!r.timestamp) {
+                        let d = new Date();
+                        let parts = r.time ? r.time.split(':') : [];
+                        if (parts.length === 2) {
+                            d.setHours(parseInt(parts[0]), parseInt(parts[1]), 0, 0);
+                            r.timestamp = d.getTime();
+                        } else {
+                            r.timestamp = Date.now();
+                        }
+                    }
+                });
+                state.ledger.sort((a, b) => b.timestamp - a.timestamp);
+            } catch(e) {} 
+        } else { 
+            recordNavSnapshot(); saveData(); 
+        }
+        
         const savedShow = localStorage.getItem('SETTING_NODE_SHOW'); if (savedShow !== null) document.getElementById("cfg-node-show").checked = savedShow === 'true'; else document.getElementById("cfg-node-show").checked = true;
+        const savedCrosshair = localStorage.getItem('SETTING_CROSSHAIR_SHOW'); if (savedCrosshair !== null) document.getElementById("cfg-crosshair-show").checked = savedCrosshair === 'true'; else document.getElementById("cfg-crosshair-show").checked = true;
+        
         const savedVal = localStorage.getItem('SETTING_NODE_VAL');
         if (savedVal !== null) {
             document.getElementById("cfg-node-slider").value = (savedVal === 'All') ? 60 : savedVal; document.getElementById("cfg-node-val").value = savedVal;
@@ -564,49 +860,171 @@
         }
         document.getElementById("node-settings-wrapper").classList.toggle("disabled", !document.getElementById("cfg-node-show").checked);
         document.getElementById("trade-ticker").value = currentTicker; document.getElementById("m-chart-ticker").innerText = currentTicker;
+        
+        // 初始化帶入當前時間到時光機面板
+        initTimeMachineDefault();
+
         renderRecentTickers(); renderCards();
     }
+    
     function saveData() { localStorage.setItem(DATA_KEY, JSON.stringify(state)); updateAllViews(); renderCards(); }
     function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { localStorage.removeItem(DATA_KEY); state = { cash: 1000000, holdings: {}, ledger: [], recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { labels: [], data: [] } }; initData(); } }
 
-    /* 🌟 JSON 備份與還原功能 */
     function exportData() {
-        const dataStr = JSON.stringify(state, null, 2);
-        const blob = new Blob([dataStr], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-        a.href = url;
-        a.download = `AlphaTrade_Backup_${date}.json`;
+        const dataStr = JSON.stringify(state, null, 2), blob = new Blob([dataStr], { type: "application/json" }), url = URL.createObjectURL(blob), a = document.createElement("a");
+        const date = new Date().toISOString().slice(0, 10).replace(/-/g, ""); a.href = url; a.download = `AlphaTrade_Backup_${date}.json`;
         document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
         triggerDynamicFeedback("已成功匯出備份檔案", "buy", null, "EXPORTED");
     }
 
     function importData(event) {
-        const file = event.target.files[0]; if (!file) return;
-        const reader = new FileReader();
+        const file = event.target.files[0]; if (!file) return; const reader = new FileReader();
         reader.onload = function(e) {
             try {
                 const importedState = JSON.parse(e.target.result);
                 if (importedState && typeof importedState.cash === 'number') {
-                    state = importedState;
-                    state.cardTickers = state.cardTickers || []; state.recentTickers = state.recentTickers || [];
-                    state.holdings = state.holdings || {}; state.ledger = state.ledger || [];
-                    saveData(); fetchAllCardsData();
-                    triggerDynamicFeedback("資料已成功還原！", "buy", null, "RESTORED");
+                    state = importedState; state.cardTickers = state.cardTickers || []; state.recentTickers = state.recentTickers || []; state.holdings = state.holdings || {}; state.ledger = state.ledger || [];
+                    saveData(); fetchAllCardsData(); triggerDynamicFeedback("資料已成功還原！", "buy", null, "RESTORED");
                 } else alert("檔案格式錯誤或損毀！");
-            } catch (err) { alert("檔案解析失敗！"); }
+            } catch (err) { alert("檔案解析失敗！請確保貼上完整無重複內容。"); }
             event.target.value = ''; 
         };
         reader.readAsText(file);
     }
 
-    let cDragTimer, cIsDragging = false, cDragCard = null, cPlaceholder = null, cStartX = 0, cStartY = 0, cElemStartX = 0, cElemStartY = 0;
-
-    function attachCardDragEvents() {
-        document.querySelectorAll('.draggable-card').forEach(card => { card.addEventListener('touchstart', handleCardPointerDown, {passive: false}); card.addEventListener('mousedown', handleCardPointerDown); });
+    function recalculateState(ledgerArray) {
+        let tempCash = 1000000;
+        let tempHoldings = {};
+        let invalidSellIndices = []; 
+        
+        for (let i = ledgerArray.length - 1; i >= 0; i--) {
+            let r = ledgerArray[i];
+            let rate = r.rate || getCurrencyMultiplier(r.ticker);
+            
+            if (r.action === 'BUY') {
+                tempCash -= r.total;
+                if (!tempHoldings[r.ticker]) tempHoldings[r.ticker] = { shares: 0, avgPrice: 0 };
+                let h = tempHoldings[r.ticker];
+                let origTotalSpend = r.origTotalSpend || (r.total / rate);
+                h.avgPrice = ((h.shares * h.avgPrice) + origTotalSpend) / (h.shares + r.shares);
+                h.shares += r.shares;
+            } else if (r.action === 'SELL') {
+                if (!tempHoldings[r.ticker] || tempHoldings[r.ticker].shares < r.shares) {
+                    invalidSellIndices.push(i);
+                    continue; 
+                }
+                tempCash += r.total;
+                let h = tempHoldings[r.ticker];
+                let costBasisTWD = r.shares * h.avgPrice * rate;
+                r.realizedPnL = r.total - costBasisTWD;
+                h.shares -= r.shares;
+                if (h.shares === 0) delete tempHoldings[r.ticker];
+            }
+        }
+        return { cash: tempCash, holdings: tempHoldings, invalidSellIndices };
     }
 
+    function insertHistoricalTrade() {
+        const dateVal = document.getElementById("tm-date").value;
+        const hVal = document.getElementById("tm-hour").value;
+        const mVal = document.getElementById("tm-minute").value;
+        const ticker = document.getElementById("tm-ticker").value.trim().toUpperCase();
+        const action = document.getElementById("tm-action").value;
+        const price = parseFloat(document.getElementById("tm-price").value);
+        const shares = parseInt(document.getElementById("tm-shares").value);
+        
+        if (!dateVal || hVal.length !== 2 || mVal.length !== 2) {
+            alert("請確認日期與時分格式正確");
+            return;
+        }
+        if (!ticker || !price || !shares || shares <= 0 || price <= 0) {
+            alert("請完整填寫所有欄位，且單價與股數須大於 0。若剛輸入完代號，請等待價格自動檢索。");
+            return;
+        }
+        
+        const timeVal = `${hVal}:${mVal}`;
+        const timestamp = new Date(`${dateVal}T${timeVal}`).getTime();
+        if (timestamp > Date.now()) {
+            alert("不能登錄未來的交易時間！");
+            return;
+        }
+        
+        const rate = getCurrencyMultiplier(ticker);
+        const origSubtotal = shares * price;
+        const origFee = origSubtotal * (parseFloat(document.getElementById("cfg-fee-rate").value) / 100);
+        const origTax = action === 'SELL' ? origSubtotal * (parseFloat(document.getElementById("cfg-tax-rate").value) / 100) : 0;
+        
+        const twdTotalSpend = (origSubtotal + origFee) * rate; 
+        const twdTotalGet = (origSubtotal - origFee - origTax) * rate; 
+        const twdFee = origFee * rate;
+        const twdTax = origTax * rate;
+        
+        let newTrade = {
+            time: getFormattedTimeFromDate(new Date(timestamp)),
+            timestamp: timestamp,
+            action: action,
+            ticker: ticker,
+            price: price,
+            shares: shares,
+            fee: action === 'BUY' ? twdFee : (twdFee + twdTax),
+            tax: twdTax,
+            total: action === 'BUY' ? twdTotalSpend : twdTotalGet,
+            rate: rate,
+            origTotalSpend: action === 'BUY' ? (origSubtotal + origFee) : null,
+            realizedPnL: null
+        };
+        
+        let testLedger = JSON.parse(JSON.stringify(state.ledger));
+        testLedger.push(newTrade);
+        testLedger.sort((a, b) => b.timestamp - a.timestamp); 
+        
+        let result = recalculateState(testLedger);
+        if (result.cash < 0 && !confirm("此筆補登將導致歷史過程的現金變成負數，確認要強制補登嗎？")) {
+            return;
+        }
+        if (result.invalidSellIndices.length > 0) {
+            alert(`補登失敗：此操作將導致後續存在 ${result.invalidSellIndices.length} 筆無效賣出 (庫存不足)！請先整理後續的帳務。`);
+            return;
+        }
+        
+        state.ledger = testLedger;
+        state.cash = result.cash;
+        state.holdings = result.holdings;
+        
+        document.getElementById("tm-ticker").value = '';
+        document.getElementById("tm-price").value = '';
+        document.getElementById("tm-shares").value = '';
+        
+        saveData();
+        triggerDynamicFeedback("已成功補登時光機交易", "buy", null, "INSERTED");
+    }
+
+    function undoTrade(index) {
+        if(!confirm("確定要撤銷這筆交易嗎？系統會為你重新結算所有歷史損益與庫存。")) return;
+        
+        let testLedger = JSON.parse(JSON.stringify(state.ledger)); 
+        testLedger.splice(index, 1); 
+        
+        let result = recalculateState(testLedger);
+        if (result.invalidSellIndices.length > 0) {
+            if(!confirm(`⚠️ 警告：撤銷此筆買入將導致後續 ${result.invalidSellIndices.length} 筆賣出操作失效 (因庫存不足)。\n\n為了維持帳務正確，系統將【強制一併撤銷】這些無效的賣出。\n是否繼續？`)) {
+                return;
+            }
+            result.invalidSellIndices.forEach(i => { testLedger[i]._invalid = true; });
+            testLedger = testLedger.filter(x => !x._invalid);
+            result = recalculateState(testLedger);
+        }
+        
+        state.ledger = testLedger;
+        state.cash = result.cash;
+        state.holdings = result.holdings;
+        saveData();
+        triggerDynamicFeedback("交易已成功撤銷", "buy", null, "UNDONE");
+    }
+
+    let cDragTimer, cIsDragging = false, cDragCard = null, cPlaceholder = null, cStartX = 0, cStartY = 0, cElemStartX = 0, cElemStartY = 0;
+
+    function attachCardDragEvents() { document.querySelectorAll('.draggable-card').forEach(card => { card.addEventListener('touchstart', handleCardPointerDown, {passive: false}); card.addEventListener('mousedown', handleCardPointerDown); }); }
     function handleCardPointerDown(e) {
         if (!isCardEditMode) return; if (e.target.closest('.delete-btn')) return;
         const clientX = e.touches ? e.touches[0].clientX : e.clientX, clientY = e.touches ? e.touches[0].clientY : e.clientY, card = e.currentTarget;
@@ -615,16 +1033,13 @@
         const cancelMove = (eMove) => { const mx = eMove.touches ? eMove.touches[0].clientX : eMove.clientX, my = eMove.touches ? eMove.touches[0].clientY : eMove.clientY; if(Math.abs(mx - clientX) > 10 || Math.abs(my - clientY) > 10) cancelDrag(); };
         document.addEventListener('touchend', cancelDrag); document.addEventListener('mouseup', cancelDrag); document.addEventListener('touchmove', cancelMove, {passive: true}); document.addEventListener('mousemove', cancelMove);
     }
-
     function startCardDrag(card, startX, startY) {
         if(navigator.vibrate) navigator.vibrate(50);
-        cIsDragging = true; cPlaceholder = card; const rect = card.getBoundingClientRect();
-        cDragCard = card.cloneNode(true);
+        cIsDragging = true; cPlaceholder = card; const rect = card.getBoundingClientRect(); cDragCard = card.cloneNode(true);
         cDragCard.style.position = 'fixed'; cDragCard.style.top = rect.top + 'px'; cDragCard.style.left = rect.left + 'px'; cDragCard.style.width = rect.width + 'px'; cDragCard.style.height = rect.height + 'px'; cDragCard.style.zIndex = '10000'; cDragCard.style.margin = '0'; cDragCard.style.boxShadow = '0 20px 40px rgba(0,0,0,0.8), 0 0 0 2px var(--color-acc)'; cDragCard.style.transform = 'scale(1.05)'; cDragCard.style.transition = 'transform 0.2s'; cDragCard.style.pointerEvents = 'none';
         document.body.appendChild(cDragCard); cPlaceholder.style.opacity = '0'; cStartX = startX; cStartY = startY; cElemStartX = rect.left; cElemStartY = rect.top;
         document.addEventListener('touchmove', handleCardPointerMove, {passive: false}); document.addEventListener('mousemove', handleCardPointerMove); document.addEventListener('touchend', handleCardPointerUp); document.addEventListener('mouseup', handleCardPointerUp);
     }
-
     function handleCardPointerMove(e) {
         if (!cIsDragging) return; e.preventDefault();
         const clientX = e.touches ? e.touches[0].clientX : e.clientX, clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -632,7 +1047,6 @@
         const targetCard = document.elementsFromPoint(clientX, clientY).find(el => el.classList.contains('draggable-card') && el !== cPlaceholder);
         if (targetCard) swapCardNodes(cPlaceholder, targetCard);
     }
-
     function swapCardNodes(nodeA, nodeB) {
         const parent = nodeA.parentNode, rectB = nodeB.getBoundingClientRect(), siblingA = nodeA.nextSibling === nodeB ? nodeA : nodeA.nextSibling;
         nodeB.parentNode.insertBefore(nodeA, nodeB); parent.insertBefore(nodeB, siblingA);
@@ -640,7 +1054,6 @@
         nodeB.style.transform = `translate(${diffX}px, ${diffY}px)`; nodeB.style.transition = 'none';
         requestAnimationFrame(() => { nodeB.style.transform = ''; nodeB.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)'; });
     }
-
     function handleCardPointerUp(e) {
         if (!cIsDragging) return; cIsDragging = false; const rect = cPlaceholder.getBoundingClientRect();
         cDragCard.style.transition = 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)'; cDragCard.style.left = rect.left + 'px'; cDragCard.style.top = rect.top + 'px'; cDragCard.style.transform = 'scale(1)';
@@ -684,9 +1097,11 @@
     function renderCards() {
         const grid = document.getElementById('cards-grid'); let html = '';
         state.cardTickers.forEach(t => {
+            const rate = getCurrencyMultiplier(t);
             const cData = cardsDataCache[t] || { price: 0, rsi: null }, h = state.holdings[t] || { shares: 0, avgPrice: 0 };
-            const gross = h.shares * cData.price, feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100, taxRate = parseFloat(document.getElementById("cfg-tax-rate").value) / 100;
-            const netValue = gross > 0 ? (gross - (gross * feeRate) - (gross * taxRate)) : 0, totalCost = h.shares * h.avgPrice, pnl = netValue - totalCost;
+            
+            const gross = h.shares * cData.price * rate, feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100, taxRate = parseFloat(document.getElementById("cfg-tax-rate").value) / 100;
+            const netValue = gross > 0 ? (gross - (gross * feeRate) - (gross * taxRate)) : 0, totalCost = h.shares * h.avgPrice * rate, pnl = netValue - totalCost;
             const pnlColor = pnl >= 0 ? 'var(--color-buy)' : 'var(--color-sell)';
             const deleteBtn = isCardEditMode ? `<div class="delete-btn" onclick="removeCard('${t}')" style="position:absolute; top:-8px; right:-8px; background:var(--color-sell); color:#fff; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:10; box-shadow:0 0 10px rgba(0,0,0,0.5);"><i class="fa-solid fa-minus"></i></div>` : '';
 
@@ -701,7 +1116,7 @@
                     <div style="display:flex; flex-direction:column; gap:4px;"><span style="color:#777;">14日 RSI</span><span style="font-family:monospace; font-weight:bold; font-size:13px; color:${cData.rsi >= 70 ? 'var(--color-sell)' : cData.rsi <= 30 ? 'var(--color-buy)' : 'var(--color-acc)'}">${cData.rsi !== null ? cData.rsi.toFixed(1) : '--'}</span></div>
                     <div style="display:flex; flex-direction:column; gap:4px; text-align:right;"><span style="color:#777;">持有數量</span><span style="font-family:monospace; font-weight:bold; font-size:13px;">${h.shares} 股</span></div>
                     <div style="display:flex; flex-direction:column; gap:4px;"><span style="color:#777;">買入均價</span><span style="font-family:monospace; font-weight:bold; font-size:13px;">$${h.avgPrice.toFixed(2)}</span></div>
-                    <div style="display:flex; flex-direction:column; gap:4px; text-align:right;"><span style="color:#777;">買入總成本</span><span style="font-family:monospace; font-weight:bold; font-size:13px;">$${totalCost.toLocaleString(undefined, {minimumFractionDigits:2})}</span></div>
+                    <div style="display:flex; flex-direction:column; gap:4px; text-align:right;"><span style="color:#777;">買入總成本(TWD)</span><span style="font-family:monospace; font-weight:bold; font-size:13px;">$${totalCost.toLocaleString(undefined, {minimumFractionDigits:2})}</span></div>
                     <div style="display:flex; flex-direction:column; gap:6px; grid-column: span 2; background:rgba(0,0,0,0.4); padding:10px 12px; border-radius:8px; margin-top:4px;">
                         <div style="display:flex; justify-content:space-between; align-items:center;"><span style="color:#888;">實收總價值 <span style="font-size:10px">(扣稅費)</span></span><span style="font-family:monospace; font-weight:bold; font-size:14px; color:${netValue > 0 ? '#fff' : '#888'};">$${netValue.toLocaleString(undefined, {minimumFractionDigits:2})}</span></div>
                         <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid rgba(255,255,255,0.05); padding-top:6px;"><span style="color:#888;">預估淨損益</span><span style="font-family:monospace; font-weight:bold; font-size:14px; color:${pnlColor};">${pnl >= 0 ? '+' : ''}$${pnl.toLocaleString(undefined, {minimumFractionDigits:2})}</span></div>
@@ -715,12 +1130,17 @@
     }
 
     function addToRecentlySelected(t) { state.recentTickers = [t, ...state.recentTickers.filter(item => item !== t)].slice(0, 5); saveData(); renderRecentTickers(); }
-    function renderRecentTickers() { document.getElementById("recent-tickers-list").innerHTML = state.recentTickers.map(t => `<div class="dropdown-item" onclick="selectTicker('${t}')"><span style="font-weight:bold; color:var(--color-buy)">${t}</span><span style="color:#888; font-size:11px;">最近選取</span></div>`).join(""); }
+    function renderRecentTickers() { document.getElementById("recent-tickers-list").innerHTML = state.recentTickers.map(t => `
+            <div class="dropdown-item" onclick="selectTicker('${t}')">
+                <span style="font-weight:bold; color:var(--color-buy)">${t}</span>
+                <span style="color:#888; font-size:11px;">最近選取</span>
+            </div>`).join(""); }
 
     const tickerInput = document.getElementById("trade-ticker");
     tickerInput.addEventListener("input", (e) => {
         const query = e.target.value.trim().toUpperCase(); document.getElementById("ticker-dropdown").classList.add("show");
         document.getElementById("recent-group-title").style.display = 'none'; document.getElementById("recent-tickers-list").style.display = 'none';
+
         clearTimeout(searchDebounceTimer);
         searchDebounceTimer = setTimeout(async () => {
             if(!query) { document.getElementById("live-search-list").innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#666;">輸入代號自動撈取標的...</div>`; return; }
@@ -842,15 +1262,25 @@
     
     function applyPercentShares(pct) {
         if (isPriceLoading || currentRealPrice === null) return;
-        if (tradeMode === 'BUY') { const feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100 || 0.001425; sharesInput.value = Math.max(1, Math.floor(Math.floor(state.cash / (currentRealPrice * (1 + feeRate))) * pct)); } 
-        else { const holding = state.holdings[currentTicker]?.shares || 0; sharesInput.value = Math.max(1, Math.floor(holding * pct)); }
+        const rate = getCurrencyMultiplier(currentTicker);
+        if (tradeMode === 'BUY') { 
+            const feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100 || 0.001425; 
+            sharesInput.value = Math.max(1, Math.floor(Math.floor(state.cash / (currentRealPrice * rate * (1 + feeRate))) * pct)); 
+        } 
+        else { 
+            const holding = state.holdings[currentTicker]?.shares || 0; 
+            sharesInput.value = Math.max(1, Math.floor(holding * pct)); 
+        }
         validateSharesInput();
     }
     
     function validateSharesInput() {
         if (isPriceLoading || currentRealPrice === null) { document.getElementById("exec-trade-btn").disabled = true; return; }
         let s = parseInt(sharesInput.value) || 0;
-        const feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100, maxBuy = Math.max(0, Math.floor(state.cash / (currentRealPrice * (1 + feeRate)))), holding = state.holdings[currentTicker]?.shares || 0;
+        const rate = getCurrencyMultiplier(currentTicker);
+        const feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100;
+        const maxBuy = Math.max(0, Math.floor(state.cash / (currentRealPrice * rate * (1 + feeRate))));
+        const holding = state.holdings[currentTicker]?.shares || 0;
         document.getElementById("holding-shares-display").innerText = holding.toLocaleString();
         
         if (tradeMode === 'BUY') {
@@ -866,10 +1296,18 @@
     function recalculateOrder() {
         if (isPriceLoading || currentRealPrice === null) return;
         let s = parseInt(sharesInput.value) || 0;
-        const subtotal = s * currentRealPrice, fee = subtotal * (parseFloat(document.getElementById("cfg-fee-rate").value) / 100), tax = tradeMode === 'SELL' ? subtotal * (parseFloat(document.getElementById("cfg-tax-rate").value) / 100) : 0;
+        const rate = getCurrencyMultiplier(currentTicker);
+        
+        const subtotal = s * currentRealPrice * rate;
+        const fee = subtotal * (parseFloat(document.getElementById("cfg-fee-rate").value) / 100);
+        const tax = tradeMode === 'SELL' ? subtotal * (parseFloat(document.getElementById("cfg-tax-rate").value) / 100) : 0;
+        
         document.getElementById("calc-subtotal").innerText = `$ ${subtotal.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
-        document.getElementById("calc-fee").innerText = `$ ${fee.toFixed(2)}`; document.getElementById("calc-tax").innerText = `$ ${tax.toFixed(2)}`;
-        const total = tradeMode === 'BUY' ? (subtotal + fee) : (subtotal - fee - tax), totalEl = document.getElementById("calc-total");
+        document.getElementById("calc-fee").innerText = `$ ${fee.toFixed(2)}`; 
+        document.getElementById("calc-tax").innerText = `$ ${tax.toFixed(2)}`;
+        
+        const total = tradeMode === 'BUY' ? (subtotal + fee) : (subtotal - fee - tax);
+        const totalEl = document.getElementById("calc-total");
         document.getElementById("total-label").innerText = tradeMode === 'BUY' ? '預估總付出:' : '預估總收入:';
         totalEl.innerText = `$ ${total.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
     }
@@ -877,34 +1315,66 @@
     function executeTrade() {
         if (isPriceLoading || currentRealPrice === null) { alert("報價連線中，請稍候！"); return; }
         let s = parseInt(sharesInput.value); if(!s || s <= 0) return;
-        const subtotal = s * currentRealPrice, fee = subtotal * (parseFloat(document.getElementById("cfg-fee-rate").value) / 100), tradeTime = getFormattedTime();
+        const rate = getCurrencyMultiplier(currentTicker);
+        
+        const origSubtotal = s * currentRealPrice;
+        const origFee = origSubtotal * (parseFloat(document.getElementById("cfg-fee-rate").value) / 100);
+        const origTax = tradeMode === 'SELL' ? origSubtotal * (parseFloat(document.getElementById("cfg-tax-rate").value) / 100) : 0;
+        
+        const twdTotalSpend = (origSubtotal + origFee) * rate; 
+        const twdTotalGet = (origSubtotal - origFee - origTax) * rate; 
+        const twdFee = origFee * rate;
+        const twdTax = origTax * rate;
+        
+        const timestamp = Date.now();
+        const tradeTime = getFormattedTimeFromDate(new Date(timestamp));
         
         if(tradeMode === 'BUY') {
-            const totalSpend = subtotal + fee; if(totalSpend > state.cash) { alert("現有現金不足！"); return; }
-            state.cash -= totalSpend; if(!state.holdings[currentTicker]) state.holdings[currentTicker] = { shares: 0, avgPrice: 0 };
-            const h = state.holdings[currentTicker]; h.avgPrice = ((h.shares * h.avgPrice) + totalSpend) / (h.shares + s); h.shares += s;
-            state.ledger.unshift({ time: tradeTime, action: "BUY", ticker: currentTicker, price: currentRealPrice, shares: s, fee: fee, total: totalSpend });
+            if(twdTotalSpend > state.cash) { alert("現有現金不足！"); return; }
+            state.cash -= twdTotalSpend; 
+            if(!state.holdings[currentTicker]) state.holdings[currentTicker] = { shares: 0, avgPrice: 0 };
+            const h = state.holdings[currentTicker]; 
+            const origTotalSpend = origSubtotal + origFee;
+            h.avgPrice = ((h.shares * h.avgPrice) + origTotalSpend) / (h.shares + s); 
+            h.shares += s;
+            
+            state.ledger.unshift({ time: tradeTime, timestamp: timestamp, action: "BUY", ticker: currentTicker, price: currentRealPrice, shares: s, fee: twdFee, total: twdTotalSpend, realizedPnL: null, rate: rate, origTotalSpend: origTotalSpend });
             triggerDynamicFeedback(`成功買進 ${s} 股 ${currentTicker}`, 'buy', document.getElementById('exec-trade-btn'), `+${s} Shares`);
         } else {
             const h = state.holdings[currentTicker]; if(!h || h.shares < s) return;
-            const tax = subtotal * (parseFloat(document.getElementById("cfg-tax-rate").value) / 100), totalGet = subtotal - fee - tax;
-            state.cash += totalGet; h.shares -= s; if(h.shares === 0) delete state.holdings[currentTicker];
-            state.ledger.unshift({ time: tradeTime, action: "SELL", ticker: currentTicker, price: currentRealPrice, shares: s, fee: fee + tax, total: totalGet });
-            triggerDynamicFeedback(`成功賣出 ${s} 股 ${currentTicker}`, 'sell', document.getElementById('exec-trade-btn'), `+$${Math.floor(totalGet).toLocaleString()}`);
+            state.cash += twdTotalGet; 
+            
+            const costBasisTWD = s * h.avgPrice * rate; 
+            const realizedPnL = twdTotalGet - costBasisTWD;
+            
+            h.shares -= s; if(h.shares === 0) delete state.holdings[currentTicker];
+            
+            state.ledger.unshift({ time: tradeTime, timestamp: timestamp, action: "SELL", ticker: currentTicker, price: currentRealPrice, shares: s, fee: twdFee + twdTax, total: twdTotalGet, realizedPnL: realizedPnL, rate: rate });
+            triggerDynamicFeedback(`成功賣出 ${s} 股 ${currentTicker}`, 'sell', document.getElementById('exec-trade-btn'), `+$${Math.floor(twdTotalGet).toLocaleString()}`);
         }
         recordNavSnapshot(); saveData(); validateSharesInput();
     }
 
     function recordNavSnapshot() {
         if (currentRealPrice === null) return;
-        let holdingsVal = 0; for(let t in state.holdings) holdingsVal += state.holdings[t].shares * ((t === currentTicker) ? currentRealPrice : state.holdings[t].avgPrice);
-        state.navHistory.labels.push(getFormattedTime()); state.navHistory.data.push(state.cash + holdingsVal);
+        let holdingsVal = 0; 
+        for(let t in state.holdings) {
+            const rate = getCurrencyMultiplier(t);
+            holdingsVal += state.holdings[t].shares * ((t === currentTicker) ? currentRealPrice : state.holdings[t].avgPrice) * rate;
+        }
+        state.navHistory.labels.push(getFormattedTimeFromDate(new Date())); 
+        state.navHistory.data.push(state.cash + holdingsVal);
         if(state.navHistory.data.length > 60) { state.navHistory.labels.shift(); state.navHistory.data.shift(); }
     }
 
     function updateAllViews() {
         let holdingsVal = 0, totalCost = 0;
-        for(let t in state.holdings) { let price = (t === currentTicker && currentRealPrice !== null) ? currentRealPrice : state.holdings[t].avgPrice; holdingsVal += state.holdings[t].shares * price; totalCost += state.holdings[t].shares * state.holdings[t].avgPrice; }
+        for(let t in state.holdings) { 
+            const rate = getCurrencyMultiplier(t);
+            let price = (t === currentTicker && currentRealPrice !== null) ? currentRealPrice : state.holdings[t].avgPrice; 
+            holdingsVal += state.holdings[t].shares * price * rate; 
+            totalCost += state.holdings[t].shares * state.holdings[t].avgPrice * rate; 
+        }
         const nav = state.cash + holdingsVal, pnl = holdingsVal - totalCost;
         document.getElementById("nav-total").innerText = `$ ${Math.floor(nav).toLocaleString()}`; document.getElementById("nav-cash").innerText = `$ ${Math.floor(state.cash).toLocaleString()}`;
         document.getElementById("nav-holdings").innerText = `$ ${Math.floor(holdingsVal).toLocaleString()}`;
@@ -912,11 +1382,43 @@
         document.getElementById("nav-pnl").style.color = pnl >= 0 ? "var(--color-buy)" : "var(--color-sell)";
 
         document.getElementById("holdings-table-body").innerHTML = Object.keys(state.holdings).length ? Object.keys(state.holdings).map(t => {
-            const h = state.holdings[t], curP = (t === currentTicker && currentRealPrice !== null) ? currentRealPrice : h.avgPrice, val = h.shares * curP, pnl = val - (h.shares * h.avgPrice);
-            return `<tr><td style="font-weight:bold; color:var(--color-acc)">${t}</td><td>${h.shares}</td><td>$${h.avgPrice.toFixed(1)}</td><td>$${curP.toFixed(1)}</td><td>$${Math.floor(val).toLocaleString()}</td><td style="color:${pnl>=0?'var(--color-buy)':'var(--color-sell)'}">${pnl>=0?'+':''}$${Math.floor(pnl)}</td><td><button onclick="selectTicker('${t}')" style="background:rgba(255,255,255,0.08); border:none; color:#fff; padding:4px 8px; border-radius:4px; cursor:pointer;">交易</button></td></tr>`;
-        }).join("") : `<tr><td colspan="7" style="text-align:center; color:#555; padding:30px;">尚無持股</td></tr>`;
+            const rate = getCurrencyMultiplier(t);
+            const h = state.holdings[t], curP = (t === currentTicker && currentRealPrice !== null) ? currentRealPrice : h.avgPrice;
+            const val = h.shares * curP * rate, itemPnl = val - (h.shares * h.avgPrice * rate);
+            const feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100, taxRate = parseFloat(document.getElementById("cfg-tax-rate").value) / 100;
+            const breakEvenPrice = h.avgPrice / (1 - feeRate - taxRate);
 
-        document.getElementById("ledger-table-body").innerHTML = state.ledger.length ? state.ledger.map(r => `<tr><td>${r.time}</td><td><span class="badge ${r.action==='BUY'?'badge-buy':'badge-sell'}">${r.action}</span></td><td style="font-weight:bold;">${r.ticker}</td><td>$${r.price.toFixed(1)}</td><td>${r.shares}</td><td>$${r.fee.toFixed(1)}</td><td style="font-weight:bold;">$${Math.floor(r.total).toLocaleString()}</td></tr>`).join("") : `<tr><td colspan="7" style="text-align:center; color:#555; padding:30px;">尚無紀錄</td></tr>`;
+            return `<tr>
+                <td style="font-weight:bold; color:var(--color-acc)">${t}</td><td>${h.shares}</td>
+                <td>
+                    <div style="font-weight:bold;">$${h.avgPrice.toFixed(2)}</div>
+                    <div style="font-size:10px; color:var(--color-warn); margin-top:2px;">低於 $${breakEvenPrice.toFixed(2)} 虧損</div>
+                </td>
+                <td>$${curP.toFixed(2)}</td><td>$${Math.floor(val).toLocaleString()}</td>
+                <td style="color:${itemPnl>=0?'var(--color-buy)':'var(--color-sell)'}; font-weight:bold;">${itemPnl>=0?'+':''}$${Math.floor(itemPnl).toLocaleString()}</td>
+                <td><button onclick="selectTicker('${t}')" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:#fff; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:bold; transition:all 0.2s;">即時交易</button></td>
+            </tr>`;
+        }).join("") : `<tr><td colspan="7" style="text-align:center; color:#555; padding:40px;">尚未持有任何證券</td></tr>`;
+
+        document.getElementById("ledger-table-body").innerHTML = state.ledger.length ? state.ledger.map((r, index) => {
+            const pnlHtml = (r.realizedPnL !== null && r.realizedPnL !== undefined) 
+                ? `<td style="color:${r.realizedPnL >= 0 ? 'var(--color-buy)' : 'var(--color-sell)'}; font-weight:bold;">${r.realizedPnL >= 0 ? '+' : ''}$${Math.floor(r.realizedPnL).toLocaleString()}</td>`
+                : `<td style="color:#666;">-</td>`;
+            
+            const displayTime = r.timestamp ? getFullFormattedTimeFromDate(r.timestamp) : r.time;
+                
+            return `<tr>
+                <td>${displayTime}</td>
+                <td><span class="badge ${r.action==='BUY'?'badge-buy':'badge-sell'}">${r.action}</span></td>
+                <td style="font-weight:bold;">${r.ticker}</td>
+                <td>$${r.price.toFixed(2)}</td>
+                <td>${r.shares}</td>
+                <td>$${r.fee.toFixed(1)}</td>
+                <td style="font-weight:bold;">$${Math.floor(r.total).toLocaleString()}</td>
+                ${pnlHtml}
+                <td><button onclick="undoTrade(${index})" style="background:rgba(255,69,96,0.15); color:var(--color-sell); border:1px solid rgba(255,69,96,0.3); padding:4px 10px; border-radius:4px; cursor:pointer; font-weight:bold; font-size:11px; transition:all 0.2s;">撤銷</button></td>
+            </tr>`;
+        }).join("") : `<tr><td colspan="9" style="text-align:center; color:#555; padding:40px;">尚無紀錄</td></tr>`;
         renderAllCharts();
     }
 
@@ -950,24 +1452,84 @@
     }
 
     document.getElementById("cfg-node-show").addEventListener("change", (e) => { localStorage.setItem('SETTING_NODE_SHOW', e.target.checked); document.getElementById("node-settings-wrapper").classList.toggle("disabled", !e.target.checked); renderAllCharts(); });
+    
+    document.getElementById("cfg-crosshair-show").addEventListener("change", (e) => {
+        localStorage.setItem('SETTING_CROSSHAIR_SHOW', e.target.checked);
+    });
+
     document.getElementById("cfg-node-slider").addEventListener("input", (e) => {
         const val = parseInt(e.target.value), displayVal = (val >= 60) ? 'All' : val; document.getElementById("cfg-node-val").value = displayVal; localStorage.setItem('SETTING_NODE_VAL', displayVal);
         const pct = (val - e.target.min) / (e.target.max - e.target.min); document.getElementById("jelly-thumb").style.left = `${pct * 162}px`; renderAllCharts();
     });
 
+    function parseSimpleMarkdown(text) {
+        return text
+            .replace(/\*\*(.*?)\*\*/g, '<strong style="color:#fff">$1</strong>')
+            .replace(/^\s*[\-\*]\s+(.*)$/gim, '• $1')
+            .replace(/\n/g, '<br>');
+    }
+
+    function quickAskAI(type) {
+        const prompts = {
+            'diagnostic': `請針對 ${currentTicker} 當前的現價與 RSI 技術指標進行短線綜合體檢。`,
+            'risk': `請結合我目前的帳戶現金、${currentTicker} 持倉成本與當前走勢，評估整體風控與止損點設定。`,
+            'strategy': `考量我目前對 ${currentTicker} 的持股情況，現在適合加碼、減碼還是觀望？`
+        };
+        document.getElementById("chat-input").value = prompts[type] || "";
+        askAI();
+    }
+
     async function askAI() {
-        const input = document.getElementById("chat-input"), q = input.value.trim(); if(!q) return;
-        let key = localStorage.getItem("MY_GEMINI_KEY") || prompt("請輸入 Gemini Key："); if(!key) return; localStorage.setItem("MY_GEMINI_KEY", key);
+        const input = document.getElementById("chat-input"), q = input.value.trim(); 
+        if(!q) return;
+        
+        let key = localStorage.getItem("MY_GEMINI_KEY") || prompt("請輸入 Gemini API Key："); 
+        if(!key) return; 
+        localStorage.setItem("MY_GEMINI_KEY", key);
+
         const out = document.getElementById("chat-output"), msgId = "ai-" + Date.now();
-        out.innerHTML += `<br><span style="color:#fff">> ${q}</span><br><div id="${msgId}"><span style="color:var(--color-acc)">[GEMINI]</span> <span style="color:#777">分析中...</span></div>`; input.value = ""; out.scrollTop = out.scrollHeight;
+        out.innerHTML += `<br><span style="color:#fff">> ${q}</span><br><div id="${msgId}"><span style="color:var(--color-acc)">[GEMINI]</span> <span style="color:#777">分析整體資產與指標中...</span></div>`; 
+        input.value = ""; 
+        out.scrollTop = out.scrollHeight;
+
+        const rsiVal = document.getElementById("rsi-val-display").innerText || "--";
+        const holding = state.holdings[currentTicker] || { shares: 0, avgPrice: 0 };
+        const rate = getCurrencyMultiplier(currentTicker);
+        const holdingValueTWD = holding.shares * currentRealPrice * rate;
+        const totalCostTWD = holding.shares * holding.avgPrice * rate;
+        const pnlTWD = holdingValueTWD - totalCostTWD;
+
+        const fullPrompt = `你是一位講求數據與風險控制的資深華爾街操盤手。請根據以下即時數據，用簡潔專業的口吻回答用戶問題（字數約 150 字內，列出重點與建議）。
+
+【即時市場與帳戶數據】
+• 討論標的: ${currentTicker}
+• 當前現價: $${currentRealPrice}
+• 14日 RSI 指標: ${rsiVal}
+• 當前持股數量: ${holding.shares} 股
+• 持股買入均價: $${holding.avgPrice.toFixed(2)}
+• 該標的未實現損益: TWD $${Math.floor(pnlTWD).toLocaleString()}
+• 帳戶可用現金: TWD $${Math.floor(state.cash).toLocaleString()}
+
+用戶問題：${q}`;
+
         try {
-            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ contents: [{ parts: [{ text: `以專業操盤手回答問題。當前討論:${currentTicker}現價$${currentRealPrice}。用戶問:${q}` }] }] }) });
-            const json = await res.json(); document.getElementById(msgId).innerHTML = `<span style="color:var(--color-acc)">[GEMINI]</span> <span style="color:#ddd">${json.candidates[0].content.parts[0].text}</span>`;
-        } catch(e) { document.getElementById(msgId).innerHTML = `<span style="color:var(--color-sell)">連線失敗</span>`; }
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${key}`, { 
+                method: "POST", 
+                headers: {"Content-Type": "application/json"}, 
+                body: JSON.stringify({ contents: [{ parts: [{ text: fullPrompt }] }] }) 
+            });
+            const json = await res.json();
+            const rawReply = json.candidates[0].content.parts[0].text;
+            document.getElementById(msgId).innerHTML = `<span style="color:var(--color-acc)">[GEMINI]</span> <span style="color:#ddd">${parseSimpleMarkdown(rawReply)}</span>`;
+        } catch(e) { 
+            document.getElementById(msgId).innerHTML = `<span style="color:var(--color-sell)">連線失敗或 Key 無效</span>`; 
+        }
         out.scrollTop = out.scrollHeight;
     }
 
-    initData(); setTradeMode('BUY'); selectTicker(currentTicker); setInterval(() => { fetchRealPrice(currentTicker); fetchAllCardsData(); }, 8000);
+    initData(); setTradeMode('BUY'); selectTicker(currentTicker);
+    fetchExchangeRate(); 
+    setInterval(() => { fetchRealPrice(currentTicker); fetchAllCardsData(); fetchExchangeRate(); }, 8000);
 </script>
 </body>
 </html>
