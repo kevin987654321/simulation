@@ -533,6 +533,9 @@
     // 定義你專屬的 Worker 網址
     const myProxy = "https://square-moon-a3d9.kevinchang090818.workers.dev/?url=";
 
+    // 🚀 新增：全域報價快取系統 (共享給所有模組)
+    let globalPriceCache = {};
+
     async function fetchExchangeRate() {
         try {
             const res = await fetch(`${myProxy}${encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/TWD=X')}`, { cache: "no-store" });
@@ -543,6 +546,26 @@
                 }
             }
         } catch (e) { console.warn("匯率抓取失敗，使用預設值", e); }
+    }
+
+    // 🚀 新增：高效率批量抓取所有庫存現價 (用於精準 NAV 估值)
+    async function fetchHoldingsPrices() {
+        const tickers = Object.keys(state.holdings);
+        if (tickers.length === 0) return;
+        try {
+            // 使用 v7/quote API 允許一次查詢多個代號
+            const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${tickers.join(',')}`)}`;
+            const res = await fetch(proxyUrl, { cache: "no-store" });
+            if (res.ok) {
+                const json = await res.json();
+                if (json.quoteResponse && json.quoteResponse.result) {
+                    json.quoteResponse.result.forEach(q => {
+                        if (q.regularMarketPrice) globalPriceCache[q.symbol] = q.regularMarketPrice;
+                    });
+                    updateAllViews(); // 抓取完畢立刻刷新主畫面與估值
+                }
+            }
+        } catch (e) { console.warn('批量庫存報價抓取失敗', e); }
     }
 
     function getCurrencyMultiplier(ticker) {
@@ -872,7 +895,8 @@
         let currentHoldingsVal = 0;
         for(let t in state.holdings) {
             let rateT = (t.endsWith('.TW') || t.endsWith('.TWO')) ? 1 : currentUSDTWD;
-            let price = (t === currentTicker && currentRealPrice !== null) ? currentRealPrice : state.holdings[t].avgPrice;
+            // 🚀 改良：重建圖表歷史末端時也採用快取最新價
+            let price = globalPriceCache[t] || (t === currentTicker && currentRealPrice !== null ? currentRealPrice : state.holdings[t].avgPrice);
             currentHoldingsVal += state.holdings[t].shares * price * rateT;
         }
         let now = Date.now();
@@ -1178,6 +1202,9 @@
                 const res = await fetch(`${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${t}?range=1mo&interval=1d`)}`, { cache: "no-store" });
                 if(res.ok) { 
                     const json = await res.json(), result = json.chart.result[0], price = result.meta.regularMarketPrice, prices = result.indicators.quote[0].close || [], rsi = calculateRSI(prices.filter(p => p !== null), 14);
+                    
+                    // 🚀 將卡片抓到的現價也寫入全域快取
+                    if (price) globalPriceCache[t] = price;
                     cardsDataCache[t] = { price, rsi };
                 }
             } catch(e) {}
@@ -1269,7 +1296,11 @@
             const res = await fetch(proxyUrl, { cache: "no-store" });
             if(res.ok) { 
                 const json = await res.json(), price = json.chart.result[0].meta.regularMarketPrice; 
-                if(price) { currentRealPrice = price; isPriceLoading = false; }
+                if(price) { 
+                    currentRealPrice = price; 
+                    globalPriceCache[ticker] = price; // 🚀 寫入全域快取
+                    isPriceLoading = false; 
+                }
             }
         } catch(e) {}
         finally {
@@ -1447,11 +1478,12 @@
     }
 
     function recordNavSnapshot() {
-        if (currentRealPrice === null) return;
         let holdingsVal = 0; 
         for(let t in state.holdings) {
             const rate = getCurrencyMultiplier(t);
-            holdingsVal += state.holdings[t].shares * ((t === currentTicker) ? currentRealPrice : state.holdings[t].avgPrice) * rate;
+            // 🚀 改良：從全域快取取出現價
+            let price = globalPriceCache[t] || (t === currentTicker && currentRealPrice !== null ? currentRealPrice : state.holdings[t].avgPrice); 
+            holdingsVal += state.holdings[t].shares * price * rate;
         }
         const now = Date.now();
         if (!state.navHistory.timestamps) state.navHistory.timestamps = [];
@@ -1470,7 +1502,9 @@
         let holdingsVal = 0, totalCost = 0;
         for(let t in state.holdings) { 
             const rate = getCurrencyMultiplier(t);
-            let price = (t === currentTicker && currentRealPrice !== null) ? currentRealPrice : state.holdings[t].avgPrice; 
+            // 🚀 重大修復：優先套用快取現價，如果都沒有才退回 avgPrice，不再因為沒被選中就卡在均價
+            let price = globalPriceCache[t] || (t === currentTicker && currentRealPrice !== null ? currentRealPrice : state.holdings[t].avgPrice); 
+            
             holdingsVal += state.holdings[t].shares * price * rate; 
             totalCost += state.holdings[t].shares * state.holdings[t].avgPrice * rate; 
         }
@@ -1482,7 +1516,11 @@
 
         document.getElementById("holdings-table-body").innerHTML = Object.keys(state.holdings).length ? Object.keys(state.holdings).map(t => {
             const rate = getCurrencyMultiplier(t);
-            const h = state.holdings[t], curP = (t === currentTicker && currentRealPrice !== null) ? currentRealPrice : h.avgPrice;
+            const h = state.holdings[t];
+            
+            // 🚀 重大修復：這裡也一樣要使用快取的即時現價
+            const curP = globalPriceCache[t] || (t === currentTicker && currentRealPrice !== null ? currentRealPrice : h.avgPrice);
+            
             const val = h.shares * curP * rate, itemPnl = val - (h.shares * h.avgPrice * rate);
             const feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100, taxRate = parseFloat(document.getElementById("cfg-tax-rate").value) / 100;
             const breakEvenPrice = h.avgPrice / (1 - feeRate - taxRate);
@@ -1666,9 +1704,29 @@
         out.scrollTop = out.scrollHeight;
     }
 
-    initData(); setTradeMode('BUY'); selectTicker(currentTicker);
-    fetchExchangeRate(); 
-    setInterval(() => { fetchRealPrice(currentTicker); fetchAllCardsData(); fetchExchangeRate(); }, 8000);
+    // 🚀 新增：啟動與排程控制中心 (確保載入時的高優先級順序)
+    async function bootSystem() {
+        initData(); 
+        setTradeMode('BUY'); 
+        selectTicker(currentTicker);
+        
+        // 優先：獲取匯率與庫存所有報價 (等待完成)
+        await fetchExchangeRate();
+        await fetchHoldingsPrices(); 
+        
+        // 隨後獲取卡片 (不阻擋主畫面)
+        fetchAllCardsData(); 
+
+        setInterval(() => { 
+            fetchRealPrice(currentTicker); 
+            fetchHoldingsPrices();
+            fetchAllCardsData(); 
+            fetchExchangeRate(); 
+        }, 8000);
+    }
+    
+    bootSystem(); // 執行啟動
+
 </script>
 </body>
 </html>
