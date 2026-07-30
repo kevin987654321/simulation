@@ -223,6 +223,9 @@
         #mobile-header { display: none; }
         #sidebar-overlay { display: none; }
 
+        /* 卡片拖曳時的佔位符樣式 */
+        .is-dragging-placeholder { opacity: 0; pointer-events: none; }
+
         @media (max-width: 768px) {
             .mobile-only { display: flex; }
             #mobile-header { display: flex; justify-content: space-between; align-items: center; height: 60px; padding: 0 20px; background: rgba(10, 10, 10, 0.95); border-bottom: 1px solid rgba(255,255,255,0.06); z-index: 50; position: absolute; top: 0; left: 0; width: 100%; }
@@ -684,7 +687,6 @@
                         if(closestIdx !== -1) {
                             priceInput.value = closes[closestIdx].toFixed(2); priceInput.placeholder = "";
                             const fetchedDate = new Date(timestamps[closestIdx] * 1000), tStr = `${fetchedDate.getMonth()+1}/${fetchedDate.getDate()} ${String(fetchedDate.getHours()).padStart(2, '0')}:${String(fetchedDate.getMinutes()).padStart(2, '0')}`;
-                            // 🚀 這裡將歷史報價成功的 Toast 改為指定的灰色系風格
                             triggerDynamicFeedback(`精準撈取 ${tStr} 報價`, 'gray', priceInput, closes[closestIdx].toFixed(2));
                             return;
                         }
@@ -701,7 +703,7 @@
         let iconClass = 'fa-circle-check';
         if (type === 'buy') iconClass = 'fa-circle-arrow-up';
         else if (type === 'sell') iconClass = 'fa-circle-arrow-down';
-        else if (type === 'gray') iconClass = 'fa-clock-rotate-left'; // 灰色時光機專用
+        else if (type === 'gray') iconClass = 'fa-clock-rotate-left'; 
 
         toast.className = `toast ${type}`; 
         toast.innerHTML = `<i class="fa-solid ${iconClass}" style="font-size:18px;"></i> <span>${msg}</span> <div class="toast-progress"></div>`;
@@ -967,46 +969,193 @@
         rebuildNavHistoryFromLedger(); saveData(); triggerDynamicFeedback("交易已成功撤銷", "buy", null, "UNDONE");
     }
 
-    let cDragTimer, cIsDragging = false, cDragCard = null, cPlaceholder = null, cStartX = 0, cStartY = 0, cElemStartX = 0, cElemStartY = 0;
-    function attachCardDragEvents() { document.querySelectorAll('.draggable-card').forEach(card => { card.addEventListener('touchstart', handleCardPointerDown, {passive: false}); card.addEventListener('mousedown', handleCardPointerDown); }); }
-    function handleCardPointerDown(e) {
-        if (!isCardEditMode) return; if (e.target.closest('.delete-btn')) return;
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX, clientY = e.touches ? e.touches[0].clientY : e.clientY, card = e.currentTarget;
-        cDragTimer = setTimeout(() => { startCardDrag(card, clientX, clientY); }, 300);
-        const cancelDrag = () => { clearTimeout(cDragTimer); document.removeEventListener('touchend', cancelDrag); document.removeEventListener('mouseup', cancelDrag); document.removeEventListener('touchmove', cancelMove); document.removeEventListener('mousemove', cancelMove); };
-        const cancelMove = (eMove) => { const mx = eMove.touches ? eMove.touches[0].clientX : eMove.clientX, my = eMove.touches ? eMove.touches[0].clientY : eMove.clientY; if(Math.abs(mx - clientX) > 10 || Math.abs(my - clientY) > 10) cancelDrag(); };
-        document.addEventListener('touchend', cancelDrag); document.addEventListener('mouseup', cancelDrag); document.addEventListener('touchmove', cancelMove, {passive: true}); document.addEventListener('mousemove', cancelMove);
+    // 🚀 全新設計的卡片拖曳與排序引擎
+    let cIsDragging = false, cDragCardClone = null, cRealCard = null;
+    let cStartX = 0, cStartY = 0, cPointerStartX = 0, cPointerStartY = 0;
+    let dragTimeout = null;
+
+    function attachCardDragEvents() {
+        const cards = document.querySelectorAll('.draggable-card');
+        cards.forEach(card => {
+            card.removeEventListener('touchstart', handlePointerDown);
+            card.removeEventListener('mousedown', handlePointerDown);
+            // 改用 passive true 允許原生滾動
+            card.addEventListener('touchstart', handlePointerDown, { passive: true });
+            card.addEventListener('mousedown', handlePointerDown);
+        });
     }
-    function startCardDrag(card, startX, startY) {
-        if(navigator.vibrate) navigator.vibrate(50);
-        cIsDragging = true; cPlaceholder = card; const rect = card.getBoundingClientRect(); cDragCard = card.cloneNode(true);
-        cDragCard.style.position = 'fixed'; cDragCard.style.top = rect.top + 'px'; cDragCard.style.left = rect.left + 'px'; cDragCard.style.width = rect.width + 'px'; cDragCard.style.height = rect.height + 'px'; cDragCard.style.zIndex = '10000'; cDragCard.style.margin = '0'; cDragCard.style.boxShadow = '0 20px 40px rgba(0,0,0,0.8), 0 0 0 2px var(--color-acc)'; cDragCard.style.transform = 'scale(1.05)'; cDragCard.style.transition = 'transform 0.2s'; cDragCard.style.pointerEvents = 'none';
-        document.body.appendChild(cDragCard); cPlaceholder.style.opacity = '0'; cStartX = startX; cStartY = startY; cElemStartX = rect.left; cElemStartY = rect.top;
-        document.addEventListener('touchmove', handleCardPointerMove, {passive: false}); document.addEventListener('mousemove', handleCardPointerMove); document.addEventListener('touchend', handleCardPointerUp); document.addEventListener('mouseup', handleCardPointerUp);
+
+    function handlePointerDown(e) {
+        if (!isCardEditMode) return;
+        if (e.target.closest('.delete-btn')) return; 
+
+        const isTouch = e.type === 'touchstart';
+        if (!isTouch && e.button !== 0) return; // 確保只響應滑鼠左鍵
+
+        cRealCard = e.currentTarget;
+        cPointerStartX = isTouch ? e.touches[0].clientX : e.clientX;
+        cPointerStartY = isTouch ? e.touches[0].clientY : e.clientY;
+
+        if (isTouch) {
+            // 手機版：等待 300ms，確認是長按而不是上下滑動
+            dragTimeout = setTimeout(() => {
+                startDrag(cRealCard, cPointerStartX, cPointerStartY);
+            }, 300);
+            document.addEventListener('touchmove', checkCancelDrag, { passive: true });
+            document.addEventListener('touchend', cancelDragStart);
+        } else {
+            // 電腦版：按住並滑動立即開始拖曳
+            document.addEventListener('mousemove', checkStartDragDesktop);
+            document.addEventListener('mouseup', cancelDragStart);
+        }
     }
-    function handleCardPointerMove(e) {
-        if (!cIsDragging) return; e.preventDefault();
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX, clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        cDragCard.style.left = (cElemStartX + (clientX - cStartX)) + 'px'; cDragCard.style.top = (cElemStartY + (clientY - cStartY)) + 'px';
-        const targetCard = document.elementsFromPoint(clientX, clientY).find(el => el.classList.contains('draggable-card') && el !== cPlaceholder);
-        if (targetCard) swapCardNodes(cPlaceholder, targetCard);
+
+    function checkCancelDrag(e) {
+        const cx = e.touches ? e.touches[0].clientX : e.clientX;
+        const cy = e.touches ? e.touches[0].clientY : e.clientY;
+        // 如果還沒觸發長按，手指就移動超過 10px，代表用戶正在滑動網頁，取消拖曳判定
+        if (Math.abs(cx - cPointerStartX) > 10 || Math.abs(cy - cPointerStartY) > 10) {
+            cancelDragStart();
+        }
     }
-    function swapCardNodes(nodeA, nodeB) {
-        const parent = nodeA.parentNode, rectB = nodeB.getBoundingClientRect(), siblingA = nodeA.nextSibling === nodeB ? nodeA : nodeA.nextSibling;
-        nodeB.parentNode.insertBefore(nodeA, nodeB); parent.insertBefore(nodeB, siblingA);
-        const newRectB = nodeB.getBoundingClientRect(), diffX = rectB.left - newRectB.left, diffY = rectB.top - newRectB.top;
-        nodeB.style.transform = `translate(${diffX}px, ${diffY}px)`; nodeB.style.transition = 'none'; requestAnimationFrame(() => { nodeB.style.transform = ''; nodeB.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)'; });
+
+    function checkStartDragDesktop(e) {
+        const cx = e.clientX;
+        const cy = e.clientY;
+        // 電腦版稍微移動 3px 立即開始拖曳
+        if (Math.abs(cx - cPointerStartX) > 3 || Math.abs(cy - cPointerStartY) > 3) {
+            cancelDragStart(); 
+            startDrag(cRealCard, cx, cy);
+        }
     }
-    function handleCardPointerUp(e) {
-        if (!cIsDragging) return; cIsDragging = false; const rect = cPlaceholder.getBoundingClientRect();
-        cDragCard.style.transition = 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)'; cDragCard.style.left = rect.left + 'px'; cDragCard.style.top = rect.top + 'px'; cDragCard.style.transform = 'scale(1)';
-        document.removeEventListener('touchmove', handleCardPointerMove); document.removeEventListener('mousemove', handleCardPointerMove); document.removeEventListener('touchend', handleCardPointerUp); document.removeEventListener('mouseup', handleCardPointerUp);
+
+    function cancelDragStart() {
+        clearTimeout(dragTimeout);
+        document.removeEventListener('touchmove', checkCancelDrag);
+        document.removeEventListener('touchend', cancelDragStart);
+        document.removeEventListener('mousemove', checkStartDragDesktop);
+        document.removeEventListener('mouseup', cancelDragStart);
+    }
+
+    function startDrag(card, px, py) {
+        cIsDragging = true;
+        cancelDragStart(); 
+
+        if (navigator.vibrate) navigator.vibrate(50); // 震動回饋
+
+        const rect = card.getBoundingClientRect();
+        cStartX = rect.left;
+        cStartY = rect.top;
+
+        // 建立浮動的複製卡片 (跟隨手指/鼠標)
+        cDragCardClone = card.cloneNode(true);
+        cDragCardClone.style.position = 'fixed';
+        cDragCardClone.style.left = rect.left + 'px';
+        cDragCardClone.style.top = rect.top + 'px';
+        cDragCardClone.style.width = rect.width + 'px';
+        cDragCardClone.style.height = rect.height + 'px';
+        cDragCardClone.style.zIndex = '100000';
+        cDragCardClone.style.margin = '0';
+        cDragCardClone.style.boxShadow = '0 20px 40px rgba(0,0,0,0.8), 0 0 0 2px var(--color-acc)';
+        cDragCardClone.style.transform = 'scale(1.05)';
+        cDragCardClone.style.transition = 'transform 0.2s';
+        cDragCardClone.style.pointerEvents = 'none';
+
+        document.body.appendChild(cDragCardClone);
+
+        // 隱藏原本的卡片 (變成一個隱形的坑位佔位符)
+        card.style.opacity = '0';
+        card.classList.add('is-dragging-placeholder');
+
+        // 開始監聽全局位移，並禁止原生滾動
+        document.addEventListener('touchmove', handleDragMove, { passive: false });
+        document.addEventListener('mousemove', handleDragMove);
+        document.addEventListener('touchend', handleDragEnd);
+        document.addEventListener('mouseup', handleDragEnd);
+    }
+
+    function handleDragMove(e) {
+        if (!cIsDragging) return;
+        e.preventDefault(); // 拖曳中禁止網頁上下滑動
+
+        const px = e.touches ? e.touches[0].clientX : e.clientX;
+        const py = e.touches ? e.touches[0].clientY : e.clientY;
+
+        const deltaX = px - cPointerStartX;
+        const deltaY = py - cPointerStartY;
+
+        // 更新浮動卡片的位置
+        cDragCardClone.style.left = (cStartX + deltaX) + 'px';
+        cDragCardClone.style.top = (cStartY + deltaY) + 'px';
+
+        // 🚀 計算當前「浮動卡片的中心點」
+        const cloneRect = cDragCardClone.getBoundingClientRect();
+        const cloneCenterX = cloneRect.left + cloneRect.width / 2;
+        const cloneCenterY = cloneRect.top + cloneRect.height / 2;
+
+        // 尋找目標卡片 (基於中心點碰撞判定)
+        const grid = document.getElementById('cards-grid');
+        const cards = Array.from(grid.querySelectorAll('.draggable-card:not(.is-dragging-placeholder)'));
+        let targetCard = null;
+
+        for (let t of cards) {
+            const tRect = t.getBoundingClientRect();
+            // 如果浮動卡片的中心點，進入了目標卡片的矩形範圍內，即觸發替換
+            if (cloneCenterX >= tRect.left && cloneCenterX <= tRect.right &&
+                cloneCenterY >= tRect.top && cloneCenterY <= tRect.bottom) {
+                targetCard = t;
+                break;
+            }
+        }
+
+        if (targetCard) {
+            const allCards = Array.from(grid.querySelectorAll('.draggable-card'));
+            const draggedIdx = allCards.indexOf(cRealCard);
+            const targetIdx = allCards.indexOf(targetCard);
+
+            // 根絕閃爍與殘影問題：直接改變真實 DOM 的順序，不使用 CSS 位移來模擬
+            if (draggedIdx < targetIdx) {
+                grid.insertBefore(cRealCard, targetCard.nextSibling);
+            } else {
+                grid.insertBefore(cRealCard, targetCard);
+            }
+        }
+    }
+
+    function handleDragEnd() {
+        if (!cIsDragging) return;
+        cIsDragging = false;
+
+        document.removeEventListener('touchmove', handleDragMove);
+        document.removeEventListener('mousemove', handleDragMove);
+        document.removeEventListener('touchend', handleDragEnd);
+        document.removeEventListener('mouseup', handleDragEnd);
+
+        // 將浮動卡片平滑吸附回真實卡片的最終位置
+        const finalRect = cRealCard.getBoundingClientRect();
+        cDragCardClone.style.transition = 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)';
+        cDragCardClone.style.left = finalRect.left + 'px';
+        cDragCardClone.style.top = finalRect.top + 'px';
+        cDragCardClone.style.transform = 'scale(1)';
+
         setTimeout(() => {
-            if (cDragCard) cDragCard.remove(); if (cPlaceholder) cPlaceholder.style.opacity = '1';
-            const newOrder = []; document.querySelectorAll('.draggable-card').forEach(el => { const ticker = el.getAttribute('data-ticker'); if(ticker) newOrder.push(ticker); });
-            state.cardTickers = newOrder; saveData();
+            if (cDragCardClone) cDragCardClone.remove(); // 移除浮動卡片
+            if (cRealCard) {
+                cRealCard.style.opacity = '1'; // 顯示真實卡片
+                cRealCard.classList.remove('is-dragging-placeholder');
+            }
+
+            // 儲存最新的排序結果
+            const newOrder = [];
+            document.querySelectorAll('.draggable-card').forEach(el => {
+                const ticker = el.getAttribute('data-ticker');
+                if (ticker) newOrder.push(ticker);
+            });
+            state.cardTickers = newOrder;
+            saveData();
         }, 300);
     }
+    // ---------------------------------------------------------
 
     function toggleCardEditMode() { isCardEditMode = !isCardEditMode; const btn = document.getElementById('edit-cards-btn'); btn.innerText = isCardEditMode ? '完成' : '編輯'; btn.style.background = isCardEditMode ? 'var(--color-sell)' : 'transparent'; btn.style.borderColor = isCardEditMode ? 'var(--color-sell)' : 'rgba(255,255,255,0.2)'; renderCards(); }
     function removeCard(ticker) { state.cardTickers = state.cardTickers.filter(t => t !== ticker); saveData(); }
@@ -1046,8 +1195,9 @@
             const pnlColor = pnl >= 0 ? 'var(--color-buy)' : 'var(--color-sell)';
             const deleteBtn = isCardEditMode ? `<div class="delete-btn" onclick="removeCard('${t}')" style="position:absolute; top:-8px; right:-8px; background:var(--color-sell); color:#fff; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:10; box-shadow:0 0 10px rgba(0,0,0,0.5);"><i class="fa-solid fa-minus"></i></div>` : '';
 
+            // 移除原本強制加上去的 touch-action，讓游標控制交給新寫的 Drag 事件
             html += `
-            <div class="glass-panel draggable-card" data-ticker="${t}" style="padding: 18px; display:flex; flex-direction:column; gap:12px; touch-action:${isCardEditMode ? 'none' : 'auto'}; cursor:${isCardEditMode ? 'grab' : 'default'};">
+            <div class="glass-panel draggable-card" data-ticker="${t}" style="padding: 18px; display:flex; flex-direction:column; gap:12px; cursor:${isCardEditMode ? 'grab' : 'default'};">
                 ${deleteBtn}
                 <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:10px;">
                     <span style="font-size:18px; font-weight:900; color:var(--color-acc); letter-spacing:0.5px;">${t}</span>
@@ -1090,7 +1240,6 @@
         }, 300);
     });
 
-    // 🚀 新增：時光機補登歷史的即時搜尋系統
     const tmTickerInput = document.getElementById("tm-ticker");
     let tmSearchDebounceTimer = null;
     tmTickerInput.addEventListener("input", (e) => {
