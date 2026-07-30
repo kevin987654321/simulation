@@ -51,16 +51,16 @@
             backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
             box-shadow: 0 10px 35px rgba(0, 0, 0, 0.7); transition: border-color 0.4s ease, box-shadow 0.4s ease;
         }
-        .panel-flash-buy { border-color: var(--color-buy) !important; box-shadow: 0 0 25px rgba(0, 255, 170, 0.3) !important; }
-        .panel-flash-sell { border-color: var(--color-sell) !important; box-shadow: 0 0 25px rgba(255, 69, 96, 0.3) !important; }
 
         #toast-container { position: fixed; top: 20px; right: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
         .toast { position: relative; overflow: hidden; background: rgba(15, 15, 18, 0.92); border: 1px solid rgba(255,255,255,0.12); padding: 14px 20px; border-radius: 10px; font-size: 13px; font-weight: bold; box-shadow: 0 15px 35px rgba(0,0,0,0.8); display: flex; align-items: center; gap: 12px; backdrop-filter: blur(15px); pointer-events: auto; animation: toastEnter 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .toast.buy { border-color: rgba(0,255,170,0.4); color: var(--color-buy); }
         .toast.sell { border-color: rgba(255,69,96,0.4); color: var(--color-sell); }
+        .toast.info { border-color: rgba(200,200,200,0.4); color: #ddd; } /* 新增灰色 Info Toast */
         .toast-progress { position: absolute; bottom: 0; left: 0; height: 3px; width: 100%; animation: toastBar 3s linear forwards; }
         .toast.buy .toast-progress { background: var(--color-buy); box-shadow: 0 0 10px var(--color-buy); }
         .toast.sell .toast-progress { background: var(--color-sell); box-shadow: 0 0 10px var(--color-sell); }
+        .toast.info .toast-progress { background: #ddd; box-shadow: 0 0 10px #ddd; } /* 新增灰色進度條 */
         @keyframes toastEnter { from { opacity: 0; transform: translateY(-20px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
         @keyframes toastBar { from { width: 100%; } to { width: 0%; } }
 
@@ -182,6 +182,28 @@
 
         #mobile-header { display: none; }
         #sidebar-overlay { display: none; }
+
+        /* 新增：霧面玻璃自訂數字小鍵盤 (僅手機版生效) */
+        #custom-keypad {
+            display: none; position: fixed; bottom: 0; left: 0; width: 100%;
+            background: rgba(18, 18, 20, 0.7); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
+            border-top: 1px solid rgba(255, 255, 255, 0.1); z-index: 10005;
+            padding: 15px 12px max(15px, env(safe-area-inset-bottom));
+            grid-template-columns: repeat(3, 1fr); gap: 10px;
+            transform: translateY(100%); transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 -10px 40px rgba(0,0,0,0.8);
+        }
+        #custom-keypad.show { transform: translateY(0); }
+        .keypad-btn {
+            background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #fff; font-size: 24px; font-weight: bold; font-family: monospace;
+            border-radius: 12px; padding: 12px 0; cursor: pointer; transition: background 0.1s, transform 0.1s;
+            display: flex; align-items: center; justify-content: center; user-select: none; -webkit-user-select: none; touch-action: manipulation;
+        }
+        .keypad-btn:active { background: rgba(255, 255, 255, 0.2); transform: scale(0.95); }
+        .keypad-btn.action { font-size: 16px; color: #000; background: var(--color-buy); border: none; box-shadow: 0 0 15px rgba(0,255,170,0.3); }
+        .keypad-btn.action:active { background: #00e699; }
+        .keypad-btn.del { color: var(--color-sell); }
 
         @media (max-width: 768px) {
             .mobile-only { display: flex; }
@@ -349,14 +371,24 @@
                 <div>
                     <div style="font-size:11px; color:#888; margin-bottom:4px;">時間 (24H)</div>
                     <div style="display:flex; align-items:center; gap:2px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); border-radius:6px; padding:0 8px; width:fit-content;">
-                        <input type="text" id="tm-hour" inputmode="numeric" maxlength="2" onfocus="this.select()" oninput="handleHourInput(this)" onblur="padHour(this)" placeholder="00" style="width:22px; background:transparent; border:none; color:#fff; padding:6px 0; font-family:monospace; text-align:center; outline:none; font-size:14px;">
+                        <!-- 新增 custom-num-input -->
+                        <input type="number" id="tm-hour" class="custom-num-input" maxlength="2" onfocus="this.select()" oninput="handleHourInput(this)" onblur="padHour(this)" placeholder="00" style="width:22px; background:transparent; border:none; color:#fff; padding:6px 0; font-family:monospace; text-align:center; outline:none; font-size:14px;">
                         <span style="color:#888; font-weight:bold; padding-bottom:2px;">:</span>
-                        <input type="text" id="tm-minute" inputmode="numeric" maxlength="2" onfocus="this.select()" oninput="handleMinuteInput(this)" onblur="padMinute(this)" placeholder="00" style="width:22px; background:transparent; border:none; color:#fff; padding:6px 0; font-family:monospace; text-align:center; outline:none; font-size:14px;">
+                        <input type="number" id="tm-minute" class="custom-num-input" maxlength="2" onfocus="this.select()" oninput="handleMinuteInput(this)" onblur="padMinute(this)" placeholder="00" style="width:22px; background:transparent; border:none; color:#fff; padding:6px 0; font-family:monospace; text-align:center; outline:none; font-size:14px;">
                     </div>
                 </div>
                 <div>
                     <div style="font-size:11px; color:#888; margin-bottom:4px;">代號</div>
-                    <input type="text" id="tm-ticker" onfocus="this.select()" oninput="autoFetchHistoricalPrice()" placeholder="" style="width:90px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-transform:uppercase; font-family:monospace; font-weight:bold;">
+                    <!-- 新增獨立的時光機下拉搜尋選單 -->
+                    <div class="custom-select-wrapper" id="tm-ticker-wrapper" style="width:110px;">
+                        <input type="text" id="tm-ticker" onfocus="this.select()" oninput="autoFetchHistoricalPrice()" autocomplete="off" placeholder="搜尋" style="width:100%; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-transform:uppercase; font-family:monospace; font-weight:bold; outline:none;">
+                        <div class="opaque-dropdown-list" id="tm-ticker-dropdown" style="width: 200px;">
+                            <div class="dropdown-group-title" style="border-top:none;">⚡ 搜尋結果</div>
+                            <div id="tm-live-search-list">
+                                <div style="padding:10px 12px; font-size:11px; color:#666;">輸入代號以搜尋...</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div>
                     <div style="font-size:11px; color:#888; margin-bottom:4px;">動作</div>
@@ -367,11 +399,11 @@
                 </div>
                 <div>
                     <div style="font-size:11px; color:#888; margin-bottom:4px;">單價</div>
-                    <input type="number" id="tm-price" onfocus="this.select()" placeholder="自動查詢中..." style="width:100px; background:rgba(0,0,0,0.5); border:1px solid var(--color-acc); color:var(--color-acc); padding:6px; border-radius:6px; font-family:monospace; font-weight:bold;">
+                    <input type="number" id="tm-price" class="custom-num-input" onfocus="this.select()" placeholder="查詢中..." style="width:100px; background:rgba(0,0,0,0.5); border:1px solid var(--color-acc); color:var(--color-acc); padding:6px; border-radius:6px; font-family:monospace; font-weight:bold;">
                 </div>
                 <div>
                     <div style="font-size:11px; color:#888; margin-bottom:4px;">股數</div>
-                    <input type="number" id="tm-shares" onfocus="this.select()" placeholder="10" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-family:monospace;">
+                    <input type="number" id="tm-shares" class="custom-num-input" onfocus="this.select()" placeholder="10" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-family:monospace;">
                 </div>
                 <button onclick="insertHistoricalTrade()" style="background:var(--color-acc); color:#000; border:none; padding:8px 16px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:12px; transition:all 0.2s;">
                     確認插入
@@ -406,11 +438,11 @@
             </div>
             <div class="glass-panel setting-item">
                 <div><div style="font-weight:bold;">手續費費率設定 (%)</div><div style="font-size:11px; color:#777; margin-top:2px;">預設折扣 0.1425%</div></div>
-                <input type="number" id="cfg-fee-rate" value="0.1425" step="0.01" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
+                <input type="number" id="cfg-fee-rate" class="custom-num-input" value="0.1425" step="0.01" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
             </div>
             <div class="glass-panel setting-item">
                 <div><div style="font-weight:bold;">證交稅率設定 (%)</div><div style="font-size:11px; color:#777; margin-top:2px;">賣出徵收，預設 0.3%</div></div>
-                <input type="number" id="cfg-tax-rate" value="0.30" step="0.05" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
+                <input type="number" id="cfg-tax-rate" class="custom-num-input" value="0.30" step="0.05" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
             </div>
             <div class="glass-panel setting-item">
                 <div><div style="font-weight:bold;">圖表動態十字輔助線</div><div style="font-size:11px; color:#777; margin-top:2px;">按住圖表滑動時，顯示絲滑跟隨的垂直輔助線</div></div>
@@ -506,7 +538,7 @@
     <div>
         <div class="stepper-row">
             <button class="stepper-btn" onclick="stepShares(-1)">-</button>
-            <input type="number" id="trade-shares" class="stepper-input" value="1" min="1" oninput="validateSharesInput()">
+            <input type="number" id="trade-shares" class="stepper-input custom-num-input" value="1" min="1" oninput="validateSharesInput()">
             <button class="stepper-btn" onclick="stepShares(1)">+</button>
         </div>
         <div class="quick-percent-grid" style="margin-top:6px;">
@@ -527,11 +559,26 @@
     <button class="exec-btn buy" id="exec-trade-btn" onclick="executeTrade()" disabled>確認買進 BUY</button>
 </div>
 
+<!-- 專屬霧面數字小鍵盤 (預設隱藏) -->
+<div id="custom-keypad">
+    <button class="keypad-btn">1</button>
+    <button class="keypad-btn">2</button>
+    <button class="keypad-btn">3</button>
+    <button class="keypad-btn">4</button>
+    <button class="keypad-btn">5</button>
+    <button class="keypad-btn">6</button>
+    <button class="keypad-btn">7</button>
+    <button class="keypad-btn">8</button>
+    <button class="keypad-btn">9</button>
+    <button class="keypad-btn">.</button>
+    <button class="keypad-btn">0</button>
+    <button class="keypad-btn del"><i class="fa-solid fa-delete-left"></i></button>
+    <button class="keypad-btn action" style="grid-column: 1 / -1; padding: 12px 0;">完成</button>
+</div>
+
 <script>
     let currentUSDTWD = 32.5;
     const myProxy = "https://square-moon-a3d9.kevinchang090818.workers.dev/?url=";
-
-    // 🚀 新增：全域報價快取系統 (共享給所有模組)
     let globalPriceCache = {};
 
     async function fetchExchangeRate() {
@@ -546,12 +593,9 @@
         } catch (e) {}
     }
 
-    // 🚀 重大重構：改用最穩定的 v8/chart 併發請求，且保證 100% 抓取每一檔庫存的現價
     async function fetchHoldingsPrices() {
         const tickers = Object.keys(state.holdings);
         if (tickers.length === 0) return;
-        
-        // 將所有庫存代號轉換為獨立的 API 請求，並用 Promise.all 同時發送
         const promises = tickers.map(async (t) => {
             try {
                 const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${t}?range=1d&interval=1d`)}`;
@@ -561,25 +605,14 @@
                     const price = json.chart.result[0].meta.regularMarketPrice;
                     if (price) globalPriceCache[t] = price;
                 }
-            } catch (e) { console.warn(`庫存報價抓取失敗: ${t}`); }
+            } catch (e) { }
         });
-
         await Promise.all(promises);
     }
 
-    function getCurrencyMultiplier(ticker) {
-        return (ticker.endsWith('.TW') || ticker.endsWith('.TWO')) ? 1 : currentUSDTWD;
-    }
-
-    function getFullFormattedTimeFromDate(timestamp) {
-        let d = new Date(timestamp);
-        return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-    }
-    
-    function getShortFormattedTimeFromDate(timestamp) {
-        let d = new Date(timestamp);
-        return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-    }
+    function getCurrencyMultiplier(ticker) { return (ticker.endsWith('.TW') || ticker.endsWith('.TWO')) ? 1 : currentUSDTWD; }
+    function getFullFormattedTimeFromDate(timestamp) { let d = new Date(timestamp); return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; }
+    function getShortFormattedTimeFromDate(timestamp) { let d = new Date(timestamp); return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; }
 
     function handleHourInput(el) {
         let val = el.value.replace(/\D/g, '');
@@ -588,16 +621,13 @@
         } else { el.value = ''; }
         if (el.value.length === 2) autoFetchHistoricalPrice();
     }
-
     function padHour(el) { if (el.value.length === 1) el.value = '0' + el.value; autoFetchHistoricalPrice(); }
-
     function handleMinuteInput(el) {
         let val = el.value.replace(/\D/g, '');
         if (val.length >= 2) { val = val.substring(0, 2); if (parseInt(val) > 59) val = '59'; el.value = val; document.getElementById('tm-ticker').focus(); 
         } else { el.value = val; }
         if (el.value.length === 2) autoFetchHistoricalPrice();
     }
-
     function padMinute(el) { if (el.value.length === 1) el.value = '0' + el.value; autoFetchHistoricalPrice(); }
 
     function initTimeMachineDefault() {
@@ -638,7 +668,8 @@
                         if(closestIdx !== -1) {
                             priceInput.value = closes[closestIdx].toFixed(2); priceInput.placeholder = "";
                             const fetchedDate = new Date(timestamps[closestIdx] * 1000), tStr = `${fetchedDate.getMonth()+1}/${fetchedDate.getDate()} ${String(fetchedDate.getHours()).padStart(2, '0')}:${String(fetchedDate.getMinutes()).padStart(2, '0')}`;
-                            triggerDynamicFeedback(`精準撈取 ${tStr} 報價`, 'buy', priceInput, closes[closestIdx].toFixed(2));
+                            // 🚀 修改點：使用 'info' 發出灰色高質感通知
+                            triggerDynamicFeedback(`精準撈取 ${tStr} 報價`, 'info', priceInput, closes[closestIdx].toFixed(2));
                             return;
                         }
                     }
@@ -650,12 +681,23 @@
 
     function triggerDynamicFeedback(msg, type, targetBtn, valueText) {
         const container = document.getElementById('toast-container'), toast = document.createElement('div');
-        toast.className = `toast ${type}`; toast.innerHTML = `<i class="fa-solid ${type === 'buy' ? 'fa-circle-arrow-up' : 'fa-circle-arrow-down'}" style="font-size:18px;"></i> <span>${msg}</span> <div class="toast-progress"></div>`;
+        let iconClass = 'fa-circle-info';
+        if (type === 'buy') iconClass = 'fa-circle-arrow-up';
+        else if (type === 'sell') iconClass = 'fa-circle-arrow-down';
+
+        toast.className = `toast ${type}`; toast.innerHTML = `<i class="fa-solid ${iconClass}" style="font-size:18px;"></i> <span>${msg}</span> <div class="toast-progress"></div>`;
         container.appendChild(toast); setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateY(-20px) scale(0.9)'; toast.style.transition = 'all 0.35s'; setTimeout(() => toast.remove(), 350); }, 3000);
 
         if (targetBtn && valueText) {
             const rect = targetBtn.getBoundingClientRect(), floatEl = document.createElement('div'); floatEl.className = 'float-popup';
-            floatEl.style.color = type === 'buy' ? 'var(--color-buy)' : 'var(--color-sell)'; floatEl.style.left = `${rect.left + rect.width / 2 - 40}px`; floatEl.style.top = `${rect.top - 10}px`;
+            
+            let floatColor = '#fff';
+            if (type === 'buy') floatColor = 'var(--color-buy)';
+            else if (type === 'sell') floatColor = 'var(--color-sell)';
+            else if (type === 'info') floatColor = '#ddd'; // 灰色漂浮文字
+
+            floatEl.style.color = floatColor; 
+            floatEl.style.left = `${rect.left + rect.width / 2 - 40}px`; floatEl.style.top = `${rect.top - 10}px`;
             floatEl.innerText = valueText; document.body.appendChild(floatEl); setTimeout(() => floatEl.remove(), 1200);
         }
         const navEl = document.getElementById('nav-total'); navEl.classList.remove('value-pulse'); void navEl.offsetWidth; navEl.classList.add('value-pulse');
@@ -958,26 +1000,19 @@
     }
     function confirmAddCard() { const val = document.getElementById('new-card-input').value.trim().toUpperCase(); if(val && !state.cardTickers.includes(val)) { state.cardTickers.push(val); saveData(); fetchAllCardsData(); } else { renderCards(); } }
 
-    // 🚀 改良：完全併發的自選卡片資料獲取
     async function fetchAllCardsData() {
         if (state.cardTickers.length === 0) return;
-        
         const promises = state.cardTickers.map(async (t) => {
             try {
                 const res = await fetch(`${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${t}?range=1mo&interval=1d`)}`, { cache: "no-store" });
                 if(res.ok) { 
                     const json = await res.json(), result = json.chart.result[0], price = result.meta.regularMarketPrice, prices = result.indicators.quote[0].close || [], rsi = calculateRSI(prices.filter(p => p !== null), 14);
-                    if (price) globalPriceCache[t] = price;
-                    cardsDataCache[t] = { price, rsi };
+                    if (price) globalPriceCache[t] = price; cardsDataCache[t] = { price, rsi };
                 }
             } catch(e) {}
         });
-        
         await Promise.all(promises);
-        
-        if (document.getElementById('view-cards').classList.contains('active')) {
-            renderCards();
-        }
+        if (document.getElementById('view-cards').classList.contains('active')) { renderCards(); }
     }
 
     function renderCards() {
@@ -1034,7 +1069,38 @@
     });
 
     function toggleTickerDropdown() { document.getElementById("ticker-dropdown").classList.toggle("show"); }
-    document.addEventListener("click", (e) => { if(!document.getElementById("ticker-select-wrapper").contains(e.target)) document.getElementById("ticker-dropdown").classList.remove("show"); });
+
+    // 🚀 新增：時光機專屬搜尋列邏輯
+    let tmSearchDebounceTimer = null;
+    const tmTickerInput = document.getElementById("tm-ticker");
+    tmTickerInput.addEventListener("input", (e) => {
+        const query = e.target.value.trim().toUpperCase(); 
+        document.getElementById("tm-ticker-dropdown").classList.add("show");
+        clearTimeout(tmSearchDebounceTimer);
+        tmSearchDebounceTimer = setTimeout(async () => {
+            if(!query) { document.getElementById("tm-live-search-list").innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#666;">輸入代號以搜尋...</div>`; return; }
+            document.getElementById("tm-live-search-list").innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> 搜尋 ${query}...</div>`;
+            try {
+                const proxyUrl = `${myProxy}${encodeURIComponent(`https://query2.finance.yahoo.com/v1/finance/search?q=${query}&quotesCount=6`)}`;
+                const res = await fetch(proxyUrl, { cache: "no-store" }); const json = await res.json();
+                if(json.quotes && json.quotes.length > 0) { 
+                    document.getElementById("tm-live-search-list").innerHTML = json.quotes.map(q => `<div class="dropdown-item" onclick="selectTmTicker('${q.symbol}')"><div><strong style="color:#fff">${q.symbol}</strong> <span style="color:#888; font-size:11px">${q.shortname || ''}</span></div><span style="color:var(--color-acc); font-size:11px">${q.exchDisp || ''}</span></div>`).join(""); 
+                } else document.getElementById("tm-live-search-list").innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#ff4560;">查無符合標的</div>`;
+            } catch(err) { document.getElementById("tm-live-search-list").innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#ff4560;">連線異常</div>`; }
+        }, 300);
+    });
+
+    function selectTmTicker(t) {
+        document.getElementById("tm-ticker").value = t;
+        document.getElementById("tm-ticker-dropdown").classList.remove("show");
+        autoFetchHistoricalPrice(); // 自動觸發回溯報價
+    }
+
+    // 關閉下拉選單共用邏輯
+    document.addEventListener("click", (e) => { 
+        if(!document.getElementById("ticker-select-wrapper").contains(e.target)) document.getElementById("ticker-dropdown").classList.remove("show"); 
+        if(!document.getElementById("tm-ticker-wrapper").contains(e.target)) document.getElementById("tm-ticker-dropdown").classList.remove("show"); 
+    });
 
     function selectTicker(t) {
         currentTicker = t; localStorage.setItem('LAST_SELECTED_TICKER', t);
@@ -1197,7 +1263,6 @@
         recordNavSnapshot(); saveData(); validateSharesInput();
     }
 
-    // 🚀 改良：智慧型快照寫入，防止圖表塞車失真
     function recordNavSnapshot() {
         let holdingsVal = 0; 
         for(let t in state.holdings) {
@@ -1207,20 +1272,12 @@
         }
         const now = Date.now();
         if (!state.navHistory.timestamps) state.navHistory.timestamps = [];
-
-        // 避免每 8 秒就產生一個新點導致圖表過於密集且失真：
-        // 如果最後一個節點是 60 秒內產生的，直接覆寫它的 Y 值；否則才新增一個節點。
         const lastIdx = state.navHistory.timestamps.length - 1;
         if (lastIdx >= 0 && (now - state.navHistory.timestamps[lastIdx]) < 60000) {
-            state.navHistory.timestamps[lastIdx] = now;
-            state.navHistory.labels[lastIdx] = getShortFormattedTimeFromDate(now);
-            state.navHistory.data[lastIdx] = state.cash + holdingsVal;
+            state.navHistory.timestamps[lastIdx] = now; state.navHistory.labels[lastIdx] = getShortFormattedTimeFromDate(now); state.navHistory.data[lastIdx] = state.cash + holdingsVal;
         } else {
-            state.navHistory.timestamps.push(now);
-            state.navHistory.labels.push(getShortFormattedTimeFromDate(now));
-            state.navHistory.data.push(state.cash + holdingsVal);
+            state.navHistory.timestamps.push(now); state.navHistory.labels.push(getShortFormattedTimeFromDate(now)); state.navHistory.data.push(state.cash + holdingsVal);
         }
-        
         if(state.navHistory.data.length > 5000) { state.navHistory.timestamps.shift(); state.navHistory.labels.shift(); state.navHistory.data.shift(); }
     }
 
@@ -1228,11 +1285,8 @@
         let holdingsVal = 0, totalCost = 0;
         for(let t in state.holdings) { 
             const rate = getCurrencyMultiplier(t);
-            // 🚀 重大修復：所有報價優先拿取快取中的現價，保證同步
             let price = globalPriceCache[t] || (t === currentTicker && currentRealPrice !== null ? currentRealPrice : state.holdings[t].avgPrice); 
-            
-            holdingsVal += state.holdings[t].shares * price * rate; 
-            totalCost += state.holdings[t].shares * state.holdings[t].avgPrice * rate; 
+            holdingsVal += state.holdings[t].shares * price * rate; totalCost += state.holdings[t].shares * state.holdings[t].avgPrice * rate; 
         }
         const nav = state.cash + holdingsVal, pnl = holdingsVal - totalCost;
         document.getElementById("nav-total").innerText = `$ ${Math.floor(nav).toLocaleString()}`; document.getElementById("nav-cash").innerText = `$ ${Math.floor(state.cash).toLocaleString()}`;
@@ -1338,42 +1392,97 @@
         } catch(e) { document.getElementById(msgId).innerHTML = `<span style="color:var(--color-sell)">連線失敗或 Key 無效</span>`; } out.scrollTop = out.scrollHeight;
     }
 
-    // 🚀 關鍵重構：最高優先級載入與排程引擎
-    async function bootSystem() {
-        initData(); // 優先讀取本地存檔繪製框架
-        setTradeMode('BUY');
+    // 🚀 新增：手機版自訂數字鍵盤初始化邏輯
+    let activeNumInput = null;
+    const keypad = document.getElementById("custom-keypad");
+
+    function initMobileKeypad() {
+        if (window.innerWidth > 768) return;
+        const numInputs = document.querySelectorAll('.custom-num-input');
         
-        // 1. 最高優先：利用 Promise.all 併發阻塞，必定等匯率跟「所有庫存報價」抓到才往下走
+        numInputs.forEach(input => {
+            // 阻擋原生鍵盤
+            input.setAttribute('inputmode', 'none');
+            // 轉換為 text 防止某些手機瀏覽器依然彈出數字鍵盤
+            if(input.type === 'number') input.type = 'text';
+
+            input.addEventListener('focus', (e) => {
+                activeNumInput = input;
+                keypad.style.display = 'grid';
+                setTimeout(() => keypad.classList.add('show'), 10); // 確保觸發 CSS Transition
+                setTimeout(() => input.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200);
+            });
+        });
+    }
+
+    document.querySelectorAll('.keypad-btn').forEach(btn => {
+        btn.addEventListener('pointerdown', (e) => {
+            e.preventDefault(); // 核心：防止點擊按鈕時輸入框失去焦點
+            if (!activeNumInput) return;
+            
+            if (btn.classList.contains('action')) {
+                closeKeypad();
+            } else if (btn.classList.contains('del')) {
+                activeNumInput.value = activeNumInput.value.slice(0, -1);
+                activeNumInput.dispatchEvent(new Event('input', { bubbles: true }));
+            } else {
+                const char = btn.innerText.trim();
+                // 阻擋重複的小數點
+                if (char === '.' && activeNumInput.value.includes('.')) return;
+                // 阻擋超過長度限制
+                if (activeNumInput.maxLength > 0 && activeNumInput.value.length >= activeNumInput.maxLength) return;
+                
+                activeNumInput.value += char;
+                activeNumInput.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        });
+    });
+
+    function closeKeypad() {
+        keypad.classList.remove('show');
+        setTimeout(() => {
+            keypad.style.display = 'none';
+            if (activeNumInput) {
+                activeNumInput.blur();
+                activeNumInput.dispatchEvent(new Event('blur')); // 手動觸發時光機小時/分鐘的 padHour() 邏輯
+                activeNumInput = null;
+            }
+        }, 250);
+    }
+
+    // 點擊空白處關閉鍵盤
+    document.addEventListener('touchstart', (e) => {
+        if (activeNumInput && !keypad.contains(e.target) && e.target !== activeNumInput) {
+            closeKeypad();
+        }
+    });
+
+    async function bootSystem() {
+        initData();
+        setTradeMode('BUY');
+        initMobileKeypad(); // 啟動小鍵盤事件
+        
         await Promise.all([
             fetchExchangeRate(),
             fetchHoldingsPrices()
         ]);
-        
-        // 2. 拿到最新報價後，強制更新一次圖表快照與主畫面估值
         recordNavSnapshot();
         updateAllViews();
-
-        // 3. 畫面完全更新後，背景非阻塞載入當前下單標的與自選卡片
         selectTicker(currentTicker);
         fetchAllCardsData();
 
-        // 4. 定時排程：同樣保障庫存更新的優先級
         setInterval(async () => {
             await Promise.all([
                 fetchExchangeRate(),
                 fetchHoldingsPrices()
             ]);
-            // 庫存更新完優先刷新主頁估值
             recordNavSnapshot();
             updateAllViews();
-            
-            // 再刷新下單報價跟卡片
             fetchRealPrice(currentTicker);
             fetchAllCardsData();
         }, 8000);
     }
     
-    // 啟動系統
     bootSystem(); 
 
 </script>
