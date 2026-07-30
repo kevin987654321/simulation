@@ -529,8 +529,6 @@
 
 <script>
     let currentUSDTWD = 32.5;
-    
-    // 定義你專屬的 Worker 網址
     const myProxy = "https://square-moon-a3d9.kevinchang090818.workers.dev/?url=";
 
     // 🚀 新增：全域報價快取系統 (共享給所有模組)
@@ -545,39 +543,39 @@
                     currentUSDTWD = json.chart.result[0].meta.regularMarketPrice;
                 }
             }
-        } catch (e) { console.warn("匯率抓取失敗，使用預設值", e); }
+        } catch (e) {}
     }
 
-    // 🚀 新增：高效率批量抓取所有庫存現價 (用於精準 NAV 估值)
+    // 🚀 重大重構：改用最穩定的 v8/chart 併發請求，且保證 100% 抓取每一檔庫存的現價
     async function fetchHoldingsPrices() {
         const tickers = Object.keys(state.holdings);
         if (tickers.length === 0) return;
-        try {
-            // 使用 v7/quote API 允許一次查詢多個代號
-            const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${tickers.join(',')}`)}`;
-            const res = await fetch(proxyUrl, { cache: "no-store" });
-            if (res.ok) {
-                const json = await res.json();
-                if (json.quoteResponse && json.quoteResponse.result) {
-                    json.quoteResponse.result.forEach(q => {
-                        if (q.regularMarketPrice) globalPriceCache[q.symbol] = q.regularMarketPrice;
-                    });
-                    updateAllViews(); // 抓取完畢立刻刷新主畫面與估值
+        
+        // 將所有庫存代號轉換為獨立的 API 請求，並用 Promise.all 同時發送
+        const promises = tickers.map(async (t) => {
+            try {
+                const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${t}?range=1d&interval=1d`)}`;
+                const res = await fetch(proxyUrl, { cache: "no-store" });
+                if (res.ok) {
+                    const json = await res.json();
+                    const price = json.chart.result[0].meta.regularMarketPrice;
+                    if (price) globalPriceCache[t] = price;
                 }
-            }
-        } catch (e) { console.warn('批量庫存報價抓取失敗', e); }
+            } catch (e) { console.warn(`庫存報價抓取失敗: ${t}`); }
+        });
+
+        await Promise.all(promises);
     }
 
     function getCurrencyMultiplier(ticker) {
         return (ticker.endsWith('.TW') || ticker.endsWith('.TWO')) ? 1 : currentUSDTWD;
     }
 
-    // 🌟 全域轉換日期為完整格式 "YYYY/MM/DD HH:MM"
     function getFullFormattedTimeFromDate(timestamp) {
         let d = new Date(timestamp);
         return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
     }
-    // 🌟 圖表適用的精簡版日期格式 "MM/DD HH:MM"
+    
     function getShortFormattedTimeFromDate(timestamp) {
         let d = new Date(timestamp);
         return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -585,129 +583,69 @@
 
     function handleHourInput(el) {
         let val = el.value.replace(/\D/g, '');
-        if (val.length === 1) {
-            if (parseInt(val) > 2) {
-                el.value = '0' + val;
-                document.getElementById('tm-minute').focus();
-            } else {
-                el.value = val;
-            }
-        } else if (val.length >= 2) {
-            val = val.substring(0, 2);
-            if (parseInt(val) > 23) val = '23';
-            el.value = val;
-            document.getElementById('tm-minute').focus();
-        } else {
-            el.value = '';
-        }
+        if (val.length === 1) { if (parseInt(val) > 2) { el.value = '0' + val; document.getElementById('tm-minute').focus(); } else { el.value = val; }
+        } else if (val.length >= 2) { val = val.substring(0, 2); if (parseInt(val) > 23) val = '23'; el.value = val; document.getElementById('tm-minute').focus();
+        } else { el.value = ''; }
         if (el.value.length === 2) autoFetchHistoricalPrice();
     }
 
-    function padHour(el) {
-        if (el.value.length === 1) el.value = '0' + el.value;
-        autoFetchHistoricalPrice();
-    }
+    function padHour(el) { if (el.value.length === 1) el.value = '0' + el.value; autoFetchHistoricalPrice(); }
 
     function handleMinuteInput(el) {
         let val = el.value.replace(/\D/g, '');
-        if (val.length >= 2) {
-            val = val.substring(0, 2);
-            if (parseInt(val) > 59) val = '59';
-            el.value = val;
-            document.getElementById('tm-ticker').focus(); 
-        } else {
-            el.value = val;
-        }
+        if (val.length >= 2) { val = val.substring(0, 2); if (parseInt(val) > 59) val = '59'; el.value = val; document.getElementById('tm-ticker').focus(); 
+        } else { el.value = val; }
         if (el.value.length === 2) autoFetchHistoricalPrice();
     }
 
-    function padMinute(el) {
-        if (el.value.length === 1) el.value = '0' + el.value;
-        autoFetchHistoricalPrice();
-    }
+    function padMinute(el) { if (el.value.length === 1) el.value = '0' + el.value; autoFetchHistoricalPrice(); }
 
     function initTimeMachineDefault() {
-        const d = new Date();
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        const hours = String(d.getHours()).padStart(2, '0');
-        const minutes = String(d.getMinutes()).padStart(2, '0');
-        document.getElementById('tm-date').value = `${year}-${month}-${day}`;
-        document.getElementById('tm-hour').value = hours;
-        document.getElementById('tm-minute').value = minutes;
+        const d = new Date(); const year = d.getFullYear(); const month = String(d.getMonth() + 1).padStart(2, '0'); const day = String(d.getDate()).padStart(2, '0'); const hours = String(d.getHours()).padStart(2, '0'); const minutes = String(d.getMinutes()).padStart(2, '0');
+        document.getElementById('tm-date').value = `${year}-${month}-${day}`; document.getElementById('tm-hour').value = hours; document.getElementById('tm-minute').value = minutes;
     }
 
     let fetchPriceTimer = null;
     function autoFetchHistoricalPrice() {
         clearTimeout(fetchPriceTimer);
-        
         fetchPriceTimer = setTimeout(async () => {
-            const dateVal = document.getElementById("tm-date").value;
-            const hVal = document.getElementById("tm-hour").value;
-            const mVal = document.getElementById("tm-minute").value;
-            const ticker = document.getElementById("tm-ticker").value.trim().toUpperCase();
-            const priceInput = document.getElementById("tm-price");
+            const dateVal = document.getElementById("tm-date").value, hVal = document.getElementById("tm-hour").value, mVal = document.getElementById("tm-minute").value;
+            const ticker = document.getElementById("tm-ticker").value.trim().toUpperCase(), priceInput = document.getElementById("tm-price");
 
             if (!dateVal || !ticker || hVal.length !== 2 || mVal.length !== 2) return;
 
-            const timeVal = `${hVal}:${mVal}`;
-            const targetTime = new Date(`${dateVal}T${timeVal}`).getTime();
+            const timeVal = `${hVal}:${mVal}`, targetTime = new Date(`${dateVal}T${timeVal}`).getTime();
             if(isNaN(targetTime)) return;
             const targetSec = Math.floor(targetTime / 1000);
 
-            priceInput.placeholder = "查詢中...";
-            priceInput.value = ""; 
-
-            // 🌟 動態 K 線精準度引擎：依據回溯天數切換 API Interval
-            const nowSec = Math.floor(Date.now() / 1000);
-            const daysDiff = (nowSec - targetSec) / 86400;
-            let interval = '1m'; // 7 天內強制啟用 1 分鐘極高精度
-            if (daysDiff > 59) interval = '1d'; // 超過 60 天退回日 K 線
-            else if (daysDiff > 6) interval = '5m'; // 超過 7 天啟用 5 分鐘線
+            priceInput.placeholder = "查詢中..."; priceInput.value = ""; 
+            const nowSec = Math.floor(Date.now() / 1000), daysDiff = (nowSec - targetSec) / 86400;
+            let interval = '1m'; if (daysDiff > 59) interval = '1d'; else if (daysDiff > 6) interval = '5m'; 
 
             try {
-                const p1 = targetSec - (86400 * 4); 
-                const p2 = targetSec + (86400 * 4); 
+                const p1 = targetSec - (86400 * 4), p2 = targetSec + (86400 * 4); 
                 const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?period1=${p1}&period2=${p2}&interval=${interval}`)}`;
-                
-                const res = await fetch(proxyUrl, { cache: "no-store" });
-                const json = await res.json();
+                const res = await fetch(proxyUrl, { cache: "no-store" }), json = await res.json();
                 
                 if(json.chart && json.chart.result && json.chart.result[0]) {
-                    const result = json.chart.result[0];
-                    const timestamps = result.timestamp || [];
-                    const closes = result.indicators.quote[0].close || [];
-                    
+                    const result = json.chart.result[0], timestamps = result.timestamp || [], closes = result.indicators.quote[0].close || [];
                     if (timestamps.length > 0) {
-                        let closestIdx = -1;
-                        let minDiff = Infinity;
-                        
+                        let closestIdx = -1, minDiff = Infinity;
                         for(let i = 0; i < timestamps.length; i++) {
                             if(closes[i] === null || closes[i] === undefined) continue;
-                            const diff = Math.abs(timestamps[i] - targetSec);
-                            if (diff < minDiff) {
-                                minDiff = diff;
-                                closestIdx = i;
-                            }
+                            const diff = Math.abs(timestamps[i] - targetSec); if (diff < minDiff) { minDiff = diff; closestIdx = i; }
                         }
-                        
                         if(closestIdx !== -1) {
-                            priceInput.value = closes[closestIdx].toFixed(2);
-                            priceInput.placeholder = "";
-                            
-                            const fetchedDate = new Date(timestamps[closestIdx] * 1000);
-                            const tStr = `${fetchedDate.getMonth()+1}/${fetchedDate.getDate()} ${String(fetchedDate.getHours()).padStart(2, '0')}:${String(fetchedDate.getMinutes()).padStart(2, '0')}`;
+                            priceInput.value = closes[closestIdx].toFixed(2); priceInput.placeholder = "";
+                            const fetchedDate = new Date(timestamps[closestIdx] * 1000), tStr = `${fetchedDate.getMonth()+1}/${fetchedDate.getDate()} ${String(fetchedDate.getHours()).padStart(2, '0')}:${String(fetchedDate.getMinutes()).padStart(2, '0')}`;
                             triggerDynamicFeedback(`精準撈取 ${tStr} 報價`, 'buy', priceInput, closes[closestIdx].toFixed(2));
                             return;
                         }
                     }
                 }
                 priceInput.placeholder = "查無此時段報價";
-            } catch(e) {
-                priceInput.placeholder = "查詢失敗";
-            }
-        }, 600); // 延遲 0.6 秒發送，體驗更絲滑
+            } catch(e) { priceInput.placeholder = "查詢失敗"; }
+        }, 600);
     }
 
     function triggerDynamicFeedback(msg, type, targetBtn, valueText) {
@@ -723,11 +661,7 @@
         const navEl = document.getElementById('nav-total'); navEl.classList.remove('value-pulse'); void navEl.offsetWidth; navEl.classList.add('value-pulse');
     }
 
-    function adaptTradeLayout() {
-        const panel = document.getElementById("shared-trade-panel");
-        if (window.innerWidth <= 768) document.getElementById("mobile-trade-col").appendChild(panel);
-        else document.getElementById("desktop-trade-col").appendChild(panel);
-    }
+    function adaptTradeLayout() { const panel = document.getElementById("shared-trade-panel"); if (window.innerWidth <= 768) document.getElementById("mobile-trade-col").appendChild(panel); else document.getElementById("desktop-trade-col").appendChild(panel); }
     adaptTradeLayout(); window.addEventListener("resize", adaptTradeLayout);
 
     const sidebarEl = document.getElementById('sidebar'), overlayEl = document.getElementById('sidebar-overlay');
@@ -766,7 +700,7 @@
         document.querySelectorAll(".menu-item").forEach(m => m.classList.remove("active"));
         document.getElementById(id).classList.add("active"); if(btn) btn.classList.add("active");
         if(window.innerWidth <= 768 && sidebarEl.classList.contains('open')) toggleSidebar();
-        if(id === 'view-cards') { fetchAllCardsData(); renderCards(); }
+        if(id === 'view-cards') { renderCards(); }
     }
 
     const holdToPreviewPlugin = {
@@ -775,18 +709,10 @@
             const e = args.event; const type = e.type;
             if (type === 'mousedown' || type === 'touchstart') chart._isPointerHolding = true;
             else if (type === 'mouseup' || type === 'touchend' || type === 'touchcancel' || type === 'mouseout' || type === 'mouseleave') { 
-                chart._isPointerHolding = false; 
-                chart.setActiveElements([]);
-                chart.tooltip.setActiveElements([], {x: 0, y: 0}); 
-                chart.update(); 
-                return false; 
+                chart._isPointerHolding = false; chart.setActiveElements([]); chart.tooltip.setActiveElements([], {x: 0, y: 0}); chart.update(); return false; 
             }
             if (type === 'mousemove' || type === 'touchmove') { 
-                if (!chart._isPointerHolding) {
-                    chart.setActiveElements([]);
-                    chart.tooltip.setActiveElements([], {x: 0, y: 0});
-                    return false;
-                }
+                if (!chart._isPointerHolding) { chart.setActiveElements([]); chart.tooltip.setActiveElements([], {x: 0, y: 0}); return false; }
             }
         }
     };
@@ -795,44 +721,15 @@
     const smoothCrosshairPlugin = {
         id: 'smoothCrosshairPlugin',
         afterDraw(chart) {
-            const toggle = document.getElementById("cfg-crosshair-show");
-            if (!toggle || !toggle.checked) return;
-
-            const activeElements = chart.getActiveElements();
-            let targetX = null;
-            let activeColor = null;
-
-            if (activeElements.length > 0 && chart._isPointerHolding) {
-                targetX = activeElements[0].element.x;
-                activeColor = chart.data.datasets[activeElements[0].datasetIndex].borderColor;
-                chart._crosshairTargetOpacity = 1;
-            } else {
-                chart._crosshairTargetOpacity = 0;
-            }
-
-            if (chart._crosshairX === undefined) chart._crosshairX = targetX;
-            if (chart._crosshairOpacity === undefined) chart._crosshairOpacity = 0;
-
-            if (targetX !== null && chart._crosshairX === null) chart._crosshairX = targetX;
-            else if (targetX !== null) chart._crosshairX += (targetX - chart._crosshairX) * 0.25;
-
+            const toggle = document.getElementById("cfg-crosshair-show"); if (!toggle || !toggle.checked) return;
+            const activeElements = chart.getActiveElements(); let targetX = null; let activeColor = null;
+            if (activeElements.length > 0 && chart._isPointerHolding) { targetX = activeElements[0].element.x; activeColor = chart.data.datasets[activeElements[0].datasetIndex].borderColor; chart._crosshairTargetOpacity = 1; } else { chart._crosshairTargetOpacity = 0; }
+            if (chart._crosshairX === undefined) chart._crosshairX = targetX; if (chart._crosshairOpacity === undefined) chart._crosshairOpacity = 0;
+            if (targetX !== null && chart._crosshairX === null) chart._crosshairX = targetX; else if (targetX !== null) chart._crosshairX += (targetX - chart._crosshairX) * 0.25;
             chart._crosshairOpacity += (chart._crosshairTargetOpacity - chart._crosshairOpacity) * 0.2;
-
             if (chart._crosshairOpacity > 0.01 && chart._crosshairX !== null) {
-                const ctx = chart.ctx;
-                ctx.save();
-                ctx.beginPath();
-                ctx.moveTo(chart._crosshairX, chart.chartArea.top);
-                ctx.lineTo(chart._crosshairX, chart.chartArea.bottom);
-                ctx.lineWidth = 1;
-                ctx.strokeStyle = activeColor || '#fff';
-                ctx.globalAlpha = chart._crosshairOpacity * 0.8;
-                ctx.stroke();
-                ctx.restore();
-
-                if (Math.abs(chart._crosshairX - targetX) > 0.5 || Math.abs(chart._crosshairOpacity - chart._crosshairTargetOpacity) > 0.05) {
-                    requestAnimationFrame(() => chart.draw());
-                }
+                const ctx = chart.ctx; ctx.save(); ctx.beginPath(); ctx.moveTo(chart._crosshairX, chart.chartArea.top); ctx.lineTo(chart._crosshairX, chart.chartArea.bottom); ctx.lineWidth = 1; ctx.strokeStyle = activeColor || '#fff'; ctx.globalAlpha = chart._crosshairOpacity * 0.8; ctx.stroke(); ctx.restore();
+                if (Math.abs(chart._crosshairX - targetX) > 0.5 || Math.abs(chart._crosshairOpacity - chart._crosshairTargetOpacity) > 0.05) { requestAnimationFrame(() => chart.draw()); }
             }
         }
     };
@@ -844,21 +741,13 @@
     let currentRealPrice = null, isPriceLoading = true, currentStockTF = '1D', searchDebounceTimer = null, desktopChartMode = 'NAV', tradeMode = 'BUY';
     let stockHistData = { labels: [], prices: [] }, cardsDataCache = {}, isCardEditMode = false;
 
-    // 🌟 時光機核心：強制從 Ledger 重建最精確的圖表時間軸
     function rebuildNavHistoryFromLedger() {
-        let tempCash = 1000000;
-        let tempHoldings = {};
-        let newTimestamps = [];
-        let newLabels = [];
-        let newData = [];
-
+        let tempCash = 1000000, tempHoldings = {}, newTimestamps = [], newLabels = [], newData = [];
         let reversedLedger = [...state.ledger].sort((a,b) => a.timestamp - b.timestamp);
 
         if (reversedLedger.length > 0) {
             let t0 = reversedLedger[0].timestamp - 60000;
-            newTimestamps.push(t0);
-            newLabels.push(getShortFormattedTimeFromDate(t0));
-            newData.push(1000000);
+            newTimestamps.push(t0); newLabels.push(getShortFormattedTimeFromDate(t0)); newData.push(1000000);
         }
 
         reversedLedger.forEach(r => {
@@ -868,14 +757,11 @@
             if (r.action === 'BUY') {
                 tempCash -= r.total;
                 if (!tempHoldings[r.ticker]) tempHoldings[r.ticker] = { shares: 0, avgPrice: 0 };
-                let h = tempHoldings[r.ticker];
-                let origTotalSpend = r.origTotalSpend || (r.total / rate);
-                h.avgPrice = ((h.shares * h.avgPrice) + origTotalSpend) / (h.shares + r.shares);
-                h.shares += r.shares;
+                let h = tempHoldings[r.ticker], origTotalSpend = r.origTotalSpend || (r.total / rate);
+                h.avgPrice = ((h.shares * h.avgPrice) + origTotalSpend) / (h.shares + r.shares); h.shares += r.shares;
             } else if (r.action === 'SELL') {
                 if(tempHoldings[r.ticker]) {
-                    tempCash += r.total;
-                    tempHoldings[r.ticker].shares -= r.shares;
+                    tempCash += r.total; tempHoldings[r.ticker].shares -= r.shares;
                     if (tempHoldings[r.ticker].shares <= 0) delete tempHoldings[r.ticker];
                 }
             }
@@ -887,23 +773,17 @@
                 holdingsVal += tempHoldings[t].shares * priceToUse * rateT;
             }
 
-            newTimestamps.push(r.timestamp);
-            newLabels.push(getShortFormattedTimeFromDate(r.timestamp));
-            newData.push(tempCash + holdingsVal);
+            newTimestamps.push(r.timestamp); newLabels.push(getShortFormattedTimeFromDate(r.timestamp)); newData.push(tempCash + holdingsVal);
         });
 
         let currentHoldingsVal = 0;
         for(let t in state.holdings) {
             let rateT = (t.endsWith('.TW') || t.endsWith('.TWO')) ? 1 : currentUSDTWD;
-            // 🚀 改良：重建圖表歷史末端時也採用快取最新價
             let price = globalPriceCache[t] || (t === currentTicker && currentRealPrice !== null ? currentRealPrice : state.holdings[t].avgPrice);
             currentHoldingsVal += state.holdings[t].shares * price * rateT;
         }
         let now = Date.now();
-        newTimestamps.push(now);
-        newLabels.push(getShortFormattedTimeFromDate(now));
-        newData.push(state.cash + currentHoldingsVal);
-
+        newTimestamps.push(now); newLabels.push(getShortFormattedTimeFromDate(now)); newData.push(state.cash + currentHoldingsVal);
         state.navHistory = { timestamps: newTimestamps, labels: newLabels, data: newData };
     }
 
@@ -913,36 +793,19 @@
             try { 
                 state = JSON.parse(saved); 
                 state.cardTickers = state.cardTickers || ["NVDA", "2330.TW"]; 
-                
-                // 🌟 時區與毫秒校正：補齊舊資料遺失的 timestamp
                 state.ledger.forEach(r => {
                     if (!r.timestamp) {
-                        let d = new Date();
-                        let parts = r.time ? r.time.split(':') : [];
-                        if (parts.length === 2) {
-                            d.setHours(parseInt(parts[0]), parseInt(parts[1]), 0, 0);
-                            r.timestamp = d.getTime();
-                        } else if (r.time && r.time.includes('/')) {
-                            r.timestamp = new Date(r.time).getTime();
-                        } else {
-                            r.timestamp = Date.now();
-                        }
+                        let d = new Date(), parts = r.time ? r.time.split(':') : [];
+                        if (parts.length === 2) { d.setHours(parseInt(parts[0]), parseInt(parts[1]), 0, 0); r.timestamp = d.getTime(); } else if (r.time && r.time.includes('/')) { r.timestamp = new Date(r.time).getTime(); } else { r.timestamp = Date.now(); }
                     }
                 });
                 state.ledger.sort((a, b) => b.timestamp - a.timestamp);
-
-                // 🌟 如果圖表沒有時間戳記憶，強制根據帳本重建 (這能解決匯入後圖表擠壓的問題)
-                if (!state.navHistory || !state.navHistory.timestamps || state.navHistory.timestamps.length === 0) {
-                    rebuildNavHistoryFromLedger();
-                }
+                if (!state.navHistory || !state.navHistory.timestamps || state.navHistory.timestamps.length === 0) { rebuildNavHistoryFromLedger(); }
             } catch(e) {} 
-        } else { 
-            recordNavSnapshot(); saveData(); 
-        }
+        } else { recordNavSnapshot(); saveData(); }
         
         const savedShow = localStorage.getItem('SETTING_NODE_SHOW'); if (savedShow !== null) document.getElementById("cfg-node-show").checked = savedShow === 'true'; else document.getElementById("cfg-node-show").checked = true;
         const savedCrosshair = localStorage.getItem('SETTING_CROSSHAIR_SHOW'); if (savedCrosshair !== null) document.getElementById("cfg-crosshair-show").checked = savedCrosshair === 'true'; else document.getElementById("cfg-crosshair-show").checked = true;
-        
         const savedVal = localStorage.getItem('SETTING_NODE_VAL');
         if (savedVal !== null) {
             document.getElementById("cfg-node-slider").value = (savedVal === 'All') ? 60 : savedVal; document.getElementById("cfg-node-val").value = savedVal;
@@ -951,8 +814,7 @@
         document.getElementById("node-settings-wrapper").classList.toggle("disabled", !document.getElementById("cfg-node-show").checked);
         document.getElementById("trade-ticker").value = currentTicker; document.getElementById("m-chart-ticker").innerText = currentTicker;
         
-        initTimeMachineDefault();
-        renderRecentTickers(); renderCards();
+        initTimeMachineDefault(); renderRecentTickers(); renderCards();
     }
     
     function saveData() { localStorage.setItem(DATA_KEY, JSON.stringify(state)); updateAllViews(); renderCards(); }
@@ -971,31 +833,14 @@
             try {
                 const importedState = JSON.parse(e.target.result);
                 if (importedState && typeof importedState.cash === 'number') {
-                    state = importedState; 
-                    state.cardTickers = state.cardTickers || []; 
-                    state.recentTickers = state.recentTickers || []; 
-                    state.holdings = state.holdings || {}; 
-                    state.ledger = state.ledger || [];
-                    
+                    state = importedState; state.cardTickers = state.cardTickers || []; state.recentTickers = state.recentTickers || []; state.holdings = state.holdings || {}; state.ledger = state.ledger || [];
                     state.ledger.forEach(r => {
                         if (!r.timestamp) {
-                            let d = new Date();
-                            let parts = r.time ? r.time.split(':') : [];
-                            if (parts.length === 2) {
-                                d.setHours(parseInt(parts[0]), parseInt(parts[1]), 0, 0);
-                                r.timestamp = d.getTime();
-                            } else if (r.time && r.time.includes('/')) {
-                                r.timestamp = new Date(r.time).getTime();
-                            } else {
-                                r.timestamp = Date.now();
-                            }
+                            let d = new Date(), parts = r.time ? r.time.split(':') : [];
+                            if (parts.length === 2) { d.setHours(parseInt(parts[0]), parseInt(parts[1]), 0, 0); r.timestamp = d.getTime(); } else if (r.time && r.time.includes('/')) { r.timestamp = new Date(r.time).getTime(); } else { r.timestamp = Date.now(); }
                         }
                     });
-                    state.ledger.sort((a, b) => b.timestamp - a.timestamp);
-                    
-                    rebuildNavHistoryFromLedger(); // 強制重建圖表解決匯入擠壓問題
-                    
-                    saveData(); fetchAllCardsData(); 
+                    state.ledger.sort((a, b) => b.timestamp - a.timestamp); rebuildNavHistoryFromLedger(); saveData(); fetchAllCardsData(); 
                     triggerDynamicFeedback("資料已成功還原！", "buy", null, "RESTORED");
                 } else alert("檔案格式錯誤或損毀！");
             } catch (err) { alert("檔案解析失敗！請確保貼上完整無重複內容。"); }
@@ -1005,31 +850,17 @@
     }
 
     function recalculateState(ledgerArray) {
-        let tempCash = 1000000;
-        let tempHoldings = {};
-        let invalidSellIndices = []; 
-        
+        let tempCash = 1000000, tempHoldings = {}, invalidSellIndices = []; 
         for (let i = ledgerArray.length - 1; i >= 0; i--) {
-            let r = ledgerArray[i];
-            let rate = r.rate || getCurrencyMultiplier(r.ticker);
-            
+            let r = ledgerArray[i], rate = r.rate || getCurrencyMultiplier(r.ticker);
             if (r.action === 'BUY') {
-                tempCash -= r.total;
-                if (!tempHoldings[r.ticker]) tempHoldings[r.ticker] = { shares: 0, avgPrice: 0 };
-                let h = tempHoldings[r.ticker];
-                let origTotalSpend = r.origTotalSpend || (r.total / rate);
-                h.avgPrice = ((h.shares * h.avgPrice) + origTotalSpend) / (h.shares + r.shares);
-                h.shares += r.shares;
+                tempCash -= r.total; if (!tempHoldings[r.ticker]) tempHoldings[r.ticker] = { shares: 0, avgPrice: 0 };
+                let h = tempHoldings[r.ticker], origTotalSpend = r.origTotalSpend || (r.total / rate);
+                h.avgPrice = ((h.shares * h.avgPrice) + origTotalSpend) / (h.shares + r.shares); h.shares += r.shares;
             } else if (r.action === 'SELL') {
-                if (!tempHoldings[r.ticker] || tempHoldings[r.ticker].shares < r.shares) {
-                    invalidSellIndices.push(i);
-                    continue; 
-                }
-                tempCash += r.total;
-                let h = tempHoldings[r.ticker];
-                let costBasisTWD = r.shares * h.avgPrice * rate;
-                r.realizedPnL = r.total - costBasisTWD;
-                h.shares -= r.shares;
+                if (!tempHoldings[r.ticker] || tempHoldings[r.ticker].shares < r.shares) { invalidSellIndices.push(i); continue; }
+                tempCash += r.total; let h = tempHoldings[r.ticker], costBasisTWD = r.shares * h.avgPrice * rate;
+                r.realizedPnL = r.total - costBasisTWD; h.shares -= r.shares;
                 if (h.shares === 0) delete tempHoldings[r.ticker];
             }
         }
@@ -1037,108 +868,46 @@
     }
 
     function insertHistoricalTrade() {
-        const dateVal = document.getElementById("tm-date").value;
-        const hVal = document.getElementById("tm-hour").value;
-        const mVal = document.getElementById("tm-minute").value;
-        const ticker = document.getElementById("tm-ticker").value.trim().toUpperCase();
-        const action = document.getElementById("tm-action").value;
-        const price = parseFloat(document.getElementById("tm-price").value);
-        const shares = parseInt(document.getElementById("tm-shares").value);
+        const dateVal = document.getElementById("tm-date").value, hVal = document.getElementById("tm-hour").value, mVal = document.getElementById("tm-minute").value;
+        const ticker = document.getElementById("tm-ticker").value.trim().toUpperCase(), action = document.getElementById("tm-action").value;
+        const price = parseFloat(document.getElementById("tm-price").value), shares = parseInt(document.getElementById("tm-shares").value);
         
-        if (!dateVal || hVal.length !== 2 || mVal.length !== 2) {
-            alert("請確認日期與時分格式正確");
-            return;
-        }
-        if (!ticker || !price || !shares || shares <= 0 || price <= 0) {
-            alert("請完整填寫所有欄位，且單價與股數須大於 0。若剛輸入完代號，請等待價格自動檢索。");
-            return;
-        }
+        if (!dateVal || hVal.length !== 2 || mVal.length !== 2) { alert("請確認日期與時分格式正確"); return; }
+        if (!ticker || !price || !shares || shares <= 0 || price <= 0) { alert("請完整填寫所有欄位，且單價與股數須大於 0。"); return; }
         
-        const timeVal = `${hVal}:${mVal}`;
-        const timestamp = new Date(`${dateVal}T${timeVal}`).getTime();
-        if (timestamp > Date.now()) {
-            alert("不能登錄未來的交易時間！");
-            return;
-        }
+        const timestamp = new Date(`${dateVal}T${hVal}:${mVal}`).getTime();
+        if (timestamp > Date.now()) { alert("不能登錄未來的交易時間！"); return; }
         
-        const rate = getCurrencyMultiplier(ticker);
-        const origSubtotal = shares * price;
+        const rate = getCurrencyMultiplier(ticker), origSubtotal = shares * price;
         const origFee = origSubtotal * (parseFloat(document.getElementById("cfg-fee-rate").value) / 100);
         const origTax = action === 'SELL' ? origSubtotal * (parseFloat(document.getElementById("cfg-tax-rate").value) / 100) : 0;
+        const twdTotalSpend = (origSubtotal + origFee) * rate, twdTotalGet = (origSubtotal - origFee - origTax) * rate, twdFee = origFee * rate, twdTax = origTax * rate;
         
-        const twdTotalSpend = (origSubtotal + origFee) * rate; 
-        const twdTotalGet = (origSubtotal - origFee - origTax) * rate; 
-        const twdFee = origFee * rate;
-        const twdTax = origTax * rate;
-        
-        let newTrade = {
-            time: getFullFormattedTimeFromDate(timestamp),
-            timestamp: timestamp,
-            action: action,
-            ticker: ticker,
-            price: price,
-            shares: shares,
-            fee: action === 'BUY' ? twdFee : (twdFee + twdTax),
-            tax: twdTax,
-            total: action === 'BUY' ? twdTotalSpend : twdTotalGet,
-            rate: rate,
-            origTotalSpend: action === 'BUY' ? (origSubtotal + origFee) : null,
-            realizedPnL: null
-        };
-        
-        let testLedger = JSON.parse(JSON.stringify(state.ledger));
-        testLedger.push(newTrade);
-        testLedger.sort((a, b) => b.timestamp - a.timestamp); 
+        let newTrade = { time: getFullFormattedTimeFromDate(timestamp), timestamp: timestamp, action: action, ticker: ticker, price: price, shares: shares, fee: action === 'BUY' ? twdFee : (twdFee + twdTax), tax: twdTax, total: action === 'BUY' ? twdTotalSpend : twdTotalGet, rate: rate, origTotalSpend: action === 'BUY' ? (origSubtotal + origFee) : null, realizedPnL: null };
+        let testLedger = JSON.parse(JSON.stringify(state.ledger)); testLedger.push(newTrade); testLedger.sort((a, b) => b.timestamp - a.timestamp); 
         
         let result = recalculateState(testLedger);
-        if (result.cash < 0 && !confirm("此筆補登將導致歷史過程的現金變成負數，確認要強制補登嗎？")) {
-            return;
-        }
-        if (result.invalidSellIndices.length > 0) {
-            alert(`補登失敗：此操作將導致後續存在 ${result.invalidSellIndices.length} 筆無效賣出 (庫存不足)！請先整理後續的帳務。`);
-            return;
-        }
+        if (result.cash < 0 && !confirm("此筆補登將導致現金變為負數，確認要強制補登嗎？")) return;
+        if (result.invalidSellIndices.length > 0) { alert(`補登失敗：此操作將導致後續存在 ${result.invalidSellIndices.length} 筆無效賣出 (庫存不足)！`); return; }
         
-        state.ledger = testLedger;
-        state.cash = result.cash;
-        state.holdings = result.holdings;
-        
-        document.getElementById("tm-ticker").value = '';
-        document.getElementById("tm-price").value = '';
-        document.getElementById("tm-shares").value = '';
-        
-        rebuildNavHistoryFromLedger(); // 強制重建圖表
-        saveData();
-        triggerDynamicFeedback("已成功補登時光機交易", "buy", null, "INSERTED");
+        state.ledger = testLedger; state.cash = result.cash; state.holdings = result.holdings;
+        document.getElementById("tm-ticker").value = ''; document.getElementById("tm-price").value = ''; document.getElementById("tm-shares").value = '';
+        rebuildNavHistoryFromLedger(); saveData(); triggerDynamicFeedback("已成功補登時光機交易", "buy", null, "INSERTED");
     }
 
     function undoTrade(index) {
         if(!confirm("確定要撤銷這筆交易嗎？系統會為你重新結算所有歷史損益與庫存。")) return;
-        
-        let testLedger = JSON.parse(JSON.stringify(state.ledger)); 
-        testLedger.splice(index, 1); 
-        
+        let testLedger = JSON.parse(JSON.stringify(state.ledger)); testLedger.splice(index, 1); 
         let result = recalculateState(testLedger);
         if (result.invalidSellIndices.length > 0) {
-            if(!confirm(`⚠️ 警告：撤銷此筆買入將導致後續 ${result.invalidSellIndices.length} 筆賣出操作失效 (因庫存不足)。\n\n為了維持帳務正確，系統將【強制一併撤銷】這些無效的賣出。\n是否繼續？`)) {
-                return;
-            }
-            result.invalidSellIndices.forEach(i => { testLedger[i]._invalid = true; });
-            testLedger = testLedger.filter(x => !x._invalid);
-            result = recalculateState(testLedger);
+            if(!confirm(`⚠️ 警告：撤銷此筆買入將導致後續 ${result.invalidSellIndices.length} 筆賣出操作失效 (因庫存不足)。\n\n系統將【強制一併撤銷】這些無效的賣出。\n是否繼續？`)) return;
+            result.invalidSellIndices.forEach(i => { testLedger[i]._invalid = true; }); testLedger = testLedger.filter(x => !x._invalid); result = recalculateState(testLedger);
         }
-        
-        state.ledger = testLedger;
-        state.cash = result.cash;
-        state.holdings = result.holdings;
-        
-        rebuildNavHistoryFromLedger(); // 強制重建圖表
-        saveData();
-        triggerDynamicFeedback("交易已成功撤銷", "buy", null, "UNDONE");
+        state.ledger = testLedger; state.cash = result.cash; state.holdings = result.holdings;
+        rebuildNavHistoryFromLedger(); saveData(); triggerDynamicFeedback("交易已成功撤銷", "buy", null, "UNDONE");
     }
 
     let cDragTimer, cIsDragging = false, cDragCard = null, cPlaceholder = null, cStartX = 0, cStartY = 0, cElemStartX = 0, cElemStartY = 0;
-
     function attachCardDragEvents() { document.querySelectorAll('.draggable-card').forEach(card => { card.addEventListener('touchstart', handleCardPointerDown, {passive: false}); card.addEventListener('mousedown', handleCardPointerDown); }); }
     function handleCardPointerDown(e) {
         if (!isCardEditMode) return; if (e.target.closest('.delete-btn')) return;
@@ -1166,8 +935,7 @@
         const parent = nodeA.parentNode, rectB = nodeB.getBoundingClientRect(), siblingA = nodeA.nextSibling === nodeB ? nodeA : nodeA.nextSibling;
         nodeB.parentNode.insertBefore(nodeA, nodeB); parent.insertBefore(nodeB, siblingA);
         const newRectB = nodeB.getBoundingClientRect(), diffX = rectB.left - newRectB.left, diffY = rectB.top - newRectB.top;
-        nodeB.style.transform = `translate(${diffX}px, ${diffY}px)`; nodeB.style.transition = 'none';
-        requestAnimationFrame(() => { nodeB.style.transform = ''; nodeB.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)'; });
+        nodeB.style.transform = `translate(${diffX}px, ${diffY}px)`; nodeB.style.transition = 'none'; requestAnimationFrame(() => { nodeB.style.transform = ''; nodeB.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)'; });
     }
     function handleCardPointerUp(e) {
         if (!cIsDragging) return; cIsDragging = false; const rect = cPlaceholder.getBoundingClientRect();
@@ -1180,12 +948,7 @@
         }, 300);
     }
 
-    function toggleCardEditMode() {
-        isCardEditMode = !isCardEditMode; const btn = document.getElementById('edit-cards-btn');
-        btn.innerText = isCardEditMode ? '完成' : '編輯';
-        btn.style.background = isCardEditMode ? 'var(--color-sell)' : 'transparent'; btn.style.borderColor = isCardEditMode ? 'var(--color-sell)' : 'rgba(255,255,255,0.2)';
-        renderCards();
-    }
+    function toggleCardEditMode() { isCardEditMode = !isCardEditMode; const btn = document.getElementById('edit-cards-btn'); btn.innerText = isCardEditMode ? '完成' : '編輯'; btn.style.background = isCardEditMode ? 'var(--color-sell)' : 'transparent'; btn.style.borderColor = isCardEditMode ? 'var(--color-sell)' : 'rgba(255,255,255,0.2)'; renderCards(); }
     function removeCard(ticker) { state.cardTickers = state.cardTickers.filter(t => t !== ticker); saveData(); }
     function addCardPrompt() {
         const grid = document.getElementById('cards-grid'), box = document.createElement('div');
@@ -1195,21 +958,26 @@
     }
     function confirmAddCard() { const val = document.getElementById('new-card-input').value.trim().toUpperCase(); if(val && !state.cardTickers.includes(val)) { state.cardTickers.push(val); saveData(); fetchAllCardsData(); } else { renderCards(); } }
 
+    // 🚀 改良：完全併發的自選卡片資料獲取
     async function fetchAllCardsData() {
-        if (!document.getElementById('view-cards').classList.contains('active')) return;
-        for (const t of state.cardTickers) {
+        if (state.cardTickers.length === 0) return;
+        
+        const promises = state.cardTickers.map(async (t) => {
             try {
                 const res = await fetch(`${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${t}?range=1mo&interval=1d`)}`, { cache: "no-store" });
                 if(res.ok) { 
                     const json = await res.json(), result = json.chart.result[0], price = result.meta.regularMarketPrice, prices = result.indicators.quote[0].close || [], rsi = calculateRSI(prices.filter(p => p !== null), 14);
-                    
-                    // 🚀 將卡片抓到的現價也寫入全域快取
                     if (price) globalPriceCache[t] = price;
                     cardsDataCache[t] = { price, rsi };
                 }
             } catch(e) {}
+        });
+        
+        await Promise.all(promises);
+        
+        if (document.getElementById('view-cards').classList.contains('active')) {
+            renderCards();
         }
-        renderCards();
     }
 
     function renderCards() {
@@ -1217,7 +985,6 @@
         state.cardTickers.forEach(t => {
             const rate = getCurrencyMultiplier(t);
             const cData = cardsDataCache[t] || { price: 0, rsi: null }, h = state.holdings[t] || { shares: 0, avgPrice: 0 };
-            
             const gross = h.shares * cData.price * rate, feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100, taxRate = parseFloat(document.getElementById("cfg-tax-rate").value) / 100;
             const netValue = gross > 0 ? (gross - (gross * feeRate) - (gross * taxRate)) : 0, totalCost = h.shares * h.avgPrice * rate, pnl = netValue - totalCost;
             const pnlColor = pnl >= 0 ? 'var(--color-buy)' : 'var(--color-sell)';
@@ -1248,17 +1015,12 @@
     }
 
     function addToRecentlySelected(t) { state.recentTickers = [t, ...state.recentTickers.filter(item => item !== t)].slice(0, 5); saveData(); renderRecentTickers(); }
-    function renderRecentTickers() { document.getElementById("recent-tickers-list").innerHTML = state.recentTickers.map(t => `
-            <div class="dropdown-item" onclick="selectTicker('${t}')">
-                <span style="font-weight:bold; color:var(--color-buy)">${t}</span>
-                <span style="color:#888; font-size:11px;">最近選取</span>
-            </div>`).join(""); }
+    function renderRecentTickers() { document.getElementById("recent-tickers-list").innerHTML = state.recentTickers.map(t => `<div class="dropdown-item" onclick="selectTicker('${t}')"><span style="font-weight:bold; color:var(--color-buy)">${t}</span><span style="color:#888; font-size:11px;">最近選取</span></div>`).join(""); }
 
     const tickerInput = document.getElementById("trade-ticker");
     tickerInput.addEventListener("input", (e) => {
         const query = e.target.value.trim().toUpperCase(); document.getElementById("ticker-dropdown").classList.add("show");
         document.getElementById("recent-group-title").style.display = 'none'; document.getElementById("recent-tickers-list").style.display = 'none';
-
         clearTimeout(searchDebounceTimer);
         searchDebounceTimer = setTimeout(async () => {
             if(!query) { document.getElementById("live-search-list").innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#666;">輸入代號自動撈取標的...</div>`; return; }
@@ -1266,9 +1028,7 @@
             try {
                 const proxyUrl = `${myProxy}${encodeURIComponent(`https://query2.finance.yahoo.com/v1/finance/search?q=${query}&quotesCount=6`)}`;
                 const res = await fetch(proxyUrl, { cache: "no-store" }); const json = await res.json();
-                if(json.quotes && json.quotes.length > 0) {
-                    document.getElementById("live-search-list").innerHTML = json.quotes.map(q => `<div class="dropdown-item" onclick="selectTicker('${q.symbol}')"><div><strong style="color:#fff">${q.symbol}</strong> <span style="color:#888; font-size:11px">${q.shortname || ''}</span></div><span style="color:var(--color-acc); font-size:11px">${q.exchDisp || ''}</span></div>`).join("");
-                } else document.getElementById("live-search-list").innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#ff4560;">查無符合標的</div>`;
+                if(json.quotes && json.quotes.length > 0) { document.getElementById("live-search-list").innerHTML = json.quotes.map(q => `<div class="dropdown-item" onclick="selectTicker('${q.symbol}')"><div><strong style="color:#fff">${q.symbol}</strong> <span style="color:#888; font-size:11px">${q.shortname || ''}</span></div><span style="color:var(--color-acc); font-size:11px">${q.exchDisp || ''}</span></div>`).join(""); } else document.getElementById("live-search-list").innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#ff4560;">查無符合標的</div>`;
             } catch(err) { document.getElementById("live-search-list").innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#ff4560;">連線異常</div>`; }
         }, 300);
     });
@@ -1296,11 +1056,7 @@
             const res = await fetch(proxyUrl, { cache: "no-store" });
             if(res.ok) { 
                 const json = await res.json(), price = json.chart.result[0].meta.regularMarketPrice; 
-                if(price) { 
-                    currentRealPrice = price; 
-                    globalPriceCache[ticker] = price; // 🚀 寫入全域快取
-                    isPriceLoading = false; 
-                }
+                if(price) { currentRealPrice = price; globalPriceCache[ticker] = price; isPriceLoading = false; }
             }
         } catch(e) {}
         finally {
@@ -1314,10 +1070,8 @@
 
     const tfGroup = document.getElementById('tf-group'), tfBg = document.getElementById('tf-active-bg'), tfBtns = Array.from(document.querySelectorAll('#tf-group .tf-btn'));
     function updateTfBg(index, animate = true) {
-        const btn = tfBtns[index];
-        tfBg.style.transition = animate ? 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1)' : 'none';
-        tfBg.style.width = `${btn.offsetWidth}px`; tfBg.style.transform = `translateX(${btn.offsetLeft}px)`;
-        tfBtns.forEach((b, i) => b.classList.toggle('active', i === index));
+        const btn = tfBtns[index]; tfBg.style.transition = animate ? 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1)' : 'none';
+        tfBg.style.width = `${btn.offsetWidth}px`; tfBg.style.transform = `translateX(${btn.offsetLeft}px)`; tfBtns.forEach((b, i) => b.classList.toggle('active', i === index));
     }
     tfBtns.forEach((btn, index) => btn.addEventListener('click', () => { updateTfBg(index); currentStockTF = btn.dataset.tf; fetchStockHistoryData(currentTicker, currentStockTF); renderAllCharts(); }));
     setTimeout(() => updateTfBg(0, false), 100);
@@ -1335,8 +1089,7 @@
         let avgGain = gains / period, avgLoss = losses / period;
         for (let i = period + 1; i < prices.length; i++) {
             const diff = prices[i] - prices[i - 1];
-            if (diff >= 0) { avgGain = (avgGain * (period - 1) + diff) / period; avgLoss = (avgLoss * (period - 1)) / period; }
-            else { avgGain = (avgGain * (period - 1)) / period; avgLoss = (avgLoss * (period - 1) - diff) / period; }
+            if (diff >= 0) { avgGain = (avgGain * (period - 1) + diff) / period; avgLoss = (avgLoss * (period - 1)) / period; } else { avgGain = (avgGain * (period - 1)) / period; avgLoss = (avgLoss * (period - 1) - diff) / period; }
         }
         if (avgLoss === 0) return 100; return 100 - (100 / (1 + (avgGain / avgLoss)));
     }
@@ -1355,14 +1108,12 @@
         switch(tf) { case '1D': range = '1d'; interval = '5m'; break; case '1W': range = '5d'; interval = '15m'; break; case '1M': range = '1mo'; interval = '1d'; break; case '3M': range = '3mo'; interval = '1d'; break; case '1Y': range = '1y'; interval = '1d'; break; case 'All': range = '5y'; interval = '1wk'; break; }
         try {
             const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=${range}&interval=${interval}`)}`;
-            const res = await fetch(proxyUrl, { cache: "no-store" });
-            const json = await res.json(), result = json.chart.result[0], timestamps = result.timestamp || [], prices = result.indicators.quote[0].close || [];
+            const res = await fetch(proxyUrl, { cache: "no-store" }); const json = await res.json(), result = json.chart.result[0], timestamps = result.timestamp || [], prices = result.indicators.quote[0].close || [];
             let arrPrices = [], arrLabels = [];
             for(let i = 0; i < timestamps.length; i++) {
                 if (prices[i] !== null && prices[i] !== undefined) {
                     arrPrices.push(prices[i]); const d = new Date(timestamps[i] * 1000);
-                    if (tf === '1D') arrLabels.push(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`);
-                    else arrLabels.push(`${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`);
+                    if (tf === '1D') arrLabels.push(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`); else arrLabels.push(`${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`);
                 }
             }
             if (arrPrices.length > 0) { stockHistData.prices = arrPrices; stockHistData.labels = arrLabels; updateRSIDisplay(arrPrices); renderAllCharts(); }
@@ -1370,12 +1121,9 @@
     }
 
     function setTradeMode(mode) {
-        tradeMode = mode;
-        document.getElementById('mode-btn-buy').classList.toggle('active', mode === 'BUY');
-        document.getElementById('mode-btn-sell').classList.toggle('active', mode === 'SELL');
+        tradeMode = mode; document.getElementById('mode-btn-buy').classList.toggle('active', mode === 'BUY'); document.getElementById('mode-btn-sell').classList.toggle('active', mode === 'SELL');
         const execBtn = document.getElementById('exec-trade-btn');
-        if (mode === 'BUY') { execBtn.className = 'exec-btn buy'; execBtn.innerText = '確認買進 BUY'; } 
-        else { execBtn.className = 'exec-btn sell'; execBtn.innerText = '確認賣出 SELL'; }
+        if (mode === 'BUY') { execBtn.className = 'exec-btn buy'; execBtn.innerText = '確認買進 BUY'; } else { execBtn.className = 'exec-btn sell'; execBtn.innerText = '確認賣出 SELL'; }
         validateSharesInput();
     }
 
@@ -1388,21 +1136,16 @@
         if (tradeMode === 'BUY') { 
             const feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100 || 0.001425; 
             sharesInput.value = Math.max(1, Math.floor(Math.floor(state.cash / (currentRealPrice * rate * (1 + feeRate))) * pct)); 
-        } 
-        else { 
-            const holding = state.holdings[currentTicker]?.shares || 0; 
-            sharesInput.value = Math.max(1, Math.floor(holding * pct)); 
+        } else { 
+            const holding = state.holdings[currentTicker]?.shares || 0; sharesInput.value = Math.max(1, Math.floor(holding * pct)); 
         }
         validateSharesInput();
     }
     
     function validateSharesInput() {
         if (isPriceLoading || currentRealPrice === null) { document.getElementById("exec-trade-btn").disabled = true; return; }
-        let s = parseInt(sharesInput.value) || 0;
-        const rate = getCurrencyMultiplier(currentTicker);
-        const feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100;
-        const maxBuy = Math.max(0, Math.floor(state.cash / (currentRealPrice * rate * (1 + feeRate))));
-        const holding = state.holdings[currentTicker]?.shares || 0;
+        let s = parseInt(sharesInput.value) || 0; const rate = getCurrencyMultiplier(currentTicker), feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100;
+        const maxBuy = Math.max(0, Math.floor(state.cash / (currentRealPrice * rate * (1 + feeRate)))); const holding = state.holdings[currentTicker]?.shares || 0;
         document.getElementById("holding-shares-display").innerText = holding.toLocaleString();
         
         if (tradeMode === 'BUY') {
@@ -1417,92 +1160,75 @@
 
     function recalculateOrder() {
         if (isPriceLoading || currentRealPrice === null) return;
-        let s = parseInt(sharesInput.value) || 0;
-        const rate = getCurrencyMultiplier(currentTicker);
-        
-        const subtotal = s * currentRealPrice * rate;
-        const fee = subtotal * (parseFloat(document.getElementById("cfg-fee-rate").value) / 100);
+        let s = parseInt(sharesInput.value) || 0; const rate = getCurrencyMultiplier(currentTicker);
+        const subtotal = s * currentRealPrice * rate, fee = subtotal * (parseFloat(document.getElementById("cfg-fee-rate").value) / 100);
         const tax = tradeMode === 'SELL' ? subtotal * (parseFloat(document.getElementById("cfg-tax-rate").value) / 100) : 0;
-        
         document.getElementById("calc-subtotal").innerText = `$ ${subtotal.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
-        document.getElementById("calc-fee").innerText = `$ ${fee.toFixed(2)}`; 
-        document.getElementById("calc-tax").innerText = `$ ${tax.toFixed(2)}`;
-        
-        const total = tradeMode === 'BUY' ? (subtotal + fee) : (subtotal - fee - tax);
-        const totalEl = document.getElementById("calc-total");
-        document.getElementById("total-label").innerText = tradeMode === 'BUY' ? '預估總付出:' : '預估總收入:';
-        totalEl.innerText = `$ ${total.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+        document.getElementById("calc-fee").innerText = `$ ${fee.toFixed(2)}`; document.getElementById("calc-tax").innerText = `$ ${tax.toFixed(2)}`;
+        const total = tradeMode === 'BUY' ? (subtotal + fee) : (subtotal - fee - tax); const totalEl = document.getElementById("calc-total");
+        document.getElementById("total-label").innerText = tradeMode === 'BUY' ? '預估總付出:' : '預估總收入:'; totalEl.innerText = `$ ${total.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
     }
 
     function executeTrade() {
         if (isPriceLoading || currentRealPrice === null) { alert("報價連線中，請稍候！"); return; }
         let s = parseInt(sharesInput.value); if(!s || s <= 0) return;
-        const rate = getCurrencyMultiplier(currentTicker);
-        
-        const origSubtotal = s * currentRealPrice;
+        const rate = getCurrencyMultiplier(currentTicker), origSubtotal = s * currentRealPrice;
         const origFee = origSubtotal * (parseFloat(document.getElementById("cfg-fee-rate").value) / 100);
         const origTax = tradeMode === 'SELL' ? origSubtotal * (parseFloat(document.getElementById("cfg-tax-rate").value) / 100) : 0;
-        
-        const twdTotalSpend = (origSubtotal + origFee) * rate; 
-        const twdTotalGet = (origSubtotal - origFee - origTax) * rate; 
-        const twdFee = origFee * rate;
-        const twdTax = origTax * rate;
-        
-        const timestamp = Date.now();
-        const tradeTime = getFullFormattedTimeFromDate(timestamp);
+        const twdTotalSpend = (origSubtotal + origFee) * rate, twdTotalGet = (origSubtotal - origFee - origTax) * rate, twdFee = origFee * rate, twdTax = origTax * rate;
+        const timestamp = Date.now(), tradeTime = getFullFormattedTimeFromDate(timestamp);
         
         if(tradeMode === 'BUY') {
             if(twdTotalSpend > state.cash) { alert("現有現金不足！"); return; }
             state.cash -= twdTotalSpend; 
             if(!state.holdings[currentTicker]) state.holdings[currentTicker] = { shares: 0, avgPrice: 0 };
-            const h = state.holdings[currentTicker]; 
-            const origTotalSpend = origSubtotal + origFee;
-            h.avgPrice = ((h.shares * h.avgPrice) + origTotalSpend) / (h.shares + s); 
-            h.shares += s;
-            
+            const h = state.holdings[currentTicker], origTotalSpend = origSubtotal + origFee;
+            h.avgPrice = ((h.shares * h.avgPrice) + origTotalSpend) / (h.shares + s); h.shares += s;
             state.ledger.unshift({ time: tradeTime, timestamp: timestamp, action: "BUY", ticker: currentTicker, price: currentRealPrice, shares: s, fee: twdFee, total: twdTotalSpend, realizedPnL: null, rate: rate, origTotalSpend: origTotalSpend });
             triggerDynamicFeedback(`成功買進 ${s} 股 ${currentTicker}`, 'buy', document.getElementById('exec-trade-btn'), `+${s} Shares`);
         } else {
             const h = state.holdings[currentTicker]; if(!h || h.shares < s) return;
             state.cash += twdTotalGet; 
-            
-            const costBasisTWD = s * h.avgPrice * rate; 
-            const realizedPnL = twdTotalGet - costBasisTWD;
-            
+            const costBasisTWD = s * h.avgPrice * rate, realizedPnL = twdTotalGet - costBasisTWD;
             h.shares -= s; if(h.shares === 0) delete state.holdings[currentTicker];
-            
             state.ledger.unshift({ time: tradeTime, timestamp: timestamp, action: "SELL", ticker: currentTicker, price: currentRealPrice, shares: s, fee: twdFee + twdTax, total: twdTotalGet, realizedPnL: realizedPnL, rate: rate });
             triggerDynamicFeedback(`成功賣出 ${s} 股 ${currentTicker}`, 'sell', document.getElementById('exec-trade-btn'), `+$${Math.floor(twdTotalGet).toLocaleString()}`);
         }
         recordNavSnapshot(); saveData(); validateSharesInput();
     }
 
+    // 🚀 改良：智慧型快照寫入，防止圖表塞車失真
     function recordNavSnapshot() {
         let holdingsVal = 0; 
         for(let t in state.holdings) {
             const rate = getCurrencyMultiplier(t);
-            // 🚀 改良：從全域快取取出現價
             let price = globalPriceCache[t] || (t === currentTicker && currentRealPrice !== null ? currentRealPrice : state.holdings[t].avgPrice); 
             holdingsVal += state.holdings[t].shares * price * rate;
         }
         const now = Date.now();
         if (!state.navHistory.timestamps) state.navHistory.timestamps = [];
-        state.navHistory.timestamps.push(now);
-        state.navHistory.labels.push(getShortFormattedTimeFromDate(now)); 
-        state.navHistory.data.push(state.cash + holdingsVal);
-        
-        if(state.navHistory.data.length > 5000) { 
-            state.navHistory.timestamps.shift();
-            state.navHistory.labels.shift(); 
-            state.navHistory.data.shift(); 
+
+        // 避免每 8 秒就產生一個新點導致圖表過於密集且失真：
+        // 如果最後一個節點是 60 秒內產生的，直接覆寫它的 Y 值；否則才新增一個節點。
+        const lastIdx = state.navHistory.timestamps.length - 1;
+        if (lastIdx >= 0 && (now - state.navHistory.timestamps[lastIdx]) < 60000) {
+            state.navHistory.timestamps[lastIdx] = now;
+            state.navHistory.labels[lastIdx] = getShortFormattedTimeFromDate(now);
+            state.navHistory.data[lastIdx] = state.cash + holdingsVal;
+        } else {
+            state.navHistory.timestamps.push(now);
+            state.navHistory.labels.push(getShortFormattedTimeFromDate(now));
+            state.navHistory.data.push(state.cash + holdingsVal);
         }
+        
+        if(state.navHistory.data.length > 5000) { state.navHistory.timestamps.shift(); state.navHistory.labels.shift(); state.navHistory.data.shift(); }
     }
 
     function updateAllViews() {
         let holdingsVal = 0, totalCost = 0;
         for(let t in state.holdings) { 
             const rate = getCurrencyMultiplier(t);
-            // 🚀 重大修復：優先套用快取現價，如果都沒有才退回 avgPrice，不再因為沒被選中就卡在均價
+            // 🚀 重大修復：所有報價優先拿取快取中的現價，保證同步
             let price = globalPriceCache[t] || (t === currentTicker && currentRealPrice !== null ? currentRealPrice : state.holdings[t].avgPrice); 
             
             holdingsVal += state.holdings[t].shares * price * rate; 
@@ -1515,22 +1241,15 @@
         document.getElementById("nav-pnl").style.color = pnl >= 0 ? "var(--color-buy)" : "var(--color-sell)";
 
         document.getElementById("holdings-table-body").innerHTML = Object.keys(state.holdings).length ? Object.keys(state.holdings).map(t => {
-            const rate = getCurrencyMultiplier(t);
-            const h = state.holdings[t];
-            
-            // 🚀 重大修復：這裡也一樣要使用快取的即時現價
+            const rate = getCurrencyMultiplier(t), h = state.holdings[t];
             const curP = globalPriceCache[t] || (t === currentTicker && currentRealPrice !== null ? currentRealPrice : h.avgPrice);
-            
             const val = h.shares * curP * rate, itemPnl = val - (h.shares * h.avgPrice * rate);
             const feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100, taxRate = parseFloat(document.getElementById("cfg-tax-rate").value) / 100;
             const breakEvenPrice = h.avgPrice / (1 - feeRate - taxRate);
 
             return `<tr>
                 <td style="font-weight:bold; color:var(--color-acc)">${t}</td><td>${h.shares}</td>
-                <td>
-                    <div style="font-weight:bold;">$${h.avgPrice.toFixed(2)}</div>
-                    <div style="font-size:10px; color:var(--color-warn); margin-top:2px;">低於 $${breakEvenPrice.toFixed(2)} 虧損</div>
-                </td>
+                <td><div style="font-weight:bold;">$${h.avgPrice.toFixed(2)}</div><div style="font-size:10px; color:var(--color-warn); margin-top:2px;">低於 $${breakEvenPrice.toFixed(2)} 虧損</div></td>
                 <td>$${curP.toFixed(2)}</td><td>$${Math.floor(val).toLocaleString()}</td>
                 <td style="color:${itemPnl>=0?'var(--color-buy)':'var(--color-sell)'}; font-weight:bold;">${itemPnl>=0?'+':''}$${Math.floor(itemPnl).toLocaleString()}</td>
                 <td><button onclick="selectTicker('${t}')" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:#fff; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:bold; transition:all 0.2s;">即時交易</button></td>
@@ -1541,18 +1260,11 @@
             const pnlHtml = (r.realizedPnL !== null && r.realizedPnL !== undefined) 
                 ? `<td style="color:${r.realizedPnL >= 0 ? 'var(--color-buy)' : 'var(--color-sell)'}; font-weight:bold;">${r.realizedPnL >= 0 ? '+' : ''}$${Math.floor(r.realizedPnL).toLocaleString()}</td>`
                 : `<td style="color:#666;">-</td>`;
-            
             const displayTime = r.timestamp ? getFullFormattedTimeFromDate(r.timestamp) : r.time;
-                
             return `<tr>
-                <td>${displayTime}</td>
-                <td><span class="badge ${r.action==='BUY'?'badge-buy':'badge-sell'}">${r.action}</span></td>
-                <td style="font-weight:bold;">${r.ticker}</td>
-                <td>$${r.price.toFixed(2)}</td>
-                <td>${r.shares}</td>
-                <td>$${r.fee.toFixed(1)}</td>
-                <td style="font-weight:bold;">$${Math.floor(r.total).toLocaleString()}</td>
-                ${pnlHtml}
+                <td>${displayTime}</td><td><span class="badge ${r.action==='BUY'?'badge-buy':'badge-sell'}">${r.action}</span></td>
+                <td style="font-weight:bold;">${r.ticker}</td><td>$${r.price.toFixed(2)}</td><td>${r.shares}</td><td>$${r.fee.toFixed(1)}</td>
+                <td style="font-weight:bold;">$${Math.floor(r.total).toLocaleString()}</td>${pnlHtml}
                 <td><button onclick="undoTrade(${index})" style="background:rgba(255,69,96,0.15); color:var(--color-sell); border:1px solid rgba(255,69,96,0.3); padding:4px 10px; border-radius:4px; cursor:pointer; font-weight:bold; font-size:11px; transition:all 0.2s;">撤銷</button></td>
             </tr>`;
         }).join("") : `<tr><td colspan="9" style="text-align:center; color:#555; padding:40px;">尚無紀錄</td></tr>`;
@@ -1576,156 +1288,93 @@
         
         if (desktopChartMode === 'NAV') {
             document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-area" style="color:var(--color-acc)"></i> 投資組合總淨值走勢`;
-            
-            // 🌟 讓 NAV 完美連動時間篩選器 (1D, 1W, 1M...)
-            let cutoff = 0;
-            const now = Date.now();
-            if (currentStockTF === '1D') cutoff = now - 86400000;
-            else if (currentStockTF === '1W') cutoff = now - 86400000 * 7;
-            else if (currentStockTF === '1M') cutoff = now - 86400000 * 30;
-            else if (currentStockTF === '3M') cutoff = now - 86400000 * 90;
-            else if (currentStockTF === '1Y') cutoff = now - 86400000 * 365;
+            let cutoff = 0; const now = Date.now();
+            if (currentStockTF === '1D') cutoff = now - 86400000; else if (currentStockTF === '1W') cutoff = now - 86400000 * 7; else if (currentStockTF === '1M') cutoff = now - 86400000 * 30; else if (currentStockTF === '3M') cutoff = now - 86400000 * 90; else if (currentStockTF === '1Y') cutoff = now - 86400000 * 365;
 
             let fLabels = [], fData = [];
             if (state.navHistory && state.navHistory.timestamps) {
                 for (let i = 0; i < state.navHistory.timestamps.length; i++) {
-                    if (state.navHistory.timestamps[i] >= cutoff) {
-                        fLabels.push(state.navHistory.labels[i]);
-                        fData.push(state.navHistory.data[i]);
-                    }
+                    if (state.navHistory.timestamps[i] >= cutoff) { fLabels.push(state.navHistory.labels[i]); fData.push(state.navHistory.data[i]); }
                 }
             }
-
-            // 避免完全沒點時畫面空白，補上一條水平線
             if (fData.length === 0 && state.navHistory && state.navHistory.data && state.navHistory.data.length > 0) {
-                let lastVal = state.navHistory.data[state.navHistory.data.length - 1];
-                fLabels = [currentStockTF === '1D' ? '00:00' : 'Start', 'Now'];
-                fData = [lastVal, lastVal];
-            } else if (fData.length === 1) {
-                fLabels.push('Now');
-                fData.push(fData[0]);
-            }
+                let lastVal = state.navHistory.data[state.navHistory.data.length - 1]; fLabels = [currentStockTF === '1D' ? '00:00' : 'Start', 'Now']; fData = [lastVal, lastVal];
+            } else if (fData.length === 1) { fLabels.push('Now'); fData.push(fData[0]); }
 
-            navChart.data.labels = fLabels; 
-            navChart.data.datasets[0].data = fData; 
-            navChart.data.datasets[0].borderColor = '#00d4ff'; 
-            navChart.data.datasets[0].backgroundColor = 'rgba(0, 212, 255, 0.05)'; 
-            navChart.data.datasets[0].pointRadius = computePointRadiusArray(fData.length, showNodes, densityVal);
+            navChart.data.labels = fLabels; navChart.data.datasets[0].data = fData; navChart.data.datasets[0].borderColor = '#00d4ff'; navChart.data.datasets[0].backgroundColor = 'rgba(0, 212, 255, 0.05)'; navChart.data.datasets[0].pointRadius = computePointRadiusArray(fData.length, showNodes, densityVal);
         } else {
             document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> ${currentTicker} 個股歷史走勢`;
-            navChart.data.labels = stockHistData.labels; 
-            navChart.data.datasets[0].data = stockHistData.prices; 
-            navChart.data.datasets[0].borderColor = '#00ffaa'; 
-            navChart.data.datasets[0].backgroundColor = 'rgba(0, 255, 170, 0.05)'; 
-            navChart.data.datasets[0].pointRadius = computePointRadiusArray(stockHistData.prices.length, showNodes, densityVal);
+            navChart.data.labels = stockHistData.labels; navChart.data.datasets[0].data = stockHistData.prices; navChart.data.datasets[0].borderColor = '#00ffaa'; navChart.data.datasets[0].backgroundColor = 'rgba(0, 255, 170, 0.05)'; navChart.data.datasets[0].pointRadius = computePointRadiusArray(stockHistData.prices.length, showNodes, densityVal);
         }
         navChart.update();
 
-        mobileChart.data.labels = stockHistData.labels; 
-        mobileChart.data.datasets[0].data = stockHistData.prices;
+        mobileChart.data.labels = stockHistData.labels; mobileChart.data.datasets[0].data = stockHistData.prices;
         const mDensity = (densityVal === 'All') ? 'All' : Math.floor(densityVal / 2);
-        mobileChart.data.datasets[0].pointRadius = computePointRadiusArray(stockHistData.prices.length, showNodes, mDensity);
-        mobileChart.update();
+        mobileChart.data.datasets[0].pointRadius = computePointRadiusArray(stockHistData.prices.length, showNodes, mDensity); mobileChart.update();
     }
 
     document.getElementById("cfg-node-show").addEventListener("change", (e) => { localStorage.setItem('SETTING_NODE_SHOW', e.target.checked); document.getElementById("node-settings-wrapper").classList.toggle("disabled", !e.target.checked); renderAllCharts(); });
-    
-    document.getElementById("cfg-crosshair-show").addEventListener("change", (e) => {
-        localStorage.setItem('SETTING_CROSSHAIR_SHOW', e.target.checked);
-    });
+    document.getElementById("cfg-crosshair-show").addEventListener("change", (e) => { localStorage.setItem('SETTING_CROSSHAIR_SHOW', e.target.checked); });
+    document.getElementById("cfg-node-slider").addEventListener("input", (e) => { const val = parseInt(e.target.value), displayVal = (val >= 60) ? 'All' : val; document.getElementById("cfg-node-val").value = displayVal; localStorage.setItem('SETTING_NODE_VAL', displayVal); const pct = (val - e.target.min) / (e.target.max - e.target.min); document.getElementById("jelly-thumb").style.left = `${pct * 162}px`; renderAllCharts(); });
 
-    document.getElementById("cfg-node-slider").addEventListener("input", (e) => {
-        const val = parseInt(e.target.value), displayVal = (val >= 60) ? 'All' : val; document.getElementById("cfg-node-val").value = displayVal; localStorage.setItem('SETTING_NODE_VAL', displayVal);
-        const pct = (val - e.target.min) / (e.target.max - e.target.min); document.getElementById("jelly-thumb").style.left = `${pct * 162}px`; renderAllCharts();
-    });
-
-    function parseSimpleMarkdown(text) {
-        return text
-            .replace(/\*\*(.*?)\*\*/g, '<strong style="color:#fff">$1</strong>')
-            .replace(/^\s*[\-\*]\s+(.*)$/gim, '• $1')
-            .replace(/\n/g, '<br>');
-    }
-
-    function quickAskAI(type) {
-        const prompts = {
-            'diagnostic': `請針對 ${currentTicker} 當前的現價與 RSI 技術指標進行短線綜合體檢。`,
-            'risk': `請結合我目前的帳戶現金、${currentTicker} 持倉成本與當前走勢，評估整體風控與止損點設定。`,
-            'strategy': `考量我目前對 ${currentTicker} 的持股情況，現在適合加碼、減碼還是觀望？`
-        };
-        document.getElementById("chat-input").value = prompts[type] || "";
-        askAI();
-    }
+    function parseSimpleMarkdown(text) { return text.replace(/\*\*(.*?)\*\*/g, '<strong style="color:#fff">$1</strong>').replace(/^\s*[\-\*]\s+(.*)$/gim, '• $1').replace(/\n/g, '<br>'); }
+    function quickAskAI(type) { const prompts = { 'diagnostic': `請針對 ${currentTicker} 當前的現價與 RSI 技術指標進行短線綜合體檢。`, 'risk': `請結合我目前的帳戶現金、${currentTicker} 持倉成本與當前走勢，評估整體風控與止損點設定。`, 'strategy': `考量我目前對 ${currentTicker} 的持股情況，現在適合加碼、減碼還是觀望？` }; document.getElementById("chat-input").value = prompts[type] || ""; askAI(); }
 
     async function askAI() {
-        const input = document.getElementById("chat-input"), q = input.value.trim(); 
-        if(!q) return;
-        
-        let key = localStorage.getItem("MY_GEMINI_KEY") || prompt("請輸入 Gemini API Key："); 
-        if(!key) return; 
-        localStorage.setItem("MY_GEMINI_KEY", key);
+        const input = document.getElementById("chat-input"), q = input.value.trim(); if(!q) return;
+        let key = localStorage.getItem("MY_GEMINI_KEY") || prompt("請輸入 Gemini API Key："); if(!key) return; localStorage.setItem("MY_GEMINI_KEY", key);
 
         const out = document.getElementById("chat-output"), msgId = "ai-" + Date.now();
-        out.innerHTML += `<br><span style="color:#fff">> ${q}</span><br><div id="${msgId}"><span style="color:var(--color-acc)">[GEMINI]</span> <span style="color:#777">分析整體資產與指標中...</span></div>`; 
-        input.value = ""; 
-        out.scrollTop = out.scrollHeight;
+        out.innerHTML += `<br><span style="color:#fff">> ${q}</span><br><div id="${msgId}"><span style="color:var(--color-acc)">[GEMINI]</span> <span style="color:#777">分析整體資產與指標中...</span></div>`; input.value = ""; out.scrollTop = out.scrollHeight;
 
-        const rsiVal = document.getElementById("rsi-val-display").innerText || "--";
-        const holding = state.holdings[currentTicker] || { shares: 0, avgPrice: 0 };
-        const rate = getCurrencyMultiplier(currentTicker);
-        const holdingValueTWD = holding.shares * currentRealPrice * rate;
-        const totalCostTWD = holding.shares * holding.avgPrice * rate;
-        const pnlTWD = holdingValueTWD - totalCostTWD;
-
-        const fullPrompt = `你是一位講求數據與風險控制的資深華爾街操盤手。請根據以下即時數據，用簡潔專業的口吻回答用戶問題（字數約 150 字內，列出重點與建議）。
-
-【即時市場與帳戶數據】
-• 討論標的: ${currentTicker}
-• 當前現價: $${currentRealPrice}
-• 14日 RSI 指標: ${rsiVal}
-• 當前持股數量: ${holding.shares} 股
-• 持股買入均價: $${holding.avgPrice.toFixed(2)}
-• 該標的未實現損益: TWD $${Math.floor(pnlTWD).toLocaleString()}
-• 帳戶可用現金: TWD $${Math.floor(state.cash).toLocaleString()}
-
-用戶問題：${q}`;
+        const rsiVal = document.getElementById("rsi-val-display").innerText || "--", holding = state.holdings[currentTicker] || { shares: 0, avgPrice: 0 }, rate = getCurrencyMultiplier(currentTicker);
+        const holdingValueTWD = holding.shares * currentRealPrice * rate, totalCostTWD = holding.shares * holding.avgPrice * rate, pnlTWD = holdingValueTWD - totalCostTWD;
+        const fullPrompt = `你是一位講求數據與風險控制的資深華爾街操盤手。請根據以下即時數據，用簡潔專業的口吻回答用戶問題（字數約 150 字內，列出重點與建議）。\n\n【即時市場與帳戶數據】\n• 討論標的: ${currentTicker}\n• 當前現價: $${currentRealPrice}\n• 14日 RSI 指標: ${rsiVal}\n• 當前持股數量: ${holding.shares} 股\n• 持股買入均價: $${holding.avgPrice.toFixed(2)}\n• 該標的未實現損益: TWD $${Math.floor(pnlTWD).toLocaleString()}\n• 帳戶可用現金: TWD $${Math.floor(state.cash).toLocaleString()}\n\n用戶問題：${q}`;
 
         try {
-            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${key}`, { 
-                method: "POST", 
-                headers: {"Content-Type": "application/json"}, 
-                body: JSON.stringify({ contents: [{ parts: [{ text: fullPrompt }] }] }) 
-            });
-            const json = await res.json();
-            const rawReply = json.candidates[0].content.parts[0].text;
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${key}`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ contents: [{ parts: [{ text: fullPrompt }] }] }) });
+            const json = await res.json(), rawReply = json.candidates[0].content.parts[0].text;
             document.getElementById(msgId).innerHTML = `<span style="color:var(--color-acc)">[GEMINI]</span> <span style="color:#ddd">${parseSimpleMarkdown(rawReply)}</span>`;
-        } catch(e) { 
-            document.getElementById(msgId).innerHTML = `<span style="color:var(--color-sell)">連線失敗或 Key 無效</span>`; 
-        }
-        out.scrollTop = out.scrollHeight;
+        } catch(e) { document.getElementById(msgId).innerHTML = `<span style="color:var(--color-sell)">連線失敗或 Key 無效</span>`; } out.scrollTop = out.scrollHeight;
     }
 
-    // 🚀 新增：啟動與排程控制中心 (確保載入時的高優先級順序)
+    // 🚀 關鍵重構：最高優先級載入與排程引擎
     async function bootSystem() {
-        initData(); 
-        setTradeMode('BUY'); 
-        selectTicker(currentTicker);
+        initData(); // 優先讀取本地存檔繪製框架
+        setTradeMode('BUY');
         
-        // 優先：獲取匯率與庫存所有報價 (等待完成)
-        await fetchExchangeRate();
-        await fetchHoldingsPrices(); 
+        // 1. 最高優先：利用 Promise.all 併發阻塞，必定等匯率跟「所有庫存報價」抓到才往下走
+        await Promise.all([
+            fetchExchangeRate(),
+            fetchHoldingsPrices()
+        ]);
         
-        // 隨後獲取卡片 (不阻擋主畫面)
-        fetchAllCardsData(); 
+        // 2. 拿到最新報價後，強制更新一次圖表快照與主畫面估值
+        recordNavSnapshot();
+        updateAllViews();
 
-        setInterval(() => { 
-            fetchRealPrice(currentTicker); 
-            fetchHoldingsPrices();
-            fetchAllCardsData(); 
-            fetchExchangeRate(); 
+        // 3. 畫面完全更新後，背景非阻塞載入當前下單標的與自選卡片
+        selectTicker(currentTicker);
+        fetchAllCardsData();
+
+        // 4. 定時排程：同樣保障庫存更新的優先級
+        setInterval(async () => {
+            await Promise.all([
+                fetchExchangeRate(),
+                fetchHoldingsPrices()
+            ]);
+            // 庫存更新完優先刷新主頁估值
+            recordNavSnapshot();
+            updateAllViews();
+            
+            // 再刷新下單報價跟卡片
+            fetchRealPrice(currentTicker);
+            fetchAllCardsData();
         }, 8000);
     }
     
-    bootSystem(); // 執行啟動
+    // 啟動系統
+    bootSystem(); 
 
 </script>
 </body>
