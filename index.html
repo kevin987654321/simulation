@@ -731,22 +731,28 @@
     const SIDEBAR_WIDTH = 260, SWIPE_THRESHOLD = SIDEBAR_WIDTH * 0.25;
 
     function toggleSidebar() { sidebarEl.classList.toggle('open'); overlayEl.classList.toggle('active'); sidebarEl.style.transform = ''; }
+    
+    // 🚀 修正 3：在編輯模式時，絕對禁止觸發右滑選單事件
     document.addEventListener('touchstart', (e) => {
         if (window.innerWidth > 768) return;
+        if (isCardEditMode) { sIsDragging = false; return; } // <--- 防止拖曳卡片時不小心滑出選單
         if (e.target.closest('canvas, .tf-btn, .jelly-slider-input, .jelly-slider-container, .table-responsive')) { sIsDragging = false; return; }
+        
         sStartX = e.touches[0].clientX; sStartY = e.touches[0].clientY; sIsDragging = true; sIsDetermined = false;
         if (!sidebarEl.classList.contains('open') && sStartX > window.innerWidth * 0.66) sIsDragging = false;
     }, {passive: true});
+    
     document.addEventListener('touchmove', (e) => {
-        if (!sIsDragging || window.innerWidth > 768) return;
+        if (!sIsDragging || window.innerWidth > 768 || isCardEditMode) return;
         sCurrentX = e.touches[0].clientX; const diffX = sCurrentX - sStartX, diffY = e.touches[0].clientY - sStartY;
         if (!sIsDetermined) { if (Math.abs(diffX) > Math.abs(diffY)) sIsDetermined = true; else { sIsDragging = false; return; } }
         const isOpen = sidebarEl.classList.contains('open');
         if (!isOpen && diffX > 0) { if (e.cancelable) e.preventDefault(); sidebarEl.classList.add('dragging'); sidebarEl.style.transform = `translateX(${Math.min(diffX - SIDEBAR_WIDTH, 0)}px)`; }
         else if (isOpen && diffX < 0) { if (e.cancelable) e.preventDefault(); sidebarEl.classList.add('dragging'); sidebarEl.style.transform = `translateX(${Math.max(diffX, -SIDEBAR_WIDTH)}px)`; }
     }, {passive: false});
+    
     function snapSidebar() {
-        if (!sIsDragging || window.innerWidth > 768) return;
+        if (!sIsDragging || window.innerWidth > 768 || isCardEditMode) return;
         sIsDragging = false; sidebarEl.classList.remove('dragging');
         const diffX = sCurrentX - sStartX, absDiff = Math.abs(diffX), isOpen = sidebarEl.classList.contains('open');
         if (sCurrentX !== 0) {
@@ -854,7 +860,9 @@
         if (saved) { 
             try { 
                 state = JSON.parse(saved); 
-                state.cardTickers = state.cardTickers || ["NVDA", "2330.TW"]; 
+                // 🚀 防禦機制：讀取時強制過濾重複的資產卡片代號
+                state.cardTickers = [...new Set(state.cardTickers || ["NVDA", "2330.TW"])]; 
+                
                 state.ledger.forEach(r => {
                     if (!r.timestamp) {
                         let d = new Date(), parts = r.time ? r.time.split(':') : [];
@@ -969,7 +977,6 @@
         rebuildNavHistoryFromLedger(); saveData(); triggerDynamicFeedback("交易已成功撤銷", "buy", null, "UNDONE");
     }
 
-    // 🚀 全新設計的卡片拖曳與排序引擎
     let cIsDragging = false, cDragCardClone = null, cRealCard = null;
     let cStartX = 0, cStartY = 0, cPointerStartX = 0, cPointerStartY = 0;
     let dragTimeout = null;
@@ -979,7 +986,6 @@
         cards.forEach(card => {
             card.removeEventListener('touchstart', handlePointerDown);
             card.removeEventListener('mousedown', handlePointerDown);
-            // 改用 passive true 允許原生滾動
             card.addEventListener('touchstart', handlePointerDown, { passive: true });
             card.addEventListener('mousedown', handlePointerDown);
         });
@@ -990,21 +996,19 @@
         if (e.target.closest('.delete-btn')) return; 
 
         const isTouch = e.type === 'touchstart';
-        if (!isTouch && e.button !== 0) return; // 確保只響應滑鼠左鍵
+        if (!isTouch && e.button !== 0) return; 
 
         cRealCard = e.currentTarget;
         cPointerStartX = isTouch ? e.touches[0].clientX : e.clientX;
         cPointerStartY = isTouch ? e.touches[0].clientY : e.clientY;
 
         if (isTouch) {
-            // 手機版：等待 300ms，確認是長按而不是上下滑動
             dragTimeout = setTimeout(() => {
                 startDrag(cRealCard, cPointerStartX, cPointerStartY);
             }, 300);
             document.addEventListener('touchmove', checkCancelDrag, { passive: true });
             document.addEventListener('touchend', cancelDragStart);
         } else {
-            // 電腦版：按住並滑動立即開始拖曳
             document.addEventListener('mousemove', checkStartDragDesktop);
             document.addEventListener('mouseup', cancelDragStart);
         }
@@ -1013,7 +1017,6 @@
     function checkCancelDrag(e) {
         const cx = e.touches ? e.touches[0].clientX : e.clientX;
         const cy = e.touches ? e.touches[0].clientY : e.clientY;
-        // 如果還沒觸發長按，手指就移動超過 10px，代表用戶正在滑動網頁，取消拖曳判定
         if (Math.abs(cx - cPointerStartX) > 10 || Math.abs(cy - cPointerStartY) > 10) {
             cancelDragStart();
         }
@@ -1022,7 +1025,6 @@
     function checkStartDragDesktop(e) {
         const cx = e.clientX;
         const cy = e.clientY;
-        // 電腦版稍微移動 3px 立即開始拖曳
         if (Math.abs(cx - cPointerStartX) > 3 || Math.abs(cy - cPointerStartY) > 3) {
             cancelDragStart(); 
             startDrag(cRealCard, cx, cy);
@@ -1041,13 +1043,12 @@
         cIsDragging = true;
         cancelDragStart(); 
 
-        if (navigator.vibrate) navigator.vibrate(50); // 震動回饋
+        if (navigator.vibrate) navigator.vibrate(50); 
 
         const rect = card.getBoundingClientRect();
         cStartX = rect.left;
         cStartY = rect.top;
 
-        // 建立浮動的複製卡片 (跟隨手指/鼠標)
         cDragCardClone = card.cloneNode(true);
         cDragCardClone.style.position = 'fixed';
         cDragCardClone.style.left = rect.left + 'px';
@@ -1063,11 +1064,9 @@
 
         document.body.appendChild(cDragCardClone);
 
-        // 隱藏原本的卡片 (變成一個隱形的坑位佔位符)
         card.style.opacity = '0';
         card.classList.add('is-dragging-placeholder');
 
-        // 開始監聽全局位移，並禁止原生滾動
         document.addEventListener('touchmove', handleDragMove, { passive: false });
         document.addEventListener('mousemove', handleDragMove);
         document.addEventListener('touchend', handleDragEnd);
@@ -1076,7 +1075,7 @@
 
     function handleDragMove(e) {
         if (!cIsDragging) return;
-        e.preventDefault(); // 拖曳中禁止網頁上下滑動
+        e.preventDefault(); 
 
         const px = e.touches ? e.touches[0].clientX : e.clientX;
         const py = e.touches ? e.touches[0].clientY : e.clientY;
@@ -1084,23 +1083,19 @@
         const deltaX = px - cPointerStartX;
         const deltaY = py - cPointerStartY;
 
-        // 更新浮動卡片的位置
         cDragCardClone.style.left = (cStartX + deltaX) + 'px';
         cDragCardClone.style.top = (cStartY + deltaY) + 'px';
 
-        // 🚀 計算當前「浮動卡片的中心點」
         const cloneRect = cDragCardClone.getBoundingClientRect();
         const cloneCenterX = cloneRect.left + cloneRect.width / 2;
         const cloneCenterY = cloneRect.top + cloneRect.height / 2;
 
-        // 尋找目標卡片 (基於中心點碰撞判定)
         const grid = document.getElementById('cards-grid');
         const cards = Array.from(grid.querySelectorAll('.draggable-card:not(.is-dragging-placeholder)'));
         let targetCard = null;
 
         for (let t of cards) {
             const tRect = t.getBoundingClientRect();
-            // 如果浮動卡片的中心點，進入了目標卡片的矩形範圍內，即觸發替換
             if (cloneCenterX >= tRect.left && cloneCenterX <= tRect.right &&
                 cloneCenterY >= tRect.top && cloneCenterY <= tRect.bottom) {
                 targetCard = t;
@@ -1113,7 +1108,6 @@
             const draggedIdx = allCards.indexOf(cRealCard);
             const targetIdx = allCards.indexOf(targetCard);
 
-            // 根絕閃爍與殘影問題：直接改變真實 DOM 的順序，不使用 CSS 位移來模擬
             if (draggedIdx < targetIdx) {
                 grid.insertBefore(cRealCard, targetCard.nextSibling);
             } else {
@@ -1131,7 +1125,6 @@
         document.removeEventListener('touchend', handleDragEnd);
         document.removeEventListener('mouseup', handleDragEnd);
 
-        // 將浮動卡片平滑吸附回真實卡片的最終位置
         const finalRect = cRealCard.getBoundingClientRect();
         cDragCardClone.style.transition = 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)';
         cDragCardClone.style.left = finalRect.left + 'px';
@@ -1139,26 +1132,33 @@
         cDragCardClone.style.transform = 'scale(1)';
 
         setTimeout(() => {
-            if (cDragCardClone) cDragCardClone.remove(); // 移除浮動卡片
+            if (cDragCardClone) cDragCardClone.remove(); 
             if (cRealCard) {
-                cRealCard.style.opacity = '1'; // 顯示真實卡片
+                cRealCard.style.opacity = '1'; 
                 cRealCard.classList.remove('is-dragging-placeholder');
             }
 
-            // 儲存最新的排序結果
             const newOrder = [];
             document.querySelectorAll('.draggable-card').forEach(el => {
                 const ticker = el.getAttribute('data-ticker');
                 if (ticker) newOrder.push(ticker);
             });
-            state.cardTickers = newOrder;
+            
+            // 🚀 修正 2：強制用 Set 進行陣列去重，確保絕對不可能寫入重複的節點
+            state.cardTickers = [...new Set(newOrder)];
             saveData();
         }, 300);
     }
-    // ---------------------------------------------------------
 
     function toggleCardEditMode() { isCardEditMode = !isCardEditMode; const btn = document.getElementById('edit-cards-btn'); btn.innerText = isCardEditMode ? '完成' : '編輯'; btn.style.background = isCardEditMode ? 'var(--color-sell)' : 'transparent'; btn.style.borderColor = isCardEditMode ? 'var(--color-sell)' : 'rgba(255,255,255,0.2)'; renderCards(); }
-    function removeCard(ticker) { state.cardTickers = state.cardTickers.filter(t => t !== ticker); saveData(); }
+    
+    function removeCard(ticker) { 
+        state.cardTickers = state.cardTickers.filter(t => t !== ticker); 
+        // 為了確保任何意外產生的重複節點也能一起被清掉並過濾，再加一層 Set
+        state.cardTickers = [...new Set(state.cardTickers)];
+        saveData(); 
+    }
+    
     function addCardPrompt() {
         const grid = document.getElementById('cards-grid'), box = document.createElement('div');
         box.style = "border: 2px dashed var(--color-acc); border-radius: 12px; background: rgba(0,212,255,0.05); display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 220px; padding: 20px;";
@@ -1182,7 +1182,11 @@
         });
         
         await Promise.all(promises);
-        if (document.getElementById('view-cards').classList.contains('active')) renderCards();
+        
+        // 🚀 修正 1：如果用戶正在編輯模式（正在新增打字或正在拖曳），絕對禁止背景自動刷新重新繪製卡片
+        if (document.getElementById('view-cards').classList.contains('active') && !isCardEditMode) {
+            renderCards();
+        }
     }
 
     function renderCards() {
@@ -1195,7 +1199,6 @@
             const pnlColor = pnl >= 0 ? 'var(--color-buy)' : 'var(--color-sell)';
             const deleteBtn = isCardEditMode ? `<div class="delete-btn" onclick="removeCard('${t}')" style="position:absolute; top:-8px; right:-8px; background:var(--color-sell); color:#fff; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:10; box-shadow:0 0 10px rgba(0,0,0,0.5);"><i class="fa-solid fa-minus"></i></div>` : '';
 
-            // 移除原本強制加上去的 touch-action，讓游標控制交給新寫的 Drag 事件
             html += `
             <div class="glass-panel draggable-card" data-ticker="${t}" style="padding: 18px; display:flex; flex-direction:column; gap:12px; cursor:${isCardEditMode ? 'grab' : 'default'};">
                 ${deleteBtn}
@@ -1223,7 +1226,6 @@
     function addToRecentlySelected(t) { state.recentTickers = [t, ...state.recentTickers.filter(item => item !== t)].slice(0, 5); saveData(); renderRecentTickers(); }
     function renderRecentTickers() { document.getElementById("recent-tickers-list").innerHTML = state.recentTickers.map(t => `<div class="dropdown-item" onclick="selectTicker('${t}')"><span style="font-weight:bold; color:var(--color-buy)">${t}</span><span style="color:#888; font-size:11px;">最近選取</span></div>`).join(""); }
 
-    // 原有下單櫃檯搜尋
     const tickerInput = document.getElementById("trade-ticker");
     tickerInput.addEventListener("input", (e) => {
         const query = e.target.value.trim().toUpperCase(); document.getElementById("ticker-dropdown").classList.add("show");
