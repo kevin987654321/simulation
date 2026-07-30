@@ -732,10 +732,9 @@
 
     function toggleSidebar() { sidebarEl.classList.toggle('open'); overlayEl.classList.toggle('active'); sidebarEl.style.transform = ''; }
     
-    // 🚀 修正 3：在編輯模式時，絕對禁止觸發右滑選單事件
     document.addEventListener('touchstart', (e) => {
         if (window.innerWidth > 768) return;
-        if (isCardEditMode) { sIsDragging = false; return; } // <--- 防止拖曳卡片時不小心滑出選單
+        if (isCardEditMode) { sIsDragging = false; return; }
         if (e.target.closest('canvas, .tf-btn, .jelly-slider-input, .jelly-slider-container, .table-responsive')) { sIsDragging = false; return; }
         
         sStartX = e.touches[0].clientX; sStartY = e.touches[0].clientY; sIsDragging = true; sIsDetermined = false;
@@ -809,6 +808,23 @@
     let currentRealPrice = null, isPriceLoading = true, currentStockTF = '1D', searchDebounceTimer = null, desktopChartMode = 'NAV', tradeMode = 'BUY';
     let stockHistData = { labels: [], prices: [] }, cardsDataCache = {}, isCardEditMode = false;
 
+    // 🚀 全新加入：取代舊的 recordNavSnapshot，僅更新最後一筆即時數值，不強塞新節點
+    function updateLiveNavNode() {
+        if (!state.navHistory || !state.navHistory.timestamps || state.navHistory.timestamps.length === 0) return;
+        let holdingsVal = 0;
+        for(let t in state.holdings) {
+            const rate = getCurrencyMultiplier(t);
+            let price = globalPriceCache[t] || (t === currentTicker && currentRealPrice !== null ? currentRealPrice : state.holdings[t].avgPrice);
+            holdingsVal += state.holdings[t].shares * price * rate;
+        }
+        const now = Date.now();
+        const lastIdx = state.navHistory.timestamps.length - 1;
+        
+        state.navHistory.timestamps[lastIdx] = now;
+        state.navHistory.labels[lastIdx] = getShortFormattedTimeFromDate(now);
+        state.navHistory.data[lastIdx] = state.cash + holdingsVal;
+    }
+
     function rebuildNavHistoryFromLedger() {
         let tempCash = 1000000, tempHoldings = {}, newTimestamps = [], newLabels = [], newData = [];
         let reversedLedger = [...state.ledger].sort((a,b) => a.timestamp - b.timestamp);
@@ -860,7 +876,6 @@
         if (saved) { 
             try { 
                 state = JSON.parse(saved); 
-                // 🚀 防禦機制：讀取時強制過濾重複的資產卡片代號
                 state.cardTickers = [...new Set(state.cardTickers || ["NVDA", "2330.TW"])]; 
                 
                 state.ledger.forEach(r => {
@@ -872,7 +887,11 @@
                 state.ledger.sort((a, b) => b.timestamp - a.timestamp);
                 if (!state.navHistory || !state.navHistory.timestamps || state.navHistory.timestamps.length === 0) { rebuildNavHistoryFromLedger(); }
             } catch(e) {} 
-        } else { recordNavSnapshot(); saveData(); }
+        } else { 
+            // 🚀 改用精準重組歷史的引擎，不產生時間垃圾節點
+            rebuildNavHistoryFromLedger(); 
+            saveData(); 
+        }
         
         const savedShow = localStorage.getItem('SETTING_NODE_SHOW'); if (savedShow !== null) document.getElementById("cfg-node-show").checked = savedShow === 'true'; else document.getElementById("cfg-node-show").checked = true;
         const savedCrosshair = localStorage.getItem('SETTING_CROSSHAIR_SHOW'); if (savedCrosshair !== null) document.getElementById("cfg-crosshair-show").checked = savedCrosshair === 'true'; else document.getElementById("cfg-crosshair-show").checked = true;
@@ -1144,7 +1163,6 @@
                 if (ticker) newOrder.push(ticker);
             });
             
-            // 🚀 修正 2：強制用 Set 進行陣列去重，確保絕對不可能寫入重複的節點
             state.cardTickers = [...new Set(newOrder)];
             saveData();
         }, 300);
@@ -1154,7 +1172,6 @@
     
     function removeCard(ticker) { 
         state.cardTickers = state.cardTickers.filter(t => t !== ticker); 
-        // 為了確保任何意外產生的重複節點也能一起被清掉並過濾，再加一層 Set
         state.cardTickers = [...new Set(state.cardTickers)];
         saveData(); 
     }
@@ -1183,7 +1200,6 @@
         
         await Promise.all(promises);
         
-        // 🚀 修正 1：如果用戶正在編輯模式（正在新增打字或正在拖曳），絕對禁止背景自動刷新重新繪製卡片
         if (document.getElementById('view-cards').classList.contains('active') && !isCardEditMode) {
             renderCards();
         }
@@ -1435,31 +1451,11 @@
             state.ledger.unshift({ time: tradeTime, timestamp: timestamp, action: "SELL", ticker: currentTicker, price: currentRealPrice, shares: s, fee: twdFee + twdTax, total: twdTotalGet, realizedPnL: realizedPnL, rate: rate });
             triggerDynamicFeedback(`成功賣出 ${s} 股 ${currentTicker}`, 'sell', document.getElementById('exec-trade-btn'), `+$${Math.floor(twdTotalGet).toLocaleString()}`);
         }
-        recordNavSnapshot(); saveData(); validateSharesInput();
-    }
-
-    function recordNavSnapshot() {
-        let holdingsVal = 0; 
-        for(let t in state.holdings) {
-            const rate = getCurrencyMultiplier(t);
-            let price = globalPriceCache[t] || (t === currentTicker && currentRealPrice !== null ? currentRealPrice : state.holdings[t].avgPrice); 
-            holdingsVal += state.holdings[t].shares * price * rate;
-        }
-        const now = Date.now();
-        if (!state.navHistory.timestamps) state.navHistory.timestamps = [];
-
-        const lastIdx = state.navHistory.timestamps.length - 1;
-        if (lastIdx >= 0 && (now - state.navHistory.timestamps[lastIdx]) < 60000) {
-            state.navHistory.timestamps[lastIdx] = now;
-            state.navHistory.labels[lastIdx] = getShortFormattedTimeFromDate(now);
-            state.navHistory.data[lastIdx] = state.cash + holdingsVal;
-        } else {
-            state.navHistory.timestamps.push(now);
-            state.navHistory.labels.push(getShortFormattedTimeFromDate(now));
-            state.navHistory.data.push(state.cash + holdingsVal);
-        }
         
-        if(state.navHistory.data.length > 5000) { state.navHistory.timestamps.shift(); state.navHistory.labels.shift(); state.navHistory.data.shift(); }
+        // 🚀 將原本無意義的快照移除，改用嚴格的歷史重建引擎，保證所有新產生的節點都與這筆買賣對應
+        rebuildNavHistoryFromLedger(); 
+        saveData(); 
+        validateSharesInput();
     }
 
     function updateAllViews() {
@@ -1662,7 +1658,8 @@
             fetchHoldingsPrices()
         ]);
         
-        recordNavSnapshot();
+        // 🚀 在此不再強行塞入新節點，只更新現在(最後一個節點)的實時價值
+        updateLiveNavNode();
         updateAllViews();
 
         selectTicker(currentTicker);
@@ -1673,7 +1670,8 @@
                 fetchExchangeRate(),
                 fetchHoldingsPrices()
             ]);
-            recordNavSnapshot();
+            // 🚀 定時抓報價時也一樣，只動態調整最後一筆的數字
+            updateLiveNavNode();
             updateAllViews();
             
             fetchRealPrice(currentTicker);
