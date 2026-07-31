@@ -455,6 +455,11 @@
                     </label>
                 </div>
             </div>
+            <!-- 🚀 新增：下單櫃檯圖表切換設定 -->
+            <div class="glass-panel setting-item">
+                <div><div style="font-weight:bold;">下單櫃檯圖表類型</div><div style="font-size:11px; color:#777; margin-top:2px;">開啟以顯示 K線 (Candlestick)，關閉為一般走勢線</div></div>
+                <label class="switch"><input type="checkbox" id="cfg-chart-type" checked><span class="slider"></span></label>
+            </div>
             <div class="glass-panel setting-item">
                 <div><div style="font-weight:bold;">手續費費率設定 (%)</div><div style="font-size:11px; color:#777; margin-top:2px;">預設折扣 0.1425%</div></div>
                 <input type="text" id="cfg-fee-rate" class="mobile-num" data-decimal="true" value="0.1425" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
@@ -760,7 +765,10 @@
         }
         sidebarEl.style.transform = ''; sStartX = sStartY = sCurrentX = 0;
     }
+    
     document.addEventListener('touchend', snapSidebar);
+    // 🚀 修正：當叫出控制中心或系統凍結畫面時，瀏覽器會觸發 touchcancel。加入監聽可防止選單卡在一半
+    document.addEventListener('touchcancel', snapSidebar);
 
     function switchView(id, btn) {
         document.querySelectorAll(".view-section").forEach(v => v.classList.remove("active"));
@@ -802,13 +810,46 @@
     };
     Chart.register(smoothCrosshairPlugin);
 
+    // 🚀 新增：自定義獨立無依賴的 K 線 (上下影線) 繪製外掛
+    const candlestickWicksPlugin = {
+        id: 'candlestickWicksPlugin',
+        afterDatasetsDraw(chart) {
+            const dataset = chart.data.datasets[0];
+            // 只在切換為 bar 且具有 wicks 屬性時執行
+            if (dataset.type !== 'bar' || !dataset.wicks) return;
+            const ctx = chart.ctx;
+            const meta = chart.getDatasetMeta(0);
+            
+            ctx.save();
+            ctx.lineWidth = 1.5;
+            for (let i = 0; i < meta.data.length; i++) {
+                const el = meta.data[i];
+                if (el.hidden) continue;
+                const raw = dataset.wicks[i];
+                if (!raw || raw.h === undefined) continue;
+                
+                const x = el.x;
+                const yHigh = chart.scales.y.getPixelForValue(raw.h);
+                const yLow = chart.scales.y.getPixelForValue(raw.l);
+                
+                ctx.strokeStyle = raw.color;
+                ctx.beginPath();
+                ctx.moveTo(x, yHigh);
+                ctx.lineTo(x, yLow);
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+    };
+    Chart.register(candlestickWicksPlugin);
+
     const DATA_KEY = "ALPHATRADE_MANUAL_DATA";
     let state = { cash: 1000000, holdings: {}, ledger: [], recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] } };
     let currentTicker = localStorage.getItem('LAST_SELECTED_TICKER') || "NVDA";
     let currentRealPrice = null, isPriceLoading = true, currentStockTF = '1D', searchDebounceTimer = null, desktopChartMode = 'NAV', tradeMode = 'BUY';
-    let stockHistData = { labels: [], prices: [] }, cardsDataCache = {}, isCardEditMode = false;
+    // 增加 ohlc 屬性儲存 K 線資料
+    let stockHistData = { labels: [], prices: [], ohlc: [] }, cardsDataCache = {}, isCardEditMode = false;
 
-    // 🚀 全新加入：取代舊的 recordNavSnapshot，僅更新最後一筆即時數值，不強塞新節點
     function updateLiveNavNode() {
         if (!state.navHistory || !state.navHistory.timestamps || state.navHistory.timestamps.length === 0) return;
         let holdingsVal = 0;
@@ -888,7 +929,6 @@
                 if (!state.navHistory || !state.navHistory.timestamps || state.navHistory.timestamps.length === 0) { rebuildNavHistoryFromLedger(); }
             } catch(e) {} 
         } else { 
-            // 🚀 改用精準重組歷史的引擎，不產生時間垃圾節點
             rebuildNavHistoryFromLedger(); 
             saveData(); 
         }
@@ -901,6 +941,11 @@
             const valNum = (savedVal === 'All') ? 60 : parseInt(savedVal); const pct = (valNum - 5) / (60 - 5); document.getElementById("jelly-thumb").style.left = `${pct * 162}px`;
         }
         document.getElementById("node-settings-wrapper").classList.toggle("disabled", !document.getElementById("cfg-node-show").checked);
+        
+        // 🚀 初始化 K 線與折線圖設定選項
+        const savedChartType = localStorage.getItem('SETTING_CHART_TYPE');
+        if (savedChartType !== null) document.getElementById("cfg-chart-type").checked = savedChartType === 'true'; else document.getElementById("cfg-chart-type").checked = true;
+
         document.getElementById("trade-ticker").value = currentTicker; document.getElementById("m-chart-ticker").innerText = currentTicker;
         
         initTimeMachineDefault(); renderRecentTickers(); renderCards();
@@ -1365,15 +1410,41 @@
         switch(tf) { case '1D': range = '1d'; interval = '5m'; break; case '1W': range = '5d'; interval = '15m'; break; case '1M': range = '1mo'; interval = '1d'; break; case '3M': range = '3mo'; interval = '1d'; break; case '1Y': range = '1y'; interval = '1d'; break; case 'All': range = '5y'; interval = '1wk'; break; }
         try {
             const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=${range}&interval=${interval}`)}`;
-            const res = await fetch(proxyUrl, { cache: "no-store" }); const json = await res.json(), result = json.chart.result[0], timestamps = result.timestamp || [], prices = result.indicators.quote[0].close || [];
-            let arrPrices = [], arrLabels = [];
+            const res = await fetch(proxyUrl, { cache: "no-store" }); 
+            const json = await res.json();
+            const result = json.chart.result[0];
+            const timestamps = result.timestamp || [];
+            
+            // 🚀 一併抓取 OHLC 數據供 K 線圖使用
+            const quote = result.indicators.quote[0];
+            const opens = quote.open || [];
+            const highs = quote.high || [];
+            const lows = quote.low || [];
+            const prices = quote.close || [];
+            
+            let arrPrices = [], arrLabels = [], arrOHLC = [];
             for(let i = 0; i < timestamps.length; i++) {
                 if (prices[i] !== null && prices[i] !== undefined) {
-                    arrPrices.push(prices[i]); const d = new Date(timestamps[i] * 1000);
-                    if (tf === '1D') arrLabels.push(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`); else arrLabels.push(`${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`);
+                    arrPrices.push(prices[i]); 
+                    arrOHLC.push({
+                        o: opens[i] ?? prices[i],
+                        h: highs[i] ?? prices[i],
+                        l: lows[i] ?? prices[i],
+                        c: prices[i]
+                    });
+                    
+                    const d = new Date(timestamps[i] * 1000);
+                    if (tf === '1D') arrLabels.push(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`); 
+                    else arrLabels.push(`${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`);
                 }
             }
-            if (arrPrices.length > 0) { stockHistData.prices = arrPrices; stockHistData.labels = arrLabels; updateRSIDisplay(arrPrices); renderAllCharts(); }
+            if (arrPrices.length > 0) { 
+                stockHistData.prices = arrPrices; 
+                stockHistData.ohlc = arrOHLC;
+                stockHistData.labels = arrLabels; 
+                updateRSIDisplay(arrPrices); 
+                renderAllCharts(); 
+            }
         } catch(err) {}
     }
 
@@ -1452,7 +1523,6 @@
             triggerDynamicFeedback(`成功賣出 ${s} 股 ${currentTicker}`, 'sell', document.getElementById('exec-trade-btn'), `+$${Math.floor(twdTotalGet).toLocaleString()}`);
         }
         
-        // 🚀 將原本無意義的快照移除，改用嚴格的歷史重建引擎，保證所有新產生的節點都與這筆買賣對應
         rebuildNavHistoryFromLedger(); 
         saveData(); 
         validateSharesInput();
@@ -1541,14 +1611,71 @@
         }
         navChart.update();
 
-        mobileChart.data.labels = stockHistData.labels; mobileChart.data.datasets[0].data = stockHistData.prices;
+        const isCandlestick = document.getElementById("cfg-chart-type").checked;
         const mDensity = (densityVal === 'All') ? 'All' : Math.floor(densityVal / 2);
-        mobileChart.data.datasets[0].pointRadius = computePointRadiusArray(stockHistData.prices.length, showNodes, mDensity); mobileChart.update();
+
+        // 🚀 下單櫃檯動態圖表：根據設定渲染為 K線圖 或 走勢折線圖
+        mobileChart.data.labels = stockHistData.labels;
+        
+        if (isCandlestick && stockHistData.ohlc && stockHistData.ohlc.length > 0) {
+            let barData = [], bgColors = [], bdColors = [], wicks = [];
+            stockHistData.ohlc.forEach(p => {
+                // 為了避免開收盤價完全相同無法渲染柱體，稍微加入微小極值 0.0001
+                barData.push([p.o, p.c === p.o ? p.o + 0.0001 : p.c]); 
+                let isUp = p.c >= p.o;
+                let color = isUp ? '#00ffaa' : '#ff4560';
+                bgColors.push(isUp ? 'rgba(0, 255, 170, 0.8)' : 'rgba(255, 69, 96, 0.8)');
+                bdColors.push(color);
+                wicks.push({h: p.h, l: p.l, color: color});
+            });
+            
+            mobileChart.data.datasets[0] = {
+                type: 'bar',
+                data: barData,
+                backgroundColor: bgColors,
+                borderColor: bdColors,
+                borderWidth: 1,
+                wicks: wicks,
+                barPercentage: 0.8,
+                categoryPercentage: 0.8
+            };
+            
+            mobileChart.options.plugins.tooltip.callbacks = {
+                label: function(ctx) {
+                    let w = ctx.dataset.wicks[ctx.dataIndex];
+                    let o = ctx.raw[0], c = ctx.raw[1];
+                    // 將極微小的調整還原顯示
+                    if (Math.abs(c - o) === 0.0001) c = o; 
+                    return `O: ${o.toFixed(2)}  H: ${w.h.toFixed(2)}  L: ${w.l.toFixed(2)}  C: ${c.toFixed(2)}`;
+                }
+            };
+        } else {
+            mobileChart.data.datasets[0] = {
+                type: 'line',
+                data: stockHistData.prices,
+                borderColor: '#00ffaa',
+                backgroundColor: 'rgba(0,255,170,0.05)',
+                borderWidth: 1.5,
+                tension: 0.2,
+                fill: true,
+                pointRadius: computePointRadiusArray(stockHistData.prices.length, showNodes, mDensity)
+            };
+            
+            mobileChart.options.plugins.tooltip.callbacks = {
+                label: function(ctx) {
+                    return `$ ${ctx.raw.toFixed(2)}`;
+                }
+            };
+        }
+        mobileChart.update();
     }
 
     document.getElementById("cfg-node-show").addEventListener("change", (e) => { localStorage.setItem('SETTING_NODE_SHOW', e.target.checked); document.getElementById("node-settings-wrapper").classList.toggle("disabled", !e.target.checked); renderAllCharts(); });
     document.getElementById("cfg-crosshair-show").addEventListener("change", (e) => { localStorage.setItem('SETTING_CROSSHAIR_SHOW', e.target.checked); });
     document.getElementById("cfg-node-slider").addEventListener("input", (e) => { const val = parseInt(e.target.value), displayVal = (val >= 60) ? 'All' : val; document.getElementById("cfg-node-val").value = displayVal; localStorage.setItem('SETTING_NODE_VAL', displayVal); const pct = (val - e.target.min) / (e.target.max - e.target.min); document.getElementById("jelly-thumb").style.left = `${pct * 162}px`; renderAllCharts(); });
+    
+    // 🚀 新增：切換 K線與折線圖事件
+    document.getElementById("cfg-chart-type").addEventListener("change", (e) => { localStorage.setItem('SETTING_CHART_TYPE', e.target.checked); renderAllCharts(); });
 
     function parseSimpleMarkdown(text) { return text.replace(/\*\*(.*?)\*\*/g, '<strong style="color:#fff">$1</strong>').replace(/^\s*[\-\*]\s+(.*)$/gim, '• $1').replace(/\n/g, '<br>'); }
     function quickAskAI(type) { const prompts = { 'diagnostic': `請針對 ${currentTicker} 當前的現價與 RSI 技術指標進行短線綜合體檢。`, 'risk': `請結合我目前的帳戶現金、${currentTicker} 持倉成本與當前走勢，評估整體風控與止損點設定。`, 'strategy': `考量我目前對 ${currentTicker} 的持股情況，現在適合加碼、減碼還是觀望？` }; document.getElementById("chat-input").value = prompts[type] || ""; askAI(); }
@@ -1608,9 +1735,8 @@
                 let top = rect.bottom + 8;
                 let left = rect.left;
                 
-                // 動態邊界檢查與適應
                 if (left + 160 > window.innerWidth) left = window.innerWidth - 170;
-                if (top + 200 > window.innerHeight) top = rect.top - 208; // 空間不夠往上顯示
+                if (top + 200 > window.innerHeight) top = rect.top - 208; 
                 
                 numpad.style.top = top + 'px';
                 numpad.style.left = left + 'px';
@@ -1636,7 +1762,6 @@
         activeNumInput.dispatchEvent(new Event('input', {bubbles: true}));
     }
 
-    // 點擊空白處自動關閉小鍵盤
     document.addEventListener('touchstart', handleOutsideClick);
     document.addEventListener('mousedown', handleOutsideClick);
     function handleOutsideClick(e) {
@@ -1658,7 +1783,6 @@
             fetchHoldingsPrices()
         ]);
         
-        // 🚀 在此不再強行塞入新節點，只更新現在(最後一個節點)的實時價值
         updateLiveNavNode();
         updateAllViews();
 
@@ -1670,7 +1794,6 @@
                 fetchExchangeRate(),
                 fetchHoldingsPrices()
             ]);
-            // 🚀 定時抓報價時也一樣，只動態調整最後一筆的數字
             updateLiveNavNode();
             updateAllViews();
             
