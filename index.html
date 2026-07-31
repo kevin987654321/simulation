@@ -633,8 +633,7 @@
     
     function getShortFormattedTimeFromDate(timestamp) {
         let d = new Date(timestamp);
-        // 統一改為 YY/MM/DD HH:mm 供全域使用
-        return `${String(d.getFullYear()).slice(-2)}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+        return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
     }
 
     function handleHourInput(el) {
@@ -1365,7 +1364,7 @@
         document.getElementById("recent-group-title").style.display = 'none'; document.getElementById("recent-tickers-list").style.display = 'none';
         clearTimeout(searchDebounceTimer);
         searchDebounceTimer = setTimeout(async () => {
-            if(!query) { document.getElementById("live-search-list").innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#666;">輸入代號自動撈取標的...</div>`; return; }
+            if(!query) { document.getElementById("live-search-list").innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#666;">輸入代號以搜尋全球市場...</div>`; return; }
             document.getElementById("live-search-list").innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> 搜尋 ${query}...</div>`;
             try {
                 const proxyUrl = `${myProxy}${encodeURIComponent(`https://query2.finance.yahoo.com/v1/finance/search?q=${query}&quotesCount=6`)}`;
@@ -1500,16 +1499,11 @@
                     arrOHLC.push({ o, h, l, c: closes[i] });
 
                     const d = new Date(timestamps[i] * 1000);
-                    const yy = String(d.getFullYear()).slice(-2);
-                    const mm = String(d.getMonth()+1).padStart(2,'0');
-                    const dd = String(d.getDate()).padStart(2,'0');
-                    const hh = String(d.getHours()).padStart(2, '0');
-                    const min = String(d.getMinutes()).padStart(2, '0');
-
-                    if (intervalStr === '5m' || intervalStr === '15m' || range === '1d') {
-                        arrLabels.push(`${yy}/${mm}/${dd} ${hh}:${min}`);
+                    // 改為1D只顯示時間不顯示日期，其餘顯示yy/mm/dd
+                    if (range === '1d') {
+                        arrLabels.push(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`);
                     } else {
-                        arrLabels.push(`${yy}/${mm}/${dd}`);
+                        arrLabels.push(`${String(d.getFullYear()).slice(-2)}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`);
                     }
                 }
             }
@@ -1655,7 +1649,7 @@
         callbacks: {
             title: function(context) { return context[0].label; },
             label: function(context) {
-                if (context.chart.canvas.id === 'navChart' && (desktopChartMode === 'NAV' || window.innerWidth <= 768)) { return '淨: $' + Math.floor(context.parsed.y).toLocaleString(); }
+                if (context.chart.canvas.id === 'navChart' && desktopChartMode === 'NAV') { return '淨: $' + Math.floor(context.parsed.y).toLocaleString(); }
                 if (context.dataset.label === 'Wick') return null; 
                 
                 const type = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
@@ -1679,28 +1673,7 @@
             interaction: { mode: 'index', intersect: false }, 
             layout: { padding: { top: 15, bottom: 15, left: 10, right: 10 } },
             plugins: { legend: { display: false }, tooltip: chartTooltipConfig }, 
-            scales: { 
-                x: { 
-                    grid: { display: false }, 
-                    offset: true,
-                    ticks: {
-                        callback: function(val, index) {
-                            if (window.innerWidth <= 768) return null; // 🚀 手機版完全不顯示時間
-                            let label = this.getLabelForValue(val);
-                            if (!label || typeof label !== 'string' || !label.includes('/')) return label;
-                            
-                            let tf = (typeof currentRange !== 'undefined' ? currentRange : '1D');
-                            if (tf === '1D' && label.includes(' ')) {
-                                return label.split(' ')[1]; // 1D 只顯示時間
-                            } else if (label.includes(' ')) {
-                                return label.split(' ')[0]; // 其餘顯示 yy/mm/dd
-                            }
-                            return label;
-                        }
-                    }
-                }, 
-                y: { beginAtZero: false, grid: { color: 'rgba(255,255,255,0.04)' }, grace: '10%' } 
-            } 
+            scales: { x: { grid: { display: false }, offset: true }, y: { beginAtZero: false, grid: { color: 'rgba(255,255,255,0.04)' }, grace: '10%' } } 
         } 
     });
     
@@ -1712,7 +1685,22 @@
             interaction: { mode: 'index', intersect: false }, 
             layout: { padding: { top: 10, bottom: 10, left: 5, right: 5 } },
             plugins: { legend: { display: false }, tooltip: chartTooltipConfig }, 
-            scales: { x: { display: false, offset: true }, y: { beginAtZero: false, grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { font: { size: 9 }, color: '#666' }, grace: '10%' } } 
+            scales: { 
+                x: { display: false, offset: true }, 
+                y: { 
+                    beginAtZero: false, 
+                    grid: { color: 'rgba(255,255,255,0.03)' }, 
+                    ticks: { 
+                        font: { size: 9 }, 
+                        color: '#666',
+                        callback: function(value) {
+                            if (Math.abs(value) >= 1000) return Math.round(value / 1000) + 'k';
+                            return Math.round(value);
+                        }
+                    }, 
+                    grace: '10%' 
+                } 
+            } 
         } 
     });
 
@@ -1730,7 +1718,6 @@
         return Array.from({ length: dataLength }, (_, i) => (i % step === 0 || i === dataLength - 1) ? 4 : 0);
     }
 
-    // 🚀 核心動畫還原：使用 Object.assign 來更新資料，使 Chart.js 的點可以流暢位移而不是重新掉落
     function applyChartDatasets(chart, newDatasets) {
         let replace = false;
         if (chart.data.datasets.length !== newDatasets.length) replace = true;
@@ -1779,35 +1766,20 @@
         const showNodes = document.getElementById("cfg-node-show").checked, rawVal = document.getElementById("cfg-node-val").value, densityVal = (rawVal === 'All') ? 'All' : parseInt(rawVal) || 20;
         const chartType = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
         
-        // 🚀 修復：手機版主頁的 navChart 應該永遠顯示 NAV (不受桌機切換干擾)
         const showNav = desktopChartMode === 'NAV' || window.innerWidth <= 768;
+        const isMobile = window.innerWidth <= 768;
 
-        // 🚀 動態切換佈局參數：還原 NAV 狀態下的無邊距視角 (與參考版本一致)，且不干擾 K線圖顯示邊距
-        if (showNav) {
-            navChart.options.layout.padding = 0;
-            navChart.options.scales.x.offset = false;
-            navChart.options.scales.y.grace = 0;
-        } else {
-            if (chartType === 'KLINE') {
-                navChart.options.layout.padding = { top: 15, bottom: 15, left: 10, right: 10 };
-                navChart.options.scales.x.offset = true;
-                navChart.options.scales.y.grace = '10%';
-            } else {
-                navChart.options.layout.padding = 0;
-                navChart.options.scales.x.offset = false;
-                navChart.options.scales.y.grace = 0;
-            }
-        }
-
-        if (chartType === 'KLINE') {
-            mobileChart.options.layout.padding = { top: 10, bottom: 10, left: 5, right: 5 };
-            mobileChart.options.scales.x.offset = true;
-            mobileChart.options.scales.y.grace = '10%';
-        } else {
-            mobileChart.options.layout.padding = 0;
-            mobileChart.options.scales.x.offset = false;
-            mobileChart.options.scales.y.grace = 0;
-        }
+        // 動態根據狀態調整 Padding、位移與坐標軸外觀 (還原 NAV 參考版樣貌與手機版需求)
+        navChart.options.layout.padding = showNav ? 0 : { top: 15, bottom: 15, left: 10, right: 10 };
+        navChart.options.scales.x.offset = !showNav;
+        navChart.options.scales.x.display = !isMobile;
+        
+        if (!navChart.options.scales.y.ticks) navChart.options.scales.y.ticks = {};
+        navChart.options.scales.y.ticks.font = { size: isMobile ? 9 : 12 };
+        navChart.options.scales.y.ticks.callback = isMobile ? function(value) {
+            if (Math.abs(value) >= 1000) return Math.round(value / 1000) + 'k';
+            return Math.round(value);
+        } : function(value) { return value.toLocaleString(); };
 
         if (showNav) {
             document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-area" style="color:var(--color-acc)"></i> <span class="hide-on-mobile" style="margin-left:4px;">投資組合總淨值走勢</span>`;
@@ -1821,12 +1793,24 @@
             let fLabels = [], fData = [];
             if (state.navHistory && state.navHistory.timestamps) {
                 for (let i = 0; i < state.navHistory.timestamps.length; i++) {
-                    if (state.navHistory.timestamps[i] >= cutoff) { fLabels.push(state.navHistory.labels[i]); fData.push(state.navHistory.data[i]); }
+                    if (state.navHistory.timestamps[i] >= cutoff) { 
+                        let d = new Date(state.navHistory.timestamps[i]);
+                        // NAV圖表也同步1D只顯示時間，其餘yy/mm/dd的格式
+                        let label = currentRange === '1D' 
+                            ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+                            : `${String(d.getFullYear()).slice(-2)}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+                        fLabels.push(label); 
+                        fData.push(state.navHistory.data[i]); 
+                    }
                 }
             }
             if (fData.length === 0 && state.navHistory && state.navHistory.data && state.navHistory.data.length > 0) {
-                let lastVal = state.navHistory.data[state.navHistory.data.length - 1]; fLabels = ['Start', 'Now']; fData = [lastVal, lastVal];
-            } else if (fData.length === 1) { fLabels.push('Now'); fData.push(fData[0]); }
+                let lastVal = state.navHistory.data[state.navHistory.data.length - 1]; 
+                fLabels = [currentRange === '1D' ? '00:00' : 'Start', 'Now']; 
+                fData = [lastVal, lastVal];
+            } else if (fData.length === 1) { 
+                fLabels.push('Now'); fData.push(fData[0]); 
+            }
 
             navChart.data.labels = fLabels; 
             applyChartDatasets(navChart, [{ label: 'NAV', type: 'line', data: fData, borderColor: '#00d4ff', backgroundColor: 'rgba(0, 212, 255, 0.05)', borderWidth: 2, tension: 0.2, fill: true, pointRadius: computePointRadiusArray(fData.length, showNodes, densityVal) }]);
@@ -1842,7 +1826,6 @@
             applyChartDatasets(navChart, getStockDatasets(stockHistData, showNodes, densityVal));
         }
         
-        // 使用預設 update 取代 update('none') 來恢復平滑動畫
         navChart.update(); 
 
         document.getElementById("m-main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> <span style="margin-left:4px;">${currentTicker}</span>`;
