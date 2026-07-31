@@ -313,28 +313,8 @@
                     <div class="chart-header">
                         <span style="font-weight: bold; font-size: 13px;" id="main-chart-title"><i class="fa-solid fa-chart-area" style="color: var(--color-acc)"></i> 投資組合總淨值走勢</span>
                         <div class="header-controls">
-                            
-                            <!-- 🚀 一般折線圖 (NAV) 專用時間區段 -->
-                            <div class="timeframe-selector" id="tf-group">
-                                <div class="tf-active-bg" id="tf-active-bg"></div>
-                                <button class="tf-btn active" data-tf="1D">1D</button>
-                                <button class="tf-btn" data-tf="1W">1W</button>
-                                <button class="tf-btn" data-tf="1M">1M</button>
-                                <button class="tf-btn" data-tf="3M">3M</button>
-                                <button class="tf-btn" data-tf="1Y">1Y</button>
-                                <button class="tf-btn" data-tf="All">All</button>
-                            </div>
-
-                            <!-- 🚀 K線圖專用獨立時間區段 (預設隱藏，切換K線時顯示) -->
-                            <div class="timeframe-selector" id="tf-group-kline" style="display:none;">
-                                <div class="tf-active-bg" id="tf-active-bg-k"></div>
-                                <button class="tf-btn" data-kline="5m">5分K</button>
-                                <button class="tf-btn" data-kline="15m">15分K</button>
-                                <button class="tf-btn active" data-kline="1d">日K</button>
-                                <button class="tf-btn" data-kline="1wk">週K</button>
-                                <button class="tf-btn" data-kline="1mo">月K</button>
-                            </div>
-
+                            <!-- 🚀 動態時間區段 -->
+                            <div class="timeframe-selector" id="tf-group"></div>
                             <button class="standalone-mode-btn" onclick="toggleDesktopChartMode()" title="切換顯示：組合總淨值 / 個股走勢">
                                 <i class="fa-solid fa-repeat" id="mode-icon"></i>
                             </button>
@@ -468,12 +448,22 @@
                 </div>
             </div>
             
-            <!-- 🚀 修正 2：個股圖表類型切換 -->
             <div class="glass-panel setting-item">
                 <div><div style="font-weight:bold;">個股圖表類型切換</div><div style="font-size:11px; color:#777; margin-top:2px;">選擇以 K線圖 (Candlestick) 或折線圖顯示個股走勢</div></div>
                 <select id="cfg-chart-type" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-weight:bold; outline:none;">
                     <option value="KLINE">K線圖</option>
                     <option value="LINE">一般折線圖</option>
+                </select>
+            </div>
+            <!-- 🚀 動態 K 線週期設定 -->
+            <div class="glass-panel setting-item" id="setting-kline-interval" style="display:none; border-top:1px solid rgba(255,255,255,0.05);">
+                <div><div style="font-weight:bold; color:var(--color-acc);">K線週期設定</div><div style="font-size:11px; color:#777; margin-top:2px;">圖表時間範圍選項會依照此設定變動</div></div>
+                <select id="cfg-kline-interval" style="background:rgba(0,212,255,0.1); border:1px solid var(--color-acc); color:#fff; padding:6px; border-radius:6px; font-weight:bold; outline:none;">
+                    <option value="5m">5分K</option>
+                    <option value="15m">15分K</option>
+                    <option value="1d">日K</option>
+                    <option value="1wk">週K</option>
+                    <option value="1mo">月K</option>
                 </select>
             </div>
 
@@ -563,26 +553,9 @@
 
     <div class="mobile-stock-chart-box">
         <div class="mobile-chart-header">
-            <span style="font-size:11px; color:#aaa; font-weight:bold;"><i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> <span id="m-chart-ticker">NVDA</span> 歷史走勢</span>
-            
-            <!-- 🚀 手機版 一般折線圖 專用時間區段 -->
-            <div class="timeframe-selector" id="m-tf-group" style="padding:2px;">
-                <button class="tf-btn active" data-tf="1D" style="padding:3px 6px;">1D</button>
-                <button class="tf-btn" data-tf="1W" style="padding:3px 6px;">1W</button>
-                <button class="tf-btn" data-tf="1M" style="padding:3px 6px;">1M</button>
-                <button class="tf-btn" data-tf="3M" style="padding:3px 6px;">3M</button>
-                <button class="tf-btn" data-tf="1Y" style="padding:3px 6px;">1Y</button>
-                <button class="tf-btn" data-tf="All" style="padding:3px 6px;">All</button>
-            </div>
-
-            <!-- 🚀 手機版 K線圖專用獨立時間區段 -->
-            <div class="timeframe-selector" id="m-tf-group-kline" style="padding:2px; display:none;">
-                <button class="tf-btn" data-kline="5m" style="padding:3px 6px;">5分K</button>
-                <button class="tf-btn" data-kline="15m" style="padding:3px 6px;">15分K</button>
-                <button class="tf-btn active" data-kline="1d" style="padding:3px 6px;">日K</button>
-                <button class="tf-btn" data-kline="1wk" style="padding:3px 6px;">週K</button>
-                <button class="tf-btn" data-kline="1mo" style="padding:3px 6px;">月K</button>
-            </div>
+            <span style="font-size:11px; color:#aaa; font-weight:bold;"><i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> <span id="m-chart-ticker">NVDA</span> 走勢</span>
+            <!-- 🚀 動態時間區段 -->
+            <div class="timeframe-selector" id="m-tf-group" style="padding:2px;"></div>
         </div>
         <div style="height: 110px; position:relative; width:100%;"><canvas id="mobileStockChart"></canvas></div>
     </div>
@@ -782,32 +755,29 @@
         else if (isOpen && diffX < 0) { if (e.cancelable) e.preventDefault(); sidebarEl.classList.add('dragging'); sidebarEl.style.transform = `translateX(${Math.max(diffX, -SIDEBAR_WIDTH)}px)`; }
     }, {passive: false});
     
-    // 🚀 修正 3：絕對無死角的側邊欄防卡死還原機制
+    // 🚀 終極防呆結算機制：只要失去接觸/中斷，依據當下距離瞬間決定開關，永不卡死
     function snapSidebar(e) {
-        if (!sidebarEl.classList.contains('dragging') && !sIsDragging) return;
+        if (!sIsDragging) return;
+        sIsDragging = false; 
+        sidebarEl.classList.remove('dragging');
         
         const diffX = sCurrentX - sStartX;
         const isOpen = sidebarEl.classList.contains('open');
-        
-        // 只要觸發此函數 (代表手指放開或系統強制中斷)，一律拔除拖曳狀態，把動畫控制權還給 CSS
-        sidebarEl.classList.remove('dragging');
-        sidebarEl.style.transform = '';
-        
-        // 如果是在正常的拖曳狀態中結束，才去計算是否跨越閥值；否則(被意外打斷)就讓它以當下狀態自然吸附歸位
-        if (sIsDragging) {
-            if (!isOpen && diffX > 40) { 
-                sidebarEl.classList.add('open'); overlayEl.classList.add('active'); 
-            } else if (isOpen && diffX < -40) { 
-                sidebarEl.classList.remove('open'); overlayEl.classList.remove('active'); 
-            }
+
+        // 當下的相對距離若超過防誤觸閥值，就變更狀態；否則還原原本狀態
+        if (!isOpen && diffX > SWIPE_THRESHOLD) { 
+            sidebarEl.classList.add('open'); overlayEl.classList.add('active'); 
+        } else if (isOpen && diffX < -SWIPE_THRESHOLD) { 
+            sidebarEl.classList.remove('open'); overlayEl.classList.remove('active'); 
         }
         
-        sIsDragging = false;
+        // 拔除所有動態 transform，讓 CSS 的 transition 直接接手平滑吸附到對應位置
+        sidebarEl.style.transform = ''; 
         sStartX = 0; sCurrentX = 0;
     }
     
     document.addEventListener('touchend', snapSidebar);
-    // 監聽各種邊緣操作 (叫出控制中心、來電、切換APP、返回桌面等)，確保狀態絕對結算
+    // 攔截各種強制中斷事件 (拉下控制中心、叫出小白條、來電、切換APP等)
     document.addEventListener('touchcancel', snapSidebar); 
     window.addEventListener('blur', snapSidebar); 
     document.addEventListener('visibilitychange', () => { if(document.hidden) snapSidebar(); });
@@ -860,28 +830,95 @@
     const DATA_KEY = "ALPHATRADE_MANUAL_DATA";
     let state = { cash: 1000000, holdings: {}, ledger: [], recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] } };
     let currentTicker = localStorage.getItem('LAST_SELECTED_TICKER') || "NVDA";
-    let currentRealPrice = null, isPriceLoading = true, currentStockTF = '1D', currentKLineTF = '1d', searchDebounceTimer = null, desktopChartMode = 'NAV', tradeMode = 'BUY';
+    let currentRealPrice = null, isPriceLoading = true, currentRange = '1M', searchDebounceTimer = null, desktopChartMode = 'NAV', tradeMode = 'BUY';
     let stockHistData = { labels: [], prices: [], ohlc: [] }, cardsDataCache = {}, isCardEditMode = false;
 
-    // 🚀 更新介面顯示：根據設定與當前模式動態切換時間選擇器
-    function updateTimeframeUIVisibility() {
-        const chartType = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
-        const isStockKLine = desktopChartMode === 'STOCK' && chartType === 'KLINE';
-        
-        document.getElementById('tf-group').style.display = isStockKLine ? 'none' : 'flex';
-        document.getElementById('tf-group-kline').style.display = isStockKLine ? 'flex' : 'none';
-        
-        document.getElementById('m-tf-group').style.display = chartType === 'KLINE' ? 'none' : 'flex';
-        document.getElementById('m-tf-group-kline').style.display = chartType === 'KLINE' ? 'flex' : 'none';
-
-        // 重新觸發白色背景塊動畫對齊
-        if (isStockKLine) {
-            const activeIdx = Array.from(document.querySelectorAll('#tf-group-kline .tf-btn')).findIndex(b => b.classList.contains('active'));
-            updateTfBgK(activeIdx !== -1 ? activeIdx : 2, false);
-        } else {
-            const activeIdx = Array.from(document.querySelectorAll('#tf-group .tf-btn')).findIndex(b => b.classList.contains('active'));
-            updateTfBg(activeIdx !== -1 ? activeIdx : 0, false);
+    // 🚀 核心：動態按鈕結構映射表
+    const RANGE_MAP = {
+        'LINE': [
+            { label: '1D', range: '1d', interval: '5m' }, { label: '1W', range: '5d', interval: '15m' }, { label: '1M', range: '1mo', interval: '1d' },
+            { label: '3M', range: '3mo', interval: '1d' }, { label: '1Y', range: '1y', interval: '1d' }, { label: 'All', range: '5y', interval: '1wk' }
+        ],
+        'KLINE': {
+            '5m': [ {label:'1D', range:'1d'}, {label:'5D', range:'5d'}, {label:'1M', range:'1mo'} ],
+            '15m': [ {label:'1D', range:'1d'}, {label:'5D', range:'5d'}, {label:'1M', range:'1mo'} ],
+            '1d': [ {label:'1M', range:'1mo'}, {label:'3M', range:'3mo'}, {label:'6M', range:'6mo'}, {label:'1Y', range:'1y'}, {label:'All', range:'5y'} ],
+            '1wk': [ {label:'1Y', range:'1y'}, {label:'2Y', range:'2y'}, {label:'All', range:'max'} ],
+            '1mo': [ {label:'1Y', range:'1y'}, {label:'5Y', range:'5y'}, {label:'All', range:'max'} ]
         }
+    };
+
+    function updateChartSettingsUI() {
+        const type = document.getElementById("cfg-chart-type").value;
+        document.getElementById("setting-kline-interval").style.display = type === 'KLINE' ? 'flex' : 'none';
+    }
+
+    // 🚀 核心：動態生成圖表上方的時間範圍按鈕
+    function updateTimeframeButtons() {
+        const type = document.getElementById("cfg-chart-type").value;
+        const interval = document.getElementById("cfg-kline-interval").value;
+        const isNav = desktopChartMode === 'NAV';
+        
+        let buttonsData = [];
+        if (isNav || type === 'LINE') buttonsData = RANGE_MAP['LINE'];
+        else buttonsData = RANGE_MAP['KLINE'][interval];
+
+        // 防呆：如果現在選擇的範圍不存在於新的選項中，則自動跳到第一個
+        if (!buttonsData.find(b => b.label === currentRange)) currentRange = buttonsData[0].label;
+
+        // 生成電腦版按鈕
+        document.getElementById('tf-group').innerHTML = `<div class="tf-active-bg" id="tf-active-bg"></div>` + 
+            buttonsData.map(b => `<button class="tf-btn ${b.label === currentRange ? 'active' : ''}" data-range="${b.range}" data-label="${b.label}">${b.label}</button>`).join('');
+
+        // 生成手機版按鈕
+        document.getElementById('m-tf-group').innerHTML = buttonsData.map(b => `<button class="tf-btn ${b.label === currentRange ? 'active' : ''}" data-range="${b.range}" data-label="${b.label}" style="padding:3px 6px;">${b.label}</button>`).join('');
+
+        attachTfListeners();
+    }
+
+    function attachTfListeners() {
+        const tfBtns = Array.from(document.querySelectorAll('#tf-group .tf-btn'));
+        const tfBg = document.getElementById('tf-active-bg');
+        
+        tfBtns.forEach((btn, index) => {
+            btn.addEventListener('click', () => {
+                tfBg.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+                tfBg.style.width = `${btn.offsetWidth}px`; tfBg.style.transform = `translateX(${btn.offsetLeft}px)`;
+                tfBtns.forEach((b, i) => b.classList.toggle('active', i === index));
+                currentRange = btn.dataset.label;
+                
+                document.querySelectorAll('#m-tf-group .tf-btn').forEach(mBtn => mBtn.classList.toggle('active', mBtn.dataset.label === currentRange));
+                fetchStockHistoryData(currentTicker, true);
+                if (desktopChartMode === 'NAV') renderAllCharts(true); 
+            });
+        });
+        
+        setTimeout(() => {
+            if(!tfBg) return;
+            const activeIdx = tfBtns.findIndex(b => b.classList.contains('active'));
+            if(activeIdx >= 0) {
+                tfBg.style.transition = 'none'; tfBg.style.width = `${tfBtns[activeIdx].offsetWidth}px`; tfBg.style.transform = `translateX(${tfBtns[activeIdx].offsetLeft}px)`;
+            }
+        }, 50);
+
+        const mTfBtns = Array.from(document.querySelectorAll('#m-tf-group .tf-btn'));
+        mTfBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                mTfBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentRange = btn.dataset.label;
+                
+                const dIdx = tfBtns.findIndex(b => b.dataset.label === currentRange);
+                if(dIdx >= 0 && tfBg) {
+                    tfBg.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+                    tfBg.style.width = `${tfBtns[dIdx].offsetWidth}px`; tfBg.style.transform = `translateX(${tfBtns[dIdx].offsetLeft}px)`;
+                    tfBtns.forEach((b, i) => b.classList.toggle('active', i === dIdx));
+                }
+
+                fetchStockHistoryData(currentTicker, true);
+                if (desktopChartMode === 'NAV') renderAllCharts(true);
+            });
+        });
     }
 
     function updateLiveNavNode() {
@@ -894,7 +931,6 @@
         }
         const now = Date.now();
         const lastIdx = state.navHistory.timestamps.length - 1;
-        
         state.navHistory.timestamps[lastIdx] = now;
         state.navHistory.labels[lastIdx] = getShortFormattedTimeFromDate(now);
         state.navHistory.data[lastIdx] = state.cash + holdingsVal;
@@ -952,7 +988,6 @@
             try { 
                 state = JSON.parse(saved); 
                 state.cardTickers = [...new Set(state.cardTickers || ["NVDA", "2330.TW"])]; 
-                
                 state.ledger.forEach(r => {
                     if (!r.timestamp) {
                         let d = new Date(), parts = r.time ? r.time.split(':') : [];
@@ -962,14 +997,16 @@
                 state.ledger.sort((a, b) => b.timestamp - a.timestamp);
                 if (!state.navHistory || !state.navHistory.timestamps || state.navHistory.timestamps.length === 0) { rebuildNavHistoryFromLedger(); }
             } catch(e) {} 
-        } else { 
-            rebuildNavHistoryFromLedger(); 
-            saveData(); 
-        }
+        } else { rebuildNavHistoryFromLedger(); saveData(); }
         
-        // 🚀 修正 2：保證 K線圖 預設載入正確 (去除空白)
+        // 保證預設載入非空白
         const savedChartType = localStorage.getItem('SETTING_CHART_TYPE'); 
         document.getElementById("cfg-chart-type").value = savedChartType ? savedChartType : 'KLINE';
+        
+        const savedKlineInterval = localStorage.getItem('SETTING_KLINE_INTERVAL'); 
+        document.getElementById("cfg-kline-interval").value = savedKlineInterval ? savedKlineInterval : '1d';
+        
+        updateChartSettingsUI();
         
         const savedShow = localStorage.getItem('SETTING_NODE_SHOW'); if (savedShow !== null) document.getElementById("cfg-node-show").checked = savedShow === 'true'; else document.getElementById("cfg-node-show").checked = true;
         const savedCrosshair = localStorage.getItem('SETTING_CROSSHAIR_SHOW'); if (savedCrosshair !== null) document.getElementById("cfg-crosshair-show").checked = savedCrosshair === 'true'; else document.getElementById("cfg-crosshair-show").checked = true;
@@ -981,12 +1018,12 @@
         document.getElementById("node-settings-wrapper").classList.toggle("disabled", !document.getElementById("cfg-node-show").checked);
         document.getElementById("trade-ticker").value = currentTicker; document.getElementById("m-chart-ticker").innerText = currentTicker;
         
-        updateTimeframeUIVisibility();
+        updateTimeframeButtons(); // 初始化動態按鈕
         initTimeMachineDefault(); renderRecentTickers(); renderCards();
     }
     
     function saveData() { localStorage.setItem(DATA_KEY, JSON.stringify(state)); updateAllViews(true); renderCards(); }
-    function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { localStorage.removeItem(DATA_KEY); state = { cash: 1000000, holdings: {}, ledger: [], recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] } }; initData(); } }
+    function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { localStorage.removeItem(DATA_KEY); state = { cash: 1000000, holdings: {}, ledger: [], recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] } }; initData(); fetchStockHistoryData(currentTicker, true); } }
 
     function exportData() {
         const dataStr = JSON.stringify(state, null, 2), blob = new Blob([dataStr], { type: "application/json" }), url = URL.createObjectURL(blob), a = document.createElement("a");
@@ -1384,7 +1421,7 @@
         document.getElementById("exec-trade-btn").disabled = true;
         
         fetchRealPrice(t); 
-        fetchStockHistoryData(t, document.getElementById("cfg-chart-type").value === 'KLINE' ? currentKLineTF : currentStockTF, true); 
+        fetchStockHistoryData(t, true); 
     }
 
     async function fetchRealPrice(ticker) {
@@ -1404,49 +1441,6 @@
             updateAllViews(false); 
         }
     }
-
-    // --- 標準折線圖與淨值走勢的 Timeframe (1D, 1W, 1M, 3M, 1Y, All) ---
-    const tfGroup = document.getElementById('tf-group'), tfBg = document.getElementById('tf-active-bg'), tfBtns = Array.from(document.querySelectorAll('#tf-group .tf-btn'));
-    function updateTfBg(index, animate = true) {
-        if(tfGroup.style.display === 'none') return;
-        const btn = tfBtns[index]; tfBg.style.transition = animate ? 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1)' : 'none';
-        tfBg.style.width = `${btn.offsetWidth}px`; tfBg.style.transform = `translateX(${btn.offsetLeft}px)`; tfBtns.forEach((b, i) => b.classList.toggle('active', i === index));
-    }
-    tfBtns.forEach((btn, index) => btn.addEventListener('click', () => { 
-        updateTfBg(index); 
-        currentStockTF = btn.dataset.tf; 
-        fetchStockHistoryData(currentTicker, currentStockTF, true); 
-    }));
-    setTimeout(() => updateTfBg(0, false), 100);
-
-    // --- K 線圖專屬的獨立 Timeframe (5分K, 15分K, 日K, 週K, 月K) ---
-    const tfGroupK = document.getElementById('tf-group-kline'), tfBgK = document.getElementById('tf-active-bg-k'), tfBtnsK = Array.from(document.querySelectorAll('#tf-group-kline .tf-btn'));
-    function updateTfBgK(index, animate = true) {
-        if(tfGroupK.style.display === 'none') return;
-        const btn = tfBtnsK[index]; tfBgK.style.transition = animate ? 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1)' : 'none';
-        tfBgK.style.width = `${btn.offsetWidth}px`; tfBgK.style.transform = `translateX(${btn.offsetLeft}px)`; tfBtnsK.forEach((b, i) => b.classList.toggle('active', i === index));
-    }
-    tfBtnsK.forEach((btn, index) => btn.addEventListener('click', () => { 
-        updateTfBgK(index); 
-        currentKLineTF = btn.dataset.kline; 
-        fetchStockHistoryData(currentTicker, currentKLineTF, true); 
-    }));
-
-    // 手機端 Timeframe 事件
-    document.querySelectorAll("#m-tf-group .tf-btn").forEach(btn => {
-        btn.addEventListener("click", () => {
-            document.querySelectorAll("#m-tf-group .tf-btn").forEach(b => b.classList.remove("active"));
-            btn.classList.add("active"); currentStockTF = btn.dataset.tf; 
-            fetchStockHistoryData(currentTicker, currentStockTF, true); 
-        });
-    });
-    document.querySelectorAll("#m-tf-group-kline .tf-btn").forEach(btn => {
-        btn.addEventListener("click", () => {
-            document.querySelectorAll("#m-tf-group-kline .tf-btn").forEach(b => b.classList.remove("active"));
-            btn.classList.add("active"); currentKLineTF = btn.dataset.kline; 
-            fetchStockHistoryData(currentTicker, currentKLineTF, true); 
-        });
-    });
 
     function calculateRSI(prices, period = 14) {
         if (!prices || prices.length <= period) return null; let gains = 0, losses = 0;
@@ -1468,28 +1462,22 @@
         else { badge.innerText = '中性區位'; badge.style.background = 'rgba(0,212,255,0.2)'; badge.style.color = 'var(--color-acc)'; }
     }
 
-    // 🚀 核心更新：根據 K 線獨立時間區段 (interval) 自適應最佳 Range 
-    async function fetchStockHistoryData(ticker, tf = '1D', animate = true) {
-        const chartType = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
+    // 🚀 核心更新：根據圖表類型 (LINE/KLINE) 自動適應區間與標籤文字
+    async function fetchStockHistoryData(ticker, animate = true) {
+        const type = document.getElementById("cfg-chart-type").value;
+        const klineInterval = document.getElementById("cfg-kline-interval").value;
+        
         let range, interval;
 
-        // 如果是 K 線模式，依據 K線獨立按鈕(如 1d, 5m) 自動匹配最適當的抓取範圍
-        if (chartType === 'KLINE') {
-            interval = currentKLineTF; // 強制使用 K 線的選擇器狀態
-            if (interval === '5m' || interval === '15m') range = '5d';
-            else if (interval === '1d') range = '6mo';
-            else if (interval === '1wk') range = '2y';
-            else if (interval === '1mo') range = '5y';
+        if (type === 'LINE') {
+            const config = RANGE_MAP['LINE'].find(b => b.label === currentRange) || RANGE_MAP['LINE'][2];
+            range = config.range;
+            interval = config.interval;
         } else {
-            // 普通折線模式，維持原有的 1D~All 邏輯
-            switch(tf) { 
-                case '1D': range = '1d'; interval = '5m'; break; 
-                case '1W': range = '5d'; interval = '15m'; break; 
-                case '1M': range = '1mo'; interval = '1d'; break; 
-                case '3M': range = '3mo'; interval = '1d'; break; 
-                case '1Y': range = '1y'; interval = '1d'; break; 
-                case 'All': range = '5y'; interval = '1wk'; break; 
-            }
+            const configList = RANGE_MAP['KLINE'][klineInterval];
+            const config = configList.find(b => b.label === currentRange) || configList[0];
+            range = config.range;
+            interval = klineInterval;
         }
 
         try {
@@ -1510,9 +1498,9 @@
                     arrOHLC.push({ o, h, l, c: closes[i] });
 
                     const d = new Date(timestamps[i] * 1000);
-                    // 若級別為分K(當天/5天)，X 軸才顯示時:分；其餘(日K/周K)一律顯示日期
+                    // 根據區間決定顯示日期還是時間
                     if (interval === '5m' || interval === '15m' || range === '1d') {
-                        arrLabels.push(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`);
+                        arrLabels.push(`${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`);
                     } else {
                         arrLabels.push(`${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`);
                     }
@@ -1647,7 +1635,7 @@
             return `<tr>
                 <td>${displayTime}</td><td><span class="badge ${r.action==='BUY'?'badge-buy':'badge-sell'}">${r.action}</span></td>
                 <td style="font-weight:bold;">${r.ticker}</td><td>$${r.price.toFixed(2)}</td><td>${r.shares}</td><td>$${r.fee.toFixed(1)}</td>
-                <td style="font-weight:bold;">$${Math.floor(r.total).toLocaleString()}</td>${pnlHtml}
+                <td style="font-weight:bold;">$Math.floor(r.total).toLocaleString()}</td>${pnlHtml}
                 <td><button onclick="undoTrade(${index})" style="background:rgba(255,69,96,0.15); color:var(--color-sell); border:1px solid rgba(255,69,96,0.3); padding:4px 10px; border-radius:4px; cursor:pointer; font-weight:bold; font-size:11px; transition:all 0.2s;">撤銷</button></td>
             </tr>`;
         }).join("") : `<tr><td colspan="9" style="text-align:center; color:#555; padding:40px;">尚無紀錄</td></tr>`;
@@ -1655,16 +1643,26 @@
         renderAllCharts(animate);
     }
 
+    // 🚀 智慧 Tooltip：依照週期對應最直觀的名稱
+    const intervalNames = { '5m': '5分K ', '15m': '15分K ', '1d': '單日', '1wk': '單週', '1mo': '單月' };
+
     const chartTooltipConfig = {
         enabled: true, mode: 'index', intersect: false,
         callbacks: {
+            title: function(context) { return context[0].label; },
             label: function(context) {
-                if (context.chart.canvas.id === 'navChart' && desktopChartMode === 'NAV') { return '總淨值: $ ' + Math.floor(context.parsed.y).toLocaleString(); }
+                if (context.chart.canvas.id === 'navChart' && desktopChartMode === 'NAV') return '總淨值: $ ' + Math.floor(context.parsed.y).toLocaleString(); 
                 if (context.dataset.label === 'Wick') return null; // K 線影線不需要單獨提示
-                if (context.dataset.label === 'Body') {
+                
+                const type = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
+                
+                if (type === 'KLINE' && context.dataset.label === 'Body') {
                     const ohlc = stockHistData.ohlc[context.dataIndex];
-                    if(ohlc) return [`開盤: $${ohlc.o.toFixed(2)}`, `最高: $${ohlc.h.toFixed(2)}`, `最低: $${ohlc.l.toFixed(2)}`, `收盤: $${ohlc.c.toFixed(2)}`];
+                    const interval = document.getElementById("cfg-kline-interval").value;
+                    const prefix = intervalNames[interval] || '';
+                    if(ohlc) return [`${prefix}開盤: $${ohlc.o.toFixed(2)}`, `${prefix}最高: $${ohlc.h.toFixed(2)}`, `${prefix}最低: $${ohlc.l.toFixed(2)}`, `${prefix}收盤: $${ohlc.c.toFixed(2)}`];
                 }
+                
                 let val = context.parsed.y !== undefined ? context.parsed.y : context.raw;
                 return '價格: $ ' + val.toFixed(2);
             }
@@ -1677,7 +1675,7 @@
     function toggleDesktopChartMode() { 
         desktopChartMode = (desktopChartMode === 'NAV') ? 'STOCK' : 'NAV'; 
         document.getElementById('mode-icon').style.transform = (desktopChartMode === 'STOCK') ? 'rotate(180deg)' : 'rotate(0deg)'; 
-        updateTimeframeUIVisibility();
+        updateTimeframeButtons(); // 切換模式時重新載入按鈕
         renderAllCharts(true); 
     }
 
@@ -1692,9 +1690,7 @@
         const chartType = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
         
         if (chartType === 'KLINE') {
-            const upColor = 'rgba(0, 255, 170, 0.9)';
-            const downColor = 'rgba(255, 69, 96, 0.9)';
-            
+            const upColor = 'rgba(0, 255, 170, 0.9)', downColor = 'rgba(255, 69, 96, 0.9)';
             const colors = data.ohlc.map(d => d.c >= d.o ? upColor : downColor);
             const borderColors = data.ohlc.map(d => d.c >= d.o ? '#00ffaa' : '#ff4560');
             const dataBody = data.ohlc.map(d => {
@@ -1720,11 +1716,11 @@
         if (desktopChartMode === 'NAV') {
             document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-area" style="color:var(--color-acc)"></i> 投資組合總淨值走勢`;
             let cutoff = 0; const now = Date.now();
-            if (currentStockTF === '1D') cutoff = now - 86400000; 
-            else if (currentStockTF === '1W') cutoff = now - 86400000 * 7; 
-            else if (currentStockTF === '1M') cutoff = now - 86400000 * 30; 
-            else if (currentStockTF === '3M') cutoff = now - 86400000 * 90; 
-            else if (currentStockTF === '1Y') cutoff = now - 86400000 * 365;
+            if (currentRange === '1D') cutoff = now - 86400000; 
+            else if (currentRange === '1W') cutoff = now - 86400000 * 7; 
+            else if (currentRange === '1M') cutoff = now - 86400000 * 30; 
+            else if (currentRange === '3M') cutoff = now - 86400000 * 90; 
+            else if (currentRange === '1Y') cutoff = now - 86400000 * 365;
 
             let fLabels = [], fData = [];
             if (state.navHistory && state.navHistory.timestamps) {
@@ -1733,13 +1729,18 @@
                 }
             }
             if (fData.length === 0 && state.navHistory && state.navHistory.data && state.navHistory.data.length > 0) {
-                let lastVal = state.navHistory.data[state.navHistory.data.length - 1]; fLabels = [currentStockTF === '1D' ? '00:00' : 'Start', 'Now']; fData = [lastVal, lastVal];
+                let lastVal = state.navHistory.data[state.navHistory.data.length - 1]; fLabels = ['Start', 'Now']; fData = [lastVal, lastVal];
             } else if (fData.length === 1) { fLabels.push('Now'); fData.push(fData[0]); }
 
             navChart.data.labels = fLabels; 
             navChart.data.datasets = [{ type: 'line', data: fData, borderColor: '#00d4ff', backgroundColor: 'rgba(0, 212, 255, 0.05)', borderWidth: 2, tension: 0.2, fill: true, pointRadius: computePointRadiusArray(fData.length, showNodes, densityVal) }];
         } else {
-            const titlePrefix = chartType === 'KLINE' ? 'K線走勢' : '個股走勢';
+            let titlePrefix = '個股走勢';
+            if (chartType === 'KLINE') {
+                const intv = document.getElementById("cfg-kline-interval").value;
+                const intvName = document.querySelector(`#cfg-kline-interval option[value="${intv}"]`).innerText;
+                titlePrefix = `${intvName} 走勢`;
+            }
             document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> ${currentTicker} ${titlePrefix}`;
             navChart.data.labels = stockHistData.labels;
             navChart.data.datasets = getStockDatasets(stockHistData, showNodes, densityVal);
@@ -1754,9 +1755,15 @@
 
     document.getElementById("cfg-chart-type").addEventListener("change", (e) => { 
         localStorage.setItem('SETTING_CHART_TYPE', e.target.value); 
-        updateTimeframeUIVisibility();
-        // 當圖表類型切換時，自動根據新模式載入對應的時間級別與資料
-        fetchStockHistoryData(currentTicker, e.target.value === 'KLINE' ? currentKLineTF : currentStockTF, true); 
+        updateChartSettingsUI();
+        updateTimeframeButtons();
+        fetchStockHistoryData(currentTicker, true); 
+    });
+    
+    document.getElementById("cfg-kline-interval").addEventListener("change", (e) => { 
+        localStorage.setItem('SETTING_KLINE_INTERVAL', e.target.value); 
+        updateTimeframeButtons();
+        fetchStockHistoryData(currentTicker, true); 
     });
     
     document.getElementById("cfg-node-show").addEventListener("change", (e) => { localStorage.setItem('SETTING_NODE_SHOW', e.target.checked); document.getElementById("node-settings-wrapper").classList.toggle("disabled", !e.target.checked); renderAllCharts(); });
@@ -1887,7 +1894,7 @@
             updateAllViews(false);
             
             fetchRealPrice(currentTicker);
-            fetchStockHistoryData(currentTicker, document.getElementById("cfg-chart-type").value === 'KLINE' ? currentKLineTF : currentStockTF, false);
+            fetchStockHistoryData(currentTicker, false);
             fetchAllCardsData();
         }, 8000);
     }
