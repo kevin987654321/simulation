@@ -314,12 +314,12 @@
                     <div class="chart-header">
                         <span style="font-weight: bold; font-size: 13px;" id="main-chart-title"><i class="fa-solid fa-chart-area" style="color: var(--color-acc)"></i> 投資組合總淨值走勢</span>
                         <div class="header-controls">
+                            <!-- 🚀 強制將 K線的時間級別統一為更適合日 K 線的週期 -->
                             <div class="timeframe-selector" id="tf-group">
                                 <div class="tf-active-bg" id="tf-active-bg"></div>
-                                <button class="tf-btn active" data-tf="1D">1D</button>
-                                <button class="tf-btn" data-tf="1W">1W</button>
-                                <button class="tf-btn" data-tf="1M">1M</button>
+                                <button class="tf-btn active" data-tf="1M">1M</button>
                                 <button class="tf-btn" data-tf="3M">3M</button>
+                                <button class="tf-btn" data-tf="6M">6M</button>
                                 <button class="tf-btn" data-tf="1Y">1Y</button>
                                 <button class="tf-btn" data-tf="All">All</button>
                             </div>
@@ -455,10 +455,11 @@
                     </label>
                 </div>
             </div>
+            <!-- 🚀 個股圖表切換設定 -->
             <div class="glass-panel setting-item">
                 <div><div style="font-weight:bold;">個股圖表類型切換</div><div style="font-size:11px; color:#777; margin-top:2px;">選擇以 K線圖 (Candlestick) 或折線圖顯示個股走勢</div></div>
                 <select id="cfg-chart-type" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-weight:bold;">
-                    <option value="KLINE">K線圖 (預設)</option>
+                    <option value="KLINE">K線圖</option>
                     <option value="LINE">一般折線圖</option>
                 </select>
             </div>
@@ -550,10 +551,9 @@
         <div class="mobile-chart-header">
             <span style="font-size:11px; color:#aaa; font-weight:bold;"><i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> <span id="m-chart-ticker">NVDA</span> 歷史走勢</span>
             <div class="timeframe-selector" id="m-tf-group" style="padding:2px;">
-                <button class="tf-btn active" data-tf="1D" style="padding:3px 6px;">1D</button>
-                <button class="tf-btn" data-tf="1W" style="padding:3px 6px;">1W</button>
-                <button class="tf-btn" data-tf="1M" style="padding:3px 6px;">1M</button>
+                <button class="tf-btn active" data-tf="1M" style="padding:3px 6px;">1M</button>
                 <button class="tf-btn" data-tf="3M" style="padding:3px 6px;">3M</button>
+                <button class="tf-btn" data-tf="6M" style="padding:3px 6px;">6M</button>
                 <button class="tf-btn" data-tf="1Y" style="padding:3px 6px;">1Y</button>
                 <button class="tf-btn" data-tf="All" style="padding:3px 6px;">All</button>
             </div>
@@ -756,10 +756,18 @@
         else if (isOpen && diffX < 0) { if (e.cancelable) e.preventDefault(); sidebarEl.classList.add('dragging'); sidebarEl.style.transform = `translateX(${Math.max(diffX, -SIDEBAR_WIDTH)}px)`; }
     }, {passive: false});
     
-    // 🚀 新增防呆：任何中斷 (如叫出控制中心、來電、切換視窗) 都會立即結算側邊欄歸位
-    function snapSidebar() {
+    // 🚀 核心修復：不管滑動中途被什麼事件打斷 (叫出控制中心、來電、切換APP)，一律安全歸位
+    function snapSidebar(e) {
         if (!sIsDragging || window.innerWidth > 768 || isCardEditMode) return;
         sIsDragging = false; sidebarEl.classList.remove('dragging');
+        
+        // 遇到強制中斷事件，直接復原外觀，不改變開關狀態，防止卡死
+        if (e && (e.type === 'touchcancel' || e.type === 'blur' || e.type === 'visibilitychange')) {
+            sidebarEl.style.transform = ''; 
+            sStartX = sStartY = sCurrentX = 0;
+            return;
+        }
+
         const diffX = sCurrentX - sStartX, absDiff = Math.abs(diffX), isOpen = sidebarEl.classList.contains('open');
         if (sCurrentX !== 0) {
             if (!isOpen && diffX > SWIPE_THRESHOLD) { sidebarEl.classList.add('open'); overlayEl.classList.add('active'); }
@@ -767,10 +775,11 @@
         }
         sidebarEl.style.transform = ''; sStartX = sStartY = sCurrentX = 0;
     }
+    
     document.addEventListener('touchend', snapSidebar);
-    document.addEventListener('touchcancel', snapSidebar);
-    window.addEventListener('blur', snapSidebar);
-    document.addEventListener('visibilitychange', () => { if(document.hidden) snapSidebar(); });
+    document.addEventListener('touchcancel', snapSidebar); // 控制中心/小白條切換視窗
+    window.addEventListener('blur', snapSidebar); // 失去焦點
+    document.addEventListener('visibilitychange', () => { if(document.hidden) snapSidebar({type: 'visibilitychange'}); });
 
     function switchView(id, btn) {
         document.querySelectorAll(".view-section").forEach(v => v.classList.remove("active"));
@@ -820,7 +829,7 @@
     const DATA_KEY = "ALPHATRADE_MANUAL_DATA";
     let state = { cash: 1000000, holdings: {}, ledger: [], recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] } };
     let currentTicker = localStorage.getItem('LAST_SELECTED_TICKER') || "NVDA";
-    let currentRealPrice = null, isPriceLoading = true, currentStockTF = '1D', searchDebounceTimer = null, desktopChartMode = 'NAV', tradeMode = 'BUY';
+    let currentRealPrice = null, isPriceLoading = true, currentStockTF = '1M', searchDebounceTimer = null, desktopChartMode = 'NAV', tradeMode = 'BUY';
     let stockHistData = { labels: [], prices: [], ohlc: [] }, cardsDataCache = {}, isCardEditMode = false;
 
     function updateLiveNavNode() {
@@ -906,7 +915,10 @@
             saveData(); 
         }
         
-        const savedChartType = localStorage.getItem('SETTING_CHART_TYPE'); if (savedChartType) document.getElementById("cfg-chart-type").value = savedChartType;
+        // 🚀 圖表類型讀取預防空白，強制預設給 KLINE
+        const savedChartType = localStorage.getItem('SETTING_CHART_TYPE'); 
+        document.getElementById("cfg-chart-type").value = savedChartType ? savedChartType : 'KLINE';
+        
         const savedShow = localStorage.getItem('SETTING_NODE_SHOW'); if (savedShow !== null) document.getElementById("cfg-node-show").checked = savedShow === 'true'; else document.getElementById("cfg-node-show").checked = true;
         const savedCrosshair = localStorage.getItem('SETTING_CROSSHAIR_SHOW'); if (savedCrosshair !== null) document.getElementById("cfg-crosshair-show").checked = savedCrosshair === 'true'; else document.getElementById("cfg-crosshair-show").checked = true;
         const savedVal = localStorage.getItem('SETTING_NODE_VAL');
@@ -1319,7 +1331,7 @@
         document.getElementById("exec-trade-btn").disabled = true;
         
         fetchRealPrice(t); 
-        fetchStockHistoryData(t, currentStockTF, true); // 🚀 切換標的時，傳入 true 觸發動畫
+        fetchStockHistoryData(t, currentStockTF, true); 
     }
 
     async function fetchRealPrice(ticker) {
@@ -1336,7 +1348,7 @@
                 document.getElementById("trade-price-display").innerText = `$ ${currentRealPrice.toFixed(2)}`;
                 document.getElementById("ai-current-ticker").innerText = currentTicker; validateSharesInput();
             } else { document.getElementById("trade-price-display").innerHTML = `<span style="font-size:14px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> 報價連線中...</span>`; }
-            updateAllViews(false); // 即時價格更新不需要觸發圖表整個重繪
+            updateAllViews(false); // 🚀 平滑刷新，背景抓價不觸發動畫
         }
     }
 
@@ -1348,7 +1360,7 @@
     tfBtns.forEach((btn, index) => btn.addEventListener('click', () => { 
         updateTfBg(index); 
         currentStockTF = btn.dataset.tf; 
-        fetchStockHistoryData(currentTicker, currentStockTF, true); // 🚀 切換時間別時，傳入 true 觸發動畫
+        fetchStockHistoryData(currentTicker, currentStockTF, true); // 🚀 主動點擊級別，允許動畫
     }));
     setTimeout(() => updateTfBg(0, false), 100);
 
@@ -1356,7 +1368,7 @@
         btn.addEventListener("click", () => {
             document.querySelectorAll("#m-tf-group .tf-btn").forEach(b => b.classList.remove("active"));
             btn.classList.add("active"); currentStockTF = btn.dataset.tf; 
-            fetchStockHistoryData(currentTicker, currentStockTF, true); // 🚀 切換時間別時觸發動畫
+            fetchStockHistoryData(currentTicker, currentStockTF, true); // 🚀 允許動畫
         });
     });
 
@@ -1380,10 +1392,16 @@
         else { badge.innerText = '中性區位'; badge.style.background = 'rgba(0,212,255,0.2)'; badge.style.color = 'var(--color-acc)'; }
     }
 
-    // 🚀 改寫 API 抓取邏輯，加入 OHLC 解析支援 K 線
-    async function fetchStockHistoryData(ticker, tf = '1D', animate = true) {
-        let range = '1d', interval = '5m';
-        switch(tf) { case '1D': range = '1d'; interval = '5m'; break; case '1W': range = '5d'; interval = '15m'; break; case '1M': range = '1mo'; interval = '1d'; break; case '3M': range = '3mo'; interval = '1d'; break; case '1Y': range = '1y'; interval = '1d'; break; case 'All': range = '5y'; interval = '1wk'; break; }
+    // 🚀 核心更新：支援原生日K線所需的 OHLC 解析
+    async function fetchStockHistoryData(ticker, tf = '1M', animate = true) {
+        let range = '1mo', interval = '1d';
+        switch(tf) { 
+            case '1M': range = '1mo'; interval = '1d'; break; 
+            case '3M': range = '3mo'; interval = '1d'; break; 
+            case '6M': range = '6mo'; interval = '1d'; break; 
+            case '1Y': range = '1y'; interval = '1d'; break; 
+            case 'All': range = '5y'; interval = '1wk'; break; 
+        }
         try {
             const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=${range}&interval=${interval}`)}`;
             const res = await fetch(proxyUrl, { cache: "no-store" }); 
@@ -1396,14 +1414,14 @@
                 if (closes[i] !== null && closes[i] !== undefined) {
                     arrPrices.push(closes[i]); 
                     
-                    // 組合 Candlestick 資料
                     let o = opens[i] !== null ? opens[i] : closes[i];
                     let h = highs[i] !== null ? highs[i] : closes[i];
                     let l = lows[i] !== null ? lows[i] : closes[i];
                     arrOHLC.push({ o, h, l, c: closes[i] });
 
                     const d = new Date(timestamps[i] * 1000);
-                    if (tf === '1D') arrLabels.push(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`); else arrLabels.push(`${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`);
+                    // 🚀 日K線專屬 X 軸日期顯示格式
+                    arrLabels.push(`${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`);
                 }
             }
             if (arrPrices.length > 0) { 
@@ -1496,7 +1514,6 @@
         validateSharesInput();
     }
 
-    // 🚀 加入 animate 參數控制
     function updateAllViews(animate = true) {
         let holdingsVal = 0, totalCost = 0;
         for(let t in state.holdings) { 
@@ -1578,18 +1595,21 @@
         const chartType = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
         
         if (chartType === 'KLINE') {
-            const colors = data.ohlc.map(d => d.c >= d.o ? 'rgba(0, 255, 170, 0.8)' : 'rgba(255, 69, 96, 0.8)');
+            const upColor = 'rgba(0, 255, 170, 0.9)';
+            const downColor = 'rgba(255, 69, 96, 0.9)';
+            
+            const colors = data.ohlc.map(d => d.c >= d.o ? upColor : downColor);
             const borderColors = data.ohlc.map(d => d.c >= d.o ? '#00ffaa' : '#ff4560');
             const dataBody = data.ohlc.map(d => {
                 let o = d.o, c = d.c;
-                if(Math.abs(o - c) < 0.0001) c = o + 0.01; // 防止收平盤時圖形消失
+                if(Math.abs(o - c) < 0.0001) c = o + 0.01; // 防止收平盤時無寬度消失
                 return [o, c];
             });
             const dataWick = data.ohlc.map(d => [d.l, d.h]);
 
             return [
-                { label: 'Body', type: 'bar', data: dataBody, backgroundColor: colors, borderColor: borderColors, borderWidth: 1, barPercentage: 0.6, categoryPercentage: 0.8, grouped: false, order: 2 },
-                { label: 'Wick', type: 'bar', data: dataWick, backgroundColor: borderColors, barPercentage: 0.05, categoryPercentage: 0.8, grouped: false, order: 1 }
+                { label: 'Body', type: 'bar', data: dataBody, backgroundColor: colors, borderColor: borderColors, borderWidth: 1, barPercentage: 0.8, categoryPercentage: 0.8, grouped: false, order: 2 },
+                { label: 'Wick', type: 'bar', data: dataWick, backgroundColor: borderColors, barThickness: 2, grouped: false, order: 1 } // 🚀 使用 barThickness: 2 繪製完美的 2px 影線
             ];
         } else {
             return [{ type: 'line', data: data.prices, borderColor: '#00ffaa', backgroundColor: 'rgba(0, 255, 170, 0.05)', borderWidth: 1.5, tension: 0.2, fill: true, pointRadius: computePointRadiusArray(data.prices.length, showNodes, densityVal) }];
@@ -1602,7 +1622,10 @@
         if (desktopChartMode === 'NAV') {
             document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-area" style="color:var(--color-acc)"></i> 投資組合總淨值走勢`;
             let cutoff = 0; const now = Date.now();
-            if (currentStockTF === '1D') cutoff = now - 86400000; else if (currentStockTF === '1W') cutoff = now - 86400000 * 7; else if (currentStockTF === '1M') cutoff = now - 86400000 * 30; else if (currentStockTF === '3M') cutoff = now - 86400000 * 90; else if (currentStockTF === '1Y') cutoff = now - 86400000 * 365;
+            if (currentStockTF === '1M') cutoff = now - 86400000 * 30; 
+            else if (currentStockTF === '3M') cutoff = now - 86400000 * 90; 
+            else if (currentStockTF === '6M') cutoff = now - 86400000 * 180; 
+            else if (currentStockTF === '1Y') cutoff = now - 86400000 * 365;
 
             let fLabels = [], fData = [];
             if (state.navHistory && state.navHistory.timestamps) {
@@ -1611,13 +1634,13 @@
                 }
             }
             if (fData.length === 0 && state.navHistory && state.navHistory.data && state.navHistory.data.length > 0) {
-                let lastVal = state.navHistory.data[state.navHistory.data.length - 1]; fLabels = [currentStockTF === '1D' ? '00:00' : 'Start', 'Now']; fData = [lastVal, lastVal];
+                let lastVal = state.navHistory.data[state.navHistory.data.length - 1]; fLabels = ['Start', 'Now']; fData = [lastVal, lastVal];
             } else if (fData.length === 1) { fLabels.push('Now'); fData.push(fData[0]); }
 
             navChart.data.labels = fLabels; 
             navChart.data.datasets = [{ type: 'line', data: fData, borderColor: '#00d4ff', backgroundColor: 'rgba(0, 212, 255, 0.05)', borderWidth: 2, tension: 0.2, fill: true, pointRadius: computePointRadiusArray(fData.length, showNodes, densityVal) }];
         } else {
-            document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> ${currentTicker} 個股歷史走勢`;
+            document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> ${currentTicker} 個股走勢 (日線)`;
             navChart.data.labels = stockHistData.labels;
             navChart.data.datasets = getStockDatasets(stockHistData, showNodes, densityVal);
         }
@@ -1626,7 +1649,7 @@
         mobileChart.data.labels = stockHistData.labels; 
         const mDensity = (densityVal === 'All') ? 'All' : Math.floor(densityVal / 2);
         mobileChart.data.datasets = getStockDatasets(stockHistData, showNodes, mDensity);
-        mobileChart.update(animate ? undefined : 'none'); // 🚀 手機版同步套用平滑刷新
+        mobileChart.update(animate ? undefined : 'none');
     }
 
     document.getElementById("cfg-chart-type").addEventListener("change", (e) => { localStorage.setItem('SETTING_CHART_TYPE', e.target.value); renderAllCharts(true); });
@@ -1755,7 +1778,6 @@
             ]);
             updateLiveNavNode();
             
-            // 🚀 定時更新完全不執行圖表躍動動畫 (參數 false)
             updateAllViews(false);
             
             fetchRealPrice(currentTicker);
