@@ -738,7 +738,6 @@
 
     function toggleSidebar() { sidebarEl.classList.toggle('open'); overlayEl.classList.toggle('active'); sidebarEl.style.transform = ''; }
     
-    // 🚀 側邊欄防呆：持續追蹤有效觸控點
     let activeTouches = 0;
     document.addEventListener('touchstart', (e) => {
         activeTouches = e.touches.length;
@@ -759,9 +758,8 @@
         else if (isOpen && diffX < 0) { if (e.cancelable) e.preventDefault(); sidebarEl.classList.add('dragging'); sidebarEl.style.transform = `translateX(${Math.max(diffX, -SIDEBAR_WIDTH)}px)`; }
     }, {passive: false});
     
-    // 🚀 側邊欄防呆結算：只要手指離開或系統中斷就立即結算
     function snapSidebar() {
-        if (sidebarEl.style.transform === '') return; // 若已經歸位則忽略
+        if (sidebarEl.style.transform === '') return;
         
         const diffX = sCurrentX - sStartX;
         const isOpen = sidebarEl.classList.contains('open');
@@ -786,7 +784,6 @@
     window.addEventListener('blur', () => { activeTouches = 0; snapSidebar(); }); 
     document.addEventListener('visibilitychange', () => { if(document.hidden) { activeTouches = 0; snapSidebar(); } });
 
-    // 🚀 持續性掃描：雙重保證手指離開後不會卡住
     setInterval(() => {
         if (activeTouches === 0 && sidebarEl.style.transform !== '') snapSidebar();
     }, 150);
@@ -842,7 +839,6 @@
     let currentRealPrice = null, isPriceLoading = true, currentRange = '1M', searchDebounceTimer = null, desktopChartMode = 'NAV', tradeMode = 'BUY';
     let stockHistData = { labels: [], prices: [], ohlc: [] }, cardsDataCache = {}, isCardEditMode = false;
 
-    // 🚀 核心：動態按鈕結構映射表
     const RANGE_MAP = {
         'LINE': [
             { label: '1D', range: '1d', interval: '5m' }, { label: '1W', range: '5d', interval: '15m' }, { label: '1M', range: '1mo', interval: '1d' },
@@ -862,22 +858,21 @@
         document.getElementById("setting-kline-interval").style.display = type === 'KLINE' ? 'flex' : 'none';
     }
 
-    // 🚀 核心：動態生成圖表上方的時間範圍按鈕
     function updateTimeframeButtons() {
         const type = document.getElementById("cfg-chart-type").value;
         const interval = document.getElementById("cfg-kline-interval").value;
-        const isNav = desktopChartMode === 'NAV';
+        const isNav = desktopChartMode === 'NAV' && window.innerWidth > 768;
         
-        let buttonsData = [];
-        if (isNav || type === 'LINE') buttonsData = RANGE_MAP['LINE'];
-        else buttonsData = RANGE_MAP['KLINE'][interval];
+        let desktopButtonsData = (isNav || type === 'LINE') ? RANGE_MAP['LINE'] : RANGE_MAP['KLINE'][interval];
+        let mobileButtonsData = (type === 'LINE') ? RANGE_MAP['LINE'] : RANGE_MAP['KLINE'][interval];
 
-        if (!buttonsData.find(b => b.label === currentRange)) currentRange = buttonsData[0].label;
+        const activeBtns = window.innerWidth <= 768 ? mobileButtonsData : desktopButtonsData;
+        if (!activeBtns.find(b => b.label === currentRange)) currentRange = activeBtns[0].label;
 
         document.getElementById('tf-group').innerHTML = `<div class="tf-active-bg" id="tf-active-bg"></div>` + 
-            buttonsData.map(b => `<button class="tf-btn ${b.label === currentRange ? 'active' : ''}" data-label="${b.label}">${b.label}</button>`).join('');
+            desktopButtonsData.map(b => `<button class="tf-btn ${b.label === currentRange ? 'active' : ''}" data-label="${b.label}">${b.label}</button>`).join('');
 
-        document.getElementById('m-tf-group').innerHTML = buttonsData.map(b => `<button class="tf-btn ${b.label === currentRange ? 'active' : ''}" data-label="${b.label}" style="padding:3px 6px;">${b.label}</button>`).join('');
+        document.getElementById('m-tf-group').innerHTML = mobileButtonsData.map(b => `<button class="tf-btn ${b.label === currentRange ? 'active' : ''}" data-label="${b.label}" style="padding:3px 6px;">${b.label}</button>`).join('');
 
         attachTfListeners();
     }
@@ -895,7 +890,6 @@
                 
                 document.querySelectorAll('#m-tf-group .tf-btn').forEach(mBtn => mBtn.classList.toggle('active', mBtn.dataset.label === currentRange));
                 
-                // 🚀 修復雙重彈跳：取消立刻渲染，交由新資料取得後單次重繪
                 fetchStockHistoryData(currentTicker, true);
             });
         });
@@ -1470,7 +1464,7 @@
     async function fetchStockHistoryData(ticker, animate = true) {
         const type = document.getElementById("cfg-chart-type").value;
         const klineInterval = document.getElementById("cfg-kline-interval").value;
-        const isNav = desktopChartMode === 'NAV';
+        const isNav = desktopChartMode === 'NAV' && window.innerWidth > 768;
         
         let range, interval;
 
@@ -1647,13 +1641,12 @@
         renderAllCharts(animate);
     }
 
-    // 🚀 1. 極簡單一字元 Tooltip (開/高/低/收/價/淨)
     const chartTooltipConfig = {
         enabled: true, mode: 'index', intersect: false,
         callbacks: {
             title: function(context) { return context[0].label; },
             label: function(context) {
-                if (context.chart.canvas.id === 'navChart' && desktopChartMode === 'NAV') { return '淨: $' + Math.floor(context.parsed.y).toLocaleString(); }
+                if (context.chart.canvas.id === 'navChart' && desktopChartMode === 'NAV' && window.innerWidth > 768) { return '淨: $' + Math.floor(context.parsed.y).toLocaleString(); }
                 if (context.dataset.label === 'Wick') return null; 
                 
                 const type = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
@@ -1686,6 +1679,25 @@
         return Array.from({ length: dataLength }, (_, i) => (i % step === 0 || i === dataLength - 1) ? 4 : 0);
     }
 
+    function applyChartDatasets(chart, newDatasets) {
+        let replace = false;
+        if (chart.data.datasets.length !== newDatasets.length) replace = true;
+        else {
+            for (let i = 0; i < newDatasets.length; i++) {
+                if (chart.data.datasets[i].type !== newDatasets[i].type || chart.data.datasets[i].label !== newDatasets[i].label) {
+                    replace = true; break;
+                }
+            }
+        }
+        if (replace) {
+            chart.data.datasets = newDatasets;
+        } else {
+            for (let i = 0; i < newDatasets.length; i++) {
+                Object.assign(chart.data.datasets[i], newDatasets[i]);
+            }
+        }
+    }
+
     function getStockDatasets(data, showNodes, densityVal) {
         const chartType = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
         
@@ -1707,7 +1719,7 @@
                 { label: 'Wick', type: 'bar', data: dataWick, backgroundColor: borderColors, barThickness: 2, grouped: false, order: 1 } 
             ];
         } else {
-            return [{ type: 'line', data: data.prices, borderColor: '#00ffaa', backgroundColor: 'rgba(0, 255, 170, 0.05)', borderWidth: 1.5, tension: 0.2, fill: true, pointRadius: computePointRadiusArray(data.prices.length, showNodes, densityVal) }];
+            return [{ label: 'Stock', type: 'line', data: data.prices, borderColor: '#00ffaa', backgroundColor: 'rgba(0, 255, 170, 0.05)', borderWidth: 1.5, tension: 0.2, fill: true, pointRadius: computePointRadiusArray(data.prices.length, showNodes, densityVal) }];
         }
     }
 
@@ -1715,8 +1727,7 @@
         const showNodes = document.getElementById("cfg-node-show").checked, rawVal = document.getElementById("cfg-node-val").value, densityVal = (rawVal === 'All') ? 'All' : parseInt(rawVal) || 20;
         const chartType = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
         
-        if (desktopChartMode === 'NAV') {
-            // 🚀 2. 隱藏手機版主標題字樣 (透過 CSS class 'hide-on-mobile')
+        if (desktopChartMode === 'NAV' && window.innerWidth > 768) {
             document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-area" style="color:var(--color-acc)"></i> <span class="hide-on-mobile" style="margin-left:4px;">投資組合總淨值走勢</span>`;
             let cutoff = 0; const now = Date.now();
             if (currentRange === '1D') cutoff = now - 86400000; 
@@ -1736,7 +1747,7 @@
             } else if (fData.length === 1) { fLabels.push('Now'); fData.push(fData[0]); }
 
             navChart.data.labels = fLabels; 
-            navChart.data.datasets = [{ type: 'line', data: fData, borderColor: '#00d4ff', backgroundColor: 'rgba(0, 212, 255, 0.05)', borderWidth: 2, tension: 0.2, fill: true, pointRadius: computePointRadiusArray(fData.length, showNodes, densityVal) }];
+            applyChartDatasets(navChart, [{ label: 'NAV', type: 'line', data: fData, borderColor: '#00d4ff', backgroundColor: 'rgba(0, 212, 255, 0.05)', borderWidth: 2, tension: 0.2, fill: true, pointRadius: computePointRadiusArray(fData.length, showNodes, densityVal) }]);
         } else {
             let titlePrefix = '個股走勢';
             if (chartType === 'KLINE') {
@@ -1746,16 +1757,29 @@
             }
             document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> <span style="margin-left:4px;">${currentTicker}</span> <span class="hide-on-mobile">${titlePrefix}</span>`;
             navChart.data.labels = stockHistData.labels;
-            navChart.data.datasets = getStockDatasets(stockHistData, showNodes, densityVal);
+            applyChartDatasets(navChart, getStockDatasets(stockHistData, showNodes, densityVal));
         }
         navChart.update(animate ? undefined : 'none'); 
 
         document.getElementById("m-main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> <span style="margin-left:4px;">${currentTicker}</span>`;
         mobileChart.data.labels = stockHistData.labels; 
         const mDensity = (densityVal === 'All') ? 'All' : Math.floor(densityVal / 2);
-        mobileChart.data.datasets = getStockDatasets(stockHistData, showNodes, mDensity);
+        applyChartDatasets(mobileChart, getStockDatasets(stockHistData, showNodes, mDensity));
         mobileChart.update(animate ? undefined : 'none');
     }
+
+    document.getElementById("cfg-chart-type").addEventListener("change", (e) => { 
+        localStorage.setItem('SETTING_CHART_TYPE', e.target.value); 
+        updateChartSettingsUI();
+        updateTimeframeButtons();
+        fetchStockHistoryData(currentTicker, true);
+    });
+
+    document.getElementById("cfg-kline-interval").addEventListener("change", (e) => { 
+        localStorage.setItem('SETTING_KLINE_INTERVAL', e.target.value); 
+        updateTimeframeButtons();
+        fetchStockHistoryData(currentTicker, true);
+    });
 
     document.getElementById("cfg-node-show").addEventListener("change", (e) => { localStorage.setItem('SETTING_NODE_SHOW', e.target.checked); document.getElementById("node-settings-wrapper").classList.toggle("disabled", !e.target.checked); renderAllCharts(); });
     document.getElementById("cfg-crosshair-show").addEventListener("change", (e) => { localStorage.setItem('SETTING_CROSSHAIR_SHOW', e.target.checked); });
