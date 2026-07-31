@@ -5,42 +5,54 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#555555">
 
-    <!-- 1. 告訴 iOS 這是一個獨立的 Web App -->
+    <!-- 1. Web App 獨立模式 -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     
-    <!-- 2. 強制讓狀態列文字變白色，並且背景變透明 -->
+    <!-- 2. 狀態列文字變白色，背景透明（透出底層 html 背景） -->
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    
     <title>AlphaTrade</title>
     
-    <!-- 3. 破解快取關鍵：在檔名後面加上 ?v=2，騙 iOS 這是一張新圖片，逼它重新下載 -->
-    <link rel="apple-touch-icon" sizes="180x180" href="icon.png?v=2">
-
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- 3. 🎯 徹底解決圖標問題：使用一個「確定沒有透明背景」的新圖示檔案 -->
+    <!-- 並加上更強力的快取破解參數 -->
+    <link rel="apple-touch-icon" sizes="180x180" href="icon_fixed.png?cache=rev4">
     
     <style>
+/* 徹底消滅底部白邊，並設定底層背景色（灰色，用於狀態列） */
         html, body {
-            /* 將最底層背景設為灰色，這樣透明狀態列透過去就會是灰色 */
-            background-color: #555555; 
             margin: 0;
             padding: 0;
             width: 100%;
-            /* 使用 dvh 確保動態填滿整個手機螢幕高度，消滅底部白邊 */
             min-height: 100dvh; 
+            background-color: #555555; /* 底層灰色 */
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
         }
 
-        body {
-            /* 讓出上方狀態列空間與下方 Home 橫條空間 */
-            padding-top: env(safe-area-inset-top);
-            padding-bottom: env(safe-area-inset-bottom);
-        }
-
-        /* 根據你上一張截圖，你的網頁主體似乎是黑色的 */
+        /* 🎯 解決上方擠成一團的問題 */
+        /* 把你所有的網頁內容都包在這個 .content div 裡面 */
         .content {
-            background-color: #000000; /* 如果你的網頁主體不是黑色，請把這裡改成你要的顏色 */
-            /* 填滿扣除上下安全距離後的剩餘空間 */
-            min-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+            background-color: #000000; /* 內容區塊設為你要的黑色 */
+            flex-grow: 1; /* 彈性填滿剩餘高度 */
+            width: 100%;
+            
+            /* 1. 清除動態島/瀏海高度 */
+            /* 2. 🎯 在清除高度後，再「額外」加上 16px 的舒適設計白邊 */
+            padding-top: calc(env(safe-area-inset-top) + 16px);
+            
+            /* 1. 清除下方 Home 橫條高度 */
+            /* 2. 在清除高度後，再「額外」加上 16px 的白邊 */
+            padding-bottom: calc(env(safe-area-inset-bottom) + 16px);
+            
+            color: white; /* 範例內容用白色字 */
+            padding-left: 20px;
+            padding-right: 20px;
+            box-sizing: border-box;
         }
+        
+        /* 用於示範的樣式 */
+        .content p { margin-top: 0; }
 
         :root {
             --bg-color: #030303;
