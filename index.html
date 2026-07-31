@@ -258,7 +258,6 @@
             .mobile-stock-chart-box { display: flex; }
             #chart-container { flex: 1; min-height: 0; display: flex; flex-direction: column; }
             #ai-commander { height: 260px; flex-shrink: 0; }
-            .chart-header { flex-direction: column; align-items: flex-start; gap: 10px; }
         }
     </style>
 </head>
@@ -314,17 +313,10 @@
             <div class="dashboard-left-col">
                 <div class="glass-panel" id="chart-container">
                     <div class="chart-header">
-                        <span style="font-weight: bold; font-size: 13px;" id="main-chart-title"><i class="fa-solid fa-chart-area" style="color: var(--color-acc)"></i> 投資組合總淨值走勢</span>
+                        <span style="font-weight: bold; font-size: 13px;" id="main-chart-title"></span>
                         <div class="header-controls">
-                            <div class="timeframe-selector" id="tf-group">
-                                <div class="tf-active-bg" id="tf-active-bg"></div>
-                                <button class="tf-btn active" data-tf="1D">1D</button>
-                                <button class="tf-btn" data-tf="1W">1W</button>
-                                <button class="tf-btn" data-tf="1M">1M</button>
-                                <button class="tf-btn" data-tf="3M">3M</button>
-                                <button class="tf-btn" data-tf="1Y">1Y</button>
-                                <button class="tf-btn" data-tf="All">All</button>
-                            </div>
+                            <!-- 🚀 動態時間區段 -->
+                            <div class="timeframe-selector" id="tf-group"></div>
                             <button class="standalone-mode-btn" onclick="toggleDesktopChartMode()" title="切換顯示：組合總淨值 / 個股走勢">
                                 <i class="fa-solid fa-repeat" id="mode-icon"></i>
                             </button>
@@ -850,7 +842,7 @@
     // 獨立管理主儀表板與下單櫃檯的範圍狀態，解決互相干擾問題
     let currentRange = '1M', mCurrentRange = '1M';
     let currentRealPrice = null, isPriceLoading = true, searchDebounceTimer = null, desktopChartMode = 'NAV', tradeMode = 'BUY';
-    let stockHistData = { labels: [], prices: [], ohlc: [] }, cardsDataCache = {}, isCardEditMode = false;
+    let stockHistData = { labels: [], prices: [], ohlc: [], tooltipLabels: [] }, cardsDataCache = {}, isCardEditMode = false;
 
     const RANGE_MAP = {
         'LINE': [
@@ -1496,7 +1488,7 @@
             const timestamps = result.timestamp || [], quote = result.indicators.quote[0];
             const closes = quote.close || [], opens = quote.open || [], highs = quote.high || [], lows = quote.low || [];
             
-            let arrPrices = [], arrLabels = [], arrOHLC = [];
+            let arrPrices = [], arrLabels = [], arrOHLC = [], arrTooltipLabels = [];
             for(let i = 0; i < timestamps.length; i++) {
                 if (closes[i] !== null && closes[i] !== undefined) {
                     arrPrices.push(closes[i]); 
@@ -1507,16 +1499,25 @@
                     arrOHLC.push({ o, h, l, c: closes[i] });
 
                     const d = new Date(timestamps[i] * 1000);
-                    if (intervalStr === '5m' || intervalStr === '15m' || range === '1d') {
-                        arrLabels.push(`${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`);
+                    const yy = String(d.getFullYear()).slice(-2);
+                    const mm = String(d.getMonth()+1).padStart(2,'0');
+                    const dd = String(d.getDate()).padStart(2,'0');
+                    const hh = String(d.getHours()).padStart(2, '0');
+                    const min = String(d.getMinutes()).padStart(2, '0');
+
+                    if (range === '1d') {
+                        arrLabels.push(`${hh}:${min}`);
+                        arrTooltipLabels.push(`${yy}/${mm}/${dd} ${hh}:${min}`);
                     } else {
-                        arrLabels.push(`${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`);
+                        arrLabels.push(`${yy}/${mm}/${dd}`);
+                        arrTooltipLabels.push(`${yy}/${mm}/${dd}`);
                     }
                 }
             }
             if (arrPrices.length > 0) { 
                 stockHistData.prices = arrPrices; 
                 stockHistData.labels = arrLabels; 
+                stockHistData.tooltipLabels = arrTooltipLabels;
                 stockHistData.ohlc = arrOHLC; 
                 updateRSIDisplay(arrPrices); 
                 renderAllCharts(animate); 
@@ -1654,7 +1655,14 @@
     const chartTooltipConfig = {
         enabled: true, mode: 'index', intersect: false,
         callbacks: {
-            title: function(context) { return context[0].label; },
+            title: function(context) { 
+                const chart = context[0].chart;
+                const dataIndex = context[0].dataIndex;
+                if (chart.data.tooltipLabels && chart.data.tooltipLabels[dataIndex]) {
+                    return chart.data.tooltipLabels[dataIndex];
+                }
+                return context[0].label; 
+            },
             label: function(context) {
                 if (context.chart.canvas.id === 'navChart' && desktopChartMode === 'NAV') { return '淨: $' + Math.floor(context.parsed.y).toLocaleString(); }
                 if (context.dataset.label === 'Wick') return null; 
@@ -1672,7 +1680,17 @@
         }
     };
 
-    const navChart = new Chart(document.getElementById('navChart').getContext('2d'), { type: 'line', data: { labels: [], datasets: [{ data: [], borderColor: '#00d4ff', backgroundColor: 'rgba(0, 212, 255, 0.05)', borderWidth: 2, tension: 0.2, fill: true }] }, options: { responsive: true, maintainAspectRatio: false, events: ['mousedown', 'mouseup', 'mousemove', 'mouseout', 'touchstart', 'touchmove', 'touchend', 'touchcancel'], interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false }, tooltip: { enabled: true, mode: 'index', intersect: false } }, scales: { x: { grid: { display: false } }, y: { grid: { color: 'rgba(255,255,255,0.04)' } } } } });
+    const navChart = new Chart(document.getElementById('navChart').getContext('2d'), { 
+        type: 'line', data: { labels: [], datasets: [] }, 
+        options: { 
+            responsive: true, maintainAspectRatio: false, 
+            events: ['mousedown', 'mouseup', 'mousemove', 'mouseout', 'touchstart', 'touchmove', 'touchend', 'touchcancel'], 
+            interaction: { mode: 'index', intersect: false }, 
+            layout: { padding: { top: 0, bottom: 0, left: 0, right: 0 } },
+            plugins: { legend: { display: false }, tooltip: chartTooltipConfig }, 
+            scales: { x: { grid: { display: false }, offset: false }, y: { beginAtZero: false, grid: { color: 'rgba(255,255,255,0.04)' }, grace: 0 } } 
+        } 
+    });
     
     const mobileChart = new Chart(document.getElementById('mobileStockChart').getContext('2d'), { 
         type: 'line', data: { labels: [], datasets: [] }, 
@@ -1761,17 +1779,46 @@
             else if (currentRange === '3M') cutoff = now - 86400000 * 90; 
             else if (currentRange === '1Y') cutoff = now - 86400000 * 365;
 
-            let fLabels = [], fData = [];
+            let fLabels = [], fData = [], fTooltipLabels = [];
             if (state.navHistory && state.navHistory.timestamps) {
                 for (let i = 0; i < state.navHistory.timestamps.length; i++) {
-                    if (state.navHistory.timestamps[i] >= cutoff) { fLabels.push(state.navHistory.labels[i]); fData.push(state.navHistory.data[i]); }
+                    if (state.navHistory.timestamps[i] >= cutoff) { 
+                        const d = new Date(state.navHistory.timestamps[i]);
+                        const yy = String(d.getFullYear()).slice(-2);
+                        const mm = String(d.getMonth()+1).padStart(2,'0');
+                        const dd = String(d.getDate()).padStart(2,'0');
+                        const hh = String(d.getHours()).padStart(2, '0');
+                        const min = String(d.getMinutes()).padStart(2, '0');
+                        
+                        if (currentRange === '1D') {
+                            fLabels.push(`${hh}:${min}`);
+                            fTooltipLabels.push(`${yy}/${mm}/${dd} ${hh}:${min}`);
+                        } else {
+                            fLabels.push(`${yy}/${mm}/${dd}`);
+                            fTooltipLabels.push(`${yy}/${mm}/${dd}`);
+                        }
+                        fData.push(state.navHistory.data[i]); 
+                    }
                 }
             }
             if (fData.length === 0 && state.navHistory && state.navHistory.data && state.navHistory.data.length > 0) {
-                let lastVal = state.navHistory.data[state.navHistory.data.length - 1]; fLabels = ['Start', 'Now']; fData = [lastVal, lastVal];
-            } else if (fData.length === 1) { fLabels.push('Now'); fData.push(fData[0]); }
+                let lastVal = state.navHistory.data[state.navHistory.data.length - 1]; 
+                fLabels = ['Start', 'Now']; 
+                fTooltipLabels = ['Start', 'Now'];
+                fData = [lastVal, lastVal];
+            } else if (fData.length === 1) { 
+                fLabels.push('Now'); 
+                fTooltipLabels.push('Now');
+                fData.push(fData[0]); 
+            }
+
+            // Restore original reference version style for NAV chart
+            navChart.options.layout.padding = { top: 0, bottom: 0, left: 0, right: 0 };
+            navChart.options.scales.y.grace = 0;
+            navChart.options.scales.x.offset = false;
 
             navChart.data.labels = fLabels; 
+            navChart.data.tooltipLabels = fTooltipLabels;
             applyChartDatasets(navChart, [{ label: 'NAV', type: 'line', data: fData, borderColor: '#00d4ff', backgroundColor: 'rgba(0, 212, 255, 0.05)', borderWidth: 2, tension: 0.2, fill: true, pointRadius: computePointRadiusArray(fData.length, showNodes, densityVal) }]);
         } else {
             let titlePrefix = '個股走勢';
@@ -1781,7 +1828,13 @@
                 titlePrefix = `${intvName} 走勢`;
             }
             document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> <span style="margin-left:4px;">${currentTicker}</span> <span class="hide-on-mobile">${titlePrefix}</span>`;
+            
+            navChart.options.layout.padding = { top: 15, bottom: 15, left: 10, right: 10 };
+            navChart.options.scales.y.grace = '10%';
+            navChart.options.scales.x.offset = (chartType === 'KLINE');
+            
             navChart.data.labels = stockHistData.labels;
+            navChart.data.tooltipLabels = stockHistData.tooltipLabels;
             applyChartDatasets(navChart, getStockDatasets(stockHistData, showNodes, densityVal));
         }
         
@@ -1789,7 +1842,10 @@
         navChart.update(); 
 
         document.getElementById("m-main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> <span style="margin-left:4px;">${currentTicker}</span>`;
+        
+        mobileChart.options.scales.x.offset = (chartType === 'KLINE');
         mobileChart.data.labels = stockHistData.labels; 
+        mobileChart.data.tooltipLabels = stockHistData.tooltipLabels;
         const mDensity = (densityVal === 'All') ? 'All' : Math.floor(densityVal / 2);
         applyChartDatasets(mobileChart, getStockDatasets(stockHistData, showNodes, mDensity));
         
