@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-Hant" class="notranslate" translate="no">
 <head>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#555555">
 
@@ -11,20 +12,34 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>AlphaTrade</title>
     
-    <link rel="apple-touch-icon" href="icon.png">
+    <!-- 3. 破解快取關鍵：在檔名後面加上 ?v=2，騙 iOS 這是一張新圖片，逼它重新下載 -->
+    <link rel="apple-touch-icon" sizes="180x180" href="icon.png?v=2">
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
     <style>
-        body {
-
-            /* 4. 因為狀態列變透明了，這裡設定的灰色會直接填滿頂端的狀態列 */
+        html, body {
+            /* 將最底層背景設為灰色，這樣透明狀態列透過去就會是灰色 */
             background-color: #555555; 
             margin: 0;
-            
-            /* 5. 確保網頁內容不會被白色的時間、電量圖示擋住 */
+            padding: 0;
+            width: 100%;
+            /* 使用 dvh 確保動態填滿整個手機螢幕高度，消滅底部白邊 */
+            min-height: 100dvh; 
+        }
+
+        body {
+            /* 讓出上方狀態列空間與下方 Home 橫條空間 */
             padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+
+        /* 根據你上一張截圖，你的網頁主體似乎是黑色的 */
+        .content {
+            background-color: #000000; /* 如果你的網頁主體不是黑色，請把這裡改成你要的顏色 */
+            /* 填滿扣除上下安全距離後的剩餘空間 */
+            min-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
         }
 
         :root {
