@@ -226,7 +226,9 @@
         /* 卡片拖曳時的佔位符樣式 */
         .is-dragging-placeholder { opacity: 0; pointer-events: none; }
 
+        /* 🚀 控制手機版圖表標題隱藏 */
         @media (max-width: 768px) {
+            .hide-on-mobile { display: none !important; }
             .mobile-only { display: flex; }
             #mobile-header { display: flex; justify-content: space-between; align-items: center; height: 60px; padding: 0 20px; background: rgba(10, 10, 10, 0.95); border-bottom: 1px solid rgba(255,255,255,0.06); z-index: 50; position: absolute; top: 0; left: 0; width: 100%; }
             .mobile-menu-btn { background: transparent; border: none; color: #fff; font-size: 20px; cursor: pointer; padding: 10px; margin-left: -10px; z-index: 2; }
@@ -311,7 +313,7 @@
             <div class="dashboard-left-col">
                 <div class="glass-panel" id="chart-container">
                     <div class="chart-header">
-                        <span style="font-weight: bold; font-size: 13px;" id="main-chart-title"><i class="fa-solid fa-chart-area" style="color: var(--color-acc)"></i> 投資組合總淨值走勢</span>
+                        <span style="font-weight: bold; font-size: 13px;" id="main-chart-title"></span>
                         <div class="header-controls">
                             <!-- 🚀 動態時間區段 -->
                             <div class="timeframe-selector" id="tf-group"></div>
@@ -455,7 +457,7 @@
                     <option value="LINE">一般折線圖</option>
                 </select>
             </div>
-            <!-- 🚀 動態 K 線週期設定 -->
+            
             <div class="glass-panel setting-item" id="setting-kline-interval" style="display:none; border-top:1px solid rgba(255,255,255,0.05);">
                 <div><div style="font-weight:bold; color:var(--color-acc);">K線週期設定</div><div style="font-size:11px; color:#777; margin-top:2px;">圖表時間範圍選項會依照此設定變動</div></div>
                 <select id="cfg-kline-interval" style="background:rgba(0,212,255,0.1); border:1px solid var(--color-acc); color:#fff; padding:6px; border-radius:6px; font-weight:bold; outline:none;">
@@ -553,8 +555,7 @@
 
     <div class="mobile-stock-chart-box">
         <div class="mobile-chart-header">
-            <span style="font-size:11px; color:#aaa; font-weight:bold;"><i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> <span id="m-chart-ticker">NVDA</span> 走勢</span>
-            <!-- 🚀 動態時間區段 -->
+            <span style="font-size:11px; color:#aaa; font-weight:bold;" id="m-main-chart-title"></span>
             <div class="timeframe-selector" id="m-tf-group" style="padding:2px;"></div>
         </div>
         <div style="height: 110px; position:relative; width:100%;"><canvas id="mobileStockChart"></canvas></div>
@@ -737,7 +738,10 @@
 
     function toggleSidebar() { sidebarEl.classList.toggle('open'); overlayEl.classList.toggle('active'); sidebarEl.style.transform = ''; }
     
+    // 🚀 側邊欄防呆：持續追蹤有效觸控點
+    let activeTouches = 0;
     document.addEventListener('touchstart', (e) => {
+        activeTouches = e.touches.length;
         if (window.innerWidth > 768) return;
         if (isCardEditMode) { sIsDragging = false; return; }
         if (e.target.closest('canvas, .tf-btn, .jelly-slider-input, .jelly-slider-container, .table-responsive')) { sIsDragging = false; return; }
@@ -755,32 +759,37 @@
         else if (isOpen && diffX < 0) { if (e.cancelable) e.preventDefault(); sidebarEl.classList.add('dragging'); sidebarEl.style.transform = `translateX(${Math.max(diffX, -SIDEBAR_WIDTH)}px)`; }
     }, {passive: false});
     
-    // 🚀 終極防呆結算機制：只要失去接觸/中斷，依據當下距離瞬間決定開關，永不卡死
-    function snapSidebar(e) {
-        if (!sIsDragging) return;
-        sIsDragging = false; 
-        sidebarEl.classList.remove('dragging');
+    // 🚀 側邊欄防呆結算：只要手指離開或系統中斷就立即結算
+    function snapSidebar() {
+        if (sidebarEl.style.transform === '') return; // 若已經歸位則忽略
         
         const diffX = sCurrentX - sStartX;
         const isOpen = sidebarEl.classList.contains('open');
-
-        // 當下的相對距離若超過防誤觸閥值，就變更狀態；否則還原原本狀態
-        if (!isOpen && diffX > SWIPE_THRESHOLD) { 
-            sidebarEl.classList.add('open'); overlayEl.classList.add('active'); 
-        } else if (isOpen && diffX < -SWIPE_THRESHOLD) { 
-            sidebarEl.classList.remove('open'); overlayEl.classList.remove('active'); 
+        
+        sidebarEl.classList.remove('dragging');
+        
+        if (sIsDragging) {
+            if (!isOpen && diffX > 40) { 
+                sidebarEl.classList.add('open'); overlayEl.classList.add('active'); 
+            } else if (isOpen && diffX < -40) { 
+                sidebarEl.classList.remove('open'); overlayEl.classList.remove('active'); 
+            }
         }
         
-        // 拔除所有動態 transform，讓 CSS 的 transition 直接接手平滑吸附到對應位置
         sidebarEl.style.transform = ''; 
+        sIsDragging = false; 
         sStartX = 0; sCurrentX = 0;
     }
     
-    document.addEventListener('touchend', snapSidebar);
-    // 攔截各種強制中斷事件 (拉下控制中心、叫出小白條、來電、切換APP等)
-    document.addEventListener('touchcancel', snapSidebar); 
-    window.addEventListener('blur', snapSidebar); 
-    document.addEventListener('visibilitychange', () => { if(document.hidden) snapSidebar(); });
+    document.addEventListener('touchend', e => { activeTouches = e.touches.length; if(activeTouches === 0) snapSidebar(); });
+    document.addEventListener('touchcancel', e => { activeTouches = e.touches.length; snapSidebar(); }); 
+    window.addEventListener('blur', () => { activeTouches = 0; snapSidebar(); }); 
+    document.addEventListener('visibilitychange', () => { if(document.hidden) { activeTouches = 0; snapSidebar(); } });
+
+    // 🚀 持續性掃描：雙重保證手指離開後不會卡住
+    setInterval(() => {
+        if (activeTouches === 0 && sidebarEl.style.transform !== '') snapSidebar();
+    }, 150);
 
     function switchView(id, btn) {
         document.querySelectorAll(".view-section").forEach(v => v.classList.remove("active"));
@@ -863,15 +872,12 @@
         if (isNav || type === 'LINE') buttonsData = RANGE_MAP['LINE'];
         else buttonsData = RANGE_MAP['KLINE'][interval];
 
-        // 防呆：如果現在選擇的範圍不存在於新的選項中，則自動跳到第一個
         if (!buttonsData.find(b => b.label === currentRange)) currentRange = buttonsData[0].label;
 
-        // 生成電腦版按鈕
         document.getElementById('tf-group').innerHTML = `<div class="tf-active-bg" id="tf-active-bg"></div>` + 
-            buttonsData.map(b => `<button class="tf-btn ${b.label === currentRange ? 'active' : ''}" data-range="${b.range}" data-label="${b.label}">${b.label}</button>`).join('');
+            buttonsData.map(b => `<button class="tf-btn ${b.label === currentRange ? 'active' : ''}" data-label="${b.label}">${b.label}</button>`).join('');
 
-        // 生成手機版按鈕
-        document.getElementById('m-tf-group').innerHTML = buttonsData.map(b => `<button class="tf-btn ${b.label === currentRange ? 'active' : ''}" data-range="${b.range}" data-label="${b.label}" style="padding:3px 6px;">${b.label}</button>`).join('');
+        document.getElementById('m-tf-group').innerHTML = buttonsData.map(b => `<button class="tf-btn ${b.label === currentRange ? 'active' : ''}" data-label="${b.label}" style="padding:3px 6px;">${b.label}</button>`).join('');
 
         attachTfListeners();
     }
@@ -888,8 +894,9 @@
                 currentRange = btn.dataset.label;
                 
                 document.querySelectorAll('#m-tf-group .tf-btn').forEach(mBtn => mBtn.classList.toggle('active', mBtn.dataset.label === currentRange));
+                
+                // 🚀 修復雙重彈跳：取消立刻渲染，交由新資料取得後單次重繪
                 fetchStockHistoryData(currentTicker, true);
-                if (desktopChartMode === 'NAV') renderAllCharts(true); 
             });
         });
         
@@ -916,7 +923,6 @@
                 }
 
                 fetchStockHistoryData(currentTicker, true);
-                if (desktopChartMode === 'NAV') renderAllCharts(true);
             });
         });
     }
@@ -999,7 +1005,6 @@
             } catch(e) {} 
         } else { rebuildNavHistoryFromLedger(); saveData(); }
         
-        // 保證預設載入非空白
         const savedChartType = localStorage.getItem('SETTING_CHART_TYPE'); 
         document.getElementById("cfg-chart-type").value = savedChartType ? savedChartType : 'KLINE';
         
@@ -1016,9 +1021,9 @@
             const valNum = (savedVal === 'All') ? 60 : parseInt(savedVal); const pct = (valNum - 5) / (60 - 5); document.getElementById("jelly-thumb").style.left = `${pct * 162}px`;
         }
         document.getElementById("node-settings-wrapper").classList.toggle("disabled", !document.getElementById("cfg-node-show").checked);
-        document.getElementById("trade-ticker").value = currentTicker; document.getElementById("m-chart-ticker").innerText = currentTicker;
+        document.getElementById("trade-ticker").value = currentTicker; 
         
-        updateTimeframeButtons(); // 初始化動態按鈕
+        updateTimeframeButtons();
         initTimeMachineDefault(); renderRecentTickers(); renderCards();
     }
     
@@ -1411,7 +1416,7 @@
 
     function selectTicker(t) {
         currentTicker = t; localStorage.setItem('LAST_SELECTED_TICKER', t);
-        document.getElementById("trade-ticker").value = t; document.getElementById("m-chart-ticker").innerText = t;
+        document.getElementById("trade-ticker").value = t; 
         document.getElementById("ticker-dropdown").classList.remove("show");
         document.getElementById("recent-group-title").style.display = 'block'; document.getElementById("recent-tickers-list").style.display = 'block';
         addToRecentlySelected(t); 
@@ -1462,14 +1467,14 @@
         else { badge.innerText = '中性區位'; badge.style.background = 'rgba(0,212,255,0.2)'; badge.style.color = 'var(--color-acc)'; }
     }
 
-    // 🚀 核心更新：根據圖表類型 (LINE/KLINE) 自動適應區間與標籤文字
     async function fetchStockHistoryData(ticker, animate = true) {
         const type = document.getElementById("cfg-chart-type").value;
         const klineInterval = document.getElementById("cfg-kline-interval").value;
+        const isNav = desktopChartMode === 'NAV';
         
         let range, interval;
 
-        if (type === 'LINE') {
+        if (isNav || type === 'LINE') {
             const config = RANGE_MAP['LINE'].find(b => b.label === currentRange) || RANGE_MAP['LINE'][2];
             range = config.range;
             interval = config.interval;
@@ -1498,7 +1503,6 @@
                     arrOHLC.push({ o, h, l, c: closes[i] });
 
                     const d = new Date(timestamps[i] * 1000);
-                    // 根據區間決定顯示日期還是時間
                     if (interval === '5m' || interval === '15m' || range === '1d') {
                         arrLabels.push(`${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`);
                     } else {
@@ -1635,7 +1639,7 @@
             return `<tr>
                 <td>${displayTime}</td><td><span class="badge ${r.action==='BUY'?'badge-buy':'badge-sell'}">${r.action}</span></td>
                 <td style="font-weight:bold;">${r.ticker}</td><td>$${r.price.toFixed(2)}</td><td>${r.shares}</td><td>$${r.fee.toFixed(1)}</td>
-                <td style="font-weight:bold;">$Math.floor(r.total).toLocaleString()}</td>${pnlHtml}
+                <td style="font-weight:bold;">$${Math.floor(r.total).toLocaleString()}</td>${pnlHtml}
                 <td><button onclick="undoTrade(${index})" style="background:rgba(255,69,96,0.15); color:var(--color-sell); border:1px solid rgba(255,69,96,0.3); padding:4px 10px; border-radius:4px; cursor:pointer; font-weight:bold; font-size:11px; transition:all 0.2s;">撤銷</button></td>
             </tr>`;
         }).join("") : `<tr><td colspan="9" style="text-align:center; color:#555; padding:40px;">尚無紀錄</td></tr>`;
@@ -1643,28 +1647,24 @@
         renderAllCharts(animate);
     }
 
-    // 🚀 智慧 Tooltip：依照週期對應最直觀的名稱
-    const intervalNames = { '5m': '5分K ', '15m': '15分K ', '1d': '單日', '1wk': '單週', '1mo': '單月' };
-
+    // 🚀 1. 極簡單一字元 Tooltip (開/高/低/收/價/淨)
     const chartTooltipConfig = {
         enabled: true, mode: 'index', intersect: false,
         callbacks: {
             title: function(context) { return context[0].label; },
             label: function(context) {
-                if (context.chart.canvas.id === 'navChart' && desktopChartMode === 'NAV') return '總淨值: $ ' + Math.floor(context.parsed.y).toLocaleString(); 
-                if (context.dataset.label === 'Wick') return null; // K 線影線不需要單獨提示
+                if (context.chart.canvas.id === 'navChart' && desktopChartMode === 'NAV') { return '淨: $' + Math.floor(context.parsed.y).toLocaleString(); }
+                if (context.dataset.label === 'Wick') return null; 
                 
                 const type = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
                 
                 if (type === 'KLINE' && context.dataset.label === 'Body') {
                     const ohlc = stockHistData.ohlc[context.dataIndex];
-                    const interval = document.getElementById("cfg-kline-interval").value;
-                    const prefix = intervalNames[interval] || '';
-                    if(ohlc) return [`${prefix}開盤: $${ohlc.o.toFixed(2)}`, `${prefix}最高: $${ohlc.h.toFixed(2)}`, `${prefix}最低: $${ohlc.l.toFixed(2)}`, `${prefix}收盤: $${ohlc.c.toFixed(2)}`];
+                    if(ohlc) return [`開: $${ohlc.o.toFixed(2)}`, `高: $${ohlc.h.toFixed(2)}`, `低: $${ohlc.l.toFixed(2)}`, `收: $${ohlc.c.toFixed(2)}`];
                 }
                 
                 let val = context.parsed.y !== undefined ? context.parsed.y : context.raw;
-                return '價格: $ ' + val.toFixed(2);
+                return '價: $' + val.toFixed(2);
             }
         }
     };
@@ -1675,8 +1675,8 @@
     function toggleDesktopChartMode() { 
         desktopChartMode = (desktopChartMode === 'NAV') ? 'STOCK' : 'NAV'; 
         document.getElementById('mode-icon').style.transform = (desktopChartMode === 'STOCK') ? 'rotate(180deg)' : 'rotate(0deg)'; 
-        updateTimeframeButtons(); // 切換模式時重新載入按鈕
-        renderAllCharts(true); 
+        updateTimeframeButtons(); 
+        fetchStockHistoryData(currentTicker, true); 
     }
 
     function computePointRadiusArray(dataLength, showNodes, densityVal) {
@@ -1690,7 +1690,9 @@
         const chartType = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
         
         if (chartType === 'KLINE') {
-            const upColor = 'rgba(0, 255, 170, 0.9)', downColor = 'rgba(255, 69, 96, 0.9)';
+            const upColor = 'rgba(0, 255, 170, 0.9)';
+            const downColor = 'rgba(255, 69, 96, 0.9)';
+            
             const colors = data.ohlc.map(d => d.c >= d.o ? upColor : downColor);
             const borderColors = data.ohlc.map(d => d.c >= d.o ? '#00ffaa' : '#ff4560');
             const dataBody = data.ohlc.map(d => {
@@ -1714,7 +1716,8 @@
         const chartType = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
         
         if (desktopChartMode === 'NAV') {
-            document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-area" style="color:var(--color-acc)"></i> 投資組合總淨值走勢`;
+            // 🚀 2. 隱藏手機版主標題字樣 (透過 CSS class 'hide-on-mobile')
+            document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-area" style="color:var(--color-acc)"></i> <span class="hide-on-mobile" style="margin-left:4px;">投資組合總淨值走勢</span>`;
             let cutoff = 0; const now = Date.now();
             if (currentRange === '1D') cutoff = now - 86400000; 
             else if (currentRange === '1W') cutoff = now - 86400000 * 7; 
@@ -1741,31 +1744,19 @@
                 const intvName = document.querySelector(`#cfg-kline-interval option[value="${intv}"]`).innerText;
                 titlePrefix = `${intvName} 走勢`;
             }
-            document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> ${currentTicker} ${titlePrefix}`;
+            document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> <span style="margin-left:4px;">${currentTicker}</span> <span class="hide-on-mobile">${titlePrefix}</span>`;
             navChart.data.labels = stockHistData.labels;
             navChart.data.datasets = getStockDatasets(stockHistData, showNodes, densityVal);
         }
         navChart.update(animate ? undefined : 'none'); 
 
+        document.getElementById("m-main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> <span style="margin-left:4px;">${currentTicker}</span>`;
         mobileChart.data.labels = stockHistData.labels; 
         const mDensity = (densityVal === 'All') ? 'All' : Math.floor(densityVal / 2);
         mobileChart.data.datasets = getStockDatasets(stockHistData, showNodes, mDensity);
         mobileChart.update(animate ? undefined : 'none');
     }
 
-    document.getElementById("cfg-chart-type").addEventListener("change", (e) => { 
-        localStorage.setItem('SETTING_CHART_TYPE', e.target.value); 
-        updateChartSettingsUI();
-        updateTimeframeButtons();
-        fetchStockHistoryData(currentTicker, true); 
-    });
-    
-    document.getElementById("cfg-kline-interval").addEventListener("change", (e) => { 
-        localStorage.setItem('SETTING_KLINE_INTERVAL', e.target.value); 
-        updateTimeframeButtons();
-        fetchStockHistoryData(currentTicker, true); 
-    });
-    
     document.getElementById("cfg-node-show").addEventListener("change", (e) => { localStorage.setItem('SETTING_NODE_SHOW', e.target.checked); document.getElementById("node-settings-wrapper").classList.toggle("disabled", !e.target.checked); renderAllCharts(); });
     document.getElementById("cfg-crosshair-show").addEventListener("change", (e) => { localStorage.setItem('SETTING_CROSSHAIR_SHOW', e.target.checked); });
     document.getElementById("cfg-node-slider").addEventListener("input", (e) => { const val = parseInt(e.target.value), displayVal = (val >= 60) ? 'All' : val; document.getElementById("cfg-node-val").value = displayVal; localStorage.setItem('SETTING_NODE_VAL', displayVal); const pct = (val - e.target.min) / (e.target.max - e.target.min); document.getElementById("jelly-thumb").style.left = `${pct * 162}px`; renderAllCharts(false); });
@@ -1828,9 +1819,8 @@
                 let top = rect.bottom + 8;
                 let left = rect.left;
                 
-                // 動態邊界檢查與適應
                 if (left + 160 > window.innerWidth) left = window.innerWidth - 170;
-                if (top + 200 > window.innerHeight) top = rect.top - 208; // 空間不夠往上顯示
+                if (top + 200 > window.innerHeight) top = rect.top - 208; 
                 
                 numpad.style.top = top + 'px';
                 numpad.style.left = left + 'px';
@@ -1856,7 +1846,6 @@
         activeNumInput.dispatchEvent(new Event('input', {bubbles: true}));
     }
 
-    // 點擊空白處自動關閉小鍵盤
     document.addEventListener('touchstart', handleOutsideClick);
     document.addEventListener('mousedown', handleOutsideClick);
     function handleOutsideClick(e) {
