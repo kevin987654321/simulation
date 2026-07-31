@@ -456,13 +456,10 @@
                 </div>
             </div>
             
-            <!-- 🚀 新增：下單櫃檯圖表模式選擇 -->
+            <!-- 🚀 新增：下單櫃檯圖表切換設定 -->
             <div class="glass-panel setting-item">
-                <div><div style="font-weight:bold;">下單櫃檯圖表模式</div><div style="font-size:11px; color:#777; margin-top:2px;">選擇以 K線 或 普通折線 顯示走勢</div></div>
-                <select id="cfg-chart-type" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-weight:bold; font-size:12px; outline:none; text-align:center;">
-                    <option value="KLINE">K線圖</option>
-                    <option value="LINE">普通折線圖</option>
-                </select>
+                <div><div style="font-weight:bold;">下單櫃檯圖表類型</div><div style="font-size:11px; color:#777; margin-top:2px;">開啟顯示專業 K 線，關閉為普通折線</div></div>
+                <label class="switch"><input type="checkbox" id="cfg-chart-type" checked><span class="slider"></span></label>
             </div>
 
             <div class="glass-panel setting-item">
@@ -592,7 +589,7 @@
     let currentUSDTWD = 32.5;
     const myProxy = "https://square-moon-a3d9.kevinchang090818.workers.dev/?url=";
 
-    // 🚀 全域報價快取系統
+    // 全域報價快取系統
     let globalPriceCache = {};
 
     async function fetchExchangeRate() {
@@ -760,6 +757,10 @@
         else if (isOpen && diffX < 0) { if (e.cancelable) e.preventDefault(); sidebarEl.classList.add('dragging'); sidebarEl.style.transform = `translateX(${Math.max(diffX, -SIDEBAR_WIDTH)}px)`; }
     }, {passive: false});
     
+    // 🚀 新增：攔截被系統打斷的操作 (如叫出控制中心、切換App)
+    document.addEventListener('touchcancel', snapSidebar);
+    window.addEventListener('blur', snapSidebar);
+
     function snapSidebar() {
         if (!sIsDragging || window.innerWidth > 768 || isCardEditMode) return;
         sIsDragging = false; sidebarEl.classList.remove('dragging');
@@ -771,11 +772,6 @@
         sidebarEl.style.transform = ''; sStartX = sStartY = sCurrentX = 0;
     }
     document.addEventListener('touchend', snapSidebar);
-
-    // 🚀 修正：攔截 touchcancel 與失去焦點事件，防止叫出控制中心時選單卡死在一半
-    document.addEventListener('touchcancel', snapSidebar);
-    window.addEventListener('blur', snapSidebar);
-    document.addEventListener('visibilitychange', () => { if (document.hidden) snapSidebar(); });
 
     function switchView(id, btn) {
         document.querySelectorAll(".view-section").forEach(v => v.classList.remove("active"));
@@ -822,8 +818,8 @@
     let currentTicker = localStorage.getItem('LAST_SELECTED_TICKER') || "NVDA";
     let currentRealPrice = null, isPriceLoading = true, currentStockTF = '1D', searchDebounceTimer = null, desktopChartMode = 'NAV', tradeMode = 'BUY';
     
-    // 🚀 擴充歷史資料暫存，加入 K 線所需的 開/高/低
-    let stockHistData = { labels: [], prices: [], opens: [], highs: [], lows: [] }, cardsDataCache = {}, isCardEditMode = false;
+    // 🚀 擴充數據結構以支援 K 線 OHLC
+    let stockHistData = { labels: [], prices: [], ohlcBody: [], ohlcWick: [], ohlcColors: [] }, cardsDataCache = {}, isCardEditMode = false;
 
     function updateLiveNavNode() {
         if (!state.navHistory || !state.navHistory.timestamps || state.navHistory.timestamps.length === 0) return;
@@ -908,13 +904,14 @@
             saveData(); 
         }
         
-        // 載入設定狀態
-        const savedChartType = localStorage.getItem('SETTING_CHART_TYPE');
-        if (savedChartType) document.getElementById("cfg-chart-type").value = savedChartType;
-        else document.getElementById("cfg-chart-type").value = "KLINE";
-
         const savedShow = localStorage.getItem('SETTING_NODE_SHOW'); if (savedShow !== null) document.getElementById("cfg-node-show").checked = savedShow === 'true'; else document.getElementById("cfg-node-show").checked = true;
         const savedCrosshair = localStorage.getItem('SETTING_CROSSHAIR_SHOW'); if (savedCrosshair !== null) document.getElementById("cfg-crosshair-show").checked = savedCrosshair === 'true'; else document.getElementById("cfg-crosshair-show").checked = true;
+        
+        // 🚀 初始化下單櫃檯圖表類型設定
+        const savedChartType = localStorage.getItem('SETTING_CHART_TYPE'); 
+        if (savedChartType !== null) document.getElementById("cfg-chart-type").checked = savedChartType === 'true'; 
+        else document.getElementById("cfg-chart-type").checked = true; // 預設為 K 線
+
         const savedVal = localStorage.getItem('SETTING_NODE_VAL');
         if (savedVal !== null) {
             document.getElementById("cfg-node-slider").value = (savedVal === 'All') ? 60 : savedVal; document.getElementById("cfg-node-val").value = savedVal;
@@ -1380,39 +1377,42 @@
         else { badge.innerText = '中性區位'; badge.style.background = 'rgba(0,212,255,0.2)'; badge.style.color = 'var(--color-acc)'; }
     }
 
-    // 🚀 更新撈取報價邏輯，同時抓取 Open, High, Low 準備給 K線 使用
     async function fetchStockHistoryData(ticker, tf = '1D') {
         let range = '1d', interval = '5m';
         switch(tf) { case '1D': range = '1d'; interval = '5m'; break; case '1W': range = '5d'; interval = '15m'; break; case '1M': range = '1mo'; interval = '1d'; break; case '3M': range = '3mo'; interval = '1d'; break; case '1Y': range = '1y'; interval = '1d'; break; case 'All': range = '5y'; interval = '1wk'; break; }
         try {
             const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=${range}&interval=${interval}`)}`;
-            const res = await fetch(proxyUrl, { cache: "no-store" }); 
-            const json = await res.json(), result = json.chart.result[0];
-            const timestamps = result.timestamp || [];
+            const res = await fetch(proxyUrl, { cache: "no-store" }); const json = await res.json(), result = json.chart.result[0], timestamps = result.timestamp || [], prices = result.indicators.quote[0].close || [];
             
-            const quote = result.indicators.quote[0];
-            const prices = quote.close || [];
-            const opens = quote.open || [];
-            const highs = quote.high || [];
-            const lows = quote.low || [];
-            
-            let arrPrices = [], arrLabels = [], arrOpens = [], arrHighs = [], arrLows = [];
+            // 🚀 擷取 K 線專用的 OHLC 結構
+            let arrPrices = [], arrLabels = [], arrBody = [], arrWick = [], arrColors = [];
             for(let i = 0; i < timestamps.length; i++) {
                 if (prices[i] !== null && prices[i] !== undefined) {
-                    arrPrices.push(prices[i]);
-                    arrOpens.push(opens[i]);
-                    arrHighs.push(highs[i]);
-                    arrLows.push(lows[i]);
+                    const c = prices[i];
+                    // 若抓不到 o, h, l 則以 c 遞補以免報錯
+                    const o = result.indicators.quote[0].open[i] ?? c;
+                    const h = result.indicators.quote[0].high[i] ?? c;
+                    const l = result.indicators.quote[0].low[i] ?? c;
+
+                    arrPrices.push(c);
+                    arrBody.push([o, c]);
+                    arrWick.push([l, h]);
+                    
+                    // 台股習慣：紅漲綠跌
+                    const isUp = c >= o;
+                    arrColors.push(isUp ? 'rgba(255, 69, 96, 1)' : 'rgba(0, 255, 170, 1)');
+
                     const d = new Date(timestamps[i] * 1000);
-                    if (tf === '1D') arrLabels.push(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`); else arrLabels.push(`${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`);
+                    if (tf === '1D') arrLabels.push(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`); 
+                    else arrLabels.push(`${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`);
                 }
             }
             if (arrPrices.length > 0) { 
                 stockHistData.prices = arrPrices; 
-                stockHistData.opens = arrOpens;
-                stockHistData.highs = arrHighs;
-                stockHistData.lows = arrLows;
                 stockHistData.labels = arrLabels; 
+                stockHistData.body = arrBody;
+                stockHistData.wick = arrWick;
+                stockHistData.colors = arrColors;
                 updateRSIDisplay(arrPrices); 
                 renderAllCharts(); 
             }
@@ -1546,7 +1546,9 @@
     }
 
     const navChart = new Chart(document.getElementById('navChart').getContext('2d'), { type: 'line', data: { labels: [], datasets: [{ data: [], borderColor: '#00d4ff', backgroundColor: 'rgba(0, 212, 255, 0.05)', borderWidth: 2, tension: 0.2, fill: true }] }, options: { responsive: true, maintainAspectRatio: false, events: ['mousedown', 'mouseup', 'mousemove', 'mouseout', 'touchstart', 'touchmove', 'touchend', 'touchcancel'], interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false }, tooltip: { enabled: true, mode: 'index', intersect: false } }, scales: { x: { grid: { display: false } }, y: { grid: { color: 'rgba(255,255,255,0.04)' } } } } });
-    const mobileChart = new Chart(document.getElementById('mobileStockChart').getContext('2d'), { type: 'line', data: { labels: [], datasets: [{ data: [], borderColor: '#00ffaa', backgroundColor: 'rgba(0,255,170,0.05)', borderWidth: 1.5, tension: 0.2, fill: true, pointRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, events: ['mousedown', 'mouseup', 'mousemove', 'mouseout', 'touchstart', 'touchmove', 'touchend', 'touchcancel'], interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false }, tooltip: { enabled: true, mode: 'index', intersect: false } }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { font: { size: 9 }, color: '#666' } } } } });
+    
+    // 將手機/主頁共用的下單櫃檯圖表設為動態變數
+    let mobileChart = null; 
 
     function toggleDesktopChartMode() { desktopChartMode = (desktopChartMode === 'NAV') ? 'STOCK' : 'NAV'; document.getElementById('mode-icon').style.transform = (desktopChartMode === 'STOCK') ? 'rotate(180deg)' : 'rotate(0deg)'; renderAllCharts(); }
 
@@ -1557,15 +1559,10 @@
         return Array.from({ length: dataLength }, (_, i) => (i % step === 0 || i === dataLength - 1) ? 4 : 0);
     }
 
-    // 🚀 設定監聽器：當切換設定時立即重繪圖表
-    document.getElementById("cfg-chart-type").addEventListener("change", (e) => { 
-        localStorage.setItem('SETTING_CHART_TYPE', e.target.value); 
-        renderAllCharts(); 
-    });
-
     function renderAllCharts() {
         const showNodes = document.getElementById("cfg-node-show").checked, rawVal = document.getElementById("cfg-node-val").value, densityVal = (rawVal === 'All') ? 'All' : parseInt(rawVal) || 20;
         
+        // --- 儀表板圖表渲染 ---
         if (desktopChartMode === 'NAV') {
             document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-area" style="color:var(--color-acc)"></i> 投資組合總淨值走勢`;
             let cutoff = 0; const now = Date.now();
@@ -1588,57 +1585,98 @@
         }
         navChart.update();
 
-        // 🚀 手機端圖表 K線 與 折線 的邏輯切換
-        mobileChart.data.labels = stockHistData.labels; 
+        // --- 下單櫃檯圖表渲染 (K線 vs 折線) ---
+        const useKline = document.getElementById("cfg-chart-type").checked;
         const mDensity = (densityVal === 'All') ? 'All' : Math.floor(densityVal / 2);
-        
-        const chartType = document.getElementById("cfg-chart-type").value || 'KLINE';
-        
-        if (chartType === 'KLINE') {
-            let wickData = [], bodyData = [], colors = [];
-            for (let i = 0; i < stockHistData.prices.length; i++) {
-                // 安全防護：若沒有開高低資料則預設為收盤價
-                let o = stockHistData.opens[i] ?? stockHistData.prices[i], c = stockHistData.prices[i];
-                let h = stockHistData.highs[i] ?? c, l = stockHistData.lows[i] ?? c;
-                
-                wickData.push([l, h]); // 繪製上下影線的數值區間
-                bodyData.push([o, c]); // 繪製實體的數值區間
-                colors.push(c >= o ? 'var(--color-buy)' : 'var(--color-sell)');
-            }
 
-            // 確保 Tooltip 在 K 線模式時，只讀取一次實體並顯示完整的 OHLC 數據
-            mobileChart.options.plugins.tooltip.filter = function(item) { return item.datasetIndex === 1; };
-            mobileChart.options.plugins.tooltip.callbacks = {
-                label: function(context) {
-                    let idx = context.dataIndex;
-                    return ` 開: ${stockHistData.opens[idx].toFixed(2)} | 收: ${stockHistData.prices[idx].toFixed(2)} | 高: ${stockHistData.highs[idx].toFixed(2)} | 低: ${stockHistData.lows[idx].toFixed(2)}`;
-                }
-            };
-            
-            mobileChart.data.datasets = [
-                { type: 'bar', data: wickData, backgroundColor: colors, barThickness: 1.5, order: 2, pointRadius: 0 },
-                { type: 'bar', data: bodyData, backgroundColor: colors, barThickness: 5, order: 1, pointRadius: 0 }
-            ];
-        } else {
-            // 切換回折線模式時，重置 Tooltip
-            mobileChart.options.plugins.tooltip.filter = undefined;
-            mobileChart.options.plugins.tooltip.callbacks = {};
-            
-            mobileChart.data.datasets = [{ 
-                type: 'line', 
-                data: stockHistData.prices, 
-                borderColor: '#00ffaa', 
-                backgroundColor: 'rgba(0,255,170,0.05)', 
-                borderWidth: 1.5, 
-                tension: 0.2, 
-                fill: true, 
-                pointRadius: computePointRadiusArray(stockHistData.prices.length, showNodes, mDensity) 
-            }];
+        // 如果圖表已存在，需要先銷毀以重組不同類型的結構
+        if (mobileChart) {
+            mobileChart.destroy();
         }
-        
-        mobileChart.update();
+
+        if (useKline && stockHistData.body && stockHistData.wick) {
+            // 原生模擬 K 線圖架構
+            mobileChart = new Chart(document.getElementById('mobileStockChart').getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: stockHistData.labels,
+                    datasets: [
+                        {
+                            label: 'Wick',
+                            data: stockHistData.wick,
+                            backgroundColor: stockHistData.colors,
+                            borderColor: stockHistData.colors,
+                            barPercentage: 0.05,
+                            categoryPercentage: 0.8,
+                            grouped: false // 關鍵：讓上下影線跟實體柱在同一個 X 軸重疊
+                        },
+                        {
+                            label: 'Body',
+                            data: stockHistData.body,
+                            backgroundColor: stockHistData.colors,
+                            borderColor: stockHistData.colors,
+                            barPercentage: 0.7,
+                            categoryPercentage: 0.8,
+                            grouped: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    events: ['mousedown', 'mouseup', 'mousemove', 'mouseout', 'touchstart', 'touchmove', 'touchend', 'touchcancel'],
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: { 
+                        legend: { display: false }, 
+                        tooltip: { 
+                            enabled: true, mode: 'index', intersect: false,
+                            callbacks: {
+                                title: function(context) { return context[0].label; },
+                                label: function(context) {
+                                    // 隱藏影線資料集的提示，統一在 Body 顯示完整的 OHLC 資訊
+                                    if(context.datasetIndex === 0) return null; 
+                                    const i = context.dataIndex;
+                                    if(!stockHistData.body[i] || !stockHistData.wick[i]) return '';
+                                    const o = stockHistData.body[i][0], c = stockHistData.body[i][1];
+                                    const l = stockHistData.wick[i][0], h = stockHistData.wick[i][1];
+                                    return `開: $${o.toFixed(2)}  收: $${c.toFixed(2)}  高: $${h.toFixed(2)}  低: $${l.toFixed(2)}`;
+                                }
+                            }
+                        } 
+                    },
+                    scales: { 
+                        x: { display: false }, 
+                        y: { 
+                            grid: { color: 'rgba(255,255,255,0.03)' }, 
+                            ticks: { font: { size: 9 }, color: '#666' } 
+                        } 
+                    }
+                }
+            });
+        } else {
+            // 普通折線圖架構
+            mobileChart = new Chart(document.getElementById('mobileStockChart').getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: stockHistData.labels,
+                    datasets: [{
+                        data: stockHistData.prices,
+                        borderColor: '#00ffaa', backgroundColor: 'rgba(0,255,170,0.05)', borderWidth: 1.5, tension: 0.2, fill: true, 
+                        pointRadius: computePointRadiusArray(stockHistData.prices.length, showNodes, mDensity)
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    events: ['mousedown', 'mouseup', 'mousemove', 'mouseout', 'touchstart', 'touchmove', 'touchend', 'touchcancel'],
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: { legend: { display: false }, tooltip: { enabled: true, mode: 'index', intersect: false } },
+                    scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { font: { size: 9 }, color: '#666' } } }
+                }
+            });
+        }
     }
 
+    // 設定選項的監聽器
+    document.getElementById("cfg-chart-type").addEventListener("change", (e) => { localStorage.setItem('SETTING_CHART_TYPE', e.target.checked); renderAllCharts(); });
     document.getElementById("cfg-node-show").addEventListener("change", (e) => { localStorage.setItem('SETTING_NODE_SHOW', e.target.checked); document.getElementById("node-settings-wrapper").classList.toggle("disabled", !e.target.checked); renderAllCharts(); });
     document.getElementById("cfg-crosshair-show").addEventListener("change", (e) => { localStorage.setItem('SETTING_CROSSHAIR_SHOW', e.target.checked); });
     document.getElementById("cfg-node-slider").addEventListener("input", (e) => { const val = parseInt(e.target.value), displayVal = (val >= 60) ? 'All' : val; document.getElementById("cfg-node-val").value = displayVal; localStorage.setItem('SETTING_NODE_VAL', displayVal); const pct = (val - e.target.min) / (e.target.max - e.target.min); document.getElementById("jelly-thumb").style.left = `${pct * 162}px`; renderAllCharts(); });
