@@ -876,7 +876,6 @@
             deskBtns.map(b => `<button class="tf-btn ${b.label === currentRange ? 'active' : ''}" data-label="${b.label}">${b.label}</button>`).join('');
 
         // 2. Mobile Trade Panel buttons (m-tf-group) 
-        // Always depends on user KLINE setting, regardless of Dashboard's NAV mode
         let mobBtns = (type === 'LINE') ? RANGE_MAP['LINE'] : RANGE_MAP['KLINE'][interval];
         if (!mobBtns.find(b => b.label === mCurrentRange)) mCurrentRange = mobBtns[0].label;
         
@@ -1499,8 +1498,8 @@
                     arrOHLC.push({ o, h, l, c: closes[i] });
 
                     const d = new Date(timestamps[i] * 1000);
-                    // 修正：依據 1d 範圍不再顯示日期
-                    if (range === '1d') {
+                    // 🚀 1D 僅顯示時間
+                    if (targetRangeLabel === '1D' || range === '1d') {
                         arrLabels.push(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`);
                     } else if (intervalStr === '5m' || intervalStr === '15m') {
                         arrLabels.push(`${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`);
@@ -1667,7 +1666,13 @@
         }
     };
 
-    // 🚀 初始化時新增 ticks 設定，避免字體斜角
+    // 🚀 X 軸標籤設定 (強迫防傾斜並自動控制密度避免重疊)
+    const xTicksConfig = { 
+        maxRotation: 0, 
+        minRotation: 0, 
+        autoSkip: true 
+    };
+
     const navChart = new Chart(document.getElementById('navChart').getContext('2d'), { 
         type: 'line', data: { labels: [], datasets: [] }, 
         options: { 
@@ -1676,14 +1681,7 @@
             interaction: { mode: 'index', intersect: false }, 
             layout: { padding: { top: 15, bottom: 15, left: 10, right: 10 } },
             plugins: { legend: { display: false }, tooltip: chartTooltipConfig }, 
-            scales: { 
-                x: { 
-                    grid: { display: false }, 
-                    offset: true,
-                    ticks: { maxRotation: 0, minRotation: 0, maxTicksLimit: window.innerWidth <= 768 ? 5 : 10 }
-                }, 
-                y: { beginAtZero: false, grid: { color: 'rgba(255,255,255,0.04)' }, grace: '10%' } 
-            } 
+            scales: { x: { grid: { display: false }, offset: true, ticks: xTicksConfig }, y: { beginAtZero: false, grid: { color: 'rgba(255,255,255,0.04)' }, grace: '10%' } } 
         } 
     });
     
@@ -1695,13 +1693,7 @@
             interaction: { mode: 'index', intersect: false }, 
             layout: { padding: { top: 10, bottom: 10, left: 5, right: 5 } },
             plugins: { legend: { display: false }, tooltip: chartTooltipConfig }, 
-            scales: { 
-                x: { 
-                    display: false, offset: true,
-                    ticks: { maxRotation: 0, minRotation: 0, maxTicksLimit: window.innerWidth <= 768 ? 5 : 10 }
-                }, 
-                y: { beginAtZero: false, grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { font: { size: 9 }, color: '#666' }, grace: '10%' } 
-            } 
+            scales: { x: { display: true, grid: { display: false }, offset: true, ticks: Object.assign({}, xTicksConfig, { font: { size: 9 }, color: '#666' }) }, y: { beginAtZero: false, grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { font: { size: 9 }, color: '#666' }, grace: '10%' } } 
         } 
     });
 
@@ -1719,7 +1711,6 @@
         return Array.from({ length: dataLength }, (_, i) => (i % step === 0 || i === dataLength - 1) ? 4 : 0);
     }
 
-    // 🚀 核心動畫還原：使用 Object.assign 來更新資料，使 Chart.js 的點可以流暢位移而不是重新掉落
     function applyChartDatasets(chart, newDatasets) {
         let replace = false;
         if (chart.data.datasets.length !== newDatasets.length) replace = true;
@@ -1768,19 +1759,17 @@
         const showNodes = document.getElementById("cfg-node-show").checked, rawVal = document.getElementById("cfg-node-val").value, densityVal = (rawVal === 'All') ? 'All' : parseInt(rawVal) || 20;
         const chartType = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
         
-        // 🚀 修復：手機版主頁的 navChart 應該永遠顯示 NAV (不受桌機切換干擾)
         const showNav = desktopChartMode === 'NAV' || window.innerWidth <= 768;
-        
-        // 設定所有圖表X軸的標籤顯示固定數量，避免字體傾斜
         const isMobile = window.innerWidth <= 768;
-        if (navChart.options.scales.x.ticks) navChart.options.scales.x.ticks.maxTicksLimit = isMobile ? 5 : 10;
-        if (mobileChart.options.scales.x.ticks) mobileChart.options.scales.x.ticks.maxTicksLimit = isMobile ? 5 : 10;
+
+        // 🚀 動態設定 X軸標籤最大數量，強制防傾斜
+        navChart.options.scales.x.ticks.maxTicksLimit = isMobile ? 5 : 10;
+        mobileChart.options.scales.x.ticks.maxTicksLimit = 5;
 
         if (showNav) {
-            // 還原 NAV 圖表的樣式（取消 padding 和 offset，並將 y軸 grace 歸零）
+            // 🚀 還原為參考版本樣式：淨值折線圖無 offset 與 移除多餘 padding
             navChart.options.scales.x.offset = false;
-            navChart.options.layout.padding = { top: 0, bottom: 0, left: 0, right: 0 };
-            navChart.options.scales.y.grace = 0;
+            navChart.options.layout.padding = 0;
 
             document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-area" style="color:var(--color-acc)"></i> <span class="hide-on-mobile" style="margin-left:4px;">投資組合總淨值走勢</span>`;
             let cutoff = 0; const now = Date.now();
@@ -1794,26 +1783,31 @@
             if (state.navHistory && state.navHistory.timestamps) {
                 for (let i = 0; i < state.navHistory.timestamps.length; i++) {
                     if (state.navHistory.timestamps[i] >= cutoff) { 
-                        let label = state.navHistory.labels[i];
-                        if (currentRange === '1D' && label.includes(' ')) {
-                            label = label.split(' ')[1]; // 1D 不顯示日期，僅顯示時間
+                        let lbl = state.navHistory.labels[i];
+                        // 🚀 1D 僅顯示時間
+                        if (currentRange === '1D') {
+                            let parts = lbl.split(' ');
+                            lbl = parts.length > 1 ? parts[1] : lbl;
                         }
-                        fLabels.push(label); 
+                        fLabels.push(lbl); 
                         fData.push(state.navHistory.data[i]); 
                     }
                 }
             }
             if (fData.length === 0 && state.navHistory && state.navHistory.data && state.navHistory.data.length > 0) {
-                let lastVal = state.navHistory.data[state.navHistory.data.length - 1]; fLabels = [currentRange === '1D' ? '00:00' : 'Start', 'Now']; fData = [lastVal, lastVal];
-            } else if (fData.length === 1) { fLabels.push('Now'); fData.push(fData[0]); }
+                let lastVal = state.navHistory.data[state.navHistory.data.length - 1]; 
+                fLabels = [currentRange === '1D' ? '00:00' : 'Start', 'Now']; 
+                fData = [lastVal, lastVal];
+            } else if (fData.length === 1) { 
+                fLabels.push('Now'); fData.push(fData[0]); 
+            }
 
             navChart.data.labels = fLabels; 
             applyChartDatasets(navChart, [{ label: 'NAV', type: 'line', data: fData, borderColor: '#00d4ff', backgroundColor: 'rgba(0, 212, 255, 0.05)', borderWidth: 2, tension: 0.2, fill: true, pointRadius: computePointRadiusArray(fData.length, showNodes, densityVal) }]);
         } else {
-            // 切換為 K線或一般個股走勢圖時，啟用 padding 和 offset，確保K線不會被切掉
-            navChart.options.scales.x.offset = true;
+            // 🚀 個股K線圖維持 offset 與 padding
+            navChart.options.scales.x.offset = true; 
             navChart.options.layout.padding = { top: 15, bottom: 15, left: 10, right: 10 };
-            navChart.options.scales.y.grace = '10%';
 
             let titlePrefix = '個股走勢';
             if (chartType === 'KLINE') {
@@ -1826,7 +1820,6 @@
             applyChartDatasets(navChart, getStockDatasets(stockHistData, showNodes, densityVal));
         }
         
-        // 使用預設 update 取代 update('none') 來恢復平滑動畫
         navChart.update(); 
 
         document.getElementById("m-main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> <span style="margin-left:4px;">${currentTicker}</span>`;
