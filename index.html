@@ -226,9 +226,7 @@
         /* 卡片拖曳時的佔位符樣式 */
         .is-dragging-placeholder { opacity: 0; pointer-events: none; }
 
-        /* 🚀 控制手機版圖表標題隱藏 */
         @media (max-width: 768px) {
-            .hide-on-mobile { display: none !important; }
             .mobile-only { display: flex; }
             #mobile-header { display: flex; justify-content: space-between; align-items: center; height: 60px; padding: 0 20px; background: rgba(10, 10, 10, 0.95); border-bottom: 1px solid rgba(255,255,255,0.06); z-index: 50; position: absolute; top: 0; left: 0; width: 100%; }
             .mobile-menu-btn { background: transparent; border: none; color: #fff; font-size: 20px; cursor: pointer; padding: 10px; margin-left: -10px; z-index: 2; }
@@ -258,6 +256,7 @@
             .mobile-stock-chart-box { display: flex; }
             #chart-container { flex: 1; min-height: 0; display: flex; flex-direction: column; }
             #ai-commander { height: 260px; flex-shrink: 0; }
+            .chart-header { flex-direction: column; align-items: flex-start; gap: 10px; }
         }
     </style>
 </head>
@@ -313,7 +312,7 @@
             <div class="dashboard-left-col">
                 <div class="glass-panel" id="chart-container">
                     <div class="chart-header">
-                        <span style="font-weight: bold; font-size: 13px;" id="main-chart-title"></span>
+                        <span style="font-weight: bold; font-size: 13px;" id="main-chart-title"><i class="fa-solid fa-chart-area" style="color: var(--color-acc)"></i> 投資組合總淨值走勢</span>
                         <div class="header-controls">
                             <!-- 🚀 動態時間區段 -->
                             <div class="timeframe-selector" id="tf-group"></div>
@@ -1752,11 +1751,10 @@
         const showNodes = document.getElementById("cfg-node-show").checked, rawVal = document.getElementById("cfg-node-val").value, densityVal = (rawVal === 'All') ? 'All' : parseInt(rawVal) || 20;
         const chartType = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
         
-        // 🚀 修復：手機版主頁的 navChart 應該永遠顯示 NAV (不受桌機切換干擾)
-        const showNav = desktopChartMode === 'NAV' || window.innerWidth <= 768;
+        const showNav = desktopChartMode === 'NAV';
 
         if (showNav) {
-            document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-area" style="color:var(--color-acc)"></i> <span class="hide-on-mobile" style="margin-left:4px;">投資組合總淨值走勢</span>`;
+            document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-area" style="color: var(--color-acc)"></i> 投資組合總淨值走勢`;
             let cutoff = 0; const now = Date.now();
             if (currentRange === '1D') cutoff = now - 86400000; 
             else if (currentRange === '1W') cutoff = now - 86400000 * 7; 
@@ -1783,7 +1781,7 @@
                 const intvName = document.querySelector(`#cfg-kline-interval option[value="${intv}"]`).innerText;
                 titlePrefix = `${intvName} 走勢`;
             }
-            document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> <span style="margin-left:4px;">${currentTicker}</span> <span class="hide-on-mobile">${titlePrefix}</span>`;
+            document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> <span style="margin-left:4px;">${currentTicker}</span> ${titlePrefix}`;
             navChart.data.labels = stockHistData.labels;
             applyChartDatasets(navChart, getStockDatasets(stockHistData, showNodes, densityVal));
         }
