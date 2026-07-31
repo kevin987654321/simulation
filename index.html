@@ -1,15 +1,32 @@
 <!DOCTYPE html>
 <html lang="zh-Hant" class="notranslate" translate="no">
 <head>
-    <meta name="theme-color" content="#555555">
-    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#555555">
+
+    <!-- 1. 告訴 iOS 這是一個獨立的 Web App -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    
+    <!-- 2. 強制讓狀態列文字變白色，並且背景變透明 -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>AlphaTrade</title>
     
+    <link rel="apple-touch-icon" href="icon.png">
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
     <style>
+        body {
+
+            /* 4. 因為狀態列變透明了，這裡設定的灰色會直接填滿頂端的狀態列 */
+            background-color: #555555; 
+            margin: 0;
+            
+            /* 5. 確保網頁內容不會被白色的時間、電量圖示擋住 */
+            padding-top: env(safe-area-inset-top);
+        }
+
         :root {
             --bg-color: #030303;
             --bg-gradient: radial-gradient(circle at 50% 0%, #121212 0%, #030303 85%);
