@@ -633,8 +633,8 @@
     
     function getShortFormattedTimeFromDate(timestamp) {
         let d = new Date(timestamp);
-        const yy = String(d.getFullYear()).slice(-2);
-        return `${yy}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+        // 統一改為 YY/MM/DD HH:mm 供全域使用
+        return `${String(d.getFullYear()).slice(-2)}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
     }
 
     function handleHourInput(el) {
@@ -1365,7 +1365,7 @@
         document.getElementById("recent-group-title").style.display = 'none'; document.getElementById("recent-tickers-list").style.display = 'none';
         clearTimeout(searchDebounceTimer);
         searchDebounceTimer = setTimeout(async () => {
-            if(!query) { document.getElementById("live-search-list").innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#666;">輸入代號以搜尋全球市場...</div>`; return; }
+            if(!query) { document.getElementById("live-search-list").innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#666;">輸入代號自動撈取標的...</div>`; return; }
             document.getElementById("live-search-list").innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> 搜尋 ${query}...</div>`;
             try {
                 const proxyUrl = `${myProxy}${encodeURIComponent(`https://query2.finance.yahoo.com/v1/finance/search?q=${query}&quotesCount=6`)}`;
@@ -1501,11 +1501,16 @@
 
                     const d = new Date(timestamps[i] * 1000);
                     const yy = String(d.getFullYear()).slice(-2);
-                    const mm = String(d.getMonth() + 1).padStart(2, '0');
-                    const dd = String(d.getDate()).padStart(2, '0');
+                    const mm = String(d.getMonth()+1).padStart(2,'0');
+                    const dd = String(d.getDate()).padStart(2,'0');
                     const hh = String(d.getHours()).padStart(2, '0');
                     const min = String(d.getMinutes()).padStart(2, '0');
-                    arrLabels.push(`${yy}/${mm}/${dd} ${hh}:${min}`);
+
+                    if (intervalStr === '5m' || intervalStr === '15m' || range === '1d') {
+                        arrLabels.push(`${yy}/${mm}/${dd} ${hh}:${min}`);
+                    } else {
+                        arrLabels.push(`${yy}/${mm}/${dd}`);
+                    }
                 }
             }
             if (arrPrices.length > 0) { 
@@ -1648,33 +1653,9 @@
     const chartTooltipConfig = {
         enabled: true, mode: 'index', intersect: false,
         callbacks: {
-            title: function(context) {
-                let label = context[0].label;
-                if (label === 'Start' || label === 'Now' || !label) return label;
-
-                let parts = label.split(' ');
-                let datePart = parts[0];
-                let timePart = parts.length > 1 ? parts[1] : '';
-
-                if (datePart.split('/').length === 2) {
-                    datePart = `${String(new Date().getFullYear()).slice(-2)}/${datePart}`;
-                }
-
-                const isMobile = window.innerWidth <= 768;
-                // 手機版直接不顯示時間
-                if (isMobile) {
-                    return datePart;
-                }
-
-                // 在下單櫃檯的圖表按住顯示的資訊要顯示yy/mm/dd
-                if (context[0].chart.canvas.id === 'mobileStockChart') {
-                    return datePart;
-                }
-
-                return `${datePart} ${timePart}`.trim();
-            },
+            title: function(context) { return context[0].label; },
             label: function(context) {
-                if (context.chart.canvas.id === 'navChart' && desktopChartMode === 'NAV') { return '淨: $' + Math.floor(context.parsed.y).toLocaleString(); }
+                if (context.chart.canvas.id === 'navChart' && (desktopChartMode === 'NAV' || window.innerWidth <= 768)) { return '淨: $' + Math.floor(context.parsed.y).toLocaleString(); }
                 if (context.dataset.label === 'Wick') return null; 
                 
                 const type = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
@@ -1690,56 +1671,48 @@
         }
     };
 
-    // 🚀 還原主圖表設定至參考版本 (移除外距、間距等) 並套用時間軸格式
     const navChart = new Chart(document.getElementById('navChart').getContext('2d'), { 
         type: 'line', data: { labels: [], datasets: [] }, 
         options: { 
             responsive: true, maintainAspectRatio: false, 
             events: ['mousedown', 'mouseup', 'mousemove', 'mouseout', 'touchstart', 'touchmove', 'touchend', 'touchcancel'], 
             interaction: { mode: 'index', intersect: false }, 
+            layout: { padding: { top: 15, bottom: 15, left: 10, right: 10 } },
             plugins: { legend: { display: false }, tooltip: chartTooltipConfig }, 
             scales: { 
                 x: { 
-                    grid: { display: false },
+                    grid: { display: false }, 
+                    offset: true,
                     ticks: {
-                        callback: function(value) {
-                            let label = this.getLabelForValue(value);
-                            if (label === 'Start' || label === 'Now' || !label) return label;
+                        callback: function(val, index) {
+                            if (window.innerWidth <= 768) return null; // 🚀 手機版完全不顯示時間
+                            let label = this.getLabelForValue(val);
+                            if (!label || typeof label !== 'string' || !label.includes('/')) return label;
                             
-                            let parts = label.split(' ');
-                            let datePart = parts[0];
-                            let timePart = parts.length > 1 ? parts[1] : '';
-
-                            if (datePart.split('/').length === 2) {
-                                datePart = `${String(new Date().getFullYear()).slice(-2)}/${datePart}`;
+                            let tf = (typeof currentRange !== 'undefined' ? currentRange : '1D');
+                            if (tf === '1D' && label.includes(' ')) {
+                                return label.split(' ')[1]; // 1D 只顯示時間
+                            } else if (label.includes(' ')) {
+                                return label.split(' ')[0]; // 其餘顯示 yy/mm/dd
                             }
-
-                            // 1D只顯示時間不顯示日期，其餘的顯示yy/mm/dd
-                            let is1D = (desktopChartMode === 'NAV') ? (currentRange === '1D') : (currentRange === '1D' || currentRange === '1d');
-                            if (is1D && timePart) {
-                                return timePart;
-                            }
-                            return datePart;
+                            return label;
                         }
                     }
                 }, 
-                y: { grid: { color: 'rgba(255,255,255,0.04)' } } 
+                y: { beginAtZero: false, grid: { color: 'rgba(255,255,255,0.04)' }, grace: '10%' } 
             } 
         } 
     });
     
-    // 🚀 還原手機圖表設定至參考版本並套用時間軸格式
     const mobileChart = new Chart(document.getElementById('mobileStockChart').getContext('2d'), { 
         type: 'line', data: { labels: [], datasets: [] }, 
         options: { 
             responsive: true, maintainAspectRatio: false, 
             events: ['mousedown', 'mouseup', 'mousemove', 'mouseout', 'touchstart', 'touchmove', 'touchend', 'touchcancel'], 
             interaction: { mode: 'index', intersect: false }, 
+            layout: { padding: { top: 10, bottom: 10, left: 5, right: 5 } },
             plugins: { legend: { display: false }, tooltip: chartTooltipConfig }, 
-            scales: { 
-                x: { display: false }, 
-                y: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { font: { size: 9 }, color: '#666' } } 
-            } 
+            scales: { x: { display: false, offset: true }, y: { beginAtZero: false, grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { font: { size: 9 }, color: '#666' }, grace: '10%' } } 
         } 
     });
 
@@ -1806,9 +1779,38 @@
         const showNodes = document.getElementById("cfg-node-show").checked, rawVal = document.getElementById("cfg-node-val").value, densityVal = (rawVal === 'All') ? 'All' : parseInt(rawVal) || 20;
         const chartType = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
         
-        // 🚀 還原：將投資組合與淨值走勢的判定還原跟參考版本一致
-        if (desktopChartMode === 'NAV') {
-            document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-area" style="color:var(--color-acc)"></i> 投資組合總淨值走勢`;
+        // 🚀 修復：手機版主頁的 navChart 應該永遠顯示 NAV (不受桌機切換干擾)
+        const showNav = desktopChartMode === 'NAV' || window.innerWidth <= 768;
+
+        // 🚀 動態切換佈局參數：還原 NAV 狀態下的無邊距視角 (與參考版本一致)，且不干擾 K線圖顯示邊距
+        if (showNav) {
+            navChart.options.layout.padding = 0;
+            navChart.options.scales.x.offset = false;
+            navChart.options.scales.y.grace = 0;
+        } else {
+            if (chartType === 'KLINE') {
+                navChart.options.layout.padding = { top: 15, bottom: 15, left: 10, right: 10 };
+                navChart.options.scales.x.offset = true;
+                navChart.options.scales.y.grace = '10%';
+            } else {
+                navChart.options.layout.padding = 0;
+                navChart.options.scales.x.offset = false;
+                navChart.options.scales.y.grace = 0;
+            }
+        }
+
+        if (chartType === 'KLINE') {
+            mobileChart.options.layout.padding = { top: 10, bottom: 10, left: 5, right: 5 };
+            mobileChart.options.scales.x.offset = true;
+            mobileChart.options.scales.y.grace = '10%';
+        } else {
+            mobileChart.options.layout.padding = 0;
+            mobileChart.options.scales.x.offset = false;
+            mobileChart.options.scales.y.grace = 0;
+        }
+
+        if (showNav) {
+            document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-area" style="color:var(--color-acc)"></i> <span class="hide-on-mobile" style="margin-left:4px;">投資組合總淨值走勢</span>`;
             let cutoff = 0; const now = Date.now();
             if (currentRange === '1D') cutoff = now - 86400000; 
             else if (currentRange === '1W') cutoff = now - 86400000 * 7; 
@@ -1840,6 +1842,7 @@
             applyChartDatasets(navChart, getStockDatasets(stockHistData, showNodes, densityVal));
         }
         
+        // 使用預設 update 取代 update('none') 來恢復平滑動畫
         navChart.update(); 
 
         document.getElementById("m-main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> <span style="margin-left:4px;">${currentTicker}</span>`;
