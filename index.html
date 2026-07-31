@@ -759,7 +759,7 @@
     }, {passive: false});
     
     function snapSidebar() {
-        if (sidebarEl.style.transform === '') return;
+        if (sidebarEl.style.transform === '') return; 
         
         const diffX = sCurrentX - sStartX;
         const isOpen = sidebarEl.classList.contains('open');
@@ -793,7 +793,9 @@
         document.querySelectorAll(".menu-item").forEach(m => m.classList.remove("active"));
         document.getElementById(id).classList.add("active"); if(btn) btn.classList.add("active");
         if(window.innerWidth <= 768 && sidebarEl.classList.contains('open')) toggleSidebar();
+        
         if(id === 'view-cards') { renderCards(); }
+        if(id === 'view-dashboard' || id === 'view-mobile-trade') { fetchStockHistoryData(currentTicker, true); }
     }
 
     const holdToPreviewPlugin = {
@@ -836,7 +838,10 @@
     const DATA_KEY = "ALPHATRADE_MANUAL_DATA";
     let state = { cash: 1000000, holdings: {}, ledger: [], recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] } };
     let currentTicker = localStorage.getItem('LAST_SELECTED_TICKER') || "NVDA";
-    let currentRealPrice = null, isPriceLoading = true, currentRange = '1M', searchDebounceTimer = null, desktopChartMode = 'NAV', tradeMode = 'BUY';
+    
+    // 獨立管理主儀表板與下單櫃檯的範圍狀態，解決互相干擾問題
+    let currentRange = '1M', mCurrentRange = '1M';
+    let currentRealPrice = null, isPriceLoading = true, searchDebounceTimer = null, desktopChartMode = 'NAV', tradeMode = 'BUY';
     let stockHistData = { labels: [], prices: [], ohlc: [] }, cardsDataCache = {}, isCardEditMode = false;
 
     const RANGE_MAP = {
@@ -861,18 +866,21 @@
     function updateTimeframeButtons() {
         const type = document.getElementById("cfg-chart-type").value;
         const interval = document.getElementById("cfg-kline-interval").value;
-        const isNav = desktopChartMode === 'NAV' && window.innerWidth > 768;
+        const isNav = desktopChartMode === 'NAV';
+
+        // 1. Desktop Dashboard buttons (tf-group)
+        let deskBtns = (isNav || type === 'LINE') ? RANGE_MAP['LINE'] : RANGE_MAP['KLINE'][interval];
+        if (!deskBtns.find(b => b.label === currentRange)) currentRange = deskBtns[0].label;
         
-        let desktopButtonsData = (isNav || type === 'LINE') ? RANGE_MAP['LINE'] : RANGE_MAP['KLINE'][interval];
-        let mobileButtonsData = (type === 'LINE') ? RANGE_MAP['LINE'] : RANGE_MAP['KLINE'][interval];
-
-        const activeBtns = window.innerWidth <= 768 ? mobileButtonsData : desktopButtonsData;
-        if (!activeBtns.find(b => b.label === currentRange)) currentRange = activeBtns[0].label;
-
         document.getElementById('tf-group').innerHTML = `<div class="tf-active-bg" id="tf-active-bg"></div>` + 
-            desktopButtonsData.map(b => `<button class="tf-btn ${b.label === currentRange ? 'active' : ''}" data-label="${b.label}">${b.label}</button>`).join('');
+            deskBtns.map(b => `<button class="tf-btn ${b.label === currentRange ? 'active' : ''}" data-label="${b.label}">${b.label}</button>`).join('');
 
-        document.getElementById('m-tf-group').innerHTML = mobileButtonsData.map(b => `<button class="tf-btn ${b.label === currentRange ? 'active' : ''}" data-label="${b.label}" style="padding:3px 6px;">${b.label}</button>`).join('');
+        // 2. Mobile Trade Panel buttons (m-tf-group) 
+        // Always depends on user KLINE setting, regardless of Dashboard's NAV mode
+        let mobBtns = (type === 'LINE') ? RANGE_MAP['LINE'] : RANGE_MAP['KLINE'][interval];
+        if (!mobBtns.find(b => b.label === mCurrentRange)) mCurrentRange = mobBtns[0].label;
+        
+        document.getElementById('m-tf-group').innerHTML = mobBtns.map(b => `<button class="tf-btn ${b.label === mCurrentRange ? 'active' : ''}" data-label="${b.label}" style="padding:3px 6px;">${b.label}</button>`).join('');
 
         attachTfListeners();
     }
@@ -883,12 +891,12 @@
         
         tfBtns.forEach((btn, index) => {
             btn.addEventListener('click', () => {
-                tfBg.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
-                tfBg.style.width = `${btn.offsetWidth}px`; tfBg.style.transform = `translateX(${btn.offsetLeft}px)`;
+                if(tfBg) {
+                    tfBg.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+                    tfBg.style.width = `${btn.offsetWidth}px`; tfBg.style.transform = `translateX(${btn.offsetLeft}px)`;
+                }
                 tfBtns.forEach((b, i) => b.classList.toggle('active', i === index));
                 currentRange = btn.dataset.label;
-                
-                document.querySelectorAll('#m-tf-group .tf-btn').forEach(mBtn => mBtn.classList.toggle('active', mBtn.dataset.label === currentRange));
                 
                 fetchStockHistoryData(currentTicker, true);
             });
@@ -907,15 +915,8 @@
             btn.addEventListener('click', () => {
                 mTfBtns.forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
-                currentRange = btn.dataset.label;
+                mCurrentRange = btn.dataset.label;
                 
-                const dIdx = tfBtns.findIndex(b => b.dataset.label === currentRange);
-                if(dIdx >= 0 && tfBg) {
-                    tfBg.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
-                    tfBg.style.width = `${tfBtns[dIdx].offsetWidth}px`; tfBg.style.transform = `translateX(${tfBtns[dIdx].offsetLeft}px)`;
-                    tfBtns.forEach((b, i) => b.classList.toggle('active', i === dIdx));
-                }
-
                 fetchStockHistoryData(currentTicker, true);
             });
         });
@@ -1464,23 +1465,24 @@
     async function fetchStockHistoryData(ticker, animate = true) {
         const type = document.getElementById("cfg-chart-type").value;
         const klineInterval = document.getElementById("cfg-kline-interval").value;
-        const isNav = desktopChartMode === 'NAV' && window.innerWidth > 768;
+        const isNav = desktopChartMode === 'NAV';
         
-        let range, interval;
+        let range, intervalStr;
 
-        if (isNav || type === 'LINE') {
-            const config = RANGE_MAP['LINE'].find(b => b.label === currentRange) || RANGE_MAP['LINE'][2];
-            range = config.range;
-            interval = config.interval;
-        } else {
-            const configList = RANGE_MAP['KLINE'][klineInterval];
-            const config = configList.find(b => b.label === currentRange) || configList[0];
-            range = config.range;
-            interval = klineInterval;
-        }
+        // 獨立判斷當前活躍的視圖並獲取正確的圖表配置
+        const isMobileTradeView = window.innerWidth <= 768 && document.getElementById('view-mobile-trade').classList.contains('active');
+        let targetRangeLabel = isMobileTradeView ? mCurrentRange : currentRange;
+        
+        let activeBtns = isMobileTradeView ? 
+            ((type === 'LINE') ? RANGE_MAP['LINE'] : RANGE_MAP['KLINE'][klineInterval]) : 
+            ((isNav || type === 'LINE') ? RANGE_MAP['LINE'] : RANGE_MAP['KLINE'][klineInterval]);
+            
+        const config = activeBtns.find(b => b.label === targetRangeLabel) || activeBtns[0];
+        range = config.range;
+        intervalStr = (activeBtns === RANGE_MAP['LINE']) ? config.interval : klineInterval;
 
         try {
-            const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=${range}&interval=${interval}`)}`;
+            const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=${range}&interval=${intervalStr}`)}`;
             const res = await fetch(proxyUrl, { cache: "no-store" }); 
             const json = await res.json(), result = json.chart.result[0];
             const timestamps = result.timestamp || [], quote = result.indicators.quote[0];
@@ -1497,7 +1499,7 @@
                     arrOHLC.push({ o, h, l, c: closes[i] });
 
                     const d = new Date(timestamps[i] * 1000);
-                    if (interval === '5m' || interval === '15m' || range === '1d') {
+                    if (intervalStr === '5m' || intervalStr === '15m' || range === '1d') {
                         arrLabels.push(`${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`);
                     } else {
                         arrLabels.push(`${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`);
@@ -1646,7 +1648,7 @@
         callbacks: {
             title: function(context) { return context[0].label; },
             label: function(context) {
-                if (context.chart.canvas.id === 'navChart' && desktopChartMode === 'NAV' && window.innerWidth > 768) { return '淨: $' + Math.floor(context.parsed.y).toLocaleString(); }
+                if (context.chart.canvas.id === 'navChart' && desktopChartMode === 'NAV') { return '淨: $' + Math.floor(context.parsed.y).toLocaleString(); }
                 if (context.dataset.label === 'Wick') return null; 
                 
                 const type = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
@@ -1662,8 +1664,30 @@
         }
     };
 
-    const navChart = new Chart(document.getElementById('navChart').getContext('2d'), { type: 'line', data: { labels: [], datasets: [] }, options: { responsive: true, maintainAspectRatio: false, events: ['mousedown', 'mouseup', 'mousemove', 'mouseout', 'touchstart', 'touchmove', 'touchend', 'touchcancel'], interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false }, tooltip: chartTooltipConfig }, scales: { x: { grid: { display: false } }, y: { beginAtZero: false, grid: { color: 'rgba(255,255,255,0.04)' } } } } });
-    const mobileChart = new Chart(document.getElementById('mobileStockChart').getContext('2d'), { type: 'line', data: { labels: [], datasets: [] }, options: { responsive: true, maintainAspectRatio: false, events: ['mousedown', 'mouseup', 'mousemove', 'mouseout', 'touchstart', 'touchmove', 'touchend', 'touchcancel'], interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false }, tooltip: chartTooltipConfig }, scales: { x: { display: false }, y: { beginAtZero: false, grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { font: { size: 9 }, color: '#666' } } } } });
+    // 🚀 初始化時新增 layout.padding 與 y.grace 及 x.offset 屬性，避免K線在邊緣被裁切
+    const navChart = new Chart(document.getElementById('navChart').getContext('2d'), { 
+        type: 'line', data: { labels: [], datasets: [] }, 
+        options: { 
+            responsive: true, maintainAspectRatio: false, 
+            events: ['mousedown', 'mouseup', 'mousemove', 'mouseout', 'touchstart', 'touchmove', 'touchend', 'touchcancel'], 
+            interaction: { mode: 'index', intersect: false }, 
+            layout: { padding: { top: 15, bottom: 15, left: 10, right: 10 } },
+            plugins: { legend: { display: false }, tooltip: chartTooltipConfig }, 
+            scales: { x: { grid: { display: false }, offset: true }, y: { beginAtZero: false, grid: { color: 'rgba(255,255,255,0.04)' }, grace: '10%' } } 
+        } 
+    });
+    
+    const mobileChart = new Chart(document.getElementById('mobileStockChart').getContext('2d'), { 
+        type: 'line', data: { labels: [], datasets: [] }, 
+        options: { 
+            responsive: true, maintainAspectRatio: false, 
+            events: ['mousedown', 'mouseup', 'mousemove', 'mouseout', 'touchstart', 'touchmove', 'touchend', 'touchcancel'], 
+            interaction: { mode: 'index', intersect: false }, 
+            layout: { padding: { top: 10, bottom: 10, left: 5, right: 5 } },
+            plugins: { legend: { display: false }, tooltip: chartTooltipConfig }, 
+            scales: { x: { display: false, offset: true }, y: { beginAtZero: false, grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { font: { size: 9 }, color: '#666' }, grace: '10%' } } 
+        } 
+    });
 
     function toggleDesktopChartMode() { 
         desktopChartMode = (desktopChartMode === 'NAV') ? 'STOCK' : 'NAV'; 
@@ -1679,6 +1703,7 @@
         return Array.from({ length: dataLength }, (_, i) => (i % step === 0 || i === dataLength - 1) ? 4 : 0);
     }
 
+    // 🚀 核心動畫還原：使用 Object.assign 來更新資料，使 Chart.js 的點可以流暢位移而不是重新掉落
     function applyChartDatasets(chart, newDatasets) {
         let replace = false;
         if (chart.data.datasets.length !== newDatasets.length) replace = true;
@@ -1727,7 +1752,10 @@
         const showNodes = document.getElementById("cfg-node-show").checked, rawVal = document.getElementById("cfg-node-val").value, densityVal = (rawVal === 'All') ? 'All' : parseInt(rawVal) || 20;
         const chartType = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
         
-        if (desktopChartMode === 'NAV' && window.innerWidth > 768) {
+        // 🚀 修復：手機版主頁的 navChart 應該永遠顯示 NAV (不受桌機切換干擾)
+        const showNav = desktopChartMode === 'NAV' || window.innerWidth <= 768;
+
+        if (showNav) {
             document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-area" style="color:var(--color-acc)"></i> <span class="hide-on-mobile" style="margin-left:4px;">投資組合總淨值走勢</span>`;
             let cutoff = 0; const now = Date.now();
             if (currentRange === '1D') cutoff = now - 86400000; 
@@ -1759,13 +1787,16 @@
             navChart.data.labels = stockHistData.labels;
             applyChartDatasets(navChart, getStockDatasets(stockHistData, showNodes, densityVal));
         }
-        navChart.update(animate ? undefined : 'none'); 
+        
+        // 使用預設 update 取代 update('none') 來恢復平滑動畫
+        navChart.update(); 
 
         document.getElementById("m-main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> <span style="margin-left:4px;">${currentTicker}</span>`;
         mobileChart.data.labels = stockHistData.labels; 
         const mDensity = (densityVal === 'All') ? 'All' : Math.floor(densityVal / 2);
         applyChartDatasets(mobileChart, getStockDatasets(stockHistData, showNodes, mDensity));
-        mobileChart.update(animate ? undefined : 'none');
+        
+        mobileChart.update();
     }
 
     document.getElementById("cfg-chart-type").addEventListener("change", (e) => { 
