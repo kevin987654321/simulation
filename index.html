@@ -258,6 +258,7 @@
             .mobile-stock-chart-box { display: flex; }
             #chart-container { flex: 1; min-height: 0; display: flex; flex-direction: column; }
             #ai-commander { height: 260px; flex-shrink: 0; }
+            .chart-header { flex-direction: column; align-items: flex-start; gap: 10px; }
         }
     </style>
 </head>
@@ -313,10 +314,17 @@
             <div class="dashboard-left-col">
                 <div class="glass-panel" id="chart-container">
                     <div class="chart-header">
-                        <span style="font-weight: bold; font-size: 13px;" id="main-chart-title"></span>
+                        <span style="font-weight: bold; font-size: 13px;" id="main-chart-title"><i class="fa-solid fa-chart-area" style="color: var(--color-acc)"></i> 投資組合總淨值走勢</span>
                         <div class="header-controls">
-                            <!-- 🚀 動態時間區段 -->
-                            <div class="timeframe-selector" id="tf-group"></div>
+                            <div class="timeframe-selector" id="tf-group">
+                                <div class="tf-active-bg" id="tf-active-bg"></div>
+                                <button class="tf-btn active" data-tf="1D">1D</button>
+                                <button class="tf-btn" data-tf="1W">1W</button>
+                                <button class="tf-btn" data-tf="1M">1M</button>
+                                <button class="tf-btn" data-tf="3M">3M</button>
+                                <button class="tf-btn" data-tf="1Y">1Y</button>
+                                <button class="tf-btn" data-tf="All">All</button>
+                            </div>
                             <button class="standalone-mode-btn" onclick="toggleDesktopChartMode()" title="切換顯示：組合總淨值 / 個股走勢">
                                 <i class="fa-solid fa-repeat" id="mode-icon"></i>
                             </button>
@@ -876,6 +884,7 @@
             deskBtns.map(b => `<button class="tf-btn ${b.label === currentRange ? 'active' : ''}" data-label="${b.label}">${b.label}</button>`).join('');
 
         // 2. Mobile Trade Panel buttons (m-tf-group) 
+        // Always depends on user KLINE setting, regardless of Dashboard's NAV mode
         let mobBtns = (type === 'LINE') ? RANGE_MAP['LINE'] : RANGE_MAP['KLINE'][interval];
         if (!mobBtns.find(b => b.label === mCurrentRange)) mCurrentRange = mobBtns[0].label;
         
@@ -1498,10 +1507,7 @@
                     arrOHLC.push({ o, h, l, c: closes[i] });
 
                     const d = new Date(timestamps[i] * 1000);
-                    // 🚀 1D 僅顯示時間
-                    if (targetRangeLabel === '1D' || range === '1d') {
-                        arrLabels.push(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`);
-                    } else if (intervalStr === '5m' || intervalStr === '15m') {
+                    if (intervalStr === '5m' || intervalStr === '15m' || range === '1d') {
                         arrLabels.push(`${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`);
                     } else {
                         arrLabels.push(`${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`);
@@ -1666,24 +1672,7 @@
         }
     };
 
-    // 🚀 X 軸標籤設定 (強迫防傾斜並自動控制密度避免重疊)
-    const xTicksConfig = { 
-        maxRotation: 0, 
-        minRotation: 0, 
-        autoSkip: true 
-    };
-
-    const navChart = new Chart(document.getElementById('navChart').getContext('2d'), { 
-        type: 'line', data: { labels: [], datasets: [] }, 
-        options: { 
-            responsive: true, maintainAspectRatio: false, 
-            events: ['mousedown', 'mouseup', 'mousemove', 'mouseout', 'touchstart', 'touchmove', 'touchend', 'touchcancel'], 
-            interaction: { mode: 'index', intersect: false }, 
-            layout: { padding: { top: 15, bottom: 15, left: 10, right: 10 } },
-            plugins: { legend: { display: false }, tooltip: chartTooltipConfig }, 
-            scales: { x: { grid: { display: false }, offset: true, ticks: xTicksConfig }, y: { beginAtZero: false, grid: { color: 'rgba(255,255,255,0.04)' }, grace: '10%' } } 
-        } 
-    });
+    const navChart = new Chart(document.getElementById('navChart').getContext('2d'), { type: 'line', data: { labels: [], datasets: [{ data: [], borderColor: '#00d4ff', backgroundColor: 'rgba(0, 212, 255, 0.05)', borderWidth: 2, tension: 0.2, fill: true }] }, options: { responsive: true, maintainAspectRatio: false, events: ['mousedown', 'mouseup', 'mousemove', 'mouseout', 'touchstart', 'touchmove', 'touchend', 'touchcancel'], interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false }, tooltip: { enabled: true, mode: 'index', intersect: false } }, scales: { x: { grid: { display: false } }, y: { grid: { color: 'rgba(255,255,255,0.04)' } } } } });
     
     const mobileChart = new Chart(document.getElementById('mobileStockChart').getContext('2d'), { 
         type: 'line', data: { labels: [], datasets: [] }, 
@@ -1693,7 +1682,7 @@
             interaction: { mode: 'index', intersect: false }, 
             layout: { padding: { top: 10, bottom: 10, left: 5, right: 5 } },
             plugins: { legend: { display: false }, tooltip: chartTooltipConfig }, 
-            scales: { x: { display: true, grid: { display: false }, offset: true, ticks: Object.assign({}, xTicksConfig, { font: { size: 9 }, color: '#666' }) }, y: { beginAtZero: false, grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { font: { size: 9 }, color: '#666' }, grace: '10%' } } 
+            scales: { x: { display: false, offset: true }, y: { beginAtZero: false, grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { font: { size: 9 }, color: '#666' }, grace: '10%' } } 
         } 
     });
 
@@ -1711,6 +1700,7 @@
         return Array.from({ length: dataLength }, (_, i) => (i % step === 0 || i === dataLength - 1) ? 4 : 0);
     }
 
+    // 🚀 核心動畫還原：使用 Object.assign 來更新資料，使 Chart.js 的點可以流暢位移而不是重新掉落
     function applyChartDatasets(chart, newDatasets) {
         let replace = false;
         if (chart.data.datasets.length !== newDatasets.length) replace = true;
@@ -1759,18 +1749,10 @@
         const showNodes = document.getElementById("cfg-node-show").checked, rawVal = document.getElementById("cfg-node-val").value, densityVal = (rawVal === 'All') ? 'All' : parseInt(rawVal) || 20;
         const chartType = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
         
+        // 🚀 修復：手機版主頁的 navChart 應該永遠顯示 NAV (不受桌機切換干擾)
         const showNav = desktopChartMode === 'NAV' || window.innerWidth <= 768;
-        const isMobile = window.innerWidth <= 768;
-
-        // 🚀 動態設定 X軸標籤最大數量，強制防傾斜
-        navChart.options.scales.x.ticks.maxTicksLimit = isMobile ? 5 : 10;
-        mobileChart.options.scales.x.ticks.maxTicksLimit = 5;
 
         if (showNav) {
-            // 🚀 還原為參考版本樣式：淨值折線圖無 offset 與 移除多餘 padding
-            navChart.options.scales.x.offset = false;
-            navChart.options.layout.padding = 0;
-
             document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-area" style="color:var(--color-acc)"></i> <span class="hide-on-mobile" style="margin-left:4px;">投資組合總淨值走勢</span>`;
             let cutoff = 0; const now = Date.now();
             if (currentRange === '1D') cutoff = now - 86400000; 
@@ -1782,33 +1764,16 @@
             let fLabels = [], fData = [];
             if (state.navHistory && state.navHistory.timestamps) {
                 for (let i = 0; i < state.navHistory.timestamps.length; i++) {
-                    if (state.navHistory.timestamps[i] >= cutoff) { 
-                        let lbl = state.navHistory.labels[i];
-                        // 🚀 1D 僅顯示時間
-                        if (currentRange === '1D') {
-                            let parts = lbl.split(' ');
-                            lbl = parts.length > 1 ? parts[1] : lbl;
-                        }
-                        fLabels.push(lbl); 
-                        fData.push(state.navHistory.data[i]); 
-                    }
+                    if (state.navHistory.timestamps[i] >= cutoff) { fLabels.push(state.navHistory.labels[i]); fData.push(state.navHistory.data[i]); }
                 }
             }
             if (fData.length === 0 && state.navHistory && state.navHistory.data && state.navHistory.data.length > 0) {
-                let lastVal = state.navHistory.data[state.navHistory.data.length - 1]; 
-                fLabels = [currentRange === '1D' ? '00:00' : 'Start', 'Now']; 
-                fData = [lastVal, lastVal];
-            } else if (fData.length === 1) { 
-                fLabels.push('Now'); fData.push(fData[0]); 
-            }
+                let lastVal = state.navHistory.data[state.navHistory.data.length - 1]; fLabels = ['Start', 'Now']; fData = [lastVal, lastVal];
+            } else if (fData.length === 1) { fLabels.push('Now'); fData.push(fData[0]); }
 
             navChart.data.labels = fLabels; 
             applyChartDatasets(navChart, [{ label: 'NAV', type: 'line', data: fData, borderColor: '#00d4ff', backgroundColor: 'rgba(0, 212, 255, 0.05)', borderWidth: 2, tension: 0.2, fill: true, pointRadius: computePointRadiusArray(fData.length, showNodes, densityVal) }]);
         } else {
-            // 🚀 個股K線圖維持 offset 與 padding
-            navChart.options.scales.x.offset = true; 
-            navChart.options.layout.padding = { top: 15, bottom: 15, left: 10, right: 10 };
-
             let titlePrefix = '個股走勢';
             if (chartType === 'KLINE') {
                 const intv = document.getElementById("cfg-kline-interval").value;
@@ -1820,6 +1785,7 @@
             applyChartDatasets(navChart, getStockDatasets(stockHistData, showNodes, densityVal));
         }
         
+        // 使用預設 update 取代 update('none') 來恢復平滑動畫
         navChart.update(); 
 
         document.getElementById("m-main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> <span style="margin-left:4px;">${currentTicker}</span>`;
