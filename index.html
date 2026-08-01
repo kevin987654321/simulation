@@ -159,12 +159,36 @@
         .exec-btn:active:not(:disabled) { transform: scale(0.95); }
         .exec-btn:disabled { opacity: 0.3; cursor: not-allowed; border-color: rgba(255,255,255,0.1) !important; color: #666 !important; background: rgba(255,255,255,0.05) !important; box-shadow: none !important; }
 
-        #ai-commander { height: 230px; flex-shrink: 0; display: flex; flex-direction: column; background: rgba(12, 12, 12, 0.7); border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); overflow: hidden; }
+        #ai-commander { height: 230px; flex-shrink: 0; display: flex; flex-direction: column; background: rgba(12, 12, 12, 0.7); border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); overflow: hidden; position: relative; }
         .ai-header { padding: 8px 16px; background: rgba(255,255,255,0.02); border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: bold; }
+        .chat-output-wrapper { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
         .chat-display { flex: 1; padding: 10px 16px; font-size: 12.5px; color: #aaa; overflow-y: auto; line-height: 1.6; font-family: monospace; }
         .chat-input-area { padding: 10px 16px; border-top: 1px solid rgba(255,255,255,0.05); display: flex; gap: 10px; background: rgba(0,0,0,0.3); }
-        .chat-input-area input { flex: 1; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); padding: 8px 12px; border-radius: 6px; color: #fff; font-size: 12px; outline: none; }
-        .send-btn { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 0 16px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: bold; }
+        .chat-input-area input { flex: 1; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); padding: 8px 12px; border-radius: 6px; color: #fff; font-size: 12px; outline: none; transition: opacity 0.2s; }
+        .chat-input-area input:disabled { opacity: 0.4; cursor: not-allowed; }
+        .send-btn { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 0 16px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: bold; flex-shrink: 0; }
+        .send-btn.pending-confirm { background: rgba(0,212,255,0.18); border-color: var(--color-acc); color: var(--color-acc); animation: pendingPulse 1.6s ease-in-out infinite; }
+        @keyframes pendingPulse { 0%, 100% { box-shadow: 0 0 0px rgba(0,212,255,0); } 50% { box-shadow: 0 0 12px rgba(0,212,255,0.5); } }
+
+        /* 📒 歷史帳本時間範圍選擇器 */
+        .ledger-range-picker { position: absolute; inset: 0; z-index: 20; background: rgba(6,6,8,0.97); backdrop-filter: blur(10px); display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; overflow-y: auto; animation: lrFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1); }
+        @keyframes lrFadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        .lr-header { display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+        .lr-title { font-size: 12px; font-weight: bold; color: #fff; display: flex; align-items: center; gap: 6px; }
+        .lr-close-btn { color: #888; cursor: pointer; padding: 4px 6px; border-radius: 4px; transition: all 0.2s; }
+        .lr-close-btn:hover { color: #fff; background: rgba(255,255,255,0.08); }
+        .lr-preset-row { display: flex; gap: 6px; flex-wrap: wrap; flex-shrink: 0; }
+        .lr-preset-btn { flex: 1; min-width: 56px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); color: #888; border-radius: 6px; padding: 6px 0; font-size: 11px; font-weight: bold; cursor: pointer; transition: all 0.2s; }
+        .lr-preset-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+        .lr-preset-btn.active { background: rgba(0,212,255,0.15); border-color: var(--color-acc); color: var(--color-acc); }
+        .lr-date-row { display: flex; gap: 10px; align-items: flex-end; flex-shrink: 0; }
+        .lr-date-box { flex: 1; }
+        .lr-date-box label { display: block; font-size: 10px; color: #888; margin-bottom: 4px; }
+        .lr-date-box input[type="date"] { width: 100%; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 7px 6px; border-radius: 6px; font-family: monospace; font-size: 12px; }
+        .lr-date-box input[type="date"]:focus { outline: none; border-color: var(--color-acc); }
+        .lr-arrow { color: #555; padding-bottom: 8px; font-size: 12px; }
+        .lr-match-count { font-size: 11px; color: var(--color-acc); font-family: monospace; flex-shrink: 0; }
+        .lr-hint { margin-top: auto; font-size: 10.5px; color: #666; text-align: center; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.05); flex-shrink: 0; }
 
         .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
         .table-responsive::-webkit-scrollbar { display: none; }
@@ -275,6 +299,12 @@
             .mobile-stock-chart-box { display: flex; }
             #chart-container { flex: 1; min-height: 0; display: flex; flex-direction: column; }
             #ai-commander { height: 260px; flex-shrink: 0; }
+
+            /* 歷史帳本選擇器：手機空間較小，縮減間距避免溢出 */
+            .ledger-range-picker { padding: 10px 12px; gap: 6px; }
+            .lr-preset-btn { padding: 5px 0; font-size: 10.5px; }
+            .lr-date-box input[type="date"] { padding: 6px 4px; font-size: 11px; }
+            .lr-hint { font-size: 9.5px; padding-top: 6px; }
         }
     </style>
 </head>
@@ -349,7 +379,7 @@
                     </div>
                     
                     <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 12px; background:rgba(0,0,0,0.2);">
-                        <div style="display:flex; gap:6px; overflow-x:auto; scrollbar-width:none; flex: 1;">
+                        <div id="ai-quick-buttons-row" style="display:flex; gap:6px; overflow-x:auto; scrollbar-width:none; flex: 1; transition: opacity 0.2s;">
                             <button class="qp-btn" onclick="quickAskAI('diagnostic')" style="padding: 4px 10px; flex-shrink:0;"><span class="hide-on-mobile">📊 </span>綜合體檢</button>
                             <button class="qp-btn" onclick="quickAskAI('risk')" style="padding: 4px 10px; flex-shrink:0;"><span class="hide-on-mobile">🛡️ </span>風險診斷</button>
                             <button class="qp-btn" onclick="quickAskAI('strategy')" style="padding: 4px 10px; flex-shrink:0;"><span class="hide-on-mobile">💡 </span>加減碼策略</button>
@@ -366,13 +396,43 @@
                         </div>
                     </div>
 
-                    <div class="chat-display" id="chat-output">
-                        <span style="color: rgba(255,255,255,0.4)">[SYSTEM]</span> 戰略助理連線成功。已同步 <strong style="color:#fff" id="ai-current-ticker">NVDA</strong> 之 RSI、持倉成本與帳戶資金。<br>
+                    <div class="chat-output-wrapper">
+                        <div class="chat-display" id="chat-output">
+                            <span style="color: rgba(255,255,255,0.4)">[SYSTEM]</span> 戰略助理連線成功。已同步 <strong style="color:#fff" id="ai-current-ticker">NVDA</strong> 之 RSI、持倉成本與帳戶資金。<br>
+                        </div>
+
+                        <!-- 📒 歷史帳本時間範圍選擇器：偵測到「(歷史帳本)」標記時顯示 -->
+                        <div class="ledger-range-picker" id="ledger-range-picker" style="display:none;">
+                            <div class="lr-header">
+                                <span class="lr-title"><i class="fa-solid fa-clock-rotate-left" style="color:var(--color-acc)"></i> 選擇歷史帳本時間範圍</span>
+                                <i class="fa-solid fa-xmark lr-close-btn" onclick="cancelLedgerRangePicker()"></i>
+                            </div>
+                            <div class="lr-preset-row">
+                                <button type="button" class="lr-preset-btn" data-preset="today" onclick="setLedgerRangePreset('today')">今日</button>
+                                <button type="button" class="lr-preset-btn" data-preset="7d" onclick="setLedgerRangePreset('7d')">近7天</button>
+                                <button type="button" class="lr-preset-btn" data-preset="30d" onclick="setLedgerRangePreset('30d')">近30天</button>
+                                <button type="button" class="lr-preset-btn" data-preset="month" onclick="setLedgerRangePreset('month')">本月</button>
+                                <button type="button" class="lr-preset-btn" data-preset="all" onclick="setLedgerRangePreset('all')">全部</button>
+                            </div>
+                            <div class="lr-date-row">
+                                <div class="lr-date-box">
+                                    <label>起始日期</label>
+                                    <input type="date" id="lr-start-date" onchange="onLedgerRangeDateChange()" onkeypress="if(event.key==='Enter') askAI()">
+                                </div>
+                                <div class="lr-arrow">→</div>
+                                <div class="lr-date-box">
+                                    <label>結束日期</label>
+                                    <input type="date" id="lr-end-date" onchange="onLedgerRangeDateChange()" onkeypress="if(event.key==='Enter') askAI()">
+                                </div>
+                            </div>
+                            <div class="lr-match-count" id="lr-match-count"></div>
+                            <div class="lr-hint">選擇好時間範圍後，請再按一次下方「發送」送出分析</div>
+                        </div>
                     </div>
-                    
+
                     <div class="chat-input-area">
                         <input type="text" id="chat-input" placeholder="請輸入欲諮詢之戰略問題..." onkeypress="if(event.key==='Enter') askAI()">
-                        <button class="send-btn" onclick="askAI()">發送</button>
+                        <button class="send-btn" id="chat-send-btn" onclick="askAI()">發送</button>
                     </div>
                 </div>
             </div>
@@ -1116,11 +1176,6 @@
 
         const DIV = "----------------------------------------";
         let lines = [];
-        lines.push("========================================");
-        lines.push("           AlphaTrade 對帳報告");
-        lines.push("========================================");
-        lines.push(`報告產出時間: ${genTime}`);
-        lines.push("");
         lines.push("【帳戶總覽】");
         lines.push(DIV);
         lines.push(`總資產淨值 (NAV):   $ ${Math.floor(nav).toLocaleString()}`);
@@ -1171,10 +1226,6 @@
                 lines.push(DIV);
             });
         }
-        lines.push("");
-        lines.push("========================================");
-        lines.push("本報告由 AlphaTrade 模擬交易系統自動產生，僅供個人記錄與參考使用。");
-        lines.push("========================================");
 
         const reportStr = lines.join("\n");
         const blob = new Blob([reportStr], { type: "text/plain;charset=utf-8" });
@@ -2024,8 +2075,21 @@
     function parseSimpleMarkdown(text) { return text.replace(/\*\*(.*?)\*\*/g, '<strong style="color:#fff">$1</strong>').replace(/^\s*[\-\*]\s+(.*)$/gim, '• $1').replace(/\n/g, '<br>'); }
     function quickAskAI(type) { const prompts = { 'diagnostic': `請針對 ${currentTicker} 當前的現價與 RSI 技術指標進行短線綜合體檢。`, 'risk': `請結合我目前的帳戶現金、${currentTicker} 持倉成本與當前走勢，評估整體風控與止損點設定。`, 'strategy': `考量我目前對 ${currentTicker} 的持股情況，現在適合加碼、減碼還是觀望？` }; document.getElementById("chat-input").value = prompts[type] || ""; askAI(); }
 
+    // 📒 歷史帳本功能：輸入含有 "(歷史帳本)" 標記的訊息並發送時，攔截並改為請使用者選擇時間範圍
+    const LEDGER_MARKER_REGEX = /[\(（]\s*歷史帳本\s*[\)）]/;
+    let pendingLedgerQuery = null; // 非 null 時代表正在等待使用者於選擇器中確認時間範圍
+
     async function askAI() {
-        const input = document.getElementById("chat-input"), q = input.value.trim(); if(!q) return;
+        const input = document.getElementById("chat-input");
+
+        // 若目前正等待使用者選擇歷史帳本時間範圍，這次按下發送 = 確認範圍並送出分析
+        if (pendingLedgerQuery !== null) { confirmLedgerRangeAndSend(); return; }
+
+        const q = input.value.trim(); if(!q) return;
+
+        // 偵測到「(歷史帳本)」標記：攔截本次發送，改為顯示時間範圍選擇器
+        if (LEDGER_MARKER_REGEX.test(q)) { openLedgerRangePicker(q); return; }
+
         let key = localStorage.getItem("MY_GEMINI_KEY") || prompt("請輸入 Gemini API Key："); if(!key) return; localStorage.setItem("MY_GEMINI_KEY", key);
 
         const out = document.getElementById("chat-output"), msgId = "ai-" + Date.now();
@@ -2035,11 +2099,143 @@
         const holdingValueTWD = holding.shares * currentRealPrice * rate, totalCostTWD = holding.shares * holding.avgPrice * rate, pnlTWD = holdingValueTWD - totalCostTWD;
         const fullPrompt = `你是一位講求數據與風險控制的資深華爾街操盤手。請根據以下即時數據，用簡潔專業的口吻回答用戶問題（字數約 150 字內，列出重點與建議）。\n\n【即時市場與帳戶數據】\n• 討論標的: ${currentTicker}\n• 當前現價: $${currentRealPrice}\n• 14日 RSI 指標: ${rsiVal}\n• 當前持股數量: ${holding.shares} 股\n• 持股買入均價: $${holding.avgPrice.toFixed(2)}\n• 該標的未實現損益: TWD $${Math.floor(pnlTWD).toLocaleString()}\n• 帳戶可用現金: TWD $${Math.floor(state.cash).toLocaleString()}\n\n用戶問題：${q}`;
 
+        await callGeminiAPI(fullPrompt, msgId, out, key);
+    }
+
+    // 實際呼叫 Gemini API 並將結果渲染到指定訊息節點（一般提問與歷史帳本分析共用）
+    async function callGeminiAPI(fullPrompt, msgId, out, key) {
         try {
             const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${key}`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ contents: [{ parts: [{ text: fullPrompt }] }] }) });
             const json = await res.json(), rawReply = json.candidates[0].content.parts[0].text;
             document.getElementById(msgId).innerHTML = `<span style="color:var(--color-acc)">[GEMINI]</span> <span style="color:#ddd">${parseSimpleMarkdown(rawReply)}</span>`;
         } catch(e) { document.getElementById(msgId).innerHTML = `<span style="color:var(--color-sell)">連線失敗或 Key 無效</span>`; } out.scrollTop = out.scrollHeight;
+    }
+
+    // ---- 歷史帳本時間範圍選擇器 ----
+
+    function formatDateForInput(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+
+    function setLedgerPickerLockUI(locked) {
+        const input = document.getElementById("chat-input"), quickRow = document.getElementById("ai-quick-buttons-row"), sendBtn = document.getElementById("chat-send-btn");
+        input.disabled = locked; input.placeholder = locked ? "請於上方選擇時間範圍..." : "請輸入欲諮詢之戰略問題...";
+        quickRow.style.pointerEvents = locked ? "none" : ""; quickRow.style.opacity = locked ? "0.35" : "";
+        sendBtn.classList.toggle("pending-confirm", locked);
+    }
+
+    function openLedgerRangePicker(originalQuestion) {
+        pendingLedgerQuery = originalQuestion;
+        setLedgerPickerLockUI(true);
+
+        // 預設帶入最近 30 天
+        setLedgerRangePreset('30d');
+        document.getElementById("ledger-range-picker").style.display = "flex";
+    }
+
+    function setLedgerRangePreset(preset) {
+        const now = new Date();
+        let start;
+        if (preset === 'today') start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        else if (preset === '7d') start = new Date(now.getTime() - 6 * 86400000);
+        else if (preset === 'month') start = new Date(now.getFullYear(), now.getMonth(), 1);
+        else if (preset === 'all') start = new Date(2000, 0, 1);
+        else start = new Date(now.getTime() - 29 * 86400000); // 預設 30 天
+
+        document.getElementById("lr-start-date").value = formatDateForInput(start);
+        document.getElementById("lr-end-date").value = formatDateForInput(now);
+
+        document.querySelectorAll(".lr-preset-btn").forEach(b => b.classList.toggle("active", b.dataset.preset === preset));
+        updateLedgerMatchCount();
+    }
+
+    function onLedgerRangeDateChange() {
+        document.querySelectorAll(".lr-preset-btn").forEach(b => b.classList.remove("active")); // 手動調整日期後取消預設按鈕的高亮
+        updateLedgerMatchCount();
+    }
+
+    function getLedgerRangeTimestamps() {
+        const startVal = document.getElementById("lr-start-date").value, endVal = document.getElementById("lr-end-date").value;
+        if (!startVal || !endVal) return null;
+        const startTs = new Date(`${startVal}T00:00:00`).getTime(), endTs = new Date(`${endVal}T23:59:59`).getTime();
+        return { startVal, endVal, startTs, endTs };
+    }
+
+    function updateLedgerMatchCount() {
+        const range = getLedgerRangeTimestamps(), el = document.getElementById("lr-match-count");
+        if (!range) { el.innerText = ""; return; }
+        if (range.startTs > range.endTs) { el.innerText = "⚠ 起始日期不能晚於結束日期"; return; }
+        const count = state.ledger.filter(r => r.timestamp >= range.startTs && r.timestamp <= range.endTs).length;
+        el.innerText = `此範圍內共有 ${count} 筆交易紀錄`;
+    }
+
+    function cancelLedgerRangePicker() {
+        const restoredText = pendingLedgerQuery;
+        pendingLedgerQuery = null;
+        document.getElementById("ledger-range-picker").style.display = "none";
+        setLedgerPickerLockUI(false);
+
+        const input = document.getElementById("chat-input");
+        input.value = restoredText || ""; input.focus();
+    }
+
+    function confirmLedgerRangeAndSend() {
+        const range = getLedgerRangeTimestamps();
+        if (!range) { alert("請選擇完整的起訖日期"); return; }
+        if (range.startTs > range.endTs) { alert("起始日期不能晚於結束日期"); return; }
+
+        let key = localStorage.getItem("MY_GEMINI_KEY") || prompt("請輸入 Gemini API Key："); if(!key) return; localStorage.setItem("MY_GEMINI_KEY", key);
+
+        const cleanQuestion = pendingLedgerQuery.replace(LEDGER_MARKER_REGEX, "").trim() || "請幫我分析這段期間的交易表現，並提出檢討與建議。";
+
+        let filtered = state.ledger.filter(r => r.timestamp >= range.startTs && r.timestamp <= range.endTs).sort((a, b) => b.timestamp - a.timestamp);
+        const totalMatched = filtered.length;
+        const MAX_TRADES = 300; // 避免單次夾帶過多交易紀錄導致 prompt 過大
+        let truncated = false;
+        if (filtered.length > MAX_TRADES) { filtered = filtered.slice(0, MAX_TRADES); truncated = true; }
+
+        // 關閉並重置時間範圍選擇器 UI
+        pendingLedgerQuery = null;
+        document.getElementById("ledger-range-picker").style.display = "none";
+        setLedgerPickerLockUI(false);
+        document.getElementById("chat-input").value = "";
+
+        sendLedgerAnalysisToGemini(key, cleanQuestion, filtered, range, totalMatched, truncated);
+    }
+
+    function buildLedgerRangeReportText(filteredLedger, range, totalMatched, truncated) {
+        const DIV = "----------------------------------------";
+        let lines = [];
+        lines.push(`【歷史帳本】時間範圍：${range.startVal} ~ ${range.endVal}（共 ${totalMatched} 筆交易，依時間新到舊排序）`);
+        lines.push(DIV);
+        if (filteredLedger.length === 0) {
+            lines.push("(此時間範圍內查無交易紀錄)");
+        } else {
+            filteredLedger.forEach(r => {
+                const displayTime = r.timestamp ? getFullFormattedTimeFromDate(r.timestamp) : r.time;
+                const actionText = r.action === 'BUY' ? '買進' : '賣出';
+                const pnlText = (r.realizedPnL !== null && r.realizedPnL !== undefined)
+                    ? `${r.realizedPnL >= 0 ? '+' : ''}$${Math.floor(r.realizedPnL).toLocaleString()}`
+                    : "-";
+                lines.push(`[${displayTime}] ${actionText} ${r.ticker}`);
+                lines.push(`  成交均價: $${r.price.toFixed(2)}　股數: ${r.shares}`);
+                lines.push(`  手續費/稅: $${r.fee.toFixed(1)}`);
+                lines.push(`  交割金額(TWD): $${Math.floor(r.total).toLocaleString()}`);
+                lines.push(`  已實現損益(TWD): ${pnlText}`);
+                lines.push(DIV);
+            });
+            if (truncated) lines.push(`（交易筆數過多，僅附上最新 ${filteredLedger.length} 筆，範圍內實際共 ${totalMatched} 筆）`);
+        }
+        return lines.join("\n");
+    }
+
+    function sendLedgerAnalysisToGemini(key, question, filteredLedger, range, totalMatched, truncated) {
+        const out = document.getElementById("chat-output"), msgId = "ai-" + Date.now();
+        const displayQuestion = `${question} <span style="color:var(--color-acc)">[歷史帳本 ${range.startVal} ~ ${range.endVal}，共 ${totalMatched} 筆]</span>`;
+        out.innerHTML += `<br><span style="color:#fff">> ${displayQuestion}</span><br><div id="${msgId}"><span style="color:var(--color-acc)">[GEMINI]</span> <span style="color:#777">彙整期間內交易紀錄並分析中...</span></div>`; out.scrollTop = out.scrollHeight;
+
+        const ledgerText = buildLedgerRangeReportText(filteredLedger, range, totalMatched, truncated);
+        const fullPrompt = `你是一位講求數據與風險控制的資深華爾街操盤手。請仔細閱讀以下使用者於指定期間內的歷史交易紀錄，針對其操作進行覆盤分析，用簡潔專業的口吻回答用戶問題（字數約 200 字內，須包含操作評價、風險與具體建議）。\n\n${ledgerText}\n\n用戶問題：${question}`;
+
+        callGeminiAPI(fullPrompt, msgId, out, key);
     }
 
     // 🚀 手機端極簡玻璃數字鍵盤核心邏輯
