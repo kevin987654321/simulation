@@ -2233,7 +2233,7 @@
         out.innerHTML += `<br><span style="color:#fff">> ${displayQuestion}</span><br><div id="${msgId}"><span style="color:var(--color-acc)">[GEMINI]</span> <span style="color:#777">彙整期間內交易紀錄並分析中...</span></div>`; out.scrollTop = out.scrollHeight;
 
         const ledgerText = buildLedgerRangeReportText(filteredLedger, range, totalMatched, truncated);
-        const fullPrompt = `你是一位講求數據與風險控制的資深華爾街操盤手。請仔細閱讀以下使用者於指定期間內的歷史交易紀錄，針對其操作進行覆盤分析，用簡潔專業的口吻回答用戶問題（字數約 200 字內，須包含操作評價、風險與具體建議）。\n\n${ledgerText}\n\n用戶問題：${question}`;
+        const fullPrompt = `你是一位講求數據與風險控制的資深華爾街操盤手。請仔細閱讀以下使用者於指定期間內的歷史交易紀錄，針對其操作進行覆盤分析，用簡潔專業的口吻回答用戶問題（字數約 200 字內）。\n\n${ledgerText}\n\n用戶問題：${question}`;
 
         callGeminiAPI(fullPrompt, msgId, out, key);
     }
