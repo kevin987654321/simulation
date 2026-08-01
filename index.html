@@ -478,6 +478,16 @@
                     </label>
                 </div>
             </div>
+
+            <div class="glass-panel setting-item">
+                <div>
+                    <div style="font-weight:bold;"><i class="fa-solid fa-file-lines" style="color:var(--color-acc)"></i> 匯出對帳報告</div>
+                    <div style="font-size:11px; color:#777; margin-top:2px;">將目前帳戶狀態與完整交易紀錄匯出成純文字檔，方便列印或傳給他人查看</div>
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <button onclick="exportReport()" style="background:rgba(0,212,255,0.15); border:1px solid var(--color-acc); color:var(--color-acc); padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s;">匯出報告</button>
+                </div>
+            </div>
             
             <div class="glass-panel setting-item">
                 <div><div style="font-weight:bold;">個股圖表類型切換</div><div style="font-size:11px; color:#777; margin-top:2px;">選擇以 K線圖 (Candlestick) 或折線圖顯示個股走勢</div></div>
@@ -1082,6 +1092,99 @@
             event.target.value = ''; 
         };
         reader.readAsText(file);
+    }
+
+    function exportReport() {
+        const now = new Date();
+        const genTime = getFullFormattedTimeFromDate(now.getTime());
+
+        // 計算帳戶總覽（邏輯與 updateAllViews 一致）
+        let holdingsVal = 0, totalCost = 0;
+        const holdingTickers = Object.keys(state.holdings);
+        holdingTickers.forEach(t => {
+            const rate = getCurrencyMultiplier(t);
+            const price = globalPriceCache[t] || (t === currentTicker && currentRealPrice !== null ? currentRealPrice : state.holdings[t].avgPrice);
+            holdingsVal += state.holdings[t].shares * price * rate;
+            totalCost += state.holdings[t].shares * state.holdings[t].avgPrice * rate;
+        });
+        const nav = state.cash + holdingsVal;
+        const pnl = holdingsVal - totalCost;
+        const pnlPct = totalCost > 0 ? ((pnl / totalCost) * 100).toFixed(2) : "0.00";
+
+        const feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100 || 0;
+        const taxRate = parseFloat(document.getElementById("cfg-tax-rate").value) / 100 || 0;
+
+        const DIV = "----------------------------------------";
+        let lines = [];
+        lines.push("========================================");
+        lines.push("           AlphaTrade 對帳報告");
+        lines.push("========================================");
+        lines.push(`報告產出時間: ${genTime}`);
+        lines.push("");
+        lines.push("【帳戶總覽】");
+        lines.push(DIV);
+        lines.push(`總資產淨值 (NAV):   $ ${Math.floor(nav).toLocaleString()}`);
+        lines.push(`現金餘額:           $ ${Math.floor(state.cash).toLocaleString()}`);
+        lines.push(`持倉總市值:         $ ${Math.floor(holdingsVal).toLocaleString()}`);
+        lines.push(`未實現總損益:       ${pnl >= 0 ? '+' : ''}$ ${Math.floor(pnl).toLocaleString()} (${pnlPct}%)`);
+        lines.push("");
+        lines.push("【目前持倉明細】");
+        lines.push(DIV);
+        if (holdingTickers.length === 0) {
+            lines.push("(尚未持有任何證券)");
+            lines.push(DIV);
+        } else {
+            holdingTickers.forEach(t => {
+                const rate = getCurrencyMultiplier(t);
+                const h = state.holdings[t];
+                const curP = globalPriceCache[t] || (t === currentTicker && currentRealPrice !== null ? currentRealPrice : h.avgPrice);
+                const val = h.shares * curP * rate;
+                const itemPnl = val - (h.shares * h.avgPrice * rate);
+                const breakEvenPrice = h.avgPrice / (1 - feeRate - taxRate);
+                lines.push(`代號: ${t}`);
+                lines.push(`  持有股數:    ${h.shares}`);
+                lines.push(`  買入均價:    $${h.avgPrice.toFixed(2)}（損平賣價 $${breakEvenPrice.toFixed(2)}）`);
+                lines.push(`  當前現價:    $${curP.toFixed(2)}`);
+                lines.push(`  市值:        $ ${Math.floor(val).toLocaleString()}`);
+                lines.push(`  未實現損益:  ${itemPnl >= 0 ? '+' : ''}$ ${Math.floor(itemPnl).toLocaleString()}`);
+                lines.push(DIV);
+            });
+        }
+        lines.push("");
+        lines.push(`【歷史交易紀錄】(共 ${state.ledger.length} 筆，依時間新到舊排序)`);
+        lines.push(DIV);
+        if (state.ledger.length === 0) {
+            lines.push("(尚無交易紀錄)");
+            lines.push(DIV);
+        } else {
+            state.ledger.forEach(r => {
+                const displayTime = r.timestamp ? getFullFormattedTimeFromDate(r.timestamp) : r.time;
+                const actionText = r.action === 'BUY' ? '買進' : '賣出';
+                const pnlText = (r.realizedPnL !== null && r.realizedPnL !== undefined)
+                    ? `${r.realizedPnL >= 0 ? '+' : ''}$${Math.floor(r.realizedPnL).toLocaleString()}`
+                    : "-";
+                lines.push(`[${displayTime}] ${actionText} ${r.ticker}`);
+                lines.push(`  成交均價: $${r.price.toFixed(2)}　股數: ${r.shares}`);
+                lines.push(`  手續費/稅: $${r.fee.toFixed(1)}`);
+                lines.push(`  交割金額(TWD): $${Math.floor(r.total).toLocaleString()}`);
+                lines.push(`  已實現損益(TWD): ${pnlText}`);
+                lines.push(DIV);
+            });
+        }
+        lines.push("");
+        lines.push("========================================");
+        lines.push("本報告由 AlphaTrade 模擬交易系統自動產生，僅供個人記錄與參考使用。");
+        lines.push("========================================");
+
+        const reportStr = lines.join("\n");
+        const blob = new Blob([reportStr], { type: "text/plain;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+        const timeStr = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+        a.href = url; a.download = `AlphaTrade_Report_${dateStr}_${timeStr}.txt`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+        triggerDynamicFeedback("已成功匯出對帳報告", "buy", null, "REPORT EXPORTED");
     }
 
     function recalculateState(ledgerArray) {
