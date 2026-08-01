@@ -2,7 +2,10 @@
 <html lang="zh-Hant" class="notranslate" translate="no">
 <head>
     <meta charset="UTF-8">
-	<meta name="color-scheme" content="dark">
+
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#666666">
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>AlphaTrade</title>
     
@@ -77,7 +80,7 @@
         .menu-item { padding: 13px 16px; margin-bottom: 6px; border-radius: 8px; cursor: pointer; transition: all 0.2s; color: #777; display: flex; align-items: center; gap: 12px; font-size: 13px; font-weight: 600; }
         .menu-item:hover, .menu-item.active { background: rgba(255, 255, 255, 0.05); color: #fff; }
         .menu-item i { width: 18px; font-size: 15px; text-align: center; }
-        .mobile-only { display: none; }
+        .mobile-only { display: none !important; }
 
         #content-area { flex: 1; position: relative; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
         .view-section { position: absolute; inset: 0; padding: 16px; display: flex; flex-direction: column; gap: 14px; opacity: 0; pointer-events: none; transition: opacity 0.25s ease; overflow-y: auto; overflow-x: hidden; }
@@ -183,6 +186,12 @@
         .jelly-input { width: 48px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 4px; border-radius: 6px; text-align: center; font-family: monospace; font-size: 12px; }
         .setting-item.disabled { opacity: 0.3; pointer-events: none; }
 
+        /* AI Mini Ticker 手機專屬外觀 */
+        .ai-mini-ticker .select-input-box { border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; min-height: 26px; padding: 0 4px; background: rgba(0,0,0,0.5); }
+        .ai-mini-ticker .select-input-box:focus-within { border-color: var(--color-acc); }
+        .ai-mini-ticker input { flex: 1; background: transparent; border: none; color: #fff; outline: none; font-family: monospace; font-weight: bold; font-size: 11px; padding: 4px 0; text-align: center; width: 100%; }
+        .ai-mini-ticker .select-dropdown-btn { padding: 0 0 0 2px; font-size: 10px; background: transparent; border: none; color: #888; }
+
         /* 📱 手機端極簡玻璃數字小鍵盤專屬樣式 */
         .glass-numpad {
             position: fixed;
@@ -227,10 +236,10 @@
         /* 卡片拖曳時的佔位符樣式 */
         .is-dragging-placeholder { opacity: 0; pointer-events: none; }
 
-        /* 🚀 控制手機版圖表標題隱藏 */
+        /* 🚀 控制手機版圖表標題與細節配置 */
         @media (max-width: 768px) {
             .hide-on-mobile { display: none !important; }
-            .mobile-only { display: flex; }
+            .mobile-only { display: flex !important; }
             #mobile-header { display: flex; justify-content: space-between; align-items: center; height: 60px; padding: 0 20px; background: rgba(10, 10, 10, 0.95); border-bottom: 1px solid rgba(255,255,255,0.06); z-index: 50; position: absolute; top: 0; left: 0; width: 100%; }
             .mobile-menu-btn { background: transparent; border: none; color: #fff; font-size: 20px; cursor: pointer; padding: 10px; margin-left: -10px; z-index: 2; }
             .mobile-header-title { position: absolute; left: 50%; transform: translateX(-50%); font-weight: 900; letter-spacing: 3px; font-size: 16px; color: #fff; cursor: pointer; white-space: nowrap; z-index: 1; }
@@ -252,7 +261,9 @@
             .dashboard-body { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 12px; }
             .dashboard-left-col { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 12px; }
             #desktop-trade-col { display: none; }
-            .standalone-mode-btn { display: none; }
+            
+            /* 手機版同樣顯示圖表切換按鈕並進行尺寸調整 */
+            .standalone-mode-btn { display: flex; width: 28px; height: 28px; font-size: 12px; }
             
             #shared-trade-panel { height: auto !important; overflow-y: visible !important; padding: 12px !important; gap: 10px !important; }
             
@@ -332,10 +343,22 @@
                         <span style="color:#666; font-size:11px;">深度數據連線中</span>
                     </div>
                     
-                    <div style="display:flex; gap:6px; padding:6px 12px; background:rgba(0,0,0,0.2); overflow-x:auto;">
-                        <button class="qp-btn" onclick="quickAskAI('diagnostic')" style="padding: 4px 10px;">📊 綜合體檢</button>
-                        <button class="qp-btn" onclick="quickAskAI('risk')" style="padding: 4px 10px;">🛡️ 風險診斷</button>
-                        <button class="qp-btn" onclick="quickAskAI('strategy')" style="padding: 4px 10px;">💡 加減碼策略</button>
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 12px; background:rgba(0,0,0,0.2);">
+                        <div style="display:flex; gap:6px; overflow-x:auto; scrollbar-width:none; flex: 1;">
+                            <button class="qp-btn" onclick="quickAskAI('diagnostic')" style="padding: 4px 10px; flex-shrink:0;"><span class="hide-on-mobile">📊 </span>綜合體檢</button>
+                            <button class="qp-btn" onclick="quickAskAI('risk')" style="padding: 4px 10px; flex-shrink:0;"><span class="hide-on-mobile">🛡️ </span>風險診斷</button>
+                            <button class="qp-btn" onclick="quickAskAI('strategy')" style="padding: 4px 10px; flex-shrink:0;"><span class="hide-on-mobile">💡 </span>加減碼策略</button>
+                        </div>
+                        
+                        <div class="mobile-only custom-select-wrapper ai-mini-ticker" id="ai-ticker-wrapper" style="width: 75px; flex-shrink: 0; margin-left: 6px;">
+                            <div class="select-input-box">
+                                <input type="text" id="ai-mini-ticker-input" value="NVDA" autocomplete="off" placeholder="代號">
+                                <button class="select-dropdown-btn" onclick="toggleAiTickerDropdown()"><i class="fa-solid fa-chevron-down"></i></button>
+                            </div>
+                            <div class="opaque-dropdown-list" id="ai-ticker-dropdown" style="width: 140px; top: calc(100% + 5px); right: 0; left: auto; z-index: 10000;">
+                                <div id="ai-live-search-list"></div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="chat-display" id="chat-output">
@@ -480,7 +503,7 @@
             </div>
             <div class="glass-panel setting-item">
                 <div><div style="font-weight:bold;">圖表動態十字輔助線</div><div style="font-size:11px; color:#777; margin-top:2px;">按住圖表滑動時，顯示絲滑跟隨的垂直輔助線</div></div>
-                <label class="switch"><input type="checkbox" id="cfg-crosshair-show" checked><span class="slider"></span></label>
+                <label class="switch"><input type="checkbox" id="cfg-crosshair-show"><span class="slider"></span></label>
             </div>
             <div class="glass-panel setting-item">
                 <div><div style="font-weight:bold;">圖表轉折節點顯示</div><div style="font-size:11px; color:#777; margin-top:2px;">開啟以在折線圖上方顯示數據圓點</div></div>
@@ -1009,8 +1032,8 @@
         
         updateChartSettingsUI();
         
-        const savedShow = localStorage.getItem('SETTING_NODE_SHOW'); if (savedShow !== null) document.getElementById("cfg-node-show").checked = savedShow === 'true'; else document.getElementById("cfg-node-show").checked = true;
-        const savedCrosshair = localStorage.getItem('SETTING_CROSSHAIR_SHOW'); if (savedCrosshair !== null) document.getElementById("cfg-crosshair-show").checked = savedCrosshair === 'true'; else document.getElementById("cfg-crosshair-show").checked = true;
+        const savedShow = localStorage.getItem('SETTING_NODE_SHOW'); if (savedShow !== null) document.getElementById("cfg-node-show").checked = savedShow === 'true'; else document.getElementById("cfg-node-show").checked = false;
+        const savedCrosshair = localStorage.getItem('SETTING_CROSSHAIR_SHOW'); if (savedCrosshair !== null) document.getElementById("cfg-crosshair-show").checked = savedCrosshair === 'true'; else document.getElementById("cfg-crosshair-show").checked = false;
         const savedVal = localStorage.getItem('SETTING_NODE_VAL');
         if (savedVal !== null) {
             document.getElementById("cfg-node-slider").value = (savedVal === 'All') ? 60 : savedVal; document.getElementById("cfg-node-val").value = savedVal;
@@ -1018,6 +1041,7 @@
         }
         document.getElementById("node-settings-wrapper").classList.toggle("disabled", !document.getElementById("cfg-node-show").checked);
         document.getElementById("trade-ticker").value = currentTicker; 
+        document.getElementById("ai-mini-ticker-input").value = currentTicker;
         
         updateTimeframeButtons();
         initTimeMachineDefault(); renderRecentTickers(); renderCards();
@@ -1404,16 +1428,51 @@
         autoFetchHistoricalPrice();
     }
 
+    // AI 迷你搜尋器的邏輯
+    function toggleAiTickerDropdown() { 
+        const dropdown = document.getElementById("ai-ticker-dropdown");
+        dropdown.classList.toggle("show"); 
+        if(dropdown.classList.contains("show")) {
+            document.getElementById("ai-live-search-list").innerHTML = `<div class="dropdown-group-title" style="color:var(--color-buy)">★ 最近選取</div>` + state.recentTickers.map(t => `<div class="dropdown-item" onclick="selectTicker('${t}')"><span style="font-weight:bold; color:var(--color-buy)">${t}</span><span style="color:#888; font-size:11px;">最近</span></div>`).join("");
+        }
+    }
+    
+    const aiTickerInput = document.getElementById("ai-mini-ticker-input");
+    let aiSearchDebounceTimer = null;
+    aiTickerInput.addEventListener("input", (e) => {
+        const query = e.target.value.trim().toUpperCase(); 
+        const dropdown = document.getElementById("ai-ticker-dropdown");
+        const list = document.getElementById("ai-live-search-list");
+        
+        if(!query) { dropdown.classList.remove("show"); return; }
+        dropdown.classList.add("show");
+        list.innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> 搜尋 ${query}...</div>`;
+        
+        clearTimeout(aiSearchDebounceTimer);
+        aiSearchDebounceTimer = setTimeout(async () => {
+            try {
+                const proxyUrl = `${myProxy}${encodeURIComponent(`https://query2.finance.yahoo.com/v1/finance/search?q=${query}&quotesCount=6`)}`;
+                const res = await fetch(proxyUrl, { cache: "no-store" }); const json = await res.json();
+                if(json.quotes && json.quotes.length > 0) { 
+                    list.innerHTML = json.quotes.map(q => `<div class="dropdown-item" onclick="selectTicker('${q.symbol}')"><div><strong style="color:#fff">${q.symbol}</strong></div><span style="color:var(--color-acc); font-size:11px">${q.exchDisp || ''}</span></div>`).join(""); 
+                } else list.innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#ff4560;">查無結果</div>`;
+            } catch(err) { list.innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#ff4560;">連線異常</div>`; }
+        }, 300);
+    });
+
     function toggleTickerDropdown() { document.getElementById("ticker-dropdown").classList.toggle("show"); }
     document.addEventListener("click", (e) => { 
         if(!document.getElementById("ticker-select-wrapper").contains(e.target)) document.getElementById("ticker-dropdown").classList.remove("show"); 
         if(!document.getElementById("tm-ticker-wrapper").contains(e.target)) document.getElementById("tm-ticker-dropdown").classList.remove("show"); 
+        if(!document.getElementById("ai-ticker-wrapper").contains(e.target)) document.getElementById("ai-ticker-dropdown").classList.remove("show"); 
     });
 
     function selectTicker(t) {
         currentTicker = t; localStorage.setItem('LAST_SELECTED_TICKER', t);
         document.getElementById("trade-ticker").value = t; 
+        document.getElementById("ai-mini-ticker-input").value = t; 
         document.getElementById("ticker-dropdown").classList.remove("show");
+        document.getElementById("ai-ticker-dropdown").classList.remove("show");
         document.getElementById("recent-group-title").style.display = 'block'; document.getElementById("recent-tickers-list").style.display = 'block';
         addToRecentlySelected(t); 
         
@@ -1767,7 +1826,7 @@
         const showNodes = document.getElementById("cfg-node-show").checked, rawVal = document.getElementById("cfg-node-val").value, densityVal = (rawVal === 'All') ? 'All' : parseInt(rawVal) || 20;
         const chartType = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
         
-        const showNav = desktopChartMode === 'NAV' || window.innerWidth <= 768;
+        const showNav = desktopChartMode === 'NAV';
         const isMobile = window.innerWidth <= 768;
 
         // 動態根據狀態調整 Padding、位移與坐標軸外觀 (還原 NAV 參考版樣貌與手機版需求)
