@@ -31,19 +31,18 @@
         ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 10px; }
 
         html, body {
-            /* 1. 新增這行：給 iOS 狀態列和鍵盤彈出時抓取的「純色底色」 */
-            background-color: #252525 !important; 
-            
-            /* 2. 把原本的 background 改成 background-image，讓漸層疊在純色之上 */
-            background-image: var(--bg-gradient); 
-            
-            color: var(--text-main);
+            background: var(--bg-gradient); color: var(--text-main);
             font-family: "Inter", "Microsoft JhengHei", sans-serif;
             margin: 0; padding: 0; height: 100dvh; width: 100vw;
             overflow: hidden; overscroll-behavior: none; display: flex;
-            
-            /* 3. 建議補上這行：避免透明狀態列的時間/電量與你的網頁內容重疊 */
-            padding-top: env(safe-area-inset-top);
+        }
+
+        .glass-title-text {
+            font-size: 20px; font-weight: 900; letter-spacing: 4px; text-align: center;
+            margin: 15px 0 30px 0; padding: 10px;
+            background: linear-gradient(135deg, #ffffff 0%, rgba(255,255,255,0.45) 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            cursor: default; display: flex; align-items: center; justify-content: center; gap: 10px;
         }
 
         .glass-panel {
