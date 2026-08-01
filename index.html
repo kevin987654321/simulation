@@ -2184,7 +2184,7 @@
 
         let key = localStorage.getItem("MY_GEMINI_KEY") || prompt("請輸入 Gemini API Key："); if(!key) return; localStorage.setItem("MY_GEMINI_KEY", key);
 
-        const cleanQuestion = pendingLedgerQuery.replace(LEDGER_MARKER_REGEX, "").trim() || "請幫我分析這段期間的交易表現，並提出檢討與建議。";
+        const cleanQuestion = pendingLedgerQuery.replace(LEDGER_MARKER_REGEX, "").trim() || "請幫我分析這段期間的交易";
 
         let filtered = state.ledger.filter(r => r.timestamp >= range.startTs && r.timestamp <= range.endTs).sort((a, b) => b.timestamp - a.timestamp);
         const totalMatched = filtered.length;
