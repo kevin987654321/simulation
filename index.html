@@ -319,8 +319,9 @@
             .mobile-header-title { position: absolute; left: 50%; transform: translateX(-50%); font-weight: 900; letter-spacing: 3px; font-size: 16px; color: #fff; cursor: pointer; white-space: nowrap; z-index: 1; }
             .mobile-reload-btn { width: 50px; height: 100%; cursor: pointer; z-index: 2; margin-right: -10px; position: absolute; right: 0; top: 0; }
             
-            #sidebar-overlay { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0); z-index: 900; backdrop-filter: blur(0px); -webkit-backdrop-filter: blur(0px); opacity: 0; pointer-events: none; transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.3s cubic-bezier(0.4, 0, 0.2, 1), -webkit-backdrop-filter 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-            #sidebar-overlay.active { background: rgba(0,0,0,0.6); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); opacity: 1; pointer-events: auto; }
+            #sidebar-overlay { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 900; backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); opacity: 0; pointer-events: none; transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+            #sidebar-overlay.active { opacity: 1; pointer-events: auto; }
+            #sidebar-overlay.dragging { transition: none; }
             #sidebar { position: fixed; left: 0; top: 0; bottom: 0; height: 100dvh; transform: translateX(-100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 5px 0 20px rgba(0,0,0,0.5); background: rgba(10, 10, 10, 0.95); backdrop-filter: blur(20px); }
             #sidebar.open { transform: translateX(0); }
             #sidebar.dragging { transition: none; }
@@ -715,12 +716,15 @@
             <button onclick="createAccount()" style="background:var(--color-acc); color:#000; border:none; padding:10px 18px; border-radius:6px; font-weight:bold; cursor:pointer; white-space:nowrap;">
                 <i class="fa-solid fa-plus"></i> 新增帳號
             </button>
+            <button onclick="remoteLoginAccount()" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:10px 18px; border-radius:6px; font-weight:bold; cursor:pointer; white-space:nowrap;">
+                <i class="fa-solid fa-cloud-arrow-down"></i> 遠端登入
+            </button>
         </div>
 
         <div id="accounts-list-container" style="max-width:650px; margin:0 auto; width:100%; display:flex; flex-direction:column; gap:10px;"></div>
 
         <div style="max-width:650px; margin:0 auto; width:100%; font-size:10.5px; color:#555; text-align:center; padding:6px 10px;">
-            <i class="fa-solid fa-circle-info"></i> 各帳號的現金、持倉、交易與股息紀錄皆完全獨立儲存於本機瀏覽器；密碼保護僅為本機簡易鎖定，不具備雲端加密效果。
+            <i class="fa-solid fa-circle-info"></i> 各帳號的現金、持倉、交易與股息紀錄皆完全獨立儲存於本機瀏覽器；密碼保護僅為本機簡易鎖定。若啟用「遠端登入 / 雲端同步」，該帳號的密碼雜湊與資料將傳送至雲端，以供在其他裝置上登入取回。
         </div>
     </main>
 </div>
@@ -1004,8 +1008,20 @@
         sCurrentX = e.touches[0].clientX; const diffX = sCurrentX - sStartX, diffY = e.touches[0].clientY - sStartY;
         if (!sIsDetermined) { if (Math.abs(diffX) > Math.abs(diffY)) sIsDetermined = true; else { sIsDragging = false; return; } }
         const isOpen = sidebarEl.classList.contains('open');
-        if (!isOpen && diffX > 0) { if (e.cancelable) e.preventDefault(); sidebarEl.classList.add('dragging'); sidebarEl.style.transform = `translateX(${Math.min(diffX - SIDEBAR_WIDTH, 0)}px)`; }
-        else if (isOpen && diffX < 0) { if (e.cancelable) e.preventDefault(); sidebarEl.classList.add('dragging'); sidebarEl.style.transform = `translateX(${Math.max(diffX, -SIDEBAR_WIDTH)}px)`; }
+        let progress = isOpen ? (1 + diffX / SIDEBAR_WIDTH) : (diffX / SIDEBAR_WIDTH);
+        progress = Math.max(0, Math.min(1, progress));
+        if (!isOpen && diffX > 0) {
+            if (e.cancelable) e.preventDefault();
+            sidebarEl.classList.add('dragging'); overlayEl.classList.add('dragging');
+            sidebarEl.style.transform = `translateX(${Math.min(diffX - SIDEBAR_WIDTH, 0)}px)`;
+            overlayEl.style.opacity = progress;
+        }
+        else if (isOpen && diffX < 0) {
+            if (e.cancelable) e.preventDefault();
+            sidebarEl.classList.add('dragging'); overlayEl.classList.add('dragging');
+            sidebarEl.style.transform = `translateX(${Math.max(diffX, -SIDEBAR_WIDTH)}px)`;
+            overlayEl.style.opacity = progress;
+        }
     }, {passive: false});
     
     function snapSidebar() {
@@ -1014,7 +1030,8 @@
         const diffX = sCurrentX - sStartX;
         const isOpen = sidebarEl.classList.contains('open');
         
-        sidebarEl.classList.remove('dragging');
+        sidebarEl.classList.remove('dragging'); overlayEl.classList.remove('dragging');
+        overlayEl.style.opacity = '';
         
         if (sIsDragging) {
             if (!isOpen && diffX > 40) { 
@@ -1096,6 +1113,102 @@
     // ============================================================
     const ACCOUNTS_META_KEY = "ALPHATRADE_ACCOUNTS";
     const ACTIVE_ACCOUNT_KEY = "ALPHATRADE_ACTIVE_ACCOUNT_ID";
+    const CLOUD_SYNC_URL = "https://script.google.com/macros/s/AKfycbygqIVZYbWY-uepN-Oi8ieJxbYjQg1eeHhALg5JdleoXC3-zrge2RgivQaWxmwp2_BQ/exec";
+
+    // --- ☁️ 遠端登入 / 雲端同步：與 Google Apps Script 溝通 ---
+    // 注意：使用 text/plain 當作 Content-Type 可避免瀏覽器對 GAS 發出 CORS 預檢請求 (preflight)
+    async function callCloudApi(payload) {
+        try {
+            const res = await fetch(CLOUD_SYNC_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(payload)
+            });
+            const text = await res.text();
+            return JSON.parse(text);
+        } catch (e) {
+            return { success: false, msg: '無法連線至雲端同步伺服器，請檢查網路連線' };
+        }
+    }
+
+    // 將指定帳號目前的資料上傳/註冊至雲端 (需已設定密碼且已啟用同步)
+    async function cloudSyncAccount(accountId, { silent = false } = {}) {
+        const acc = ACCOUNTS.find(a => a.id === accountId);
+        if (!acc || !acc.syncEnabled || !acc.hasPassword) return { success: false, msg: '此帳號尚未啟用遠端同步' };
+        const raw = (accountId === activeAccountId) ? JSON.stringify(state) : (localStorage.getItem(acc.storageKey) || '{}');
+        const result = await callCloudApi({ action: 'sync', accountName: acc.name, passwordHash: acc.passwordHash, stateJSON: raw });
+        if (!silent) {
+            if (result.success) triggerDynamicFeedback(`「${acc.name}」已同步至雲端`, 'buy', null, null);
+            else triggerDynamicFeedback(result.msg || '雲端同步失敗', 'sell', null, null);
+        }
+        return result;
+    }
+
+    // 依目前使用中帳號的變動，延遲(去抖動)自動推送至雲端，避免頻繁操作時過度發送請求
+    let cloudSyncDebounceTimer = null;
+    function scheduleCloudSync() {
+        const acc = getActiveAccount();
+        if (!acc || !acc.syncEnabled || !acc.hasPassword) return;
+        clearTimeout(cloudSyncDebounceTimer);
+        cloudSyncDebounceTimer = setTimeout(() => { cloudSyncAccount(acc.id, { silent: true }); }, 2500);
+    }
+
+    // 啟用/關閉指定帳號的遠端同步；啟用前提為該帳號必須已設定密碼 (雲端驗證需要 passwordHash)
+    async function toggleAccountSync(accountId) {
+        const acc = ACCOUNTS.find(a => a.id === accountId); if (!acc) return;
+
+        if (!acc.syncEnabled) {
+            if (!acc.hasPassword) {
+                const goSet = confirm(`啟用遠端同步前，「${acc.name}」必須先設定密碼（雲端驗證需要密碼保護）。\n是否現在為此帳號設定密碼？`);
+                renderAccountManagerList();
+                if (!goSet) return;
+                await setAccountPassword(accountId);
+                if (!acc.hasPassword) return;
+            }
+            acc.syncEnabled = true;
+            saveAccountsMeta(); renderAccountManagerList();
+            triggerDynamicFeedback(`正在為「${acc.name}」啟用雲端同步...`, 'gray', null, null);
+            const result = await cloudSyncAccount(accountId, { silent: true });
+            if (result && result.success) {
+                triggerDynamicFeedback(`「${acc.name}」已啟用遠端登入`, 'buy', null, null);
+            } else {
+                acc.syncEnabled = false; saveAccountsMeta();
+                triggerDynamicFeedback((result && result.msg) || '連線雲端失敗，已取消啟用', 'sell', null, null);
+            }
+            renderAccountManagerList();
+        } else {
+            acc.syncEnabled = false;
+            saveAccountsMeta(); renderAccountManagerList();
+            triggerDynamicFeedback(`已關閉「${acc.name}」的遠端登入`, 'gray', null, null);
+        }
+    }
+
+    // 從雲端登入既有帳號：以帳號名稱＋密碼向雲端驗證，成功後在本機建立/還原該帳號
+    async function remoteLoginAccount() {
+        const accName = prompt('請輸入雲端帳號名稱：');
+        if (!accName || !accName.trim()) return;
+        const trimmedName = accName.trim();
+
+        const pwd = await openPasswordModal({ title: `登入雲端帳號「${trimmedName}」`, desc: '請輸入此雲端帳號的密碼以取回資料' });
+        if (pwd === null) return;
+
+        const passwordHash = await hashPassword(pwd);
+        triggerDynamicFeedback('正在連線雲端驗證帳號...', 'gray', null, null);
+        const result = await callCloudApi({ action: 'login', accountName: trimmedName, passwordHash });
+
+        if (!result || !result.success) { triggerDynamicFeedback((result && result.msg) || '登入失敗，請確認帳號名稱與密碼是否正確', 'sell', null, null); return; }
+
+        let importedState = null;
+        try { importedState = JSON.parse(result.stateJSON); } catch (e) { importedState = null; }
+        if (!importedState) { triggerDynamicFeedback('雲端資料格式錯誤，無法還原', 'sell', null, null); return; }
+
+        const id = generateAccountId(), storageKey = `ALPHATRADE_DATA_${id}`;
+        localStorage.setItem(storageKey, JSON.stringify(importedState));
+        ACCOUNTS.push({ id, name: trimmedName, storageKey, hasPassword: true, passwordHash, syncEnabled: true, createdAt: Date.now() });
+        saveAccountsMeta();
+        renderAccountManagerList();
+        triggerDynamicFeedback(`已從雲端登入帳號「${trimmedName}」`, 'buy', null, null);
+    }
     let ACCOUNTS = [];
     let activeAccountId = null;
 
@@ -1108,9 +1221,10 @@
         } catch(e) { ACCOUNTS = []; }
 
         if (!Array.isArray(ACCOUNTS) || ACCOUNTS.length === 0) {
-            ACCOUNTS = [{ id: 'default', name: '主帳戶', storageKey: DATA_KEY, hasPassword: false, passwordHash: null, createdAt: Date.now() }];
+            ACCOUNTS = [{ id: 'default', name: '主帳戶', storageKey: DATA_KEY, hasPassword: false, passwordHash: null, syncEnabled: false, createdAt: Date.now() }];
             saveAccountsMeta();
         }
+        ACCOUNTS.forEach(a => { if (typeof a.syncEnabled === 'undefined') a.syncEnabled = false; });
 
         activeAccountId = localStorage.getItem(ACTIVE_ACCOUNT_KEY);
         if (!activeAccountId || !ACCOUNTS.find(a => a.id === activeAccountId)) {
@@ -1199,8 +1313,10 @@
         const acc = ACCOUNTS.find(a => a.id === accountId); if (!acc || !acc.hasPassword) return;
         const ok = await verifyAccountPassword(acc); if (!ok) return;
         acc.hasPassword = false; acc.passwordHash = null;
+        const wasSynced = acc.syncEnabled;
+        acc.syncEnabled = false;
         saveAccountsMeta(); renderAccountManagerList();
-        triggerDynamicFeedback(`已移除「${acc.name}」的密碼保護`, 'gray', null, null);
+        triggerDynamicFeedback(wasSynced ? `已移除「${acc.name}」的密碼保護，遠端同步也已一併關閉` : `已移除「${acc.name}」的密碼保護`, 'gray', null, null);
     }
 
     // --- 帳號 CRUD ---
@@ -1209,7 +1325,7 @@
         let name = nameInput.value.trim();
         if (!name) name = `帳戶 ${ACCOUNTS.length + 1}`;
         const id = generateAccountId(), storageKey = `ALPHATRADE_DATA_${id}`;
-        ACCOUNTS.push({ id, name, storageKey, hasPassword: false, passwordHash: null, createdAt: Date.now() });
+        ACCOUNTS.push({ id, name, storageKey, hasPassword: false, passwordHash: null, syncEnabled: false, createdAt: Date.now() });
         saveAccountsMeta();
 
         const freshState = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] } };
@@ -1289,8 +1405,16 @@
                         <span>${acc.name}</span>
                         ${isActive ? '<span style="font-size:10px; background:rgba(0,212,255,0.15); color:var(--color-acc); padding:2px 6px; border-radius:4px; font-weight:bold;">使用中</span>' : ''}
                         ${acc.hasPassword ? '<i class="fa-solid fa-lock" style="color:#888; font-size:11px;" title="已設定密碼"></i>' : ''}
+                        ${acc.syncEnabled ? '<i class="fa-solid fa-cloud" style="color:var(--color-buy); font-size:11px;" title="已啟用遠端同步"></i>' : ''}
                     </div>
                     <div style="font-size:10px; color:#666;">建立於 ${new Date(acc.createdAt).toLocaleDateString()}</div>
+                    <label style="display:flex; align-items:center; gap:8px; margin-top:2px; cursor:pointer;">
+                        <span class="switch" style="transform:scale(0.72); transform-origin:left center;">
+                            <input type="checkbox" ${acc.syncEnabled ? 'checked' : ''} onclick="toggleAccountSync('${acc.id}')">
+                            <span class="slider"></span>
+                        </span>
+                        <span style="font-size:10.5px; color:#888;">遠端登入 / 雲端同步</span>
+                    </label>
                 </div>
                 <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
                     ${!isActive ? `<button class="account-action-btn accent" onclick="switchAccount('${acc.id}')">切換</button>` : ''}
@@ -1528,7 +1652,7 @@
         initTimeMachineDefault(); renderRecentTickers(); renderCards();
     }
     
-    function saveData() { localStorage.setItem(getActiveAccount().storageKey, JSON.stringify(state)); updateAllViews(true); renderCards(); }
+    function saveData() { localStorage.setItem(getActiveAccount().storageKey, JSON.stringify(state)); updateAllViews(true); renderCards(); scheduleCloudSync(); }
     function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { localStorage.removeItem(getActiveAccount().storageKey); state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] } }; initData(); fetchStockHistoryData(currentTicker, true); } }
 
     function exportData() {
