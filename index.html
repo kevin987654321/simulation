@@ -24,7 +24,7 @@
         * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
         input[type="number"]::-webkit-inner-spin-button,
         input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-        input[type="number"] { -moz-appearance: textfield; }
+        input[type="number"], input[type="text"] { -moz-appearance: textfield; user-select: auto; -webkit-user-select: auto; }
 
         ::-webkit-scrollbar { width: 5px; height: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -286,7 +286,6 @@
             .dashboard-left-col { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 12px; }
             #desktop-trade-col { display: none; }
             
-            /* 手機版同樣顯示圖表切換按鈕並進行尺寸調整 */
             .standalone-mode-btn { display: flex; width: 28px; height: 28px; font-size: 12px; }
             
             #shared-trade-panel { height: auto !important; overflow-y: visible !important; padding: 12px !important; gap: 10px !important; }
@@ -295,7 +294,6 @@
             #chart-container { flex: 1; min-height: 0; display: flex; flex-direction: column; }
             #ai-commander { height: 260px; flex-shrink: 0; }
 
-            /* 歷史帳本選擇器：手機空間較小，縮減間距避免溢出 */
             .ledger-range-picker { padding: 10px 12px; gap: 6px; }
             .lr-preset-btn { padding: 5px 0; font-size: 10.5px; }
             .lr-date-box input[type="date"] { padding: 6px 4px; font-size: 11px; }
@@ -395,7 +393,7 @@
                             <span style="color: rgba(255,255,255,0.4)">[SYSTEM]</span> 戰略助理連線成功。已同步 <strong style="color:#fff" id="ai-current-ticker">NVDA</strong> 之 RSI、持倉成本與帳戶資金。<br>
                         </div>
 
-                        <!-- 📒 歷史帳本時間範圍選擇器 -->
+                        <!-- 📒 歷史帳本時間範圍選擇器：偵測到「(歷史帳本)」標記時顯示 -->
                         <div class="ledger-range-picker" id="ledger-range-picker" style="display:none;">
                             <div class="lr-header">
                                 <span class="lr-title"><i class="fa-solid fa-clock-rotate-left" style="color:var(--color-acc)"></i> 選擇歷史帳本時間範圍</span>
@@ -463,7 +461,7 @@
 
     <main id="view-ledger" class="view-section">
         <div class="glass-panel" style="padding:16px; margin-bottom:14px; position:relative; z-index:10;">
-            <div style="font-weight:bold; font-size:14px; margin-bottom:12px;"><i class="fa-solid fa-plus-circle" style="color:var(--color-acc)"></i> 補登歷史交易與配息 (時光機回溯)</div>
+            <div style="font-weight:bold; font-size:14px; margin-bottom:12px;"><i class="fa-solid fa-plus-circle" style="color:var(--color-acc)"></i> 補登歷史交易 (時光機回溯)</div>
             <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
                 <div>
                     <div style="font-size:11px; color:#888; margin-bottom:4px;">日期</div>
@@ -488,14 +486,13 @@
                 </div>
                 <div>
                     <div style="font-size:11px; color:#888; margin-bottom:4px;">動作</div>
-                    <select id="tm-action" onchange="onTmActionChange()" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-weight:bold;">
+                    <select id="tm-action" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-weight:bold;">
                         <option value="BUY">買進</option>
                         <option value="SELL">賣出</option>
-                        <option value="DIVIDEND">發放股息</option>
                     </select>
                 </div>
                 <div>
-                    <div style="font-size:11px; color:#888; margin-bottom:4px;" id="tm-price-label">單價</div>
+                    <div style="font-size:11px; color:#888; margin-bottom:4px;">單價</div>
                     <input type="text" id="tm-price" class="mobile-num" data-decimal="true" onfocus="this.select()" placeholder="自動查詢中..." style="width:100px; background:rgba(0,0,0,0.5); border:1px solid var(--color-acc); color:var(--color-acc); padding:6px; border-radius:6px; font-family:monospace; font-weight:bold;">
                 </div>
                 <div>
@@ -512,7 +509,7 @@
             <div style="font-weight:bold; font-size:15px; margin-bottom:12px; white-space:nowrap;"><i class="fa-solid fa-list-ul"></i> 歷史帳本與撤銷管理</div>
             <div class="table-responsive">
                 <table>
-                    <thead><tr><th>時間</th><th>動作</th><th>代號</th><th>成交/配息均價</th><th>股數</th><th>手續費/稅</th><th>交割金額(TWD)</th><th>已實現損益(TWD)</th><th>操作</th></tr></thead>
+                    <thead><tr><th>時間</th><th>動作</th><th>代號</th><th>成交均價/股息</th><th>股數</th><th>手續費/稅</th><th>交割金額(TWD)</th><th>已實現損益(TWD)</th><th>操作</th></tr></thead>
                     <tbody id="ledger-table-body"></tbody>
                 </table>
             </div>
@@ -521,26 +518,26 @@
 
     <main id="view-settings" class="view-section">
         <div class="settings-list">
-            
-            <div class="glass-panel setting-item" style="flex-direction: column; align-items: stretch; gap: 12px; margin-bottom: 12px;">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
+
+            <!-- 👤 頂部：多帳號管理 -->
+            <div class="glass-panel setting-item" style="flex-direction: column; align-items: stretch; gap: 10px;">
+                <div style="display:flex; justify-content: space-between; align-items: center;">
                     <div>
                         <div style="font-weight:bold;"><i class="fa-solid fa-users" style="color:var(--color-acc)"></i> 多帳號管理</div>
-                        <div style="font-size:11px; color:#777; margin-top:2px;">建立與切換不同的投資帳號，獨立計算損益與帳本</div>
+                        <div style="font-size:11px; color:#777; margin-top:2px;">切換、新增或註銷投資組合帳號 (獨立資料夾)</div>
                     </div>
+                    <button onclick="createAccount()" style="background:rgba(0,255,170,0.15); border:1px solid var(--color-buy); color:var(--color-buy); padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s;">新增帳號</button>
                 </div>
-                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                    <select id="account-selector" onchange="switchAccount()" style="flex:1; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:8px; border-radius:6px; font-weight:bold; outline:none;">
-                    </select>
-                    <button onclick="createAccount()" style="background:rgba(0,212,255,0.15); border:1px solid var(--color-acc); color:var(--color-acc); padding:8px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold;">新增帳號</button>
-                    <button onclick="deleteAccount()" style="background:rgba(255,69,96,0.15); border:1px solid var(--color-sell); color:var(--color-sell); padding:8px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold;">註銷帳號</button>
+                <div style="display:flex; gap:8px; align-items: center;">
+                    <select id="account-selector" onchange="switchAccount(this.value)" style="flex:1; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:8px; border-radius:6px; font-weight:bold; outline:none;"></select>
+                    <button onclick="deleteCurrentAccount()" style="background:rgba(255,69,96,0.15); border:1px solid var(--color-sell); color:var(--color-sell); padding:8px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s;">註銷帳號</button>
                 </div>
             </div>
 
             <div class="glass-panel setting-item">
                 <div>
-                    <div style="font-weight:bold;"><i class="fa-solid fa-floppy-disk" style="color:var(--color-acc)"></i> 當前帳本資料備份與還原</div>
-                    <div style="font-size:11px; color:#777; margin-top:2px;">將目前帳號的所有交易紀錄匯出為檔案，或從檔案還原</div>
+                    <div style="font-weight:bold;"><i class="fa-solid fa-floppy-disk" style="color:var(--color-acc)"></i> 帳本資料備份與還原</div>
+                    <div style="font-size:11px; color:#777; margin-top:2px;">將當前帳號的所有交易紀錄、自選卡片匯出為本機檔案</div>
                 </div>
                 <div style="display:flex; gap:8px;">
                     <button onclick="exportData()" style="background:rgba(0,212,255,0.15); border:1px solid var(--color-acc); color:var(--color-acc); padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s;">匯出</button>
@@ -552,8 +549,16 @@
 
             <div class="glass-panel setting-item">
                 <div>
+                    <div style="font-weight:bold;"><i class="fa-solid fa-hand-holding-dollar" style="color:var(--color-buy)"></i> 自動股息結算與補發</div>
+                    <div style="font-size:11px; color:#777; margin-top:2px;">系統每日會自動核對持倉與除息日，您也可手動強制檢查</div>
+                </div>
+                <button onclick="processDividends(true)" style="background:rgba(0,255,170,0.15); border:1px solid var(--color-buy); color:var(--color-buy); padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s;">手動核對</button>
+            </div>
+
+            <div class="glass-panel setting-item">
+                <div>
                     <div style="font-weight:bold;"><i class="fa-solid fa-file-lines" style="color:var(--color-acc)"></i> 匯出對帳報告</div>
-                    <div style="font-size:11px; color:#777; margin-top:2px;">將目前帳戶狀態與完整交易紀錄匯出成純文字檔，方便列印或傳給他人查看</div>
+                    <div style="font-size:11px; color:#777; margin-top:2px;">將目前帳戶狀態與完整交易紀錄匯出成純文字檔，方便列印或傳閱</div>
                 </div>
                 <div style="display:flex; gap:8px;">
                     <button onclick="exportReport()" style="background:rgba(0,212,255,0.15); border:1px solid var(--color-acc); color:var(--color-acc); padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s;">匯出報告</button>
@@ -607,7 +612,7 @@
                 </div>
             </div>
             <div class="glass-panel setting-item" style="border-color: rgba(255,69,96,0.3); margin-top:10px;">
-                <div><div style="font-weight:bold; color:var(--color-sell);">重置初始帳戶資金</div><div style="font-size:11px; color:#777; margin-top:2px;">清空歷史帳本，還原現金 100 萬起始金額</div></div>
+                <div><div style="font-weight:bold; color:var(--color-sell);">重置初始帳戶資金</div><div style="font-size:11px; color:#777; margin-top:2px;">清空當前帳號歷史帳本，還原現金 100 萬</div></div>
                 <button onclick="resetAccount()" style="background:var(--color-sell); border:none; color:#fff; padding:8px 14px; border-radius:6px; font-weight:bold; cursor:pointer;">執行重置</button>
             </div>
         </div>
@@ -699,85 +704,72 @@
     let currentUSDTWD = 32.5;
     const myProxy = "https://square-moon-a3d9.kevinchang090818.workers.dev/?url=";
 
-    let globalPriceCache = {};
-    
-    // 帳號管理全域變數
-    let accountList = ["主帳戶"];
-    let currentAccount = "主帳戶";
-    
+    // --- 帳號管理系統 ---
+    let accountsList = ["預設帳戶"];
+    let currentAccount = "預設帳戶";
+
+    function getDataKey() {
+        return "ALPHATRADE_DATA_" + currentAccount;
+    }
+
     function initAccountSystem() {
-        const savedList = localStorage.getItem("ALPHATRADE_ACCOUNT_LIST");
-        if (savedList) {
-            try { accountList = JSON.parse(savedList); } catch(e) {}
-        } else {
-            localStorage.setItem("ALPHATRADE_ACCOUNT_LIST", JSON.stringify(accountList));
+        // Migrate old pre-account data if exists
+        const oldData = localStorage.getItem("ALPHATRADE_MANUAL_DATA");
+        if (oldData) {
+            localStorage.setItem("ALPHATRADE_DATA_預設帳戶", oldData);
+            localStorage.removeItem("ALPHATRADE_MANUAL_DATA");
+        }
+
+        const savedAccounts = localStorage.getItem("ALPHATRADE_ACCOUNTS_LIST");
+        if (savedAccounts) {
+            try { accountsList = JSON.parse(savedAccounts); } catch(e) {}
         }
         
         const savedCurrent = localStorage.getItem("ALPHATRADE_CURRENT_ACCOUNT");
-        if (savedCurrent && accountList.includes(savedCurrent)) {
-            currentAccount = savedCurrent;
-        } else {
-            currentAccount = accountList[0];
-            localStorage.setItem("ALPHATRADE_CURRENT_ACCOUNT", currentAccount);
-        }
-    }
-    
-    function getDataKey() {
-        return currentAccount === "主帳戶" ? "ALPHATRADE_MANUAL_DATA" : "ALPHATRADE_MANUAL_DATA_" + currentAccount;
+        if (savedCurrent && accountsList.includes(savedCurrent)) currentAccount = savedCurrent;
+        else currentAccount = accountsList[0];
+
+        renderAccountSelector();
     }
 
     function renderAccountSelector() {
-        const sel = document.getElementById("account-selector");
-        sel.innerHTML = accountList.map(a => `<option value="${a}" ${a === currentAccount ? 'selected' : ''}>${a}</option>`).join('');
+        const sel = document.getElementById('account-selector');
+        sel.innerHTML = accountsList.map(a => `<option value="${a}" ${a === currentAccount ? 'selected' : ''}>${a}</option>`).join('');
     }
 
-    function switchAccount() {
-        const sel = document.getElementById("account-selector");
-        const newAccount = sel.value;
-        if (newAccount !== currentAccount) {
-            currentAccount = newAccount;
-            localStorage.setItem("ALPHATRADE_CURRENT_ACCOUNT", currentAccount);
-            triggerDynamicFeedback(`已切換至帳號：${currentAccount}`, 'buy', null, "SWITCHED");
-            bootSystem(); 
-        }
+    function switchAccount(name) {
+        if (!accountsList.includes(name)) return;
+        currentAccount = name;
+        localStorage.setItem("ALPHATRADE_CURRENT_ACCOUNT", currentAccount);
+        initData(); 
+        fetchStockHistoryData(currentTicker, true);
+        triggerDynamicFeedback(`已切換至帳戶：${name}`, 'gray', null, name);
     }
 
     function createAccount() {
-        const name = prompt("請輸入新帳號名稱：");
-        if (!name || name.trim() === "") return;
-        const cleanName = name.trim();
-        if (accountList.includes(cleanName)) {
-            alert("帳號名稱已存在！");
-            return;
-        }
-        accountList.push(cleanName);
-        localStorage.setItem("ALPHATRADE_ACCOUNT_LIST", JSON.stringify(accountList));
-        currentAccount = cleanName;
-        localStorage.setItem("ALPHATRADE_CURRENT_ACCOUNT", currentAccount);
+        const name = prompt("請輸入新帳號名稱 (僅限自己識別用)：");
+        if (!name || !name.trim()) return;
+        const trimmed = name.trim();
+        if (accountsList.includes(trimmed)) { alert("該帳號名稱已存在！"); return; }
+        accountsList.push(trimmed);
+        localStorage.setItem("ALPHATRADE_ACCOUNTS_LIST", JSON.stringify(accountsList));
+        switchAccount(trimmed);
         renderAccountSelector();
-        triggerDynamicFeedback(`已建立並切換至：${currentAccount}`, 'buy', null, "CREATED");
-        
-        state = { cash: 1000000, holdings: {}, ledger: [], recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] } };
-        saveData();
-        bootSystem();
     }
 
-    function deleteAccount() {
-        if (accountList.length <= 1) {
-            alert("必須保留至少一個帳號！");
-            return;
-        }
-        if (confirm(`確定要註銷並刪除「${currentAccount}」的所有資料嗎？此操作無法還原！`)) {
-            localStorage.removeItem(getDataKey()); 
-            accountList = accountList.filter(a => a !== currentAccount);
-            localStorage.setItem("ALPHATRADE_ACCOUNT_LIST", JSON.stringify(accountList));
-            currentAccount = accountList[0];
-            localStorage.setItem("ALPHATRADE_CURRENT_ACCOUNT", currentAccount);
-            renderAccountSelector();
-            triggerDynamicFeedback(`已刪除帳號`, 'sell', null, "DELETED");
-            bootSystem();
-        }
+    function deleteCurrentAccount() {
+        if (accountsList.length <= 1) { alert("這是系統中最後一個帳號，無法註銷！"); return; }
+        if (!confirm(`警告：確定要註銷並永久刪除帳號「${currentAccount}」的所有資料與歷史紀錄嗎？`)) return;
+        
+        localStorage.removeItem(getDataKey());
+        accountsList = accountsList.filter(a => a !== currentAccount);
+        localStorage.setItem("ALPHATRADE_ACCOUNTS_LIST", JSON.stringify(accountsList));
+        switchAccount(accountsList[0]);
+        renderAccountSelector();
     }
+    // --- 帳號管理結束 ---
+
+    let globalPriceCache = {};
 
     async function fetchExchangeRate() {
         try {
@@ -848,16 +840,6 @@
         document.getElementById('tm-date').value = `${year}-${month}-${day}`; document.getElementById('tm-hour').value = hours; document.getElementById('tm-minute').value = minutes;
     }
 
-    function onTmActionChange() {
-        const act = document.getElementById("tm-action").value;
-        const priceLabel = document.getElementById("tm-price-label");
-        if (act === 'DIVIDEND') {
-            priceLabel.innerText = "每股配息";
-        } else {
-            priceLabel.innerText = "單價";
-        }
-    }
-
     let fetchPriceTimer = null;
     function autoFetchHistoricalPrice() {
         clearTimeout(fetchPriceTimer);
@@ -866,9 +848,6 @@
             const ticker = document.getElementById("tm-ticker").value.trim().toUpperCase(), priceInput = document.getElementById("tm-price");
 
             if (!dateVal || !ticker || hVal.length !== 2 || mVal.length !== 2) return;
-            
-            // 如果是派發股息，不一定要自動查詢歷史報價 (配息金額通常固定)，但這裡保留自動查詢功能
-            const action = document.getElementById("tm-action").value;
 
             const timeVal = `${hVal}:${mVal}`, targetTime = new Date(`${dateVal}T${timeVal}`).getTime();
             if(isNaN(targetTime)) return;
@@ -892,16 +871,15 @@
                             const diff = Math.abs(timestamps[i] - targetSec); if (diff < minDiff) { minDiff = diff; closestIdx = i; }
                         }
                         if(closestIdx !== -1) {
-                            if (action !== 'DIVIDEND') priceInput.value = closes[closestIdx].toFixed(2); 
-                            priceInput.placeholder = "";
+                            priceInput.value = closes[closestIdx].toFixed(2); priceInput.placeholder = "";
                             const fetchedDate = new Date(timestamps[closestIdx] * 1000), tStr = `${fetchedDate.getMonth()+1}/${fetchedDate.getDate()} ${String(fetchedDate.getHours()).padStart(2, '0')}:${String(fetchedDate.getMinutes()).padStart(2, '0')}`;
                             triggerDynamicFeedback(`精準撈取 ${tStr} 報價`, 'gray', priceInput, closes[closestIdx].toFixed(2));
                             return;
                         }
                     }
                 }
-                priceInput.placeholder = action === 'DIVIDEND' ? "請輸入配息金額" : "查無此時段報價";
-            } catch(e) { priceInput.placeholder = action === 'DIVIDEND' ? "請輸入配息金額" : "查詢失敗"; }
+                priceInput.placeholder = "查無此時段報價";
+            } catch(e) { priceInput.placeholder = "查詢失敗"; }
         }, 600);
     }
 
@@ -1037,7 +1015,7 @@
     };
     Chart.register(smoothCrosshairPlugin);
 
-    let state = { cash: 1000000, holdings: {}, ledger: [], recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] } };
+    let state = {};
     let currentTicker = localStorage.getItem('LAST_SELECTED_TICKER') || "NVDA";
     
     let currentRange = '1M', mCurrentRange = '1M';
@@ -1182,11 +1160,16 @@
         state.navHistory = { timestamps: newTimestamps, labels: newLabels, data: newData };
     }
 
+    function getDefaultState() {
+        return { cash: 1000000, holdings: {}, ledger: [], recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, processedDividends: [] };
+    }
+
     function initData() {
         const saved = localStorage.getItem(getDataKey());
         if (saved) { 
             try { 
                 state = JSON.parse(saved); 
+                if (!state.processedDividends) state.processedDividends = [];
                 state.cardTickers = [...new Set(state.cardTickers || ["NVDA", "2330.TW"])]; 
                 state.ledger.forEach(r => {
                     if (!r.timestamp) {
@@ -1197,10 +1180,7 @@
                 state.ledger.sort((a, b) => b.timestamp - a.timestamp);
                 if (!state.navHistory || !state.navHistory.timestamps || state.navHistory.timestamps.length === 0) { rebuildNavHistoryFromLedger(); }
             } catch(e) {} 
-        } else { 
-            state = { cash: 1000000, holdings: {}, ledger: [], recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] } };
-            rebuildNavHistoryFromLedger(); saveData(); 
-        }
+        } else { state = getDefaultState(); rebuildNavHistoryFromLedger(); saveData(); }
         
         const savedChartType = localStorage.getItem('SETTING_CHART_TYPE'); 
         document.getElementById("cfg-chart-type").value = savedChartType ? savedChartType : 'KLINE';
@@ -1226,11 +1206,11 @@
     }
     
     function saveData() { localStorage.setItem(getDataKey(), JSON.stringify(state)); updateAllViews(true); renderCards(); }
-    function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { localStorage.removeItem(getDataKey()); state = { cash: 1000000, holdings: {}, ledger: [], recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] } }; initData(); fetchStockHistoryData(currentTicker, true); } }
+    function resetAccount() { if(confirm(`確定還原「${currentAccount}」帳號為 100 萬起始金額？所有歷史將被清除。`)) { localStorage.removeItem(getDataKey()); state = getDefaultState(); saveData(); fetchStockHistoryData(currentTicker, true); triggerDynamicFeedback("帳號已重置", "sell"); } }
 
     function exportData() {
         const dataStr = JSON.stringify(state, null, 2), blob = new Blob([dataStr], { type: "application/json" }), url = URL.createObjectURL(blob), a = document.createElement("a");
-        const date = new Date().toISOString().slice(0, 10).replace(/-/g, ""); a.href = url; a.download = `AlphaTrade_Backup_${currentAccount}_${date}.json`;
+        const date = new Date().toISOString().slice(0, 10).replace(/-/g, ""); a.href = url; a.download = `AlphaTrade_${currentAccount}_Backup_${date}.json`;
         document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
         triggerDynamicFeedback("已成功匯出備份檔案", "buy", null, "EXPORTED");
     }
@@ -1241,7 +1221,9 @@
             try {
                 const importedState = JSON.parse(e.target.result);
                 if (importedState && typeof importedState.cash === 'number') {
-                    state = importedState; state.cardTickers = state.cardTickers || []; state.recentTickers = state.recentTickers || []; state.holdings = state.holdings || {}; state.ledger = state.ledger || [];
+                    state = importedState; 
+                    if (!state.processedDividends) state.processedDividends = [];
+                    state.cardTickers = state.cardTickers || []; state.recentTickers = state.recentTickers || []; state.holdings = state.holdings || {}; state.ledger = state.ledger || [];
                     state.ledger.forEach(r => {
                         if (!r.timestamp) {
                             let d = new Date(), parts = r.time ? r.time.split(':') : [];
@@ -1255,6 +1237,90 @@
             event.target.value = ''; 
         };
         reader.readAsText(file);
+    }
+
+    // --- 自動補發股息系統 ---
+    async function processDividends(manual = false) {
+        if (manual) triggerDynamicFeedback("開始掃描並核對除息日...", "gray");
+        
+        const tickersInLedger = [...new Set(state.ledger.map(r => r.ticker))];
+        if (tickersInLedger.length === 0) {
+            if (manual) alert("目前帳本中沒有交易紀錄可核對股息。");
+            return;
+        }
+
+        if (!state.processedDividends) state.processedDividends = [];
+        let totalDividendsGot = 0;
+        let divCount = 0;
+
+        for (const ticker of tickersInLedger) {
+            try {
+                const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=max&interval=1d&events=div`)}`;
+                const res = await fetch(proxyUrl, { cache: "no-store" });
+                if (!res.ok) continue;
+                const json = await res.json();
+                
+                const events = json.chart?.result?.[0]?.events;
+                if (!events || !events.dividends) continue;
+                
+                const divs = events.dividends;
+                const tickerLedger = state.ledger.filter(r => r.ticker === ticker).sort((a,b) => a.timestamp - b.timestamp);
+                if (tickerLedger.length === 0) continue;
+
+                const rate = getCurrencyMultiplier(ticker);
+
+                for (const ts in divs) {
+                    const divData = divs[ts];
+                    const divTimestamp = divData.date * 1000;
+                    const divId = `${ticker}_${divData.date}`;
+
+                    if (state.processedDividends.includes(divId) || divTimestamp > Date.now()) continue;
+
+                    let sharesAtExDate = 0;
+                    for (const r of tickerLedger) {
+                        if (r.timestamp <= divTimestamp) {
+                            if (r.action === 'BUY') sharesAtExDate += r.shares;
+                            else if (r.action === 'SELL') sharesAtExDate -= r.shares;
+                        } else break; 
+                    }
+
+                    if (sharesAtExDate > 0) {
+                        const divAmountUSD = divData.amount * sharesAtExDate;
+                        const divAmountTWD = divAmountUSD * rate;
+
+                        state.cash += divAmountTWD;
+                        state.processedDividends.push(divId);
+                        
+                        state.ledger.unshift({
+                            time: getFullFormattedTimeFromDate(divTimestamp),
+                            timestamp: divTimestamp,
+                            action: "DIVIDEND",
+                            ticker: ticker,
+                            price: divData.amount, 
+                            shares: sharesAtExDate,
+                            fee: 0,
+                            tax: 0,
+                            total: divAmountTWD,
+                            rate: rate,
+                            realizedPnL: divAmountTWD, 
+                            origTotalSpend: 0
+                        });
+
+                        totalDividendsGot += divAmountTWD;
+                        divCount++;
+                    }
+                }
+            } catch(e) { console.warn("Div fetch failed for " + ticker); }
+        }
+
+        if (divCount > 0) {
+            state.ledger.sort((a, b) => b.timestamp - a.timestamp);
+            rebuildNavHistoryFromLedger();
+            saveData();
+            triggerDynamicFeedback(`成功補發 ${divCount} 筆股息，共計 $${Math.floor(totalDividendsGot).toLocaleString()}`, "buy");
+        } else {
+            if (manual) triggerDynamicFeedback("目前無遺漏的股息需補發", "gray");
+        }
     }
 
     function exportReport() {
@@ -1278,7 +1344,7 @@
 
         const DIV = "----------------------------------------";
         let lines = [];
-        lines.push(`【帳戶總覽】(${currentAccount})`);
+        lines.push(`【帳戶總覽】- ${currentAccount}`);
         lines.push(DIV);
         lines.push(`總資產淨值 (NAV):   $ ${Math.floor(nav).toLocaleString()}`);
         lines.push(`現金餘額:           $ ${Math.floor(state.cash).toLocaleString()}`);
@@ -1316,12 +1382,12 @@
         } else {
             state.ledger.forEach(r => {
                 const displayTime = r.timestamp ? getFullFormattedTimeFromDate(r.timestamp) : r.time;
-                const actionText = r.action === 'BUY' ? '買進' : (r.action === 'SELL' ? '賣出' : '股息');
+                const actionText = r.action === 'BUY' ? '買進' : (r.action === 'SELL' ? '賣出' : '配息');
                 const pnlText = (r.realizedPnL !== null && r.realizedPnL !== undefined)
                     ? `${r.realizedPnL >= 0 ? '+' : ''}$${Math.floor(r.realizedPnL).toLocaleString()}`
                     : "-";
                 lines.push(`[${displayTime}] ${actionText} ${r.ticker}`);
-                lines.push(`  成交均價/配息: $${r.price.toFixed(2)}　股數: ${r.shares}`);
+                lines.push(`  成交均價/股息: $${r.price.toFixed(2)}　股數: ${r.shares}`);
                 lines.push(`  手續費/稅: $${r.fee.toFixed(1)}`);
                 lines.push(`  交割金額(TWD): $${Math.floor(r.total).toLocaleString()}`);
                 lines.push(`  已實現損益(TWD): ${pnlText}`);
@@ -1335,7 +1401,7 @@
         const a = document.createElement("a");
         const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
         const timeStr = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
-        a.href = url; a.download = `AlphaTrade_Report_${currentAccount}_${dateStr}_${timeStr}.txt`;
+        a.href = url; a.download = `AlphaTrade_${currentAccount}_Report_${dateStr}_${timeStr}.txt`;
         document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
         triggerDynamicFeedback("已成功匯出對帳報告", "buy", null, "REPORT EXPORTED");
     }
@@ -1355,7 +1421,6 @@
                 if (h.shares === 0) delete tempHoldings[r.ticker];
             } else if (r.action === 'DIVIDEND') {
                 tempCash += r.total;
-                r.realizedPnL = r.total;
             }
         }
         return { cash: tempCash, holdings: tempHoldings, invalidSellIndices };
@@ -1367,26 +1432,17 @@
         const price = parseFloat(document.getElementById("tm-price").value), shares = parseInt(document.getElementById("tm-shares").value);
         
         if (!dateVal || hVal.length !== 2 || mVal.length !== 2) { alert("請確認日期與時分格式正確"); return; }
-        if (!ticker || !price || !shares || shares <= 0 || price <= 0) { alert("請完整填寫所有欄位，且金額與股數須大於 0。"); return; }
+        if (!ticker || !price || !shares || shares <= 0 || price <= 0) { alert("請完整填寫所有欄位，且單價與股數須大於 0。"); return; }
         
         const timestamp = new Date(`${dateVal}T${hVal}:${mVal}`).getTime();
-        if (timestamp > Date.now()) { alert("不能登錄未來的時間！"); return; }
+        if (timestamp > Date.now()) { alert("不能登錄未來的交易時間！"); return; }
         
-        const rate = getCurrencyMultiplier(ticker);
-        let newTrade;
-
-        if (action === 'DIVIDEND') {
-            const twdTotalGet = price * shares * rate;
-            newTrade = { time: getFullFormattedTimeFromDate(timestamp), timestamp: timestamp, action: action, ticker: ticker, price: price, shares: shares, fee: 0, tax: 0, total: twdTotalGet, rate: rate, origTotalSpend: null, realizedPnL: twdTotalGet };
-        } else {
-            const origSubtotal = shares * price;
-            const origFee = origSubtotal * (parseFloat(document.getElementById("cfg-fee-rate").value) / 100);
-            const origTax = action === 'SELL' ? origSubtotal * (parseFloat(document.getElementById("cfg-tax-rate").value) / 100) : 0;
-            const twdTotalSpend = (origSubtotal + origFee) * rate, twdTotalGet = (origSubtotal - origFee - origTax) * rate, twdFee = origFee * rate, twdTax = origTax * rate;
-            
-            newTrade = { time: getFullFormattedTimeFromDate(timestamp), timestamp: timestamp, action: action, ticker: ticker, price: price, shares: shares, fee: action === 'BUY' ? twdFee : (twdFee + twdTax), tax: twdTax, total: action === 'BUY' ? twdTotalSpend : twdTotalGet, rate: rate, origTotalSpend: action === 'BUY' ? (origSubtotal + origFee) : null, realizedPnL: null };
-        }
-
+        const rate = getCurrencyMultiplier(ticker), origSubtotal = shares * price;
+        const origFee = origSubtotal * (parseFloat(document.getElementById("cfg-fee-rate").value) / 100);
+        const origTax = action === 'SELL' ? origSubtotal * (parseFloat(document.getElementById("cfg-tax-rate").value) / 100) : 0;
+        const twdTotalSpend = (origSubtotal + origFee) * rate, twdTotalGet = (origSubtotal - origFee - origTax) * rate, twdFee = origFee * rate, twdTax = origTax * rate;
+        
+        let newTrade = { time: getFullFormattedTimeFromDate(timestamp), timestamp: timestamp, action: action, ticker: ticker, price: price, shares: shares, fee: action === 'BUY' ? twdFee : (twdFee + twdTax), tax: twdTax, total: action === 'BUY' ? twdTotalSpend : twdTotalGet, rate: rate, origTotalSpend: action === 'BUY' ? (origSubtotal + origFee) : null, realizedPnL: null };
         let testLedger = JSON.parse(JSON.stringify(state.ledger)); testLedger.push(newTrade); testLedger.sort((a, b) => b.timestamp - a.timestamp); 
         
         let result = recalculateState(testLedger);
@@ -1395,17 +1451,25 @@
         
         state.ledger = testLedger; state.cash = result.cash; state.holdings = result.holdings;
         document.getElementById("tm-ticker").value = ''; document.getElementById("tm-price").value = ''; document.getElementById("tm-shares").value = '';
-        rebuildNavHistoryFromLedger(); saveData(); triggerDynamicFeedback("已成功補登時光機操作", "buy", null, "INSERTED");
+        rebuildNavHistoryFromLedger(); saveData(); triggerDynamicFeedback("已成功補登時光機交易", "buy", null, "INSERTED");
     }
 
     function undoTrade(index) {
         if(!confirm("確定要撤銷這筆紀錄嗎？系統會為你重新結算所有歷史損益與庫存。")) return;
-        let testLedger = JSON.parse(JSON.stringify(state.ledger)); testLedger.splice(index, 1); 
+        let testLedger = JSON.parse(JSON.stringify(state.ledger)); 
+        const tradeToRemove = testLedger.splice(index, 1)[0]; 
+
         let result = recalculateState(testLedger);
         if (result.invalidSellIndices.length > 0) {
-            if(!confirm(`⚠️ 警告：撤銷此筆操作將導致後續 ${result.invalidSellIndices.length} 筆賣出操作失效 (因庫存不足)。\n\n系統將【強制一併撤銷】這些無效的賣出。\n是否繼續？`)) return;
+            if(!confirm(`⚠️ 警告：撤銷此筆買入將導致後續 ${result.invalidSellIndices.length} 筆賣出操作失效 (因庫存不足)。\n\n系統將【強制一併撤銷】這些無效的賣出。\n是否繼續？`)) return;
             result.invalidSellIndices.forEach(i => { testLedger[i]._invalid = true; }); testLedger = testLedger.filter(x => !x._invalid); result = recalculateState(testLedger);
         }
+
+        if (tradeToRemove.action === 'DIVIDEND') {
+             const divId = `${tradeToRemove.ticker}_${Math.floor(tradeToRemove.timestamp/1000)}`;
+             state.processedDividends = state.processedDividends.filter(id => id !== divId);
+        }
+
         state.ledger = testLedger; state.cash = result.cash; state.holdings = result.holdings;
         rebuildNavHistoryFromLedger(); saveData(); triggerDynamicFeedback("紀錄已成功撤銷", "buy", null, "UNDONE");
     }
@@ -1964,9 +2028,9 @@
                 : `<td style="color:#666;">-</td>`;
             const displayTime = r.timestamp ? getFullFormattedTimeFromDate(r.timestamp) : r.time;
             const badgeClass = r.action === 'BUY' ? 'badge-buy' : (r.action === 'SELL' ? 'badge-sell' : 'badge-dividend');
-            const actionText = r.action === 'DIVIDEND' ? '股息' : r.action;
+            const displayAction = r.action === 'BUY' ? '買進' : (r.action === 'SELL' ? '賣出' : '配息');
             return `<tr>
-                <td>${displayTime}</td><td><span class="badge ${badgeClass}">${actionText}</span></td>
+                <td>${displayTime}</td><td><span class="badge ${badgeClass}">${displayAction}</span></td>
                 <td style="font-weight:bold;">${r.ticker}</td><td>$${r.price.toFixed(2)}</td><td>${r.shares}</td><td>$${r.fee.toFixed(1)}</td>
                 <td style="font-weight:bold;">$${Math.floor(r.total).toLocaleString()}</td>${pnlHtml}
                 <td><button onclick="undoTrade(${index})" style="background:rgba(255,69,96,0.15); color:var(--color-sell); border:1px solid rgba(255,69,96,0.3); padding:4px 10px; border-radius:4px; cursor:pointer; font-weight:bold; font-size:11px; transition:all 0.2s;">撤銷</button></td>
@@ -2313,12 +2377,12 @@
         } else {
             filteredLedger.forEach(r => {
                 const displayTime = r.timestamp ? getFullFormattedTimeFromDate(r.timestamp) : r.time;
-                const actionText = r.action === 'BUY' ? '買進' : (r.action === 'SELL' ? '賣出' : '股息');
+                const actionText = r.action === 'BUY' ? '買進' : (r.action === 'SELL' ? '賣出' : '配息');
                 const pnlText = (r.realizedPnL !== null && r.realizedPnL !== undefined)
                     ? `${r.realizedPnL >= 0 ? '+' : ''}$${Math.floor(r.realizedPnL).toLocaleString()}`
                     : "-";
                 lines.push(`[${displayTime}] ${actionText} ${r.ticker}`);
-                lines.push(`  成交/配息均價: $${r.price.toFixed(2)}　股數: ${r.shares}`);
+                lines.push(`  成交均價/配息: $${r.price.toFixed(2)}　股數: ${r.shares}`);
                 lines.push(`  手續費/稅: $${r.fee.toFixed(1)}`);
                 lines.push(`  交割金額(TWD): $${Math.floor(r.total).toLocaleString()}`);
                 lines.push(`  已實現損益(TWD): ${pnlText}`);
@@ -2340,6 +2404,7 @@
         callGeminiAPI(fullPrompt, msgId, out, key);
     }
 
+    // 🚀 手機端極簡玻璃數字鍵盤核心邏輯 (支援選取文字覆蓋)
     let activeNumInput = null;
     
     function renderNumpad(allowDecimal) {
@@ -2385,47 +2450,35 @@
         }
     });
 
-    // 🚀 優化：支援文字選取替換及刪除的數字鍵盤核心邏輯
     function numpadPress(e, key) {
         e.preventDefault(); 
         if(!activeNumInput || key === '') return;
         
-        let input = activeNumInput;
-        let val = input.value;
-        let start = input.selectionStart;
-        let end = input.selectionEnd;
-        
-        if (start === null) {
-            start = val.length;
-            end = val.length;
-        }
-        
-        if(key === 'backspace') {
+        let val = activeNumInput.value;
+        let start = activeNumInput.selectionStart;
+        let end = activeNumInput.selectionEnd;
+
+        if (key === 'backspace') {
             if (start !== end) {
-                // 有選取範圍時，刪除選取範圍
                 val = val.substring(0, start) + val.substring(end);
-                input.value = val;
-                input.setSelectionRange(start, start);
+                activeNumInput.value = val;
+                activeNumInput.setSelectionRange(start, start);
             } else if (start > 0) {
-                // 無選取範圍時，刪除游標前一個字元
-                val = val.substring(0, start - 1) + val.substring(start);
-                input.value = val;
-                input.setSelectionRange(start - 1, start - 1);
+                val = val.substring(0, start - 1) + val.substring(end);
+                activeNumInput.value = val;
+                activeNumInput.setSelectionRange(start - 1, start - 1);
             }
         } else {
-            let valAfterReplace = val.substring(0, start) + val.substring(end);
+            if (key === '.' && val.includes('.') && start === end) return;
+            const maxlen = activeNumInput.dataset.maxlen;
+            if (maxlen && val.replace('.', '').length >= parseInt(maxlen) && key !== '.' && start === end) return;
             
-            if(key === '.' && valAfterReplace.includes('.')) return;
-            
-            let newVal = val.substring(0, start) + key + val.substring(end);
-            const maxlen = input.dataset.maxlen;
-            if(maxlen && newVal.replace('.', '').length > parseInt(maxlen)) return;
-            
-            input.value = newVal;
-            input.setSelectionRange(start + key.length, start + key.length);
+            val = val.substring(0, start) + key + val.substring(end);
+            activeNumInput.value = val;
+            activeNumInput.setSelectionRange(start + 1, start + 1);
         }
         
-        input.dispatchEvent(new Event('input', {bubbles: true}));
+        activeNumInput.dispatchEvent(new Event('input', {bubbles: true}));
     }
 
     document.addEventListener('touchstart', handleOutsideClick);
@@ -2440,18 +2493,16 @@
         }
     }
 
-    let systemLoop = null;
-
     async function bootSystem() {
-        initAccountSystem();
-        initData(); 
+        initAccountSystem(); 
         setTradeMode('BUY');
-        renderAccountSelector();
         
         await Promise.all([
             fetchExchangeRate(),
             fetchHoldingsPrices()
         ]);
+
+        await processDividends(false); // 每次系統啟動自動核對並發放未領取之股息
         
         updateLiveNavNode();
         updateAllViews(true);
@@ -2459,21 +2510,19 @@
         selectTicker(currentTicker);
         fetchAllCardsData();
 
-        if (!systemLoop) {
-            systemLoop = setInterval(async () => {
-                await Promise.all([
-                    fetchExchangeRate(),
-                    fetchHoldingsPrices()
-                ]);
-                updateLiveNavNode();
-                
-                updateAllViews(false);
-                
-                fetchRealPrice(currentTicker);
-                fetchStockHistoryData(currentTicker, false);
-                fetchAllCardsData();
-            }, 8000);
-        }
+        setInterval(async () => {
+            await Promise.all([
+                fetchExchangeRate(),
+                fetchHoldingsPrices()
+            ]);
+            updateLiveNavNode();
+            
+            updateAllViews(false);
+            
+            fetchRealPrice(currentTicker);
+            fetchStockHistoryData(currentTicker, false);
+            fetchAllCardsData();
+        }, 8000);
     }
     
     bootSystem(); 
