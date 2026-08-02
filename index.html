@@ -42,11 +42,36 @@
 
         .glass-title-text {
             font-size: 20px; font-weight: 900; letter-spacing: 4px; text-align: center;
-            margin: 15px 0 30px 0; padding: 10px;
+            margin: 15px 0 10px 0; padding: 10px; /* 縮小底部 margin 以容納帳戶切換器 */
             background: linear-gradient(135deg, #ffffff 0%, rgba(255,255,255,0.45) 100%);
             -webkit-background-clip: text; -webkit-text-fill-color: transparent;
             cursor: default; display: flex; align-items: center; justify-content: center; gap: 10px;
         }
+
+        /* 🟢 左側選單：灰階霧面玻璃帳戶切換器 */
+        .sidebar-acc-selector { margin: 0 15px 20px 15px; position: relative; z-index: 101; }
+        .sidebar-acc-current {
+            background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 8px 12px; border-radius: 6px; font-size: 11.5px; font-weight: bold; color: #bbb;
+            display: flex; justify-content: space-between; align-items: center; cursor: pointer;
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); transition: all 0.2s;
+        }
+        .sidebar-acc-current:hover { background: rgba(255, 255, 255, 0.07); color: #fff; }
+        .sidebar-acc-dropdown {
+            position: absolute; top: calc(100% + 5px); left: 0; width: 100%;
+            background: rgba(20, 20, 22, 0.85); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; overflow: hidden;
+            opacity: 0; pointer-events: none; transform: translateY(-5px);
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1); box-shadow: 0 10px 25px rgba(0,0,0,0.8);
+        }
+        .sidebar-acc-dropdown.show { opacity: 1; pointer-events: auto; transform: translateY(0); }
+        .sidebar-acc-item {
+            padding: 10px 12px; font-size: 11px; color: #888; cursor: pointer; transition: all 0.2s;
+            border-bottom: 1px solid rgba(255,255,255,0.03); display: flex; justify-content: space-between; align-items: center;
+        }
+        .sidebar-acc-item:last-child { border-bottom: none; }
+        .sidebar-acc-item:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
+        .sidebar-acc-item.active { color: #fff; font-weight: bold; }
 
         .glass-panel {
             position: relative; background: rgba(18, 18, 18, 0.45);
@@ -215,45 +240,44 @@
         .ai-mini-ticker .select-dropdown-btn { padding: 0 0 0 2px; font-size: 10px; background: transparent; border: none; color: #888; }
 
         .glass-numpad {
-            position: fixed;
-            width: 40vw; 
-            max-width: 160px;
-            min-width: 140px;
-            aspect-ratio: 1 / 1.25; 
-            background: rgba(30, 30, 30, 0.6);
-            backdrop-filter: blur(25px) saturate(120%);
-            -webkit-backdrop-filter: blur(25px) saturate(120%);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            border-top: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 16px;
-            display: none;
-            grid-template-columns: repeat(3, 1fr);
-            grid-template-rows: repeat(4, 1fr);
-            gap: 8px;
-            padding: 10px;
-            z-index: 100000;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            position: fixed; width: 40vw; max-width: 160px; min-width: 140px; aspect-ratio: 1 / 1.25; 
+            background: rgba(30, 30, 30, 0.6); backdrop-filter: blur(25px) saturate(120%); -webkit-backdrop-filter: blur(25px) saturate(120%);
+            border: 1px solid rgba(255, 255, 255, 0.15); border-top: 1px solid rgba(255, 255, 255, 0.3); border-radius: 16px;
+            display: none; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(4, 1fr); gap: 8px; padding: 10px;
+            z-index: 100000; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
         }
         .numpad-btn {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-top: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 12px;
-            color: #eaeaea;
-            font-size: 20px;
-            font-weight: 300;
-            font-family: "Inter", sans-serif;
-            display: flex; align-items: center; justify-content: center;
-            cursor: pointer;
-            user-select: none;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-top: 1px solid rgba(255, 255, 255, 0.2); border-radius: 12px;
+            color: #eaeaea; font-size: 20px; font-weight: 300; font-family: "Inter", sans-serif; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; user-select: none; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
         }
         .numpad-btn:active { background: rgba(255, 255, 255, 0.15); }
         .numpad-btn.empty { background: transparent !important; border: none !important; box-shadow: none !important; pointer-events: none; }
 
+        /* 🟢 帳戶管理中心高級動畫 */
+        @keyframes modalOverlayFade { from { opacity: 0; backdrop-filter: blur(0px); } to { opacity: 1; backdrop-filter: blur(10px); } }
+        @keyframes modalPopIn { 0% { opacity: 0; transform: scale(0.9) translateY(20px); } 100% { opacity: 1; transform: scale(1) translateY(0); } }
+        .fancy-modal-overlay {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 100000;
+            justify-content: center; align-items: center; padding: 20px; animation: modalOverlayFade 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .fancy-modal-box {
+            width: 100%; max-width: 440px; background: rgba(18, 18, 20, 0.85); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px;
+            padding: 24px; display: flex; flex-direction: column; gap: 20px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.8);
+            animation: modalPopIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .fancy-acc-item {
+            background: rgba(255,255,255,0.03); padding: 14px 16px; border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: space-between; align-items: center; transition: all 0.2s;
+        }
+        .fancy-acc-item:hover { background: rgba(255,255,255,0.05); }
+        .fancy-acc-item.is-current { border-color: var(--color-acc); background: rgba(0, 212, 255, 0.05); box-shadow: 0 0 15px rgba(0,212,255,0.1); }
+        .acc-action-btn { background: transparent; border: none; color: #888; font-size: 14px; padding: 6px; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; }
+        .acc-action-btn:hover { color: #fff; background: rgba(255,255,255,0.1); }
+        .acc-action-btn.delete:hover { color: var(--color-sell); background: rgba(255, 69, 96, 0.15); }
+
         #mobile-header { display: none; }
         #sidebar-overlay { display: none; }
-
         .is-dragging-placeholder { opacity: 0; pointer-events: none; }
 
         @media (max-width: 768px) {
@@ -271,24 +295,18 @@
             
             .view-section::-webkit-scrollbar, .trade-panel::-webkit-scrollbar { display: none !important; width: 0 !important; }
             .view-section, .trade-panel { scrollbar-width: none !important; }
-
             .view-section { top: 60px; height: calc(100dvh - 60px); padding: 12px; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
             .stat-grid { grid-template-columns: repeat(2, 1fr); height: auto; margin-bottom: 5px; }
             .stat-card { padding: 12px; }
             .stat-value { font-size: 16px; }
-            
             .dashboard-body { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 12px; }
             .dashboard-left-col { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 12px; }
             #desktop-trade-col { display: none; }
-            
             .standalone-mode-btn { display: flex; width: 28px; height: 28px; font-size: 12px; }
-            
             #shared-trade-panel { height: auto !important; overflow-y: visible !important; padding: 12px !important; gap: 10px !important; }
-            
             .mobile-stock-chart-box { display: flex; }
             #chart-container { flex: 1; min-height: 0; display: flex; flex-direction: column; }
             #ai-commander { height: 260px; flex-shrink: 0; }
-
             .ledger-range-picker { padding: 10px 12px; gap: 6px; }
             .lr-preset-btn { padding: 5px 0; font-size: 10.5px; }
             .lr-date-box input[type="date"] { padding: 6px 4px; font-size: 11px; }
@@ -305,14 +323,15 @@
     <button onclick="unlockAccount()" style="background:var(--color-acc); color:#000; border:none; padding:12px 24px; border-radius:8px; font-weight:bold; cursor:pointer; width:100%; max-width:250px;">解鎖進入</button>
 </div>
 
-<div id="account-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); backdrop-filter:blur(10px); z-index:100000; justify-content:center; align-items:center; padding:20px;">
-    <div class="glass-panel" style="width:100%; max-width:400px; padding:20px; display:flex; flex-direction:column; gap:16px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; font-size:16px; font-weight:bold;">
-            <span><i class="fa-solid fa-users" style="color:var(--color-acc)"></i> 帳戶切換與管理</span>
-            <i class="fa-solid fa-xmark" style="cursor:pointer; color:#888;" onclick="closeAccountModal()"></i>
+<!-- 🟢 升級版：帳戶管理中心彈出視窗 -->
+<div id="account-modal" class="fancy-modal-overlay">
+    <div class="fancy-modal-box">
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:17px; font-weight:bold;">
+            <span><i class="fa-solid fa-users-gear" style="color:var(--color-acc)"></i> 帳戶總管</span>
+            <i class="fa-solid fa-xmark" style="cursor:pointer; color:#888; font-size: 18px; padding: 4px;" onclick="closeAccountModal()"></i>
         </div>
-        <div id="account-list" style="display:flex; flex-direction:column; gap:10px; max-height:50vh; overflow-y:auto;"></div>
-        <button onclick="createNewAccount()" style="background:rgba(255,255,255,0.08); color:#fff; border:1px dashed rgba(255,255,255,0.2); padding:10px; border-radius:8px; font-weight:bold; cursor:pointer; transition:all 0.2s;"><i class="fa-solid fa-plus"></i> 新增帳戶</button>
+        <div id="account-list" style="display:flex; flex-direction:column; gap:12px; max-height:55vh; overflow-y:auto; padding-right:4px;"></div>
+        <button onclick="createNewAccount()" style="background:rgba(255,255,255,0.06); color:#fff; border:1px dashed rgba(255,255,255,0.2); padding:12px; border-radius:10px; font-weight:bold; cursor:pointer; transition:all 0.2s; margin-top:4px;"><i class="fa-solid fa-plus" style="margin-right:6px;"></i> 建立全新帳戶</button>
     </div>
 </div>
 
@@ -323,6 +342,16 @@
 
 <aside id="sidebar">
     <div class="glass-title-text"><i class="fa-solid fa-cube" style="color: var(--color-acc)"></i> ALPHATRADE</div>
+    
+    <!-- 🟢 左側選單：帳戶快速切換下拉框 -->
+    <div class="sidebar-acc-selector" id="sidebar-acc-selector">
+        <div class="sidebar-acc-current" onclick="toggleSidebarAccDropdown()">
+            <span id="sidebar-acc-current-name">載入中...</span>
+            <i class="fa-solid fa-chevron-down" style="font-size:10px;"></i>
+        </div>
+        <div class="sidebar-acc-dropdown" id="sidebar-acc-dropdown"></div>
+    </div>
+
     <div class="menu-item active" onclick="switchView('view-dashboard', this)"><i class="fa-solid fa-chart-line"></i> 指揮操盤中心</div>
     <div class="menu-item mobile-only" onclick="switchView('view-mobile-trade', this)"><i class="fa-solid fa-hand-holding-dollar"></i> 下單櫃檯</div>
     <div class="menu-item" onclick="switchView('view-cards', this)"><i class="fa-solid fa-address-card"></i> 自選資產卡片</div>
@@ -340,7 +369,6 @@
         <div class="mobile-reload-btn" onclick="location.reload()"></div>
     </div>
 
-    <!-- 主儀表板 -->
     <main id="view-dashboard" class="view-section active">
         <div class="stat-grid">
             <div class="glass-panel stat-card">
@@ -532,10 +560,10 @@
             
             <div class="glass-panel setting-item">
                 <div>
-                    <div style="font-weight:bold;"><i class="fa-solid fa-users" style="color:var(--color-acc)"></i> 帳戶切換與管理</div>
+                    <div style="font-weight:bold;"><i class="fa-solid fa-users-gear" style="color:var(--color-acc)"></i> 帳戶總管中心</div>
                     <div style="font-size:11px; color:#777; margin-top:2px;" id="current-account-name">目前帳戶: 載入中...</div>
                 </div>
-                <button onclick="openAccountModal()" style="background:rgba(0,212,255,0.15); border:1px solid var(--color-acc); color:var(--color-acc); padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s;">管理</button>
+                <button onclick="openAccountModal()" style="background:rgba(0,212,255,0.15); border:1px solid var(--color-acc); color:var(--color-acc); padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s;">管理帳戶</button>
             </div>
 
             <div class="glass-panel setting-item">
@@ -722,33 +750,57 @@
         if (savedMgr) {
             try { accMgr = JSON.parse(savedMgr); } catch(e) {}
         } else {
-            // 向後相容舊資料
-            if (localStorage.getItem("ALPHATRADE_MANUAL_DATA")) {
-                accMgr.currentId = 'default';
-            }
+            if (localStorage.getItem("ALPHATRADE_MANUAL_DATA")) accMgr.currentId = 'default';
             saveAccountManager();
         }
+        renderSidebarAccSelector();
     }
 
     function saveAccountManager() {
         localStorage.setItem(ACC_MGR_KEY, JSON.stringify(accMgr));
+        renderSidebarAccSelector();
     }
 
-    function getCurrentDataKey() {
-        return accMgr.currentId === 'default' ? "ALPHATRADE_MANUAL_DATA" : `ALPHATRADE_MANUAL_DATA_${accMgr.currentId}`;
+    function getCurrentDataKey() { return accMgr.currentId === 'default' ? "ALPHATRADE_MANUAL_DATA" : `ALPHATRADE_MANUAL_DATA_${accMgr.currentId}`; }
+
+    // 🟢 繪製側邊欄極簡下拉切換器
+    function renderSidebarAccSelector() {
+        const currentAcc = accMgr.accounts.find(a => a.id === accMgr.currentId);
+        document.getElementById('sidebar-acc-current-name').innerText = currentAcc ? currentAcc.name : '未知帳戶';
+        
+        const dropdown = document.getElementById('sidebar-acc-dropdown');
+        dropdown.innerHTML = accMgr.accounts.map(acc => `
+            <div class="sidebar-acc-item ${acc.id === accMgr.currentId ? 'active' : ''}" onclick="switchAccount('${acc.id}')">
+                <span>${acc.name}</span>
+                ${acc.id === accMgr.currentId ? '<i class="fa-solid fa-check" style="color:#ccc;"></i>' : ''}
+            </div>
+        `).join('');
     }
 
+    function toggleSidebarAccDropdown() {
+        document.getElementById('sidebar-acc-dropdown').classList.toggle('show');
+    }
+
+    // 🟢 繪製主帳戶管理中心清單 (優化版 UI)
     function openAccountModal() {
         const list = document.getElementById('account-list');
         list.innerHTML = accMgr.accounts.map(acc => `
-            <div style="background:rgba(255,255,255,0.05); padding:12px; border-radius:8px; border:1px solid ${acc.id === accMgr.currentId ? 'var(--color-acc)' : 'rgba(255,255,255,0.1)'}; display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <div style="font-weight:bold; color:${acc.id === accMgr.currentId ? 'var(--color-acc)' : '#fff'};">${acc.name} ${acc.password ? '<i class="fa-solid fa-lock" style="font-size:10px; color:#aaa; margin-left:6px;"></i>' : ''}</div>
-                    ${acc.id === accMgr.currentId ? '<div style="font-size:10px; color:var(--color-acc); margin-top:2px;">目前使用中</div>' : ''}
+            <div class="fancy-acc-item ${acc.id === accMgr.currentId ? 'is-current' : ''}">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <div style="width:32px; height:32px; border-radius:50%; background:rgba(255,255,255,0.08); display:flex; align-items:center; justify-content:center; color:${acc.id === accMgr.currentId ? 'var(--color-acc)' : '#aaa'}; font-size:12px;">
+                        <i class="fa-solid fa-user"></i>
+                    </div>
+                    <div style="display:flex; flex-direction:column;">
+                        <span style="font-weight:bold; font-size:13px; color:#fff;">${acc.name}</span>
+                        <span style="font-size:10px; color:${acc.id === accMgr.currentId ? 'var(--color-acc)' : '#777'}; margin-top:2px;">
+                            ${acc.id === accMgr.currentId ? '● 當前正在使用' : (acc.password ? '已啟用密碼保護' : '無密碼保護')}
+                        </span>
+                    </div>
                 </div>
-                <div style="display:flex; gap:8px;">
-                    ${acc.id !== accMgr.currentId ? `<button onclick="switchAccount('${acc.id}')" style="background:rgba(255,255,255,0.1); border:none; color:#fff; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:bold;">切換</button>` : ''}
-                    <button onclick="editAccount('${acc.id}')" style="background:rgba(255,255,255,0.1); border:none; color:#fff; padding:6px 12px; border-radius:6px; cursor:pointer;"><i class="fa-solid fa-pen"></i></button>
+                <div style="display:flex; gap:4px;">
+                    <button class="acc-action-btn" title="更改名稱" onclick="renameAccount('${acc.id}')"><i class="fa-solid fa-pen"></i></button>
+                    <button class="acc-action-btn" title="設定/移除密碼" onclick="changeAccountPassword('${acc.id}')"><i class="fa-solid ${acc.password ? 'fa-lock' : 'fa-lock-open'}"></i></button>
+                    ${acc.id !== accMgr.currentId ? `<button class="acc-action-btn delete" title="刪除帳戶" onclick="deleteAccount('${acc.id}')"><i class="fa-solid fa-trash-can"></i></button>` : ''}
                 </div>
             </div>
         `).join('');
@@ -758,41 +810,44 @@
     function closeAccountModal() { document.getElementById('account-modal').style.display = 'none'; }
 
     function switchAccount(id) {
+        if(id === accMgr.currentId) return;
         accMgr.currentId = id;
         saveAccountManager();
         location.reload(); 
     }
 
     function createNewAccount() {
-        const name = prompt("請輸入新帳戶名稱:");
+        const name = prompt("請為新帳戶命名:");
         if (!name) return;
-        const pwd = prompt("請設定密碼 (若不需密碼請直接留空):");
         const newId = 'acc_' + Date.now();
-        accMgr.accounts.push({ id: newId, name: name, password: pwd || '' });
+        accMgr.accounts.push({ id: newId, name: name, password: '' });
         saveAccountManager();
         openAccountModal();
     }
 
-    function editAccount(id) {
+    function renameAccount(id) {
         const acc = accMgr.accounts.find(a => a.id === id);
-        const action = prompt(`對帳戶「${acc.name}」進行操作:\n1. 更改名稱\n2. 更改密碼\n3. 刪除帳戶 (不可逆)\n\n請輸入對應數字 (1, 2, 3):`);
-        if (action === '1') {
-            const newName = prompt("新名稱:", acc.name);
-            if (newName) { acc.name = newName; saveAccountManager(); openAccountModal(); }
-        } else if (action === '2') {
-            const newPwd = prompt("新密碼 (留空代表移除密碼):");
-            if (newPwd !== null) { acc.password = newPwd; saveAccountManager(); openAccountModal(); }
-        } else if (action === '3') {
-            if (accMgr.accounts.length <= 1) { alert("系統必須保留至少一個帳戶！"); return; }
-            if (confirm(`確定要刪除帳戶「${acc.name}」嗎？所有資料將永久遺失！`)) {
-                accMgr.accounts = accMgr.accounts.filter(a => a.id !== id);
-                localStorage.removeItem(`ALPHATRADE_MANUAL_DATA_${id}`);
-                if (id === 'default') localStorage.removeItem(`ALPHATRADE_MANUAL_DATA`);
-                
-                if (accMgr.currentId === id) accMgr.currentId = accMgr.accounts[0].id;
-                saveAccountManager();
-                if (accMgr.currentId === accMgr.accounts[0].id) location.reload(); else openAccountModal();
-            }
+        const newName = prompt("請輸入新名稱:", acc.name);
+        if (newName && newName.trim() !== '') { acc.name = newName.trim(); saveAccountManager(); openAccountModal(); }
+    }
+
+    function changeAccountPassword(id) {
+        const acc = accMgr.accounts.find(a => a.id === id);
+        const newPwd = prompt(`設定「${acc.name}」的新密碼：\n（若不需要密碼請直接留空並按下確認）`, acc.password);
+        if (newPwd !== null) { acc.password = newPwd.trim(); saveAccountManager(); openAccountModal(); }
+    }
+
+    function deleteAccount(id) {
+        const acc = accMgr.accounts.find(a => a.id === id);
+        if (accMgr.accounts.length <= 1) { alert("系統必須保留至少一個帳戶！"); return; }
+        if (confirm(`確定要刪除帳戶「${acc.name}」嗎？\n此帳號內的所有交易與配置將永久遺失！`)) {
+            accMgr.accounts = accMgr.accounts.filter(a => a.id !== id);
+            localStorage.removeItem(`ALPHATRADE_MANUAL_DATA_${id}`);
+            if (id === 'default') localStorage.removeItem(`ALPHATRADE_MANUAL_DATA`);
+            
+            if (accMgr.currentId === id) accMgr.currentId = accMgr.accounts[0].id;
+            saveAccountManager();
+            if (accMgr.currentId === accMgr.accounts[0].id) location.reload(); else openAccountModal();
         }
     }
 
@@ -1833,6 +1888,10 @@
         if(!document.getElementById("ticker-select-wrapper").contains(e.target)) document.getElementById("ticker-dropdown").classList.remove("show"); 
         if(!document.getElementById("tm-ticker-wrapper").contains(e.target)) document.getElementById("tm-ticker-dropdown").classList.remove("show"); 
         if(!document.getElementById("ai-ticker-wrapper").contains(e.target)) document.getElementById("ai-ticker-dropdown").classList.remove("show"); 
+        if(!document.getElementById("sidebar-acc-selector").contains(e.target)) {
+            const sidebarDropdown = document.getElementById("sidebar-acc-dropdown");
+            if(sidebarDropdown) sidebarDropdown.classList.remove("show");
+        }
     });
 
     function selectTicker(t) {
@@ -2438,7 +2497,6 @@
         callGeminiAPI(fullPrompt, msgId, out, key);
     }
 
-    // 🚀 修復後的玻璃數字鍵盤邏輯
     let activeNumInput = null;
     
     function renderNumpad(allowDecimal) {
@@ -2492,7 +2550,6 @@
         let start = activeNumInput.selectionStart;
         let end = activeNumInput.selectionEnd;
         
-        // 兼容處理：利用選取範圍來正確插入或替換文字
         if (start === null || start === undefined) {
             if(key === 'backspace') {
                 val = val.slice(0, -1);
@@ -2524,7 +2581,7 @@
         
         activeNumInput.value = val;
         if (start !== null && start !== undefined) {
-            activeNumInput.setSelectionRange(start, start); // 移動游標到新位置
+            activeNumInput.setSelectionRange(start, start); 
         }
         activeNumInput.dispatchEvent(new Event('input', {bubbles: true}));
     }
@@ -2567,7 +2624,6 @@
             fetchHoldingsPrices()
         ]);
         
-        // 每日一次檢查股息派發
         const lastCheck = localStorage.getItem(`LAST_DIV_CHECK_${accMgr.currentId}`);
         const todayStr = new Date().toISOString().slice(0, 10);
         if (lastCheck !== todayStr) {
@@ -2602,4 +2658,5 @@
 </script>
 </body>
 </html>
+
 
