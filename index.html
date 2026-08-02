@@ -85,7 +85,11 @@
 
         #sidebar { width: 260px; border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 20px 15px; background: rgba(6, 6, 6, 0.85); z-index: 1000; flex-shrink: 0; height: 100dvh; }
         .menu-item { padding: 13px 16px; margin-bottom: 6px; border-radius: 8px; cursor: pointer; transition: all 0.2s; color: #777; display: flex; align-items: center; gap: 12px; font-size: 13px; font-weight: 600; }
-        .menu-item:hover, .menu-item.active { background: rgba(255, 255, 255, 0.05); color: #fff; }
+        .menu-item.active { background: rgba(255, 255, 255, 0.05); color: #fff; }
+        @media (hover: hover) and (pointer: fine) {
+            .menu-item:hover { background: rgba(255, 255, 255, 0.05); color: #fff; }
+        }
+        .menu-item:active { background: rgba(255, 255, 255, 0.08); color: #fff; }
         .menu-item i { width: 18px; font-size: 15px; text-align: center; }
         .mobile-only { display: none !important; }
 
@@ -212,8 +216,8 @@
 
         .jelly-slider-container { position: relative; width: 180px; height: 24px; display: flex; align-items: center; }
         .jelly-slider-track { position: absolute; left: 0; right: 0; height: 6px; border-radius: 4px; background: rgba(255,255,255,0.08); }
-        .jelly-slider-thumb { position: absolute; top: 50%; left: 0; width: 18px; height: 18px; margin-top: -9px; border-radius: 50%; background: #fff; box-shadow: 0 0 10px var(--color-acc); pointer-events: none; z-index: 2; transition: transform 0.5s cubic-bezier(0.4, 2.5, 0.4, 0.9); }
-        .jelly-slider-input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; z-index: 10; margin: 0; }
+        .jelly-slider-thumb { position: absolute; top: 50%; left: 0; width: 18px; height: 18px; margin-top: -9px; border-radius: 50%; background: #fff; box-shadow: 0 0 10px rgba(255,255,255,0.4); pointer-events: none; z-index: 2; transition: transform 0.5s cubic-bezier(0.4, 2.5, 0.4, 0.9); }
+        .jelly-slider-input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; z-index: 10; margin: 0; touch-action: none; -webkit-user-select: none; user-select: none; }
         .jelly-input { width: 48px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 4px; border-radius: 6px; text-align: center; font-family: monospace; font-size: 12px; }
         .setting-item.disabled { opacity: 0.3; pointer-events: none; }
 
@@ -315,7 +319,8 @@
             .mobile-header-title { position: absolute; left: 50%; transform: translateX(-50%); font-weight: 900; letter-spacing: 3px; font-size: 16px; color: #fff; cursor: pointer; white-space: nowrap; z-index: 1; }
             .mobile-reload-btn { width: 50px; height: 100%; cursor: pointer; z-index: 2; margin-right: -10px; position: absolute; right: 0; top: 0; }
             
-            #sidebar-overlay.active { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 900; backdrop-filter: blur(2px); }
+            #sidebar-overlay { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0); z-index: 900; backdrop-filter: blur(0px); -webkit-backdrop-filter: blur(0px); opacity: 0; pointer-events: none; transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.3s cubic-bezier(0.4, 0, 0.2, 1), -webkit-backdrop-filter 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+            #sidebar-overlay.active { background: rgba(0,0,0,0.6); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); opacity: 1; pointer-events: auto; }
             #sidebar { position: fixed; left: 0; top: 0; bottom: 0; height: 100dvh; transform: translateX(-100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 5px 0 20px rgba(0,0,0,0.5); background: rgba(10, 10, 10, 0.95); backdrop-filter: blur(20px); }
             #sidebar.open { transform: translateX(0); }
             #sidebar.dragging { transition: none; }
@@ -611,21 +616,21 @@
 
             <div class="glass-panel setting-item">
                 <div>
-                    <div style="font-weight:bold;"><i class="fa-solid fa-sack-dollar" style="color:var(--color-acc)"></i> 股息自動配發</div>
+                    <div style="font-weight:bold;"><i class="fa-solid fa-sack-dollar" style="color:#aaa"></i> 股息自動配發</div>
                     <div style="font-size:11px; color:#777; margin-top:2px;">每天自動查詢一次持股股息，歷史未配發者會自動補發　<span id="last-dividend-check-label" style="color:#555;">尚未查詢過</span></div>
                 </div>
-                <button onclick="checkDividends(true)" id="manual-dividend-check-btn" style="background:rgba(0,212,255,0.15); border:1px solid var(--color-acc); color:var(--color-acc); padding:8px 14px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s; white-space:nowrap;">
+                <button onclick="checkDividends(true)" id="manual-dividend-check-btn" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:8px 14px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s; white-space:nowrap;">
                     <i class="fa-solid fa-arrows-rotate"></i> 立即查詢
                 </button>
             </div>
 
             <div class="glass-panel setting-item">
                 <div>
-                    <div style="font-weight:bold;"><i class="fa-solid fa-floppy-disk" style="color:var(--color-acc)"></i> 帳本資料備份與還原</div>
+                    <div style="font-weight:bold;"><i class="fa-solid fa-floppy-disk" style="color:#aaa"></i> 帳本資料備份與還原</div>
                     <div style="font-size:11px; color:#777; margin-top:2px;">將所有交易紀錄、自選卡片匯出為本機檔案，或從檔案還原</div>
                 </div>
                 <div style="display:flex; gap:8px;">
-                    <button onclick="exportData()" style="background:rgba(0,212,255,0.15); border:1px solid var(--color-acc); color:var(--color-acc); padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s;">匯出</button>
+                    <button onclick="exportData()" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s;">匯出</button>
                     <label style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:#fff; padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s;">
                         匯入 <input type="file" style="display:none" accept=".json" onchange="importData(event)">
                     </label>
@@ -634,11 +639,11 @@
 
             <div class="glass-panel setting-item">
                 <div>
-                    <div style="font-weight:bold;"><i class="fa-solid fa-file-lines" style="color:var(--color-acc)"></i> 匯出對帳報告</div>
+                    <div style="font-weight:bold;"><i class="fa-solid fa-file-lines" style="color:#aaa"></i> 匯出對帳報告</div>
                     <div style="font-size:11px; color:#777; margin-top:2px;">將目前帳戶狀態與完整交易紀錄匯出成純文字檔，方便列印或傳給他人查看</div>
                 </div>
                 <div style="display:flex; gap:8px;">
-                    <button onclick="exportReport()" style="background:rgba(0,212,255,0.15); border:1px solid var(--color-acc); color:var(--color-acc); padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s;">匯出報告</button>
+                    <button onclick="exportReport()" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s;">匯出報告</button>
                 </div>
             </div>
             
@@ -651,8 +656,8 @@
             </div>
             
             <div class="glass-panel setting-item" id="setting-kline-interval" style="display:none; border-top:1px solid rgba(255,255,255,0.05);">
-                <div><div style="font-weight:bold; color:var(--color-acc);">K線週期設定</div><div style="font-size:11px; color:#777; margin-top:2px;">圖表時間範圍選項會依照此設定變動</div></div>
-                <select id="cfg-kline-interval" style="background:rgba(0,212,255,0.1); border:1px solid var(--color-acc); color:#fff; padding:6px; border-radius:6px; font-weight:bold; outline:none;">
+                <div><div style="font-weight:bold; color:#aaa;">K線週期設定</div><div style="font-size:11px; color:#777; margin-top:2px;">圖表時間範圍選項會依照此設定變動</div></div>
+                <select id="cfg-kline-interval" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#fff; padding:6px; border-radius:6px; font-weight:bold; outline:none;">
                     <option value="5m">5分K</option>
                     <option value="15m">15分K</option>
                     <option value="1d">日K</option>
@@ -683,9 +688,9 @@
                     <div class="jelly-slider-container">
                         <div class="jelly-slider-track"></div>
                         <div class="jelly-slider-thumb" id="jelly-thumb"></div>
-                        <input type="range" id="cfg-node-slider" min="5" max="60" value="20" class="jelly-slider-input">
+                        <input type="range" id="cfg-node-slider" min="5" max="60" value="60" class="jelly-slider-input">
                     </div>
-                    <input type="text" id="cfg-node-val" class="jelly-input" value="20" readonly>
+                    <input type="text" id="cfg-node-val" class="jelly-input" value="All" readonly>
                 </div>
             </div>
             <div class="glass-panel setting-item" style="border-color: rgba(255,69,96,0.3); margin-top:10px;">
@@ -1512,10 +1517,9 @@
         const savedShow = localStorage.getItem('SETTING_NODE_SHOW'); if (savedShow !== null) document.getElementById("cfg-node-show").checked = savedShow === 'true'; else document.getElementById("cfg-node-show").checked = false;
         const savedCrosshair = localStorage.getItem('SETTING_CROSSHAIR_SHOW'); if (savedCrosshair !== null) document.getElementById("cfg-crosshair-show").checked = savedCrosshair === 'true'; else document.getElementById("cfg-crosshair-show").checked = false;
         const savedVal = localStorage.getItem('SETTING_NODE_VAL');
-        if (savedVal !== null) {
-            document.getElementById("cfg-node-slider").value = (savedVal === 'All') ? 60 : savedVal; document.getElementById("cfg-node-val").value = savedVal;
-            const valNum = (savedVal === 'All') ? 60 : parseInt(savedVal); const pct = (valNum - 5) / (60 - 5); document.getElementById("jelly-thumb").style.left = `${pct * 162}px`;
-        }
+        const effectiveVal = (savedVal !== null) ? savedVal : 'All';
+        document.getElementById("cfg-node-slider").value = (effectiveVal === 'All') ? 60 : effectiveVal; document.getElementById("cfg-node-val").value = effectiveVal;
+        const valNum = (effectiveVal === 'All') ? 60 : parseInt(effectiveVal); const pct = (valNum - 5) / (60 - 5); document.getElementById("jelly-thumb").style.left = `${pct * 162}px`;
         document.getElementById("node-settings-wrapper").classList.toggle("disabled", !document.getElementById("cfg-node-show").checked);
         document.getElementById("trade-ticker").value = currentTicker; 
         document.getElementById("ai-mini-ticker-input").value = currentTicker;
