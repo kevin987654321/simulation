@@ -25,18 +25,26 @@
         input[type="number"]::-webkit-inner-spin-button,
         input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         input[type="number"] { -moz-appearance: textfield; }
+        /* 🩹 修復：輸入框文字選取（讓 onfocus="this.select()" 與手動選取範圍對玻璃數字鍵盤生效 */
+        input, textarea { user-select: text; -webkit-user-select: text; -webkit-touch-callout: default; }
 
         ::-webkit-scrollbar { width: 5px; height: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 10px; }
 
         html, body {
+            /* 1. 新增這行：給 iOS 狀態列和鍵盤彈出時抓取的「純色底色」 */
             background-color: #181818 !important; 
+            
+            /* 2. 把原本的 background 改成 background-image，讓漸層疊在純色之上 */
             background-image: var(--bg-gradient); 
+            
             color: var(--text-main);
             font-family: "Inter", "Microsoft JhengHei", sans-serif;
             margin: 0; padding: 0; height: 100dvh; width: 100vw;
             overflow: hidden; overscroll-behavior: none; display: flex;
+            
+            /* 3. 建議補上這行：避免透明狀態列的時間/電量與你的網頁內容重疊 */
             padding-top: env(safe-area-inset-top);
         }
 
@@ -54,67 +62,10 @@
             backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
             box-shadow: 0 10px 35px rgba(0, 0, 0, 0.7); transition: border-color 0.4s ease, box-shadow 0.4s ease;
         }
+        .panel-flash-buy { border-color: var(--color-buy) !important; box-shadow: 0 0 25px rgba(0, 255, 170, 0.3) !important; }
+        .panel-flash-sell { border-color: var(--color-sell) !important; box-shadow: 0 0 25px rgba(255, 69, 96, 0.3) !important; }
 
-        /* ✨ 側邊欄帳戶極簡切換器 */
-        .sidebar-acc-btn {
-            display: flex; justify-content: space-between; align-items: center;
-            background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 8px; padding: 8px 12px; color: #aaa; font-size: 11px; cursor: pointer;
-            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        .sidebar-acc-btn:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
-        .sidebar-acc-btn.active { background: rgba(255, 255, 255, 0.1); color: #fff; border-color: rgba(255, 255, 255, 0.15); }
-        .sb-acc-arrow { transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
-        .sidebar-acc-btn.active .sb-acc-arrow { transform: rotate(180deg); }
-        
-        .sb-acc-dropdown {
-            position: absolute; top: calc(100% - 10px); left: 16px; right: 16px;
-            background: rgba(20, 20, 22, 0.95); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px;
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.8); z-index: 1000;
-            opacity: 0; pointer-events: none; transform: translateY(-5px);
-            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-            max-height: 200px; overflow-y: auto;
-        }
-        .sb-acc-dropdown.show { opacity: 1; pointer-events: auto; transform: translateY(0); }
-        
-        .sb-acc-item {
-            padding: 10px 12px; display: flex; justify-content: space-between; align-items: center;
-            font-size: 11.5px; color: #ccc; cursor: pointer; border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-            transition: all 0.2s;
-        }
-        .sb-acc-item:last-child { border-bottom: none; }
-        .sb-acc-item:hover { background: rgba(255, 255, 255, 0.05); color: #fff; }
-        .sb-acc-item.current { color: var(--color-acc); font-weight: bold; pointer-events: none; }
-
-        /* ✨ 玻璃通用輸入框 */
-        .glass-input {
-            background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15);
-            color: #fff; padding: 12px 14px; border-radius: 8px; font-size: 14px;
-            outline: none; transition: all 0.2s; font-family: "Inter", sans-serif;
-            width: 100%;
-        }
-        .glass-input:focus { border-color: var(--color-acc); box-shadow: 0 0 15px rgba(0,212,255,0.15); background: rgba(0,0,0,0.6); }
-
-        /* ✨ 模態框與動畫 */
-        .modal-overlay {
-            position: fixed; inset: 0; background: rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-            z-index: 100000; display: flex; justify-content: center; align-items: center; padding: 20px;
-            opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
-        }
-        .modal-overlay.active { opacity: 1; pointer-events: auto; }
-        .modal-panel {
-            width: 100%; max-width: 420px;
-            transform: scale(0.95) translateY(10px); transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        .modal-overlay.active .modal-panel { transform: scale(1) translateY(0); }
-        
-        .view-fade { transition: opacity 0.25s ease, transform 0.25s ease; }
-        .view-fade.hide { opacity: 0; pointer-events: none; transform: scale(0.98); position: absolute; visibility: hidden; }
-
-        /* 原有樣式 */
-        #toast-container { position: fixed; top: 20px; right: 20px; z-index: 200000; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+        #toast-container { position: fixed; top: 20px; right: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
         .toast { position: relative; overflow: hidden; background: rgba(15, 15, 18, 0.92); border: 1px solid rgba(255,255,255,0.12); padding: 14px 20px; border-radius: 10px; font-size: 13px; font-weight: bold; box-shadow: 0 15px 35px rgba(0,0,0,0.8); display: flex; align-items: center; gap: 12px; backdrop-filter: blur(15px); pointer-events: auto; animation: toastEnter 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .toast.buy { border-color: rgba(0,255,170,0.4); color: var(--color-buy); }
         .toast.sell { border-color: rgba(255,69,96,0.4); color: var(--color-sell); }
@@ -132,8 +83,8 @@
         .value-pulse { animation: navPulse 0.6s ease; }
         @keyframes navPulse { 0% { transform: scale(1); } 50% { transform: scale(1.06); text-shadow: 0 0 15px var(--color-acc); color: #fff; } 100% { transform: scale(1); } }
 
-        #sidebar { width: 260px; border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 20px 0; background: rgba(6, 6, 6, 0.85); z-index: 1000; flex-shrink: 0; height: 100dvh; }
-        .menu-item { padding: 13px 16px; margin: 0 15px 6px 15px; border-radius: 8px; cursor: pointer; transition: all 0.2s; color: #777; display: flex; align-items: center; gap: 12px; font-size: 13px; font-weight: 600; }
+        #sidebar { width: 260px; border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 20px 15px; background: rgba(6, 6, 6, 0.85); z-index: 1000; flex-shrink: 0; height: 100dvh; }
+        .menu-item { padding: 13px 16px; margin-bottom: 6px; border-radius: 8px; cursor: pointer; transition: all 0.2s; color: #777; display: flex; align-items: center; gap: 12px; font-size: 13px; font-weight: 600; }
         .menu-item:hover, .menu-item.active { background: rgba(255, 255, 255, 0.05); color: #fff; }
         .menu-item i { width: 18px; font-size: 15px; text-align: center; }
         .mobile-only { display: none !important; }
@@ -221,6 +172,7 @@
         .send-btn.pending-confirm { background: rgba(0,212,255,0.18); border-color: var(--color-acc); color: var(--color-acc); animation: pendingPulse 1.6s ease-in-out infinite; }
         @keyframes pendingPulse { 0%, 100% { box-shadow: 0 0 0px rgba(0,212,255,0); } 50% { box-shadow: 0 0 12px rgba(0,212,255,0.5); } }
 
+        /* 📒 歷史帳本時間範圍選擇器 */
         .ledger-range-picker { position: absolute; inset: 0; z-index: 20; background: rgba(6,6,8,0.97); backdrop-filter: blur(10px); display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; overflow-y: auto; animation: lrFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1); }
         @keyframes lrFadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
         .lr-header { display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
@@ -248,7 +200,6 @@
         .badge { padding: 3px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; }
         .badge-buy { background: rgba(0,255,170,0.12); color: var(--color-buy); border: 1px solid rgba(0,255,170,0.3); }
         .badge-sell { background: rgba(255,69,96,0.12); color: var(--color-sell); border: 1px solid rgba(255,69,96,0.3); }
-        .badge-dividend { background: rgba(0,212,255,0.12); color: var(--color-acc); border: 1px solid rgba(0,212,255,0.3); }
 
         .settings-list { max-width: 650px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; width: 100%; }
         .setting-item { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; }
@@ -266,11 +217,29 @@
         .jelly-input { width: 48px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 4px; border-radius: 6px; text-align: center; font-family: monospace; font-size: 12px; }
         .setting-item.disabled { opacity: 0.3; pointer-events: none; }
 
+        /* 👤 帳號管理 & 🔐 密碼彈窗 / 開機鎖定畫面 */
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(3,3,3,0.88); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); z-index: 20000; align-items: center; justify-content: center; animation: modalFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+        @keyframes modalFadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .modal-box { width: 90%; max-width: 320px; padding: 22px; display: flex; flex-direction: column; gap: 12px; animation: modalPopIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        @keyframes modalPopIn { from { opacity:0; transform: scale(0.92) translateY(10px); } to { opacity:1; transform: scale(1) translateY(0); } }
+        .modal-input { background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 11px 12px; border-radius: 8px; font-family: monospace; font-size: 14px; outline: none; width: 100%; text-align: center; letter-spacing: 2px; transition: border-color 0.2s; }
+        .modal-input:focus { border-color: var(--color-acc); }
+        .account-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; gap: 10px; flex-wrap: wrap; transition: border-color 0.3s, box-shadow 0.3s; }
+        .account-row.active-account { border-color: var(--color-acc); box-shadow: 0 0 20px rgba(0,212,255,0.12); }
+        .account-action-btn { border-radius: 6px; font-size: 11px; cursor: pointer; font-weight: bold; padding: 6px 10px; transition: all 0.2s; white-space: nowrap; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.08); color: #fff; }
+        .account-action-btn:hover { background: rgba(255,255,255,0.16); }
+        .account-action-btn.danger { background: rgba(255,69,96,0.15); border-color: rgba(255,69,96,0.4); color: var(--color-sell); }
+        .account-action-btn.danger:hover { background: rgba(255,69,96,0.28); }
+        .account-action-btn.accent { background: rgba(0,255,170,0.15); border-color: rgba(0,255,170,0.4); color: var(--color-buy); }
+        .account-action-btn.accent:hover { background: rgba(0,255,170,0.28); }
+
+        /* AI Mini Ticker 手機專屬外觀 */
         .ai-mini-ticker .select-input-box { border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; min-height: 26px; padding: 0 4px; background: rgba(0,0,0,0.5); }
         .ai-mini-ticker .select-input-box:focus-within { border-color: var(--color-acc); }
         .ai-mini-ticker input { flex: 1; background: transparent; border: none; color: #fff; outline: none; font-family: monospace; font-weight: bold; font-size: 11px; padding: 4px 0; text-align: center; width: 100%; }
         .ai-mini-ticker .select-dropdown-btn { padding: 0 0 0 2px; font-size: 10px; background: transparent; border: none; color: #888; }
 
+        /* 📱 手機端極簡玻璃數字小鍵盤專屬樣式 */
         .glass-numpad {
             position: fixed;
             width: 40vw; 
@@ -283,7 +252,7 @@
             border: 1px solid rgba(255, 255, 255, 0.15);
             border-top: 1px solid rgba(255, 255, 255, 0.3);
             border-radius: 16px;
-            display: none;
+            display: none; /* 預設隱藏 */
             grid-template-columns: repeat(3, 1fr);
             grid-template-rows: repeat(4, 1fr);
             gap: 8px;
@@ -311,8 +280,10 @@
         #mobile-header { display: none; }
         #sidebar-overlay { display: none; }
 
+        /* 卡片拖曳時的佔位符樣式 */
         .is-dragging-placeholder { opacity: 0; pointer-events: none; }
 
+        /* 🚀 控制手機版圖表標題與細節配置 */
         @media (max-width: 768px) {
             .hide-on-mobile { display: none !important; }
             .mobile-only { display: flex !important; }
@@ -338,6 +309,7 @@
             .dashboard-left-col { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 12px; }
             #desktop-trade-col { display: none; }
             
+            /* 手機版同樣顯示圖表切換按鈕並進行尺寸調整 */
             .standalone-mode-btn { display: flex; width: 28px; height: 28px; font-size: 12px; }
             
             #shared-trade-panel { height: auto !important; overflow-y: visible !important; padding: 12px !important; gap: 10px !important; }
@@ -346,6 +318,7 @@
             #chart-container { flex: 1; min-height: 0; display: flex; flex-direction: column; }
             #ai-commander { height: 260px; flex-shrink: 0; }
 
+            /* 歷史帳本選擇器：手機空間較小，縮減間距避免溢出 */
             .ledger-range-picker { padding: 10px 12px; gap: 6px; }
             .lr-preset-btn { padding: 5px 0; font-size: 10.5px; }
             .lr-date-box input[type="date"] { padding: 6px 4px; font-size: 11px; }
@@ -355,87 +328,14 @@
 </head>
 <body>
 
-<!-- 解鎖畫面模態框 -->
-<div id="lock-screen" class="modal-overlay">
-    <div class="modal-panel glass-panel" style="padding:30px; display:flex; flex-direction:column; align-items:center;">
-        <i class="fa-solid fa-xmark" id="lock-screen-close" style="position:absolute; top:16px; right:16px; color:#666; cursor:pointer; font-size:16px; display:none;" onclick="cancelSwitchAccount()"></i>
-        <div class="glass-title-text" style="font-size:22px; margin-bottom:10px;"><i class="fa-solid fa-cube" style="color: var(--color-acc)"></i> ALPHATRADE</div>
-        <div id="lock-account-name" style="color:#aaa; margin-bottom:24px; font-size:13px;">解鎖帳戶: ---</div>
-        
-        <input type="password" id="lock-password" placeholder="輸入解鎖密碼" class="glass-input" style="text-align:center; max-width:260px; margin-bottom:16px; font-size:16px; letter-spacing:2px;" onkeypress="if(event.key==='Enter') unlockAccount()">
-        <button onclick="unlockAccount()" style="background:var(--color-acc); color:#000; border:none; padding:12px 24px; border-radius:8px; font-weight:bold; cursor:pointer; width:100%; max-width:260px; font-size:14px; transition:all 0.2s cubic-bezier(0.16, 1, 0.3, 1);">解鎖並登入</button>
-    </div>
-</div>
-
-<!-- 帳戶管理模態框 -->
-<div id="account-modal" class="modal-overlay">
-    <div class="modal-panel glass-panel" style="padding:22px; display:flex; flex-direction:column; min-height: 250px;">
-        
-        <!-- 列表視圖 -->
-        <div id="acc-mgr-list-view" class="view-fade">
-            <div style="display:flex; justify-content:space-between; align-items:center; font-size:16px; font-weight:bold; margin-bottom:16px;">
-                <span><i class="fa-solid fa-users-gear" style="color:var(--color-acc)"></i> 帳戶設定與管理</span>
-                <i class="fa-solid fa-xmark" style="cursor:pointer; color:#888; font-size: 16px; transition:color 0.2s;" onclick="closeAccountModal()"></i>
-            </div>
-            
-            <div id="account-list" style="display:flex; flex-direction:column; gap:10px; max-height:45vh; overflow-y:auto; margin-bottom:16px; padding-right:5px;"></div>
-            
-            <button onclick="showAccountForm(null)" style="background:rgba(255,255,255,0.05); color:#fff; border:1px dashed rgba(255,255,255,0.15); padding:12px; border-radius:8px; font-weight:bold; cursor:pointer; transition:all 0.2s; width:100%;">
-                <i class="fa-solid fa-plus"></i> 新增帳戶
-            </button>
-        </div>
-
-        <!-- 表單視圖 (新增/編輯) -->
-        <div id="acc-mgr-form-view" class="view-fade hide">
-            <div style="display:flex; align-items:center; font-size:16px; font-weight:bold; margin-bottom:18px; gap:10px;">
-                <i class="fa-solid fa-chevron-left" style="cursor:pointer; color:#888; transition:color 0.2s;" onclick="accMgrBackToList()" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#888'"></i>
-                <span id="acc-mgr-form-title">新增/編輯帳戶</span>
-            </div>
-            
-            <div style="display:flex; flex-direction:column; gap:14px; flex:1;">
-                <div>
-                    <label style="font-size:11px; color:#888; margin-bottom:6px; display:block;">帳戶名稱</label>
-                    <input type="text" id="acc-mgr-input-name" placeholder="輸入名稱" class="glass-input">
-                </div>
-                <div>
-                    <label style="font-size:11px; color:#888; margin-bottom:6px; display:block;">設定解鎖密碼 (選填)</label>
-                    <input type="password" id="acc-mgr-input-pwd" placeholder="留空代表無密碼" class="glass-input">
-                </div>
-            </div>
-
-            <div style="display:flex; justify-content:space-between; margin-top: 24px; align-items: center;">
-                <button id="acc-mgr-btn-delete" onclick="accMgrDeleteCurrent()" style="background:rgba(255,69,96,0.1); color:var(--color-sell); border:none; padding:10px 16px; border-radius:8px; font-weight:bold; cursor:pointer; font-size:13px; transition:all 0.2s; display:none;">
-                    刪除帳戶
-                </button>
-                <button onclick="accMgrSave()" style="background:var(--color-acc); color:#000; border:none; padding:10px 24px; border-radius:8px; font-weight:bold; cursor:pointer; font-size:13px; margin-left:auto; transition:all 0.2s;">
-                    儲存設定
-                </button>
-            </div>
-        </div>
-
-    </div>
-</div>
-
+<!-- 手機端極簡玻璃數字鍵盤 -->
 <div id="glass-numpad" class="glass-numpad"></div>
 
 <div id="toast-container"></div>
 <div id="sidebar-overlay" onclick="toggleSidebar()"></div>
 
 <aside id="sidebar">
-    <div class="glass-title-text" style="margin-bottom: 20px;"><i class="fa-solid fa-cube" style="color: var(--color-acc)"></i> ALPHATRADE</div>
-    
-    <!-- ✨ 側邊欄專屬：極簡帳戶切換器 -->
-    <div style="padding: 0 15px 10px 15px; margin-top: -15px; position: relative;">
-        <div class="sidebar-acc-btn" id="sb-acc-toggle" onclick="toggleSidebarAccDropdown(event)">
-            <div style="display:flex; align-items:center; gap:8px;">
-                <i class="fa-solid fa-circle-user" style="font-size:14px; opacity:0.8;"></i>
-                <span id="sb-acc-name" style="font-weight:600; letter-spacing: 0.5px;">主要帳戶</span>
-            </div>
-            <i class="fa-solid fa-chevron-down sb-acc-arrow"></i>
-        </div>
-        <div class="sb-acc-dropdown" id="sb-acc-dropdown"></div>
-    </div>
-
+    <div class="glass-title-text"><i class="fa-solid fa-cube" style="color: var(--color-acc)"></i> ALPHATRADE</div>
     <div class="menu-item active" onclick="switchView('view-dashboard', this)"><i class="fa-solid fa-chart-line"></i> 指揮操盤中心</div>
     <div class="menu-item mobile-only" onclick="switchView('view-mobile-trade', this)"><i class="fa-solid fa-hand-holding-dollar"></i> 下單櫃檯</div>
     <div class="menu-item" onclick="switchView('view-cards', this)"><i class="fa-solid fa-address-card"></i> 自選資產卡片</div>
@@ -453,6 +353,7 @@
         <div class="mobile-reload-btn" onclick="location.reload()"></div>
     </div>
 
+    <!-- 主儀表板 -->
     <main id="view-dashboard" class="view-section active">
         <div class="stat-grid">
             <div class="glass-panel stat-card">
@@ -479,6 +380,7 @@
                     <div class="chart-header">
                         <span style="font-weight: bold; font-size: 13px;" id="main-chart-title"></span>
                         <div class="header-controls">
+                            <!-- 🚀 動態時間區段 -->
                             <div class="timeframe-selector" id="tf-group"></div>
                             <button class="standalone-mode-btn" onclick="toggleDesktopChartMode()" title="切換顯示：組合總淨值 / 個股走勢">
                                 <i class="fa-solid fa-repeat" id="mode-icon"></i>
@@ -517,6 +419,7 @@
                             <span style="color: rgba(255,255,255,0.4)">[SYSTEM]</span> 戰略助理連線成功。已同步 <strong style="color:#fff" id="ai-current-ticker">NVDA</strong> 之 RSI、持倉成本與帳戶資金。<br>
                         </div>
 
+                        <!-- 📒 歷史帳本時間範圍選擇器：偵測到「(歷史帳本)」標記時顯示 -->
                         <div class="ledger-range-picker" id="ledger-range-picker" style="display:none;">
                             <div class="lr-header">
                                 <span class="lr-title"><i class="fa-solid fa-clock-rotate-left" style="color:var(--color-acc)"></i> 選擇歷史帳本時間範圍</span>
@@ -632,8 +535,21 @@
             <div style="font-weight:bold; font-size:15px; margin-bottom:12px; white-space:nowrap;"><i class="fa-solid fa-list-ul"></i> 歷史帳本與撤銷管理</div>
             <div class="table-responsive">
                 <table>
-                    <thead><tr><th>時間</th><th>動作</th><th>代號</th><th>成交/配發單價</th><th>股數</th><th>手續費/稅</th><th>交割金額(TWD)</th><th>已實現損益(TWD)</th><th>操作</th></tr></thead>
+                    <thead><tr><th>時間</th><th>動作</th><th>代號</th><th>成交均價</th><th>股數</th><th>手續費/稅</th><th>交割金額(TWD)</th><th>已實現損益(TWD)</th><th>操作</th></tr></thead>
                     <tbody id="ledger-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="glass-panel" style="padding:16px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+                <div style="font-weight:bold; font-size:15px; white-space:nowrap;"><i class="fa-solid fa-sack-dollar" style="color:var(--color-acc)"></i> 股息發放紀錄　<span id="dividend-total-label" style="font-size:12px; color:var(--color-buy); font-weight:normal;"></span></div>
+                <button onclick="checkDividends(true)" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:#fff; padding:6px 12px; border-radius:6px; font-size:11px; cursor:pointer; font-weight:bold; transition:all 0.2s;"><i class="fa-solid fa-arrows-rotate"></i> 立即查詢股息</button>
+            </div>
+            <div class="table-responsive">
+                <table>
+                    <thead><tr><th>發放日期</th><th>代號</th><th>每股股息</th><th>持有股數</th><th>入帳金額(TWD)</th></tr></thead>
+                    <tbody id="dividends-table-body"></tbody>
                 </table>
             </div>
         </div>
@@ -641,30 +557,33 @@
 
     <main id="view-settings" class="view-section">
         <div class="settings-list">
-            
-            <div class="glass-panel setting-item">
+            <div class="glass-panel setting-item" style="border-color: rgba(0,212,255,0.3);">
                 <div>
-                    <div style="font-weight:bold;"><i class="fa-solid fa-users" style="color:var(--color-acc)"></i> 帳戶詳細設定與管理</div>
-                    <div style="font-size:11px; color:#777; margin-top:2px;" id="current-account-name-desc">編輯或新增多個子帳戶</div>
+                    <div style="font-weight:bold;"><i class="fa-solid fa-users" style="color:var(--color-acc)"></i> 帳號管理</div>
+                    <div style="font-size:11px; color:#777; margin-top:2px;">目前使用中：<span id="settings-current-account-name" style="color:var(--color-acc); font-weight:bold;">--</span>　可新增、切換、重新命名或註銷帳號</div>
                 </div>
-                <button onclick="openAccountModal()" style="background:rgba(0,212,255,0.15); border:1px solid var(--color-acc); color:var(--color-acc); padding:6px 16px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s;">管理</button>
+                <button onclick="switchView('view-accounts', null)" style="background:rgba(0,212,255,0.15); border:1px solid var(--color-acc); color:var(--color-acc); padding:8px 14px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s; white-space:nowrap;">
+                    管理帳號 <i class="fa-solid fa-chevron-right" style="font-size:10px;"></i>
+                </button>
             </div>
 
             <div class="glass-panel setting-item">
                 <div>
-                    <div style="font-weight:bold;"><i class="fa-solid fa-hand-holding-dollar" style="color:var(--color-buy)"></i> 股息自動結算</div>
-                    <div style="font-size:11px; color:#777; margin-top:2px;">系統每日會自動查詢，也可手動補發未入帳歷史股息</div>
+                    <div style="font-weight:bold;"><i class="fa-solid fa-sack-dollar" style="color:var(--color-acc)"></i> 股息自動配發</div>
+                    <div style="font-size:11px; color:#777; margin-top:2px;">每天自動查詢一次持股股息，歷史未配發者會自動補發　<span id="last-dividend-check-label" style="color:#555;">尚未查詢過</span></div>
                 </div>
-                <button onclick="checkDividends(true)" id="btn-dividend" style="background:rgba(0,255,170,0.15); border:1px solid var(--color-buy); color:var(--color-buy); padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s;">手動結算</button>
+                <button onclick="checkDividends(true)" id="manual-dividend-check-btn" style="background:rgba(0,212,255,0.15); border:1px solid var(--color-acc); color:var(--color-acc); padding:8px 14px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s; white-space:nowrap;">
+                    <i class="fa-solid fa-arrows-rotate"></i> 立即查詢
+                </button>
             </div>
 
             <div class="glass-panel setting-item">
                 <div>
-                    <div style="font-weight:bold;"><i class="fa-solid fa-floppy-disk" style="color:#a855f7"></i> 當前帳本備份與還原</div>
+                    <div style="font-weight:bold;"><i class="fa-solid fa-floppy-disk" style="color:var(--color-acc)"></i> 帳本資料備份與還原</div>
                     <div style="font-size:11px; color:#777; margin-top:2px;">將所有交易紀錄、自選卡片匯出為本機檔案，或從檔案還原</div>
                 </div>
                 <div style="display:flex; gap:8px;">
-                    <button onclick="exportData()" style="background:rgba(168,85,247,0.15); border:1px solid #a855f7; color:#a855f7; padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s;">匯出</button>
+                    <button onclick="exportData()" style="background:rgba(0,212,255,0.15); border:1px solid var(--color-acc); color:var(--color-acc); padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s;">匯出</button>
                     <label style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:#fff; padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s;">
                         匯入 <input type="file" style="display:none" accept=".json" onchange="importData(event)">
                     </label>
@@ -673,11 +592,11 @@
 
             <div class="glass-panel setting-item">
                 <div>
-                    <div style="font-weight:bold;"><i class="fa-solid fa-file-lines" style="color:#a855f7"></i> 匯出對帳報告</div>
-                    <div style="font-size:11px; color:#777; margin-top:2px;">將目前帳戶狀態與完整交易紀錄匯出成純文字檔</div>
+                    <div style="font-weight:bold;"><i class="fa-solid fa-file-lines" style="color:var(--color-acc)"></i> 匯出對帳報告</div>
+                    <div style="font-size:11px; color:#777; margin-top:2px;">將目前帳戶狀態與完整交易紀錄匯出成純文字檔，方便列印或傳給他人查看</div>
                 </div>
                 <div style="display:flex; gap:8px;">
-                    <button onclick="exportReport()" style="background:rgba(168,85,247,0.15); border:1px solid #a855f7; color:#a855f7; padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s;">匯出報告</button>
+                    <button onclick="exportReport()" style="background:rgba(0,212,255,0.15); border:1px solid var(--color-acc); color:var(--color-acc); padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s;">匯出報告</button>
                 </div>
             </div>
             
@@ -728,9 +647,33 @@
                 </div>
             </div>
             <div class="glass-panel setting-item" style="border-color: rgba(255,69,96,0.3); margin-top:10px;">
-                <div><div style="font-weight:bold; color:var(--color-sell);">重置初始帳戶資金</div><div style="font-size:11px; color:#777; margin-top:2px;">清空當前帳號的歷史帳本，還原現金 100 萬起始金額</div></div>
+                <div><div style="font-weight:bold; color:var(--color-sell);">重置初始帳戶資金</div><div style="font-size:11px; color:#777; margin-top:2px;">清空歷史帳本，還原現金 100 萬起始金額</div></div>
                 <button onclick="resetAccount()" style="background:var(--color-sell); border:none; color:#fff; padding:8px 14px; border-radius:6px; font-weight:bold; cursor:pointer;">執行重置</button>
             </div>
+        </div>
+    </main>
+
+    <!-- 👤 帳號管理頁 -->
+    <main id="view-accounts" class="view-section">
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom: 4px; padding:0 4px;">
+            <button onclick="switchView('view-settings', document.querySelector('.menu-item[onclick*=\'view-settings\']'))" style="background:transparent; border:1px solid rgba(255,255,255,0.2); color:#fff; width:34px; height:34px; border-radius:8px; cursor:pointer; flex-shrink:0;"><i class="fa-solid fa-arrow-left"></i></button>
+            <span style="font-size:16px; font-weight:bold;"><i class="fa-solid fa-users" style="color:var(--color-acc)"></i> 帳號管理</span>
+        </div>
+
+        <div class="glass-panel" style="max-width:650px; margin:0 auto; width:100%; padding:16px; display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+            <div style="flex:1; min-width:160px;">
+                <div style="font-size:11px; color:#888; margin-bottom:4px;">新帳號名稱（可留空）</div>
+                <input type="text" id="new-account-name" placeholder="例如：長期投資、模擬盤 A" onkeydown="if(event.key==='Enter') createAccount()" style="width:100%; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:9px 10px; border-radius:6px; outline:none;">
+            </div>
+            <button onclick="createAccount()" style="background:var(--color-acc); color:#000; border:none; padding:10px 18px; border-radius:6px; font-weight:bold; cursor:pointer; white-space:nowrap;">
+                <i class="fa-solid fa-plus"></i> 新增帳號
+            </button>
+        </div>
+
+        <div id="accounts-list-container" style="max-width:650px; margin:0 auto; width:100%; display:flex; flex-direction:column; gap:10px;"></div>
+
+        <div style="max-width:650px; margin:0 auto; width:100%; font-size:10.5px; color:#555; text-align:center; padding:6px 10px;">
+            <i class="fa-solid fa-circle-info"></i> 各帳號的現金、持倉、交易與股息紀錄皆完全獨立儲存於本機瀏覽器；密碼保護僅為本機簡易鎖定，不具備雲端加密效果。
         </div>
     </main>
 </div>
@@ -816,348 +759,84 @@
     <button class="exec-btn buy" id="exec-trade-btn" onclick="executeTrade()" disabled>確認買進 BUY</button>
 </div>
 
+<!-- 🔐 密碼輸入彈窗（設定新密碼 / 切換帳號驗證 / 移除密碼 共用） -->
+<div id="password-modal-overlay" class="modal-overlay">
+    <div class="glass-panel modal-box">
+        <div id="password-modal-title" style="font-weight:bold; font-size:14px; display:flex; align-items:center; gap:8px;"><i class="fa-solid fa-lock" style="color:var(--color-acc)"></i> 輸入密碼</div>
+        <div id="password-modal-desc" style="font-size:11px; color:#888; margin-top:-6px;"></div>
+        <input type="password" id="password-modal-input" class="modal-input" placeholder="密碼" autocomplete="new-password">
+        <input type="password" id="password-modal-input2" class="modal-input" placeholder="確認密碼" autocomplete="new-password" style="display:none;">
+        <div id="password-modal-error" style="display:none; color:var(--color-sell); font-size:11px;"><i class="fa-solid fa-triangle-exclamation"></i> <span id="password-modal-error-text"></span></div>
+        <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:4px;">
+            <button id="password-modal-cancel" style="background:transparent; border:1px solid rgba(255,255,255,0.2); color:#aaa; padding:9px 16px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:12px;">取消</button>
+            <button id="password-modal-confirm" style="background:var(--color-acc); border:none; color:#000; padding:9px 16px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:12px;">確認</button>
+        </div>
+    </div>
+</div>
+
+<!-- 🔐 開機帳號密碼鎖定畫面 -->
+<div id="boot-lock-overlay" class="modal-overlay" style="background:#030303;">
+    <div class="modal-box" style="align-items:center; text-align:center;">
+        <div class="glass-title-text" style="margin:0 0 4px 0;"><i class="fa-solid fa-cube" style="color:var(--color-acc)"></i> ALPHATRADE</div>
+        <i class="fa-solid fa-lock" style="color:var(--color-acc); font-size:26px; margin:6px 0;"></i>
+        <div style="color:#aaa; font-size:12.5px;">帳號「<span id="boot-lock-account-name" style="color:#fff; font-weight:bold;"></span>」已設定密碼保護</div>
+        <input type="password" id="boot-lock-input" class="modal-input" placeholder="請輸入密碼" autocomplete="current-password" style="margin-top:8px;">
+        <div id="boot-lock-error" style="display:none; color:var(--color-sell); font-size:11px;"><i class="fa-solid fa-triangle-exclamation"></i> 密碼錯誤，請再試一次</div>
+        <button id="boot-lock-confirm" style="width:100%; background:var(--color-acc); color:#000; border:none; padding:11px; border-radius:8px; font-weight:bold; cursor:pointer; margin-top:4px;">解鎖</button>
+        <div id="boot-lock-switch-toggle" onclick="toggleBootLockSwitcher()" style="color:#666; font-size:11px; cursor:pointer; text-decoration:underline; margin-top:6px;">切換其他帳號</div>
+        <div id="boot-lock-switcher" style="display:none; flex-direction:column; gap:6px; width:100%; margin-top:2px; max-height:160px; overflow-y:auto;"></div>
+    </div>
+</div>
+
 <script>
     let currentUSDTWD = 32.5;
     const myProxy = "https://square-moon-a3d9.kevinchang090818.workers.dev/?url=";
 
     let globalPriceCache = {};
 
-    // ==========================================
-    // 帳戶管理系統初始化與核心邏輯
-    // ==========================================
-    const ACC_MGR_KEY = "ALPHATRADE_ACCOUNT_MGR";
-    let accMgr = {
-        accounts: [{ id: 'default', name: '主要帳戶', password: '' }],
-        currentId: 'default'
-    };
-    let editingAccountId = null; // null 代表新增模式，有字串代表編輯模式
-    let pendingSwitchId = null;
-
-    function initAccountManager() {
-        const savedMgr = localStorage.getItem(ACC_MGR_KEY);
-        if (savedMgr) {
-            try { accMgr = JSON.parse(savedMgr); } catch(e) {}
-        } else {
-            if (localStorage.getItem("ALPHATRADE_MANUAL_DATA")) accMgr.currentId = 'default';
-            saveAccountManager();
-        }
-    }
-
-    function saveAccountManager() {
-        localStorage.setItem(ACC_MGR_KEY, JSON.stringify(accMgr));
-    }
-
-    function getCurrentDataKey() {
-        return accMgr.currentId === 'default' ? "ALPHATRADE_MANUAL_DATA" : `ALPHATRADE_MANUAL_DATA_${accMgr.currentId}`;
-    }
-
-    function updateAccountUI() {
-        const currentAcc = accMgr.accounts.find(a => a.id === accMgr.currentId);
-        document.getElementById('sb-acc-name').innerText = currentAcc ? currentAcc.name : '未知帳戶';
-        
-        // 側邊欄下拉選單渲染
-        const sbDropdown = document.getElementById('sb-acc-dropdown');
-        sbDropdown.innerHTML = accMgr.accounts.map(acc => `
-            <div class="sb-acc-item ${acc.id === accMgr.currentId ? 'current' : ''}" onclick="initiateAccountSwitch('${acc.id}')">
-                <span style="display:flex; align-items:center; gap:6px;">
-                    ${acc.id === accMgr.currentId ? '<i class="fa-solid fa-check" style="font-size:10px;"></i>' : '<i class="fa-solid fa-circle-user" style="opacity:0.3; font-size:10px;"></i>'}
-                    ${acc.name}
-                </span>
-                ${acc.password ? '<i class="fa-solid fa-lock" style="font-size:10px; opacity:0.5;"></i>' : ''}
-            </div>
-        `).join('');
-    }
-
-    function toggleSidebarAccDropdown(e) {
-        if(e) e.stopPropagation();
-        const btn = document.getElementById('sb-acc-toggle');
-        const dropdown = document.getElementById('sb-acc-dropdown');
-        const isActive = btn.classList.contains('active');
-        
-        if (isActive) {
-            btn.classList.remove('active'); dropdown.classList.remove('show');
-        } else {
-            btn.classList.add('active'); dropdown.classList.add('show');
-        }
-    }
-
-    document.addEventListener("click", (e) => { 
-        if(!e.target.closest('#sb-acc-toggle') && !e.target.closest('#sb-acc-dropdown')) {
-            document.getElementById('sb-acc-toggle').classList.remove('active');
-            document.getElementById('sb-acc-dropdown').classList.remove('show');
-        }
-        if(!document.getElementById("ticker-select-wrapper").contains(e.target)) document.getElementById("ticker-dropdown").classList.remove("show"); 
-        if(!document.getElementById("tm-ticker-wrapper").contains(e.target)) document.getElementById("tm-ticker-dropdown").classList.remove("show"); 
-        if(!document.getElementById("ai-ticker-wrapper").contains(e.target)) document.getElementById("ai-ticker-dropdown").classList.remove("show"); 
-    });
-
-    // --- 模態框邏輯 ---
-    function openAccountModal() {
-        const list = document.getElementById('account-list');
-        list.innerHTML = accMgr.accounts.map(acc => `
-            <div style="background:rgba(255,255,255,0.03); padding:14px; border-radius:10px; border:1px solid ${acc.id === accMgr.currentId ? 'var(--color-acc)' : 'rgba(255,255,255,0.08)'}; display:flex; justify-content:space-between; align-items:center; transition:all 0.2s;">
-                <div style="display:flex; flex-direction:column; gap:4px;">
-                    <div style="font-weight:bold; font-size:14px; color:${acc.id === accMgr.currentId ? 'var(--color-acc)' : '#fff'}; display:flex; align-items:center; gap:6px;">
-                        ${acc.name} ${acc.password ? '<i class="fa-solid fa-lock" style="font-size:10px; color:#aaa;"></i>' : ''}
-                    </div>
-                    ${acc.id === accMgr.currentId ? '<div style="font-size:11px; color:var(--color-acc); font-weight:600;">目前使用中</div>' : '<div style="font-size:11px; color:#777;">點擊切換或編輯</div>'}
-                </div>
-                <div style="display:flex; gap:8px;">
-                    ${acc.id !== accMgr.currentId ? `<button onclick="initiateAccountSwitch('${acc.id}')" style="background:rgba(255,255,255,0.1); border:none; color:#fff; padding:8px 14px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:12px; transition:background 0.2s;">切換</button>` : ''}
-                    <button onclick="showAccountForm('${acc.id}')" style="background:rgba(255,255,255,0.1); border:none; color:#fff; padding:8px 14px; border-radius:6px; cursor:pointer; transition:background 0.2s;"><i class="fa-solid fa-pen"></i></button>
-                </div>
-            </div>
-        `).join('');
-        
-        document.getElementById('acc-mgr-form-view').classList.add('hide');
-        document.getElementById('acc-mgr-list-view').classList.remove('hide');
-        document.getElementById('account-modal').classList.add('active');
-    }
-
-    function closeAccountModal() { 
-        document.getElementById('account-modal').classList.remove('active'); 
-    }
-
-    function showAccountForm(id) {
-        editingAccountId = id;
-        const formTitle = document.getElementById('acc-mgr-form-title');
-        const inputName = document.getElementById('acc-mgr-input-name');
-        const inputPwd = document.getElementById('acc-mgr-input-pwd');
-        const delBtn = document.getElementById('acc-mgr-btn-delete');
-        
-        if (id) {
-            const acc = accMgr.accounts.find(a => a.id === id);
-            formTitle.innerText = "編輯帳戶設定";
-            inputName.value = acc.name;
-            inputPwd.value = acc.password;
-            
-            // 防呆：重置刪除按鈕狀態
-            delBtn.dataset.confirm = 'false';
-            delBtn.innerText = '刪除帳戶';
-            delBtn.style.background = 'rgba(255,69,96,0.1)';
-            delBtn.style.color = 'var(--color-sell)';
-            delBtn.style.display = 'block';
-        } else {
-            formTitle.innerText = "新增帳戶";
-            inputName.value = '';
-            inputPwd.value = '';
-            delBtn.style.display = 'none';
-        }
-
-        document.getElementById('acc-mgr-list-view').classList.add('hide');
-        document.getElementById('acc-mgr-form-view').classList.remove('hide');
-    }
-
-    function accMgrBackToList() {
-        document.getElementById('acc-mgr-form-view').classList.add('hide');
-        document.getElementById('acc-mgr-list-view').classList.remove('hide');
-    }
-
-    function accMgrSave() {
-        const name = document.getElementById('acc-mgr-input-name').value.trim();
-        const pwd = document.getElementById('acc-mgr-input-pwd').value;
-        if (!name) { alert("請輸入帳戶名稱"); return; }
-        
-        if (editingAccountId) {
-            const acc = accMgr.accounts.find(a => a.id === editingAccountId);
-            acc.name = name;
-            acc.password = pwd;
-        } else {
-            const newId = 'acc_' + Date.now();
-            accMgr.accounts.push({ id: newId, name: name, password: pwd });
-        }
-        saveAccountManager();
-        updateAccountUI();
-        accMgrBackToList();
-        openAccountModal(); 
-    }
-
-    let deleteConfirmTimer = null;
-    function accMgrDeleteCurrent() {
-        if (!editingAccountId) return;
-        if (accMgr.accounts.length <= 1) { alert("系統必須保留至少一個帳戶！"); return; }
-        
-        const btn = document.getElementById('acc-mgr-btn-delete');
-        if (btn.dataset.confirm === 'true') {
-            const id = editingAccountId;
-            accMgr.accounts = accMgr.accounts.filter(a => a.id !== id);
-            localStorage.removeItem(`ALPHATRADE_MANUAL_DATA_${id}`);
-            if (id === 'default') localStorage.removeItem(`ALPHATRADE_MANUAL_DATA`);
-            
-            if (accMgr.currentId === id) {
-                accMgr.currentId = accMgr.accounts[0].id;
-                saveAccountManager();
-                location.reload(); // 切換主帳戶時為求安全徹底，進行 reload
-            } else {
-                saveAccountManager();
-                updateAccountUI();
-                accMgrBackToList();
-                openAccountModal();
-            }
-        } else {
-            btn.dataset.confirm = 'true';
-            btn.innerText = '確認刪除？(不可逆)';
-            btn.style.background = 'var(--color-sell)';
-            btn.style.color = '#fff';
-            clearTimeout(deleteConfirmTimer);
-            deleteConfirmTimer = setTimeout(() => {
-                if(btn) {
-                    btn.dataset.confirm = 'false';
-                    btn.innerText = '刪除帳戶';
-                    btn.style.background = 'rgba(255,69,96,0.1)';
-                    btn.style.color = 'var(--color-sell)';
-                }
-            }, 3000);
-        }
-    }
-
-    // --- 切換帳戶邏輯 (熱切換 Hot Swap) ---
-    function initiateAccountSwitch(id) {
-        if (id === accMgr.currentId) return;
-        const targetAcc = accMgr.accounts.find(a => a.id === id);
-        closeAccountModal();
-        document.getElementById('sb-acc-toggle').classList.remove('active');
-        document.getElementById('sb-acc-dropdown').classList.remove('show');
-        
-        if (targetAcc.password) {
-            pendingSwitchId = id;
-            document.getElementById('lock-screen-close').style.display = 'block'; // 允許取消切換
-            document.getElementById('lock-account-name').innerText = `解鎖帳戶: ${targetAcc.name}`;
-            document.getElementById('lock-screen').classList.add('active');
-            document.getElementById('lock-password').focus();
-        } else {
-            executeAccountSwitch(id);
-        }
-    }
-
-    function cancelSwitchAccount() {
-        pendingSwitchId = null;
-        document.getElementById('lock-screen').classList.remove('active');
-        document.getElementById('lock-password').value = '';
-    }
-
-    function unlockAccount() {
-        const checkId = pendingSwitchId || accMgr.currentId;
-        const acc = accMgr.accounts.find(a => a.id === checkId);
-        const inputPwd = document.getElementById('lock-password').value;
-        
-        if (acc.password === inputPwd) {
-            document.getElementById('lock-screen').classList.remove('active');
-            document.getElementById('lock-password').value = '';
-            
-            if (pendingSwitchId) {
-                executeAccountSwitch(pendingSwitchId);
-            } else {
-                startApp();
-            }
-        } else {
-            alert("密碼錯誤，請重試！");
-            document.getElementById('lock-password').value = '';
-        }
-    }
-
-    function executeAccountSwitch(id) {
-        const newAcc = accMgr.accounts.find(a => a.id === id);
-        accMgr.currentId = id;
-        saveAccountManager();
-        pendingSwitchId = null;
-
-        // 清理 AI 視窗
-        document.getElementById('chat-output').innerHTML = `<span style="color: rgba(255,255,255,0.4)">[SYSTEM]</span> 帳戶已切換，重新連線中...<br>`;
-        
-        // 重新讀取新帳號資料與重繪UI
-        initData();
-        updateAccountUI();
-        updateAllViews(true);
-        fetchStockHistoryData(currentTicker, true);
-        
-        triggerDynamicFeedback(`已無縫切換至 ${newAcc.name}`, 'gray');
-    }
-
-    // ==========================================
-
-    async function checkDividends(manual = false) {
-        if (manual) {
-            document.getElementById('btn-dividend').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 結算中...';
-            document.getElementById('btn-dividend').disabled = true;
-        }
-        
-        const allTickers = [...new Set(state.ledger.map(r => r.ticker).filter(t => t))];
-        let newDividendsCount = 0;
-        let totalDividendTWD = 0;
-
-        for (let ticker of allTickers) {
-            try {
-                const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=10y&interval=1d&events=div`)}`;
-                const res = await fetch(proxyUrl, { cache: "no-store" });
+    async function fetchExchangeRate() {
+        try {
+            const res = await fetch(`${myProxy}${encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/TWD=X')}`, { cache: "no-store" });
+            if (res.ok) {
                 const json = await res.json();
-                
-                if (json.chart.result[0].events && json.chart.result[0].events.dividends) {
-                    const divs = json.chart.result[0].events.dividends;
-                    const ascLedger = [...state.ledger].sort((a,b) => a.timestamp - b.timestamp);
-                    
-                    for (let ts in divs) {
-                        const divTs = parseInt(ts) * 1000;
-                        const amount = divs[ts].amount;
-                        
-                        const alreadyPaid = state.ledger.some(r => r.action === 'DIVIDEND' && r.ticker === ticker && r.timestamp === divTs);
-                        if (alreadyPaid) continue;
-                        
-                        let sharesAtDiv = 0;
-                        for (let r of ascLedger) {
-                            if (r.timestamp < divTs) { 
-                                if (r.ticker === ticker) {
-                                    if (r.action === 'BUY') sharesAtDiv += r.shares;
-                                    if (r.action === 'SELL') sharesAtDiv -= r.shares;
-                                }
-                            } else {
-                                break;
-                            }
-                        }
-                        
-                        if (sharesAtDiv > 0) {
-                            const rate = getCurrencyMultiplier(ticker);
-                            const taxRate = (ticker.includes('.TW') || ticker.includes('.TWO')) ? 0 : 0.3; 
-                            const grossTotal = sharesAtDiv * amount;
-                            const netTotal = grossTotal * (1 - taxRate);
-                            const twdTotal = netTotal * rate;
-                            
-                            state.ledger.push({
-                                time: getFullFormattedTimeFromDate(divTs),
-                                timestamp: divTs,
-                                action: 'DIVIDEND',
-                                ticker: ticker,
-                                price: amount,
-                                shares: sharesAtDiv,
-                                fee: grossTotal * taxRate * rate,
-                                total: twdTotal,
-                                realizedPnL: null,
-                                rate: rate
-                            });
-                            newDividendsCount++;
-                            totalDividendTWD += twdTotal;
-                        }
-                    }
+                if (json.chart.result[0].meta.regularMarketPrice) {
+                    currentUSDTWD = json.chart.result[0].meta.regularMarketPrice;
                 }
-            } catch (e) { console.error('Dividend check failed', e); }
-        }
+            }
+        } catch (e) {}
+    }
+
+    async function fetchHoldingsPrices() {
+        const tickers = Object.keys(state.holdings);
+        if (tickers.length === 0) return;
         
-        if (newDividendsCount > 0) {
-            state.ledger.sort((a, b) => b.timestamp - a.timestamp);
-            let result = recalculateState(state.ledger);
-            state.cash = result.cash;
-            state.holdings = result.holdings;
-            rebuildNavHistoryFromLedger();
-            saveData();
-            triggerDynamicFeedback(`成功補發 ${newDividendsCount} 筆股息，共 $${Math.floor(totalDividendTWD).toLocaleString()}`, 'buy', null, "股息發放");
-        } else {
-            if (manual) triggerDynamicFeedback(`目前沒有未結算的股息`, 'gray', null, "無未派發股息");
-        }
-        
-        if (manual) {
-            document.getElementById('btn-dividend').innerHTML = '手動結算';
-            document.getElementById('btn-dividend').disabled = false;
-        }
+        const promises = tickers.map(async (t) => {
+            try {
+                const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${t}?range=1d&interval=1d`)}`;
+                const res = await fetch(proxyUrl, { cache: "no-store" });
+                if (res.ok) {
+                    const json = await res.json();
+                    const price = json.chart.result[0].meta.regularMarketPrice;
+                    if (price) globalPriceCache[t] = price;
+                }
+            } catch (e) {}
+        });
+
+        await Promise.all(promises);
+    }
+
+    function getCurrencyMultiplier(ticker) {
+        return (ticker.endsWith('.TW') || ticker.endsWith('.TWO')) ? 1 : currentUSDTWD;
+    }
+
+    function getFullFormattedTimeFromDate(timestamp) {
+        let d = new Date(timestamp);
+        return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    }
+    
+    function getShortFormattedTimeFromDate(timestamp) {
+        let d = new Date(timestamp);
+        return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
     }
 
     function handleHourInput(el) {
@@ -1359,6 +1038,243 @@
     };
     Chart.register(smoothCrosshairPlugin);
 
+    const DATA_KEY = "ALPHATRADE_MANUAL_DATA";
+    let state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] } };
+    let currentTicker = localStorage.getItem('LAST_SELECTED_TICKER') || "NVDA";
+
+    // ============================================================
+    // 👤 多帳號管理系統
+    // 每個帳號各自擁有獨立的 localStorage 資料鍵（storageKey），
+    // 預設帳號沿用原本的 DATA_KEY，確保舊資料無痛升級、不遺失。
+    // ============================================================
+    const ACCOUNTS_META_KEY = "ALPHATRADE_ACCOUNTS";
+    const ACTIVE_ACCOUNT_KEY = "ALPHATRADE_ACTIVE_ACCOUNT_ID";
+    let ACCOUNTS = [];
+    let activeAccountId = null;
+
+    function generateAccountId() { return 'acc_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8); }
+
+    function loadAccountsMeta() {
+        try {
+            const saved = localStorage.getItem(ACCOUNTS_META_KEY);
+            if (saved) ACCOUNTS = JSON.parse(saved);
+        } catch(e) { ACCOUNTS = []; }
+
+        if (!Array.isArray(ACCOUNTS) || ACCOUNTS.length === 0) {
+            ACCOUNTS = [{ id: 'default', name: '主帳戶', storageKey: DATA_KEY, hasPassword: false, passwordHash: null, createdAt: Date.now() }];
+            saveAccountsMeta();
+        }
+
+        activeAccountId = localStorage.getItem(ACTIVE_ACCOUNT_KEY);
+        if (!activeAccountId || !ACCOUNTS.find(a => a.id === activeAccountId)) {
+            activeAccountId = ACCOUNTS[0].id;
+            localStorage.setItem(ACTIVE_ACCOUNT_KEY, activeAccountId);
+        }
+    }
+
+    function saveAccountsMeta() { localStorage.setItem(ACCOUNTS_META_KEY, JSON.stringify(ACCOUNTS)); }
+    function getActiveAccount() { return ACCOUNTS.find(a => a.id === activeAccountId) || ACCOUNTS[0]; }
+
+    async function hashPassword(pwd) {
+        try {
+            const enc = new TextEncoder().encode('AT_SALT_' + pwd);
+            const buf = await crypto.subtle.digest('SHA-256', enc);
+            return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+        } catch(e) {
+            let h = 0; for (let i = 0; i < pwd.length; i++) { h = (h * 31 + pwd.charCodeAt(i)) | 0; }
+            return 'fb_' + h;
+        }
+    }
+
+    // --- 通用密碼彈窗（設定新密碼時 needConfirm=true 需輸入兩次；驗證密碼時提供 onSubmit 做比對）---
+    function openPasswordModal({ title, desc, needConfirm = false, onSubmit = null }) {
+        return new Promise((resolve) => {
+            const overlay = document.getElementById('password-modal-overlay');
+            const input1 = document.getElementById('password-modal-input');
+            const input2 = document.getElementById('password-modal-input2');
+            const errorEl = document.getElementById('password-modal-error');
+            const errorText = document.getElementById('password-modal-error-text');
+            const confirmBtn = document.getElementById('password-modal-confirm');
+            const cancelBtn = document.getElementById('password-modal-cancel');
+
+            document.getElementById('password-modal-title').innerHTML = `<i class="fa-solid fa-lock" style="color:var(--color-acc)"></i> ${title}`;
+            document.getElementById('password-modal-desc').innerText = desc || '';
+            input1.value = ''; input2.value = ''; errorEl.style.display = 'none';
+            input2.style.display = needConfirm ? 'block' : 'none';
+            overlay.style.display = 'flex';
+            setTimeout(() => input1.focus(), 60);
+
+            function cleanup(result) {
+                overlay.style.display = 'none';
+                confirmBtn.removeEventListener('click', onConfirm);
+                cancelBtn.removeEventListener('click', onCancel);
+                input1.removeEventListener('keydown', onKeydown);
+                input2.removeEventListener('keydown', onKeydown);
+                resolve(result);
+            }
+            function onCancel() { cleanup(null); }
+            async function onConfirm() {
+                const val1 = input1.value, val2 = input2.value;
+                if (!val1) { errorText.innerText = "請輸入密碼"; errorEl.style.display = 'block'; return; }
+                if (needConfirm && val1 !== val2) { errorText.innerText = "兩次輸入的密碼不一致"; errorEl.style.display = 'block'; input2.value=''; input2.focus(); return; }
+                if (onSubmit) {
+                    const ok = await onSubmit(val1);
+                    if (ok === false) { errorText.innerText = "密碼錯誤"; errorEl.style.display = 'block'; input1.value = ''; input1.focus(); return; }
+                }
+                cleanup(val1);
+            }
+            function onKeydown(e) { if (e.key === 'Enter') onConfirm(); }
+            confirmBtn.addEventListener('click', onConfirm);
+            cancelBtn.addEventListener('click', onCancel);
+            input1.addEventListener('keydown', onKeydown);
+            input2.addEventListener('keydown', onKeydown);
+        });
+    }
+
+    async function verifyAccountPassword(acc) {
+        const result = await openPasswordModal({
+            title: `輸入「${acc.name}」的密碼`, desc: '此帳號已設定密碼保護',
+            onSubmit: async (val) => (await hashPassword(val)) === acc.passwordHash
+        });
+        return result !== null;
+    }
+
+    async function setAccountPassword(accountId) {
+        const acc = ACCOUNTS.find(a => a.id === accountId); if (!acc) return;
+        const val = await openPasswordModal({ title: `為「${acc.name}」設定密碼`, desc: '請輸入並確認新密碼（之後切換至此帳號需要輸入）', needConfirm: true });
+        if (val === null) return;
+        acc.passwordHash = await hashPassword(val); acc.hasPassword = true;
+        saveAccountsMeta(); renderAccountManagerList();
+        triggerDynamicFeedback(`已為「${acc.name}」設定密碼`, 'buy', null, null);
+    }
+
+    async function removeAccountPassword(accountId) {
+        const acc = ACCOUNTS.find(a => a.id === accountId); if (!acc || !acc.hasPassword) return;
+        const ok = await verifyAccountPassword(acc); if (!ok) return;
+        acc.hasPassword = false; acc.passwordHash = null;
+        saveAccountsMeta(); renderAccountManagerList();
+        triggerDynamicFeedback(`已移除「${acc.name}」的密碼保護`, 'gray', null, null);
+    }
+
+    // --- 帳號 CRUD ---
+    function createAccount() {
+        const nameInput = document.getElementById('new-account-name');
+        let name = nameInput.value.trim();
+        if (!name) name = `帳戶 ${ACCOUNTS.length + 1}`;
+        const id = generateAccountId(), storageKey = `ALPHATRADE_DATA_${id}`;
+        ACCOUNTS.push({ id, name, storageKey, hasPassword: false, passwordHash: null, createdAt: Date.now() });
+        saveAccountsMeta();
+
+        const freshState = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] } };
+        localStorage.setItem(storageKey, JSON.stringify(freshState));
+
+        nameInput.value = '';
+        renderAccountManagerList();
+        triggerDynamicFeedback(`已建立新帳號：${name}`, 'buy', null, null);
+    }
+
+    function renameAccount(accountId) {
+        const acc = ACCOUNTS.find(a => a.id === accountId); if (!acc) return;
+        const newName = prompt("請輸入新的帳號名稱：", acc.name);
+        if (newName === null) return;
+        const trimmed = newName.trim(); if (!trimmed) return;
+        acc.name = trimmed; saveAccountsMeta(); renderAccountManagerList();
+    }
+
+    async function deleteAccount(accountId) {
+        const acc = ACCOUNTS.find(a => a.id === accountId); if (!acc) return;
+        if (ACCOUNTS.length <= 1) { alert("至少須保留一個帳號，無法註銷！"); return; }
+        if (acc.hasPassword) { const ok = await verifyAccountPassword(acc); if (!ok) return; }
+        if (!confirm(`確定要註銷帳號「${acc.name}」嗎？\n此帳號的所有現金、持倉、交易與股息紀錄將被永久刪除，且無法復原！`)) return;
+
+        localStorage.removeItem(acc.storageKey);
+        ACCOUNTS = ACCOUNTS.filter(a => a.id !== accountId);
+        saveAccountsMeta();
+
+        if (activeAccountId === accountId) {
+            activeAccountId = null;
+            await switchAccount(ACCOUNTS[0].id);
+        } else {
+            renderAccountManagerList();
+        }
+        triggerDynamicFeedback(`已註銷帳號：${acc.name}`, 'sell', null, null);
+    }
+
+    async function switchAccount(accountId) {
+        if (accountId === activeAccountId) return;
+        const target = ACCOUNTS.find(a => a.id === accountId); if (!target) return;
+
+        if (target.hasPassword) { const ok = await verifyAccountPassword(target); if (!ok) return; }
+
+        activeAccountId = target.id;
+        localStorage.setItem(ACTIVE_ACCOUNT_KEY, activeAccountId);
+
+        loadAccountState();
+        updateLiveNavNode();
+        rebuildNavHistoryFromLedger();
+        updateAllViews(true);
+        renderCards();
+        renderRecentTickers();
+        renderAccountManagerList();
+
+        fetchHoldingsPrices().then(() => { updateLiveNavNode(); updateAllViews(true); });
+        fetchAllCardsData();
+        checkDividendsIfDue();
+
+        triggerDynamicFeedback(`已切換至帳號：${target.name}`, 'buy', null, null);
+    }
+
+    function updateSettingsAccountLabel() {
+        const el = document.getElementById('settings-current-account-name');
+        if (el) { const acc = getActiveAccount(); el.innerText = acc ? acc.name : '--'; }
+    }
+
+    function renderAccountManagerList() {
+        updateSettingsAccountLabel();
+        const container = document.getElementById('accounts-list-container');
+        if (!container) return;
+        container.innerHTML = ACCOUNTS.map(acc => {
+            const isActive = acc.id === activeAccountId;
+            return `<div class="glass-panel account-row ${isActive ? 'active-account' : ''}">
+                <div style="display:flex; flex-direction:column; gap:4px; min-width:140px;">
+                    <div style="font-weight:bold; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                        <span>${acc.name}</span>
+                        ${isActive ? '<span style="font-size:10px; background:rgba(0,212,255,0.15); color:var(--color-acc); padding:2px 6px; border-radius:4px; font-weight:bold;">使用中</span>' : ''}
+                        ${acc.hasPassword ? '<i class="fa-solid fa-lock" style="color:#888; font-size:11px;" title="已設定密碼"></i>' : ''}
+                    </div>
+                    <div style="font-size:10px; color:#666;">建立於 ${new Date(acc.createdAt).toLocaleDateString()}</div>
+                </div>
+                <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
+                    ${!isActive ? `<button class="account-action-btn accent" onclick="switchAccount('${acc.id}')">切換</button>` : ''}
+                    <button class="account-action-btn" onclick="renameAccount('${acc.id}')">重新命名</button>
+                    ${acc.hasPassword
+                        ? `<button class="account-action-btn" onclick="removeAccountPassword('${acc.id}')">移除密碼</button>`
+                        : `<button class="account-action-btn" onclick="setAccountPassword('${acc.id}')">設定密碼</button>`}
+                    <button class="account-action-btn danger" onclick="deleteAccount('${acc.id}')">註銷</button>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    // 獨立管理主儀表板與下單櫃檯的範圍狀態，解決互相干擾問題
+    let currentRange = '1M', mCurrentRange = '1M';
+    let currentRealPrice = null, isPriceLoading = true, searchDebounceTimer = null, desktopChartMode = 'NAV', tradeMode = 'BUY';
+    let stockHistData = { labels: [], prices: [], ohlc: [] }, cardsDataCache = {}, isCardEditMode = false;
+
+    const RANGE_MAP = {
+        'LINE': [
+            { label: '1D', range: '1d', interval: '5m' }, { label: '1W', range: '5d', interval: '15m' }, { label: '1M', range: '1mo', interval: '1d' },
+            { label: '3M', range: '3mo', interval: '1d' }, { label: '1Y', range: '1y', interval: '1d' }, { label: 'All', range: '5y', interval: '1wk' }
+        ],
+        'KLINE': {
+            '5m': [ {label:'1D', range:'1d'}, {label:'5D', range:'5d'}, {label:'1M', range:'1mo'} ],
+            '15m': [ {label:'1D', range:'1d'}, {label:'5D', range:'5d'}, {label:'1M', range:'1mo'} ],
+            '1d': [ {label:'1M', range:'1mo'}, {label:'3M', range:'3mo'}, {label:'6M', range:'6mo'}, {label:'1Y', range:'1y'}, {label:'All', range:'5y'} ],
+            '1wk': [ {label:'1Y', range:'1y'}, {label:'2Y', range:'2y'}, {label:'All', range:'max'} ],
+            '1mo': [ {label:'1Y', range:'1y'}, {label:'5Y', range:'5y'}, {label:'All', range:'max'} ]
+        }
+    };
+
     function updateChartSettingsUI() {
         const type = document.getElementById("cfg-chart-type").value;
         document.getElementById("setting-kline-interval").style.display = type === 'KLINE' ? 'flex' : 'none';
@@ -1369,12 +1285,15 @@
         const interval = document.getElementById("cfg-kline-interval").value;
         const isNav = desktopChartMode === 'NAV';
 
+        // 1. Desktop Dashboard buttons (tf-group)
         let deskBtns = (isNav || type === 'LINE') ? RANGE_MAP['LINE'] : RANGE_MAP['KLINE'][interval];
         if (!deskBtns.find(b => b.label === currentRange)) currentRange = deskBtns[0].label;
         
         document.getElementById('tf-group').innerHTML = `<div class="tf-active-bg" id="tf-active-bg"></div>` + 
             deskBtns.map(b => `<button class="tf-btn ${b.label === currentRange ? 'active' : ''}" data-label="${b.label}">${b.label}</button>`).join('');
 
+        // 2. Mobile Trade Panel buttons (m-tf-group) 
+        // Always depends on user KLINE setting, regardless of Dashboard's NAV mode
         let mobBtns = (type === 'LINE') ? RANGE_MAP['LINE'] : RANGE_MAP['KLINE'][interval];
         if (!mobBtns.find(b => b.label === mCurrentRange)) mCurrentRange = mobBtns[0].label;
         
@@ -1420,12 +1339,79 @@
         });
     }
 
-    function initData() {
-        const saved = localStorage.getItem(getCurrentDataKey());
+    function updateLiveNavNode() {
+        if (!state.navHistory || !state.navHistory.timestamps || state.navHistory.timestamps.length === 0) return;
+        let holdingsVal = 0;
+        for(let t in state.holdings) {
+            const rate = getCurrencyMultiplier(t);
+            let price = globalPriceCache[t] || (t === currentTicker && currentRealPrice !== null ? currentRealPrice : state.holdings[t].avgPrice);
+            holdingsVal += state.holdings[t].shares * price * rate;
+        }
+        const now = Date.now();
+        const lastIdx = state.navHistory.timestamps.length - 1;
+        state.navHistory.timestamps[lastIdx] = now;
+        state.navHistory.labels[lastIdx] = getShortFormattedTimeFromDate(now);
+        state.navHistory.data[lastIdx] = state.cash + holdingsVal;
+    }
+
+    function rebuildNavHistoryFromLedger() {
+        let tempCash = 1000000, tempHoldings = {}, newTimestamps = [], newLabels = [], newData = [];
+        let reversedLedger = [...state.ledger].sort((a,b) => a.timestamp - b.timestamp);
+
+        if (reversedLedger.length > 0) {
+            let t0 = reversedLedger[0].timestamp - 60000;
+            newTimestamps.push(t0); newLabels.push(getShortFormattedTimeFromDate(t0)); newData.push(1000000);
+        }
+
+        reversedLedger.forEach(r => {
+            let rate = r.rate || 1;
+            if (r.ticker && !r.ticker.includes('.TW') && !r.rate) rate = 32.5; 
+            
+            if (r.action === 'BUY') {
+                tempCash -= r.total;
+                if (!tempHoldings[r.ticker]) tempHoldings[r.ticker] = { shares: 0, avgPrice: 0 };
+                let h = tempHoldings[r.ticker], origTotalSpend = r.origTotalSpend || (r.total / rate);
+                h.avgPrice = ((h.shares * h.avgPrice) + origTotalSpend) / (h.shares + r.shares); h.shares += r.shares;
+            } else if (r.action === 'SELL') {
+                if(tempHoldings[r.ticker]) {
+                    tempCash += r.total; tempHoldings[r.ticker].shares -= r.shares;
+                    if (tempHoldings[r.ticker].shares <= 0) delete tempHoldings[r.ticker];
+                }
+            }
+
+            let holdingsVal = 0;
+            for(let t in tempHoldings) {
+                let rateT = (t.endsWith('.TW') || t.endsWith('.TWO')) ? 1 : currentUSDTWD;
+                let priceToUse = (t === r.ticker) ? r.price : tempHoldings[t].avgPrice;
+                holdingsVal += tempHoldings[t].shares * priceToUse * rateT;
+            }
+
+            newTimestamps.push(r.timestamp); newLabels.push(getShortFormattedTimeFromDate(r.timestamp)); newData.push(tempCash + holdingsVal);
+        });
+
+        let currentHoldingsVal = 0;
+        for(let t in state.holdings) {
+            let rateT = (t.endsWith('.TW') || t.endsWith('.TWO')) ? 1 : currentUSDTWD;
+            let price = globalPriceCache[t] || (t === currentTicker && currentRealPrice !== null ? currentRealPrice : state.holdings[t].avgPrice);
+            currentHoldingsVal += state.holdings[t].shares * price * rateT;
+        }
+        let now = Date.now();
+        newTimestamps.push(now); newLabels.push(getShortFormattedTimeFromDate(now)); newData.push(state.cash + currentHoldingsVal);
+        state.navHistory = { timestamps: newTimestamps, labels: newLabels, data: newData };
+    }
+
+    function loadAccountState() {
+        const storageKey = getActiveAccount().storageKey;
+        const saved = localStorage.getItem(storageKey);
         if (saved) { 
             try { 
                 state = JSON.parse(saved); 
                 state.cardTickers = [...new Set(state.cardTickers || ["NVDA", "2330.TW"])]; 
+                state.recentTickers = state.recentTickers || ["NVDA", "2330.TW"];
+                state.holdings = state.holdings || {};
+                state.ledger = state.ledger || [];
+                state.dividends = state.dividends || [];
+                state.lastDividendCheck = state.lastDividendCheck || 0;
                 state.ledger.forEach(r => {
                     if (!r.timestamp) {
                         let d = new Date(), parts = r.time ? r.time.split(':') : [];
@@ -1435,7 +1421,15 @@
                 state.ledger.sort((a, b) => b.timestamp - a.timestamp);
                 if (!state.navHistory || !state.navHistory.timestamps || state.navHistory.timestamps.length === 0) { rebuildNavHistoryFromLedger(); }
             } catch(e) {} 
-        } else { rebuildNavHistoryFromLedger(); saveData(); }
+        } else {
+            state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] } };
+            rebuildNavHistoryFromLedger(); saveData();
+        }
+        updateLastDividendCheckLabel();
+    }
+
+    function initData() {
+        loadAccountState();
         
         const savedChartType = localStorage.getItem('SETTING_CHART_TYPE'); 
         document.getElementById("cfg-chart-type").value = savedChartType ? savedChartType : 'KLINE';
@@ -1460,11 +1454,12 @@
         initTimeMachineDefault(); renderRecentTickers(); renderCards();
     }
     
-    function saveData() { localStorage.setItem(getCurrentDataKey(), JSON.stringify(state)); updateAllViews(true); renderCards(); }
+    function saveData() { localStorage.setItem(getActiveAccount().storageKey, JSON.stringify(state)); updateAllViews(true); renderCards(); }
+    function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { localStorage.removeItem(getActiveAccount().storageKey); state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] } }; initData(); fetchStockHistoryData(currentTicker, true); } }
 
     function exportData() {
         const dataStr = JSON.stringify(state, null, 2), blob = new Blob([dataStr], { type: "application/json" }), url = URL.createObjectURL(blob), a = document.createElement("a");
-        const date = new Date().toISOString().slice(0, 10).replace(/-/g, ""); a.href = url; a.download = `AlphaTrade_${accMgr.currentId}_${date}.json`;
+        const date = new Date().toISOString().slice(0, 10).replace(/-/g, ""); a.href = url; a.download = `AlphaTrade_Backup_${date}.json`;
         document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
         triggerDynamicFeedback("已成功匯出備份檔案", "buy", null, "EXPORTED");
     }
@@ -1495,6 +1490,7 @@
         const now = new Date();
         const genTime = getFullFormattedTimeFromDate(now.getTime());
 
+        // 計算帳戶總覽（邏輯與 updateAllViews 一致）
         let holdingsVal = 0, totalCost = 0;
         const holdingTickers = Object.keys(state.holdings);
         holdingTickers.forEach(t => {
@@ -1512,8 +1508,7 @@
 
         const DIV = "----------------------------------------";
         let lines = [];
-        const currentAccName = accMgr.accounts.find(a=>a.id===accMgr.currentId).name;
-        lines.push(`【帳戶總覽】${currentAccName}`);
+        lines.push("【帳戶總覽】");
         lines.push(DIV);
         lines.push(`總資產淨值 (NAV):   $ ${Math.floor(nav).toLocaleString()}`);
         lines.push(`現金餘額:           $ ${Math.floor(state.cash).toLocaleString()}`);
@@ -1551,14 +1546,14 @@
         } else {
             state.ledger.forEach(r => {
                 const displayTime = r.timestamp ? getFullFormattedTimeFromDate(r.timestamp) : r.time;
-                const actionText = r.action === 'BUY' ? '買進' : (r.action === 'SELL' ? '賣出' : '股息');
+                const actionText = r.action === 'BUY' ? '買進' : '賣出';
                 const pnlText = (r.realizedPnL !== null && r.realizedPnL !== undefined)
                     ? `${r.realizedPnL >= 0 ? '+' : ''}$${Math.floor(r.realizedPnL).toLocaleString()}`
                     : "-";
                 lines.push(`[${displayTime}] ${actionText} ${r.ticker}`);
                 lines.push(`  成交均價: $${r.price.toFixed(2)}　股數: ${r.shares}`);
                 lines.push(`  手續費/稅: $${r.fee.toFixed(1)}`);
-                lines.push(`  交割金額(TWD): ${r.action === 'DIVIDEND' ? '+' : ''}$${Math.floor(r.total).toLocaleString()}`);
+                lines.push(`  交割金額(TWD): $${Math.floor(r.total).toLocaleString()}`);
                 lines.push(`  已實現損益(TWD): ${pnlText}`);
                 lines.push(DIV);
             });
@@ -1588,8 +1583,6 @@
                 tempCash += r.total; let h = tempHoldings[r.ticker], costBasisTWD = r.shares * h.avgPrice * rate;
                 r.realizedPnL = r.total - costBasisTWD; h.shares -= r.shares;
                 if (h.shares === 0) delete tempHoldings[r.ticker];
-            } else if (r.action === 'DIVIDEND') {
-                tempCash += r.total;
             }
         }
         return { cash: tempCash, holdings: tempHoldings, invalidSellIndices };
@@ -1926,6 +1919,7 @@
         autoFetchHistoricalPrice();
     }
 
+    // AI 迷你搜尋器的邏輯
     function toggleAiTickerDropdown() { 
         const dropdown = document.getElementById("ai-ticker-dropdown");
         dropdown.classList.toggle("show"); 
@@ -1958,6 +1952,11 @@
     });
 
     function toggleTickerDropdown() { document.getElementById("ticker-dropdown").classList.toggle("show"); }
+    document.addEventListener("click", (e) => { 
+        if(!document.getElementById("ticker-select-wrapper").contains(e.target)) document.getElementById("ticker-dropdown").classList.remove("show"); 
+        if(!document.getElementById("tm-ticker-wrapper").contains(e.target)) document.getElementById("tm-ticker-dropdown").classList.remove("show"); 
+        if(!document.getElementById("ai-ticker-wrapper").contains(e.target)) document.getElementById("ai-ticker-dropdown").classList.remove("show"); 
+    });
 
     function selectTicker(t) {
         currentTicker = t; localStorage.setItem('LAST_SELECTED_TICKER', t);
@@ -2021,6 +2020,7 @@
         
         let range, intervalStr;
 
+        // 獨立判斷當前活躍的視圖並獲取正確的圖表配置
         const isMobileTradeView = window.innerWidth <= 768 && document.getElementById('view-mobile-trade').classList.contains('active');
         let targetRangeLabel = isMobileTradeView ? mCurrentRange : currentRange;
         
@@ -2050,6 +2050,7 @@
                     arrOHLC.push({ o, h, l, c: closes[i] });
 
                     const d = new Date(timestamps[i] * 1000);
+                    // 改為1D只顯示時間不顯示日期，其餘顯示yy/mm/dd
                     if (range === '1d') {
                         arrLabels.push(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`);
                     } else {
@@ -2183,20 +2184,37 @@
                 ? `<td style="color:${r.realizedPnL >= 0 ? 'var(--color-buy)' : 'var(--color-sell)'}; font-weight:bold;">${r.realizedPnL >= 0 ? '+' : ''}$${Math.floor(r.realizedPnL).toLocaleString()}</td>`
                 : `<td style="color:#666;">-</td>`;
             const displayTime = r.timestamp ? getFullFormattedTimeFromDate(r.timestamp) : r.time;
-            
-            const badgeClass = r.action === 'BUY' ? 'badge-buy' : (r.action === 'SELL' ? 'badge-sell' : 'badge-dividend');
-            const actionText = r.action === 'DIVIDEND' ? '股息' : r.action;
-
             return `<tr>
-                <td>${displayTime}</td><td><span class="badge ${badgeClass}">${actionText}</span></td>
+                <td>${displayTime}</td><td><span class="badge ${r.action==='BUY'?'badge-buy':'badge-sell'}">${r.action}</span></td>
                 <td style="font-weight:bold;">${r.ticker}</td><td>$${r.price.toFixed(2)}</td><td>${r.shares}</td><td>$${r.fee.toFixed(1)}</td>
-                <td style="font-weight:bold; color:${r.action === 'DIVIDEND' ? 'var(--color-acc)' : '#fff'};">${r.action === 'DIVIDEND' ? '+' : ''}$${Math.floor(r.total).toLocaleString()}</td>${pnlHtml}
+                <td style="font-weight:bold;">$${Math.floor(r.total).toLocaleString()}</td>${pnlHtml}
                 <td><button onclick="undoTrade(${index})" style="background:rgba(255,69,96,0.15); color:var(--color-sell); border:1px solid rgba(255,69,96,0.3); padding:4px 10px; border-radius:4px; cursor:pointer; font-weight:bold; font-size:11px; transition:all 0.2s;">撤銷</button></td>
             </tr>`;
         }).join("") : `<tr><td colspan="9" style="text-align:center; color:#555; padding:40px;">尚無紀錄</td></tr>`;
         
         renderAllCharts(animate);
     }
+
+    const chartTooltipConfig = {
+        enabled: true, mode: 'index', intersect: false,
+        callbacks: {
+            title: function(context) { return context[0].label; },
+            label: function(context) {
+                if (context.chart.canvas.id === 'navChart' && desktopChartMode === 'NAV') { return '淨: $' + Math.floor(context.parsed.y).toLocaleString(); }
+                if (context.dataset.label === 'Wick') return null; 
+                
+                const type = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
+                
+                if (type === 'KLINE' && context.dataset.label === 'Body') {
+                    const ohlc = stockHistData.ohlc[context.dataIndex];
+                    if(ohlc) return [`開: $${ohlc.o.toFixed(2)}`, `高: $${ohlc.h.toFixed(2)}`, `低: $${ohlc.l.toFixed(2)}`, `收: $${ohlc.c.toFixed(2)}`];
+                }
+                
+                let val = context.parsed.y !== undefined ? context.parsed.y : context.raw;
+                return '價: $' + val.toFixed(2);
+            }
+        }
+    };
 
     const navChart = new Chart(document.getElementById('navChart').getContext('2d'), { 
         type: 'line', data: { labels: [], datasets: [] }, 
@@ -2205,17 +2223,7 @@
             events: ['mousedown', 'mouseup', 'mousemove', 'mouseout', 'touchstart', 'touchmove', 'touchend', 'touchcancel'], 
             interaction: { mode: 'index', intersect: false }, 
             layout: { padding: { top: 15, bottom: 15, left: 10, right: 10 } },
-            plugins: { legend: { display: false }, tooltip: { enabled: true, mode: 'index', intersect: false, callbacks: { title: function(context) { return context[0].label; }, label: function(context) {
-                if (context.chart.canvas.id === 'navChart' && desktopChartMode === 'NAV') { return '淨: $' + Math.floor(context.parsed.y).toLocaleString(); }
-                if (context.dataset.label === 'Wick') return null; 
-                const type = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
-                if (type === 'KLINE' && context.dataset.label === 'Body') {
-                    const ohlc = stockHistData.ohlc[context.dataIndex];
-                    if(ohlc) return [`開: $${ohlc.o.toFixed(2)}`, `高: $${ohlc.h.toFixed(2)}`, `低: $${ohlc.l.toFixed(2)}`, `收: $${ohlc.c.toFixed(2)}`];
-                }
-                let val = context.parsed.y !== undefined ? context.parsed.y : context.raw;
-                return '價: $' + val.toFixed(2);
-            }}} }, 
+            plugins: { legend: { display: false }, tooltip: chartTooltipConfig }, 
             scales: { x: { grid: { display: false }, offset: true }, y: { beginAtZero: false, grid: { color: 'rgba(255,255,255,0.04)' }, grace: '10%' } } 
         } 
     });
@@ -2227,16 +2235,7 @@
             events: ['mousedown', 'mouseup', 'mousemove', 'mouseout', 'touchstart', 'touchmove', 'touchend', 'touchcancel'], 
             interaction: { mode: 'index', intersect: false }, 
             layout: { padding: { top: 10, bottom: 10, left: 5, right: 5 } },
-            plugins: { legend: { display: false }, tooltip: { enabled: true, mode: 'index', intersect: false, callbacks: { title: function(context) { return context[0].label; }, label: function(context) {
-                if (context.dataset.label === 'Wick') return null; 
-                const type = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
-                if (type === 'KLINE' && context.dataset.label === 'Body') {
-                    const ohlc = stockHistData.ohlc[context.dataIndex];
-                    if(ohlc) return [`開: $${ohlc.o.toFixed(2)}`, `高: $${ohlc.h.toFixed(2)}`, `低: $${ohlc.l.toFixed(2)}`, `收: $${ohlc.c.toFixed(2)}`];
-                }
-                let val = context.parsed.y !== undefined ? context.parsed.y : context.raw;
-                return '價: $' + val.toFixed(2);
-            }}} }, 
+            plugins: { legend: { display: false }, tooltip: chartTooltipConfig }, 
             scales: { 
                 x: { display: false, offset: true }, 
                 y: { 
@@ -2256,13 +2255,171 @@
         } 
     });
 
+    function toggleDesktopChartMode() { 
+        desktopChartMode = (desktopChartMode === 'NAV') ? 'STOCK' : 'NAV'; 
+        document.getElementById('mode-icon').style.transform = (desktopChartMode === 'STOCK') ? 'rotate(180deg)' : 'rotate(0deg)'; 
+        updateTimeframeButtons(); 
+        fetchStockHistoryData(currentTicker, true); 
+    }
+
+    function computePointRadiusArray(dataLength, showNodes, densityVal) {
+        if (!showNodes) return new Array(dataLength).fill(0);
+        if (densityVal === 'All' || densityVal >= 60) return new Array(dataLength).fill(4);
+        const step = Math.max(1, Math.ceil(dataLength / densityVal));
+        return Array.from({ length: dataLength }, (_, i) => (i % step === 0 || i === dataLength - 1) ? 4 : 0);
+    }
+
+    function applyChartDatasets(chart, newDatasets) {
+        let replace = false;
+        if (chart.data.datasets.length !== newDatasets.length) replace = true;
+        else {
+            for (let i = 0; i < newDatasets.length; i++) {
+                if (chart.data.datasets[i].type !== newDatasets[i].type || chart.data.datasets[i].label !== newDatasets[i].label) {
+                    replace = true; break;
+                }
+            }
+        }
+        if (replace) {
+            chart.data.datasets = newDatasets;
+        } else {
+            for (let i = 0; i < newDatasets.length; i++) {
+                Object.assign(chart.data.datasets[i], newDatasets[i]);
+            }
+        }
+    }
+
+    function getStockDatasets(data, showNodes, densityVal) {
+        const chartType = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
+        
+        if (chartType === 'KLINE') {
+            const upColor = 'rgba(0, 255, 170, 0.9)';
+            const downColor = 'rgba(255, 69, 96, 0.9)';
+            
+            const colors = data.ohlc.map(d => d.c >= d.o ? upColor : downColor);
+            const borderColors = data.ohlc.map(d => d.c >= d.o ? '#00ffaa' : '#ff4560');
+            const dataBody = data.ohlc.map(d => {
+                let o = d.o, c = d.c;
+                if(Math.abs(o - c) < 0.0001) c = o + 0.01; 
+                return [o, c];
+            });
+            const dataWick = data.ohlc.map(d => [d.l, d.h]);
+
+            return [
+                { label: 'Body', type: 'bar', data: dataBody, backgroundColor: colors, borderColor: borderColors, borderWidth: 1, barPercentage: 0.8, categoryPercentage: 0.8, grouped: false, order: 2 },
+                { label: 'Wick', type: 'bar', data: dataWick, backgroundColor: borderColors, barThickness: 2, grouped: false, order: 1 } 
+            ];
+        } else {
+            return [{ label: 'Stock', type: 'line', data: data.prices, borderColor: '#00ffaa', backgroundColor: 'rgba(0, 255, 170, 0.05)', borderWidth: 1.5, tension: 0.2, fill: true, pointRadius: computePointRadiusArray(data.prices.length, showNodes, densityVal) }];
+        }
+    }
+
+    function renderAllCharts(animate = true) {
+        const showNodes = document.getElementById("cfg-node-show").checked, rawVal = document.getElementById("cfg-node-val").value, densityVal = (rawVal === 'All') ? 'All' : parseInt(rawVal) || 20;
+        const chartType = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
+        
+        const showNav = desktopChartMode === 'NAV';
+        const isMobile = window.innerWidth <= 768;
+
+        // 動態根據狀態調整 Padding、位移與坐標軸外觀 (還原 NAV 參考版樣貌與手機版需求)
+        navChart.options.layout.padding = showNav ? 0 : { top: 15, bottom: 15, left: 10, right: 10 };
+        navChart.options.scales.x.offset = !showNav;
+        navChart.options.scales.x.display = !isMobile;
+        
+        if (!navChart.options.scales.y.ticks) navChart.options.scales.y.ticks = {};
+        navChart.options.scales.y.ticks.font = { size: isMobile ? 9 : 12 };
+        navChart.options.scales.y.ticks.callback = isMobile ? function(value) {
+            if (Math.abs(value) >= 1000) return Math.round(value / 1000) + 'k';
+            return Math.round(value);
+        } : function(value) { return value.toLocaleString(); };
+
+        if (showNav) {
+            document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-area" style="color:var(--color-acc)"></i> <span class="hide-on-mobile" style="margin-left:4px;">投資組合總淨值走勢</span>`;
+            let cutoff = 0; const now = Date.now();
+            if (currentRange === '1D') cutoff = now - 86400000; 
+            else if (currentRange === '1W') cutoff = now - 86400000 * 7; 
+            else if (currentRange === '1M') cutoff = now - 86400000 * 30; 
+            else if (currentRange === '3M') cutoff = now - 86400000 * 90; 
+            else if (currentRange === '1Y') cutoff = now - 86400000 * 365;
+
+            let fLabels = [], fData = [];
+            if (state.navHistory && state.navHistory.timestamps) {
+                for (let i = 0; i < state.navHistory.timestamps.length; i++) {
+                    if (state.navHistory.timestamps[i] >= cutoff) { 
+                        let d = new Date(state.navHistory.timestamps[i]);
+                        // NAV圖表也同步1D只顯示時間，其餘yy/mm/dd的格式
+                        let label = currentRange === '1D' 
+                            ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+                            : `${String(d.getFullYear()).slice(-2)}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+                        fLabels.push(label); 
+                        fData.push(state.navHistory.data[i]); 
+                    }
+                }
+            }
+            if (fData.length === 0 && state.navHistory && state.navHistory.data && state.navHistory.data.length > 0) {
+                let lastVal = state.navHistory.data[state.navHistory.data.length - 1]; 
+                fLabels = [currentRange === '1D' ? '00:00' : 'Start', 'Now']; 
+                fData = [lastVal, lastVal];
+            } else if (fData.length === 1) { 
+                fLabels.push('Now'); fData.push(fData[0]); 
+            }
+
+            navChart.data.labels = fLabels; 
+            applyChartDatasets(navChart, [{ label: 'NAV', type: 'line', data: fData, borderColor: '#00d4ff', backgroundColor: 'rgba(0, 212, 255, 0.05)', borderWidth: 2, tension: 0.2, fill: true, pointRadius: computePointRadiusArray(fData.length, showNodes, densityVal) }]);
+        } else {
+            let titlePrefix = '個股走勢';
+            if (chartType === 'KLINE') {
+                const intv = document.getElementById("cfg-kline-interval").value;
+                const intvName = document.querySelector(`#cfg-kline-interval option[value="${intv}"]`).innerText;
+                titlePrefix = `${intvName} 走勢`;
+            }
+            document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> <span style="margin-left:4px;">${currentTicker}</span> <span class="hide-on-mobile">${titlePrefix}</span>`;
+            navChart.data.labels = stockHistData.labels;
+            applyChartDatasets(navChart, getStockDatasets(stockHistData, showNodes, densityVal));
+        }
+        
+        navChart.update(); 
+
+        document.getElementById("m-main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> <span style="margin-left:4px;">${currentTicker}</span>`;
+        mobileChart.data.labels = stockHistData.labels; 
+        const mDensity = (densityVal === 'All') ? 'All' : Math.floor(densityVal / 2);
+        applyChartDatasets(mobileChart, getStockDatasets(stockHistData, showNodes, mDensity));
+        
+        mobileChart.update();
+    }
+
+    document.getElementById("cfg-chart-type").addEventListener("change", (e) => { 
+        localStorage.setItem('SETTING_CHART_TYPE', e.target.value); 
+        updateChartSettingsUI();
+        updateTimeframeButtons();
+        fetchStockHistoryData(currentTicker, true);
+    });
+
+    document.getElementById("cfg-kline-interval").addEventListener("change", (e) => { 
+        localStorage.setItem('SETTING_KLINE_INTERVAL', e.target.value); 
+        updateTimeframeButtons();
+        fetchStockHistoryData(currentTicker, true);
+    });
+
+    document.getElementById("cfg-node-show").addEventListener("change", (e) => { localStorage.setItem('SETTING_NODE_SHOW', e.target.checked); document.getElementById("node-settings-wrapper").classList.toggle("disabled", !e.target.checked); renderAllCharts(); });
+    document.getElementById("cfg-crosshair-show").addEventListener("change", (e) => { localStorage.setItem('SETTING_CROSSHAIR_SHOW', e.target.checked); });
+    document.getElementById("cfg-node-slider").addEventListener("input", (e) => { const val = parseInt(e.target.value), displayVal = (val >= 60) ? 'All' : val; document.getElementById("cfg-node-val").value = displayVal; localStorage.setItem('SETTING_NODE_VAL', displayVal); const pct = (val - e.target.min) / (e.target.max - e.target.min); document.getElementById("jelly-thumb").style.left = `${pct * 162}px`; renderAllCharts(false); });
+
+    function parseSimpleMarkdown(text) { return text.replace(/\*\*(.*?)\*\*/g, '<strong style="color:#fff">$1</strong>').replace(/^\s*[\-\*]\s+(.*)$/gim, '• $1').replace(/\n/g, '<br>'); }
+    function quickAskAI(type) { const prompts = { 'diagnostic': `請針對 ${currentTicker} 當前的現價與 RSI 技術指標進行短線綜合體檢。`, 'risk': `請結合我目前的帳戶現金、${currentTicker} 持倉成本與當前走勢，評估整體風控與止損點設定。`, 'strategy': `考量我目前對 ${currentTicker} 的持股情況，現在適合加碼、減碼還是觀望？` }; document.getElementById("chat-input").value = prompts[type] || ""; askAI(); }
+
+    // 📒 歷史帳本功能：輸入含有 "(歷史帳本)" 標記的訊息並發送時，攔截並改為請使用者選擇時間範圍
     const LEDGER_MARKER_REGEX = /[\(（]\s*歷史帳本\s*[\)）]/;
-    let pendingLedgerQuery = null; 
+    let pendingLedgerQuery = null; // 非 null 時代表正在等待使用者於選擇器中確認時間範圍
 
     async function askAI() {
         const input = document.getElementById("chat-input");
+
+        // 若目前正等待使用者選擇歷史帳本時間範圍，這次按下發送 = 確認範圍並送出分析
         if (pendingLedgerQuery !== null) { confirmLedgerRangeAndSend(); return; }
+
         const q = input.value.trim(); if(!q) return;
+
+        // 偵測到「(歷史帳本)」標記：攔截本次發送，改為顯示時間範圍選擇器
         if (LEDGER_MARKER_REGEX.test(q)) { openLedgerRangePicker(q); return; }
 
         let key = localStorage.getItem("MY_GEMINI_KEY") || prompt("請輸入 Gemini API Key："); if(!key) return; localStorage.setItem("MY_GEMINI_KEY", key);
@@ -2277,6 +2434,7 @@
         await callGeminiAPI(fullPrompt, msgId, out, key);
     }
 
+    // 實際呼叫 Gemini API 並將結果渲染到指定訊息節點（一般提問與歷史帳本分析共用）
     async function callGeminiAPI(fullPrompt, msgId, out, key) {
         try {
             const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${key}`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ contents: [{ parts: [{ text: fullPrompt }] }] }) });
@@ -2284,6 +2442,8 @@
             document.getElementById(msgId).innerHTML = `<span style="color:var(--color-acc)">[GEMINI]</span> <span style="color:#ddd">${parseSimpleMarkdown(rawReply)}</span>`;
         } catch(e) { document.getElementById(msgId).innerHTML = `<span style="color:var(--color-sell)">連線失敗或 Key 無效</span>`; } out.scrollTop = out.scrollHeight;
     }
+
+    // ---- 歷史帳本時間範圍選擇器 ----
 
     function formatDateForInput(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 
@@ -2297,6 +2457,8 @@
     function openLedgerRangePicker(originalQuestion) {
         pendingLedgerQuery = originalQuestion;
         setLedgerPickerLockUI(true);
+
+        // 預設帶入最近 30 天
         setLedgerRangePreset('30d');
         document.getElementById("ledger-range-picker").style.display = "flex";
     }
@@ -2308,7 +2470,7 @@
         else if (preset === '7d') start = new Date(now.getTime() - 6 * 86400000);
         else if (preset === 'month') start = new Date(now.getFullYear(), now.getMonth(), 1);
         else if (preset === 'all') start = new Date(2000, 0, 1);
-        else start = new Date(now.getTime() - 29 * 86400000); 
+        else start = new Date(now.getTime() - 29 * 86400000); // 預設 30 天
 
         document.getElementById("lr-start-date").value = formatDateForInput(start);
         document.getElementById("lr-end-date").value = formatDateForInput(now);
@@ -2318,7 +2480,7 @@
     }
 
     function onLedgerRangeDateChange() {
-        document.querySelectorAll(".lr-preset-btn").forEach(b => b.classList.remove("active")); 
+        document.querySelectorAll(".lr-preset-btn").forEach(b => b.classList.remove("active")); // 手動調整日期後取消預設按鈕的高亮
         updateLedgerMatchCount();
     }
 
@@ -2358,10 +2520,11 @@
 
         let filtered = state.ledger.filter(r => r.timestamp >= range.startTs && r.timestamp <= range.endTs).sort((a, b) => b.timestamp - a.timestamp);
         const totalMatched = filtered.length;
-        const MAX_TRADES = 300; 
+        const MAX_TRADES = 300; // 避免單次夾帶過多交易紀錄導致 prompt 過大
         let truncated = false;
         if (filtered.length > MAX_TRADES) { filtered = filtered.slice(0, MAX_TRADES); truncated = true; }
 
+        // 關閉並重置時間範圍選擇器 UI
         pendingLedgerQuery = null;
         document.getElementById("ledger-range-picker").style.display = "none";
         setLedgerPickerLockUI(false);
@@ -2380,14 +2543,14 @@
         } else {
             filteredLedger.forEach(r => {
                 const displayTime = r.timestamp ? getFullFormattedTimeFromDate(r.timestamp) : r.time;
-                const actionText = r.action === 'BUY' ? '買進' : (r.action === 'SELL' ? '賣出' : '股息');
+                const actionText = r.action === 'BUY' ? '買進' : '賣出';
                 const pnlText = (r.realizedPnL !== null && r.realizedPnL !== undefined)
                     ? `${r.realizedPnL >= 0 ? '+' : ''}$${Math.floor(r.realizedPnL).toLocaleString()}`
                     : "-";
                 lines.push(`[${displayTime}] ${actionText} ${r.ticker}`);
                 lines.push(`  成交均價: $${r.price.toFixed(2)}　股數: ${r.shares}`);
                 lines.push(`  手續費/稅: $${r.fee.toFixed(1)}`);
-                lines.push(`  交割金額(TWD): ${r.action === 'DIVIDEND' ? '+' : ''}$${Math.floor(r.total).toLocaleString()}`);
+                lines.push(`  交割金額(TWD): $${Math.floor(r.total).toLocaleString()}`);
                 lines.push(`  已實現損益(TWD): ${pnlText}`);
                 lines.push(DIV);
             });
@@ -2407,6 +2570,7 @@
         callGeminiAPI(fullPrompt, msgId, out, key);
     }
 
+    // 🚀 手機端極簡玻璃數字鍵盤核心邏輯
     let activeNumInput = null;
     
     function renderNumpad(allowDecimal) {
@@ -2457,42 +2621,16 @@
         if(!activeNumInput || key === '') return;
         
         let val = activeNumInput.value;
-        let start = activeNumInput.selectionStart;
-        let end = activeNumInput.selectionEnd;
-        
-        if (start === null || start === undefined) {
-            if(key === 'backspace') {
-                val = val.slice(0, -1);
-            } else {
-                if(key === '.' && val.includes('.')) return;
-                const maxlen = activeNumInput.dataset.maxlen;
-                if(maxlen && val.replace('.', '').length >= parseInt(maxlen) && key !== '.') return;
-                val += key;
-            }
+        if(key === 'backspace') {
+            val = val.slice(0, -1);
         } else {
-            if(key === 'backspace') {
-                if (start !== end) {
-                    val = val.substring(0, start) + val.substring(end);
-                } else if (start > 0) {
-                    val = val.substring(0, start - 1) + val.substring(end);
-                    start--;
-                }
-            } else {
-                if(key === '.' && val.includes('.')) {
-                    if (!(val.substring(start, end).includes('.'))) return;
-                }
-                const maxlen = activeNumInput.dataset.maxlen;
-                if(maxlen && val.replace('.', '').length - (end - start) >= parseInt(maxlen) && key !== '.') return;
-                
-                val = val.substring(0, start) + key + val.substring(end);
-                start += key.length;
-            }
+            if(key === '.' && val.includes('.')) return;
+            const maxlen = activeNumInput.dataset.maxlen;
+            if(maxlen && val.replace('.', '').length >= parseInt(maxlen) && key !== '.') return;
+            val += key;
         }
         
         activeNumInput.value = val;
-        if (start !== null && start !== undefined) {
-            activeNumInput.setSelectionRange(start, start); 
-        }
         activeNumInput.dispatchEvent(new Event('input', {bubbles: true}));
     }
 
@@ -2508,49 +2646,92 @@
         }
     }
 
-    async function bootSystem() {
-        initAccountManager();
-        
-        const currentAcc = accMgr.accounts.find(a => a.id === accMgr.currentId);
-        updateAccountUI(); 
-        
-        if (currentAcc && currentAcc.password) {
-            document.getElementById('lock-screen-close').style.display = 'none';
-            document.getElementById('lock-account-name').innerText = `解鎖帳戶: ${currentAcc.name}`;
-            document.getElementById('lock-screen').classList.add('active');
-            document.getElementById('lock-password').focus();
+    // --- 🔐 開機帳號密碼鎖定畫面 ---
+    let bootLockResolve = null;
+
+    function toggleBootLockSwitcher() {
+        const el = document.getElementById('boot-lock-switcher');
+        const showing = el.style.display === 'flex';
+        if (!showing) renderBootLockOtherAccounts();
+        el.style.display = showing ? 'none' : 'flex';
+    }
+
+    function renderBootLockOtherAccounts() {
+        const container = document.getElementById('boot-lock-switcher');
+        const others = ACCOUNTS.filter(a => a.id !== activeAccountId);
+        if (others.length === 0) { container.innerHTML = '<div style="color:#555; font-size:11px; text-align:center;">沒有其他帳號</div>'; return; }
+        container.innerHTML = others.map(a => `<button onclick="bootLockSwitchTo('${a.id}')" style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); color:#ccc; padding:9px; border-radius:6px; cursor:pointer; font-size:12px; text-align:left;">${a.hasPassword ? '<i class="fa-solid fa-lock" style="font-size:10px; margin-right:6px; color:#888;"></i>' : ''}${a.name}</button>`).join('');
+    }
+
+    async function bootLockSwitchTo(accountId) {
+        const acc = ACCOUNTS.find(a => a.id === accountId); if (!acc) return;
+        document.getElementById('boot-lock-switcher').style.display = 'none';
+        document.getElementById('boot-lock-error').style.display = 'none';
+        document.getElementById('boot-lock-input').value = '';
+
+        if (!acc.hasPassword) {
+            activeAccountId = acc.id;
+            localStorage.setItem(ACTIVE_ACCOUNT_KEY, activeAccountId);
+            document.getElementById('boot-lock-overlay').style.display = 'none';
+            if (bootLockResolve) { bootLockResolve(); bootLockResolve = null; }
         } else {
-            await startApp();
+            activeAccountId = acc.id;
+            document.getElementById('boot-lock-account-name').innerText = acc.name;
+            document.getElementById('boot-lock-input').focus();
         }
     }
-    
-    async function startApp() {
-        document.getElementById('lock-screen').classList.remove('active');
-        
-        const currentAccName = accMgr.accounts.find(a => a.id === accMgr.currentId).name;
-        document.getElementById('current-account-name-desc').innerText = `目前帳戶: ${currentAccName}`;
-        
+
+    async function gateBootWithPassword() {
+        const active = getActiveAccount();
+        if (!active || !active.hasPassword) return;
+
+        const overlay = document.getElementById('boot-lock-overlay');
+        document.getElementById('boot-lock-account-name').innerText = active.name;
+        overlay.style.display = 'flex';
+
+        await new Promise((resolve) => {
+            bootLockResolve = resolve;
+            const input = document.getElementById('boot-lock-input');
+            const errorEl = document.getElementById('boot-lock-error');
+            const btn = document.getElementById('boot-lock-confirm');
+
+            async function tryUnlock() {
+                const target = getActiveAccount();
+                const hash = await hashPassword(input.value);
+                if (hash === target.passwordHash) {
+                    localStorage.setItem(ACTIVE_ACCOUNT_KEY, activeAccountId);
+                    overlay.style.display = 'none';
+                    cleanup();
+                    resolve();
+                } else {
+                    errorEl.style.display = 'block'; input.value = ''; input.focus();
+                }
+            }
+            function onKeydown(e) { if (e.key === 'Enter') tryUnlock(); }
+            function cleanup() { btn.removeEventListener('click', tryUnlock); input.removeEventListener('keydown', onKeydown); }
+
+            btn.addEventListener('click', tryUnlock);
+            input.addEventListener('keydown', onKeydown);
+            setTimeout(() => input.focus(), 100);
+        });
+    }
+
+    async function bootSystem() {
         initData(); 
         setTradeMode('BUY');
+        renderAccountManagerList();
         
         await Promise.all([
             fetchExchangeRate(),
             fetchHoldingsPrices()
         ]);
         
-        const lastCheck = localStorage.getItem(`LAST_DIV_CHECK_${accMgr.currentId}`);
-        const todayStr = new Date().toISOString().slice(0, 10);
-        if (lastCheck !== todayStr) {
-            checkDividends(false).then(() => {
-                localStorage.setItem(`LAST_DIV_CHECK_${accMgr.currentId}`, todayStr);
-            });
-        }
-        
         updateLiveNavNode();
         updateAllViews(true);
 
         selectTicker(currentTicker);
         fetchAllCardsData();
+        checkDividendsIfDue();
 
         setInterval(async () => {
             await Promise.all([
@@ -2565,12 +2746,19 @@
             fetchStockHistoryData(currentTicker, false);
             fetchAllCardsData();
         }, 8000);
+
+        // 每 30 分鐘檢查一次是否已跨過一天，達成「每天自動查詢一次」股息
+        setInterval(() => { checkDividendsIfDue(); }, 30 * 60 * 1000);
     }
-    
-    bootSystem(); 
+
+    async function startApp() {
+        loadAccountsMeta();
+        await gateBootWithPassword();
+        await bootSystem();
+    }
+
+    startApp(); 
 
 </script>
 </body>
 </html>
-
-
