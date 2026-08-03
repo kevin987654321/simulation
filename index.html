@@ -424,13 +424,12 @@
 <div id="sidebar-overlay" onclick="toggleSidebar()"></div>
 
 <aside id="sidebar">
-    <div class="glass-title-text" onclick="switchView('view-achievements', document.querySelector('.menu-item[onclick*=\'view-achievements\']'))" style="cursor:pointer;" title="娛樂中心：成就與好友"><i class="fa-solid fa-cube" style="color: var(--color-acc)"></i> ALPHATRADE</div>
+    <div class="glass-title-text" onclick="switchView('view-achievements', null)" style="cursor:pointer;" title="娛樂中心：成就與好友"><i class="fa-solid fa-cube" style="color: var(--color-acc)"></i> ALPHATRADE</div>
     <div class="menu-item active" onclick="switchView('view-dashboard', this)"><i class="fa-solid fa-chart-line"></i> 指揮操盤中心</div>
     <div class="menu-item mobile-only" onclick="switchView('view-mobile-trade', this)"><i class="fa-solid fa-hand-holding-dollar"></i> 下單櫃檯</div>
     <div class="menu-item" onclick="switchView('view-cards', this)"><i class="fa-solid fa-address-card"></i> 自選資產卡片</div>
     <div class="menu-item" onclick="switchView('view-holdings', this)"><i class="fa-solid fa-wallet"></i> 庫存與資產損益</div>
     <div class="menu-item" onclick="switchView('view-ledger', this)"><i class="fa-solid fa-clock-rotate-left"></i> 時光機與歷史帳本</div>
-    <div class="menu-item" onclick="switchView('view-achievements', this)"><i class="fa-solid fa-trophy"></i> 成就殿堂</div>
     <div class="menu-item" style="margin-top: auto;" onclick="switchView('view-settings', this)"><i class="fa-solid fa-sliders"></i> 系統設定</div>
 </aside>
 
@@ -863,6 +862,12 @@
                 <span style="font-size:16px; font-weight:bold;">成就殿堂</span>
                 <span id="achv-progress-label" style="font-size:12px; color:#888; margin-left:auto;">0 / 0 已達成</span>
             </div>
+            <div style="display:flex; align-items:center; gap:8px; margin:6px 4px 4px; max-width:750px; margin-left:auto; margin-right:auto; width:100%;">
+                <i class="fa-solid fa-shop" style="color:var(--color-acc); font-size:13px;"></i>
+                <span style="font-size:12.5px; font-weight:bold; color:#ccc;">成就展示櫃</span>
+                <span style="font-size:10.5px; color:#777;">最多 4 個，好友能看到；點成就卡上的圖釘即可加入／移出</span>
+            </div>
+            <div id="achv-showcase-preview" style="max-width:750px; margin:0 auto 12px; width:100%; display:grid; grid-template-columns:repeat(4, 1fr); gap:10px;"></div>
             <div id="achv-list-container" style="max-width:750px; margin:0 auto; width:100%; display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:12px;"></div>
         </div>
 
@@ -896,7 +901,7 @@
                 <div id="friend-detail-winrate" style="font-size:15px; font-weight:bold; margin-top:4px;">--</div>
             </div>
         </div>
-        <div style="font-size:12px; color:#999; margin-bottom:8px;">成就展示櫃 <span id="friend-detail-achv-count" style="color:#666;"></span></div>
+        <div style="font-size:12px; color:#999; margin-bottom:8px;">成就 <span id="friend-detail-achv-count" style="color:#666;"></span></div>
         <div id="friend-detail-achv-list" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(70px, 1fr)); gap:8px; max-height:260px; overflow-y:auto;"></div>
         <button onclick="removeFriend()" style="margin-top:14px; width:100%; background:rgba(255,69,96,0.1); border:1px solid rgba(255,69,96,0.4); color:var(--color-sell); padding:8px; border-radius:6px; font-weight:bold; cursor:pointer;">移除好友</button>
     </div>
@@ -1449,14 +1454,20 @@
         { key: 'platinum', label: '白金', icon: '<span class="achv-platinum-wrapper"><i class="fa-solid fa-crown platinum-crown"></i></span>' },
     ];
     // 產生同一成就類別的四個級別（銅/銀/金/白金），thresholds 依序對應
-    function achv_makeTiered(idPrefix, name, descFn, thresholds, conditionFn) {
+    // metricFn(state, priceCache) 回傳「目前數值」，用來跟每一級的 threshold 比對是否達成，
+    // 同時也提供給畫面計算進度條百分比（家族只顯示單一目標，故需要保留原始數值而非只有布林值）
+    function achv_makeTiered(idPrefix, name, descFn, thresholds, metricFn) {
         return ACHV_TIERS.map((tier, i) => ({
             id: `${idPrefix}_${tier.key}`,
+            family: idPrefix,
+            tierIndex: i,
             tier: tier.key,
             name: `${name}・${tier.label}`,
             description: descFn(thresholds[i], i),
             icon: tier.icon,
-            condition: (state, priceCache) => conditionFn(state, priceCache, thresholds[i]),
+            threshold: thresholds[i],
+            metricFn: metricFn,
+            condition: (state, priceCache) => metricFn(state, priceCache) >= thresholds[i],
         }));
     }
     const HIDDEN_ICON = '<i class="fa-solid fa-gem diamond-gem"></i>';
@@ -1466,42 +1477,42 @@
         ...achv_makeTiered('capital_beast', '資本巨獸',
             (th) => `總資產（現金＋庫存市值）達到 NT$${th.toLocaleString()}`,
             [1200000, 2000000, 5000000, 100000000],
-            (state, priceCache, th) => achv_totalAssets(state, priceCache) >= th),
+            (state, priceCache) => achv_totalAssets(state, priceCache)),
 
         // 【一擊必殺】單筆 SELL 的 realizedPnL 達門檻
         ...achv_makeTiered('one_shot_kill', '一擊必殺',
             (th) => `單筆賣出實現獲利超過 NT$${th.toLocaleString()}`,
             [50000, 200000, 1000000, 3000000],
-            (state, priceCache, th) => (state.ledger || []).some(r => r.action === 'SELL' && typeof r.realizedPnL === 'number' && r.realizedPnL > th)),
+            (state) => (state.ledger || []).reduce((max, r) => (r.action === 'SELL' && typeof r.realizedPnL === 'number' && r.realizedPnL > max) ? r.realizedPnL : max, 0)),
 
         // 【造市商】ledger 全部 total（買+賣）加總達門檻
         ...achv_makeTiered('market_maker', '造市商',
             (th) => `累積買賣交易總額達到 NT$${th.toLocaleString()}`,
             [5000000, 20000000, 100000000, 500000000],
-            (state, priceCache, th) => (state.ledger || []).reduce((sum, r) => sum + (r.total || 0), 0) >= th),
+            (state) => (state.ledger || []).reduce((sum, r) => sum + (r.total || 0), 0)),
 
         // 【被動收入】dividends 的 amountTWD 加總達門檻
         ...achv_makeTiered('passive_income', '被動收入',
             (th) => `累積股息收入達到 NT$${th.toLocaleString()}`,
             [5000, 50000, 200000, 1000000],
-            (state, priceCache, th) => (state.dividends || []).reduce((sum, d) => sum + (d.amountTWD || 0), 0) >= th),
+            (state) => (state.dividends || []).reduce((sum, d) => sum + (d.amountTWD || 0), 0)),
 
         // 【常勝將軍】依時間排序的 SELL 紀錄中，連續 realizedPnL > 0 的最長連勝次數達門檻
         ...achv_makeTiered('winning_streak', '常勝將軍',
             (th) => `連續 ${th} 筆賣出交易皆為獲利`,
             [3, 7, 15, 30],
-            (state, priceCache, th) => {
+            (state) => {
                 const sells = (state.ledger || []).filter(r => r.action === 'SELL' && typeof r.realizedPnL === 'number').sort((a, b) => a.timestamp - b.timestamp);
                 let maxStreak = 0, cur = 0;
                 for (const r of sells) { if (r.realizedPnL > 0) { cur++; maxStreak = Math.max(maxStreak, cur); } else { cur = 0; } }
-                return maxStreak >= th;
+                return maxStreak;
             }),
 
         // 【時間的朋友】同一 Ticker 最早 BUY 與最晚 SELL 的時間差達門檻
         ...achv_makeTiered('friend_of_time', '時間的朋友',
             (th, i) => `同一檔標的從最早買進到最後賣出，時間跨度超過 ${['30天', '180天', '1年', '3年'][i]}`,
             [30 * 86400000, 180 * 86400000, 365 * 86400000, 3 * 365 * 86400000],
-            (state, priceCache, th) => {
+            (state) => {
                 const byTicker = {};
                 for (const r of (state.ledger || [])) {
                     if (!byTicker[r.ticker]) byTicker[r.ticker] = { firstBuy: null, lastSell: null };
@@ -1509,21 +1520,23 @@
                     if (r.action === 'BUY' && (b.firstBuy === null || r.timestamp < b.firstBuy)) b.firstBuy = r.timestamp;
                     if (r.action === 'SELL' && (b.lastSell === null || r.timestamp > b.lastSell)) b.lastSell = r.timestamp;
                 }
-                return Object.values(byTicker).some(b => b.firstBuy !== null && b.lastSell !== null && (b.lastSell - b.firstBuy) >= th);
+                let maxSpan = 0;
+                Object.values(byTicker).forEach(b => { if (b.firstBuy !== null && b.lastSell !== null) maxSpan = Math.max(maxSpan, b.lastSell - b.firstBuy); });
+                return maxSpan;
             }),
 
         // 【資產配置大師】單一持股市值 > 10,000 的 Ticker 數量達門檻
         ...achv_makeTiered('asset_allocation_master', '資產配置大師',
             (th) => `同時持有 ${th} 檔市值超過 NT$10,000 的標的`,
             [5, 10, 20, 50],
-            (state, priceCache, th) => {
+            (state, priceCache) => {
                 let count = 0;
                 for (const t in state.holdings) {
                     const h = state.holdings[t], rate = getCurrencyMultiplier(t);
                     const price = (priceCache && priceCache[t]) || h.avgPrice;
                     if (h.shares * price * rate > 10000) count++;
                 }
-                return count >= th;
+                return count;
             }),
 
         // --- 隱藏/惡搞成就（單一級別，鑽石圖示） ---
@@ -1610,6 +1623,26 @@
         return newlyUnlocked;
     }
 
+    const ACHV_TIER_COLOR = { bronze: '#cd7f32', silver: '#dfe3e8', gold: '#ffd447', platinum: '#a18cd1', hidden: 'var(--color-acc)' };
+
+    // 依 family 分組（有分級的成就）與單一級別成就（隱藏成就）
+    function achv_groupFamilies() {
+        const families = {}; const singles = [];
+        for (const a of achievementsConfig) {
+            if (a.family) { (families[a.family] = families[a.family] || []).push(a); }
+            else { singles.push(a); }
+        }
+        Object.values(families).forEach(arr => arr.sort((x, y) => x.tierIndex - y.tierIndex));
+        return { families, singles };
+    }
+
+    // 釘選/取消釘選展示櫃按鈕（最多 4 個）
+    function achv_pinButtonHtml(achv) {
+        if (!achv) return '';
+        const inShowcase = (state.achvShowcase || []).includes(achv.id);
+        return `<button onclick="event.stopPropagation(); toggleAchvShowcase('${achv.id}')" title="${inShowcase ? '移出展示櫃' : '加入展示櫃'}" style="margin-left:auto; flex-shrink:0; background:transparent; border:none; cursor:pointer; color:${inShowcase ? 'var(--color-acc)' : '#555'}; font-size:14px; padding:2px;"><i class="fa-solid fa-thumbtack"></i></button>`;
+    }
+
     function renderAchievementsPage() {
         const listEl = document.getElementById('achv-list-container');
         const labelEl = document.getElementById('achv-progress-label');
@@ -1617,17 +1650,95 @@
         const unlocked = state.unlockedAchievements || [];
         labelEl.innerText = `${unlocked.length} / ${achievementsConfig.length} 已達成`;
 
-        listEl.innerHTML = achievementsConfig.map(a => {
-            const isUnlocked = unlocked.includes(a.id);
-            const tierColor = { bronze: '#cd7f32', silver: '#dfe3e8', gold: '#ffd447', platinum: '#a18cd1', hidden: 'var(--color-acc)' }[a.tier] || '#888';
-            return `<div class="glass-panel achv-card ${isUnlocked ? '' : 'locked'}" style="padding:14px; display:flex; gap:12px; align-items:flex-start; ${isUnlocked ? `border-color:${tierColor}40;` : ''}">
-                <div style="font-size:26px; flex-shrink:0; width:32px; text-align:center;">${isUnlocked || a.tier !== 'hidden' ? a.icon : '<i class="fa-solid fa-question" style="color:#555;"></i>'}</div>
-                <div style="min-width:0;">
-                    <div style="font-weight:bold; font-size:13px; color:${isUnlocked ? '#fff' : '#888'};">${(isUnlocked || a.tier !== 'hidden') ? a.name : '???'}</div>
-                    <div style="font-size:11px; color:#888; margin-top:4px; line-height:1.5;">${(isUnlocked || a.tier !== 'hidden') ? a.description : '隱藏成就，達成後才會顯示內容'}</div>
+        const { families, singles } = achv_groupFamilies();
+
+        // 分級成就：每個家族只顯示「目前挑戰中／已完成」的單一目標，並附上進度條；
+        // 已達成的較低品質不再重複顯示，唯有達成前一品質後才會顯示下一個新目標
+        const familyCards = Object.keys(families).map(famKey => {
+            const tiers = families[famKey];
+            let highestIdx = -1;
+            tiers.forEach((t, i) => { if (unlocked.includes(t.id)) highestIdx = i; });
+            const isMaxed = highestIdx === tiers.length - 1;
+            const target = tiers[isMaxed ? highestIdx : highestIdx + 1];
+            const achieved = highestIdx >= 0 ? tiers[highestIdx] : null; // 可被釘選進展示櫃的最高已達成品質
+            const color = ACHV_TIER_COLOR[target.tier] || '#888';
+            let value = 0;
+            try { value = target.metricFn(state, globalPriceCache); } catch (e) { value = 0; }
+            const pct = isMaxed ? 100 : Math.max(0, Math.min(100, (value / target.threshold) * 100));
+
+            return `<div class="glass-panel achv-card" style="padding:14px; display:flex; gap:12px; align-items:flex-start; ${isMaxed ? `border-color:${color}40;` : ''}">
+                <div style="font-size:26px; flex-shrink:0; width:32px; text-align:center;">${target.icon}</div>
+                <div style="min-width:0; flex:1;">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <div style="font-weight:bold; font-size:13px; color:${isMaxed ? '#fff' : '#ccc'};">${target.name}</div>
+                        ${isMaxed ? `<i class="fa-solid fa-circle-check" style="color:${color}; font-size:11px;"></i>` : ''}
+                        ${achv_pinButtonHtml(achieved)}
+                    </div>
+                    <div style="font-size:11px; color:#888; margin-top:4px; line-height:1.5;">${target.description}</div>
+                    <div style="margin-top:8px; height:5px; border-radius:3px; background:rgba(255,255,255,0.08); overflow:hidden;">
+                        <div style="height:100%; width:${pct}%; background:${color}; box-shadow:0 0 6px ${color}88; transition:width 0.4s ease;"></div>
+                    </div>
+                    <div style="font-size:10px; color:#666; margin-top:3px; text-align:right;">${isMaxed ? '已達成最高品質' : `${Math.floor(pct)}%`}</div>
                 </div>
             </div>`;
-        }).join('');
+        });
+
+        // 隱藏/惡搞成就：單一級別，維持原本鎖定/解鎖顯示邏輯
+        const hiddenCards = singles.map(a => {
+            const isUnlocked = unlocked.includes(a.id);
+            const color = ACHV_TIER_COLOR[a.tier] || '#888';
+            return `<div class="glass-panel achv-card ${isUnlocked ? '' : 'locked'}" style="padding:14px; display:flex; gap:12px; align-items:flex-start; ${isUnlocked ? `border-color:${color}40;` : ''}">
+                <div style="font-size:26px; flex-shrink:0; width:32px; text-align:center;">${isUnlocked ? a.icon : '<i class="fa-solid fa-question" style="color:#555;"></i>'}</div>
+                <div style="min-width:0; flex:1;">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <div style="font-weight:bold; font-size:13px; color:${isUnlocked ? '#fff' : '#888'};">${isUnlocked ? a.name : '???'}</div>
+                        ${isUnlocked ? achv_pinButtonHtml(a) : ''}
+                    </div>
+                    <div style="font-size:11px; color:#888; margin-top:4px; line-height:1.5;">${isUnlocked ? a.description : '隱藏成就，達成後才會顯示內容'}</div>
+                </div>
+            </div>`;
+        });
+
+        listEl.innerHTML = familyCards.join('') + hiddenCards.join('');
+        renderAchvShowcasePreview();
+    }
+
+    // ============================================================
+    // 🏆 成就展示櫃：使用者最多可挑選 4 個已達成成就展示給好友看
+    // ============================================================
+    function toggleAchvShowcase(id) {
+        state.achvShowcase = state.achvShowcase || [];
+        const idx = state.achvShowcase.indexOf(id);
+        if (idx >= 0) {
+            state.achvShowcase.splice(idx, 1);
+        } else {
+            if (state.achvShowcase.length >= 4) { triggerDynamicFeedback('展示櫃最多只能放 4 個成就', 'sell', null, null); return; }
+            state.achvShowcase.push(id);
+        }
+        saveData();
+        renderAchievementsPage();
+    }
+
+    function renderAchvShowcasePreview() {
+        const el = document.getElementById('achv-showcase-preview');
+        if (!el) return;
+        const ids = (state.achvShowcase || []).slice(0, 4);
+        const items = ids.map(id => achievementsConfig.find(a => a.id === id)).filter(Boolean);
+        const slots = [];
+        for (let i = 0; i < 4; i++) {
+            const a = items[i];
+            slots.push(a
+                ? `<div class="glass-panel" style="padding:10px; text-align:center; position:relative;" title="${a.name}">
+                        <div style="font-size:22px;">${a.icon}</div>
+                        <div style="font-size:9.5px; color:#999; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${a.name}</div>
+                        <button onclick="toggleAchvShowcase('${a.id}')" title="移出展示櫃" style="position:absolute; top:2px; right:2px; background:transparent; border:none; color:#666; font-size:11px; cursor:pointer;"><i class="fa-solid fa-xmark"></i></button>
+                   </div>`
+                : `<div class="glass-panel" style="padding:10px; text-align:center; border-style:dashed; opacity:0.5;">
+                        <div style="font-size:22px; color:#444;"><i class="fa-solid fa-plus"></i></div>
+                        <div style="font-size:9.5px; color:#555; margin-top:4px;">空位</div>
+                   </div>`);
+        }
+        el.innerHTML = slots.join('');
     }
 
     let achvCelebrationQueueBusy = false;
@@ -1668,12 +1779,15 @@
     }
 
     // ============================================================
-    // 👥 好友系統：本機儲存好友的登入碼 (accountId)，向雲端查詢對方的公開資料
-    // ⚠️ 需要 GAS 後端新增 action: 'get_public_profile'，回傳 { success, displayName, totalAssets, winRate, unlockedAchievements: [id,...] }
+    // 👥 好友系統：好友的登入碼 (accountId) 儲存在「目前帳號自身的 state.friends」，
+    // 隨帳號資料一起存本機並透過 scheduleCloudSync 同步雲端 —— 好友清單綁定的是「帳號」，
+    // 換一個本機帳號或在別的裝置登入同一個帳號都會看到一致的好友清單，而不是綁定在這台裝置上
+    // 向雲端查詢對方的公開資料
+    // ⚠️ 需要 GAS 後端新增 action: 'get_public_profile'，回傳
+    //    { success, displayName, totalAssets, winRate, unlockedAchievements: [id,...], achvShowcase: [id,...] }
     // ============================================================
-    const FRIENDS_KEY = 'FRIENDS_LIST';
-    function getFriendsList() { try { return JSON.parse(localStorage.getItem(FRIENDS_KEY) || '[]'); } catch (e) { return []; } }
-    function saveFriendsList(list) { localStorage.setItem(FRIENDS_KEY, JSON.stringify(list)); }
+    function getFriendsList() { return state.friends || []; }
+    function saveFriendsList(list) { state.friends = list; saveData(); }
 
     async function addFriendByCode() {
         const code = prompt('請輸入對方的登入碼 (Account ID)：');
@@ -1741,10 +1855,20 @@
         document.getElementById('friend-detail-winrate').innerText = (typeof result.winRate === 'number') ? `${(result.winRate * 100).toFixed(1)}%` : '--';
 
         const unlockedIds = result.unlockedAchievements || [];
-        document.getElementById('friend-detail-achv-count').innerText = `(${unlockedIds.length} / ${achievementsConfig.length})`;
-        document.getElementById('friend-detail-achv-list').innerHTML = achievementsConfig.filter(a => unlockedIds.includes(a.id)).map(a =>
-            `<div style="text-align:center; font-size:20px;" title="${a.name}">${a.icon}</div>`
-        ).join('') || `<div style="font-size:11px; color:#666; grid-column:1/-1; text-align:center; padding:10px 0;">目前尚未解鎖任何成就</div>`;
+        const showcaseIds = (result.achvShowcase || []).slice(0, 4);
+
+        // 各品質（銅/銀/金/白金）已達成數量，用圖示代替文字
+        const tierCounts = { bronze: 0, silver: 0, gold: 0, platinum: 0 };
+        achievementsConfig.forEach(a => { if (unlockedIds.includes(a.id) && tierCounts.hasOwnProperty(a.tier)) tierCounts[a.tier]++; });
+
+        document.getElementById('friend-detail-achv-count').innerText = `展示櫃 ${showcaseIds.length} / 4`;
+        const tierCountsHtml = `<div style="display:flex; justify-content:space-around; grid-column:1/-1; margin-bottom:10px; padding-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.06);">
+            ${ACHV_TIERS.map(t => `<div style="text-align:center;"><div style="font-size:20px;">${t.icon}</div><div style="font-size:11px; font-weight:bold; color:#ccc; margin-top:2px;">${tierCounts[t.key]}</div></div>`).join('')}
+        </div>`;
+        const showcaseHtml = showcaseIds.length > 0
+            ? showcaseIds.map(sid => { const a = achievementsConfig.find(x => x.id === sid); return a ? `<div style="text-align:center; font-size:20px;" title="${a.name}">${a.icon}</div>` : ''; }).join('')
+            : `<div style="font-size:11px; color:#666; grid-column:1/-1; text-align:center; padding:10px 0;">對方尚未設定展示櫃</div>`;
+        document.getElementById('friend-detail-achv-list').innerHTML = tierCountsHtml + showcaseHtml;
     }
     function closeFriendDetail() { document.getElementById('friend-detail-overlay').style.display = 'none'; }
     function removeFriend() { if (currentFriendDetailId) { removeFriendById(currentFriendDetailId); closeFriendDetail(); } }
@@ -1798,7 +1922,7 @@
     Chart.register(smoothCrosshairPlugin);
 
     const DATA_KEY = "ALPHATRADE_MANUAL_DATA";
-    let state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [] };
+    let state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] };
     let stopLossAlertShown = false; // 避免同一次觸發反覆彈出警示，虧損回復到門檻之上才會重置
     let currentTicker = localStorage.getItem('LAST_SELECTED_TICKER') || "NVDA";
 
@@ -2875,6 +2999,10 @@
                 state.stopLoss = state.stopLoss || { enabled: false, percent: 10 };
                 state.dripEnabled = !!state.dripEnabled;
                 state.unlockedAchievements = state.unlockedAchievements || [];
+                // 👥 好友清單 / 🏆 成就展示櫃改為綁定在「帳號自身的 state」裡，隨帳號資料一起存本機與雲端同步，
+                // 而非過去綁定在整台裝置共用的 localStorage 鍵值，確保換帳號、換裝置登入同一帳號時好友清單一致
+                state.friends = state.friends || [];
+                state.achvShowcase = state.achvShowcase || [];
                 state.ledger.forEach(r => {
                     if (!r.timestamp) {
                         let d = new Date(), parts = r.time ? r.time.split(':') : [];
@@ -2885,7 +3013,7 @@
                 if (!state.navHistory || !state.navHistory.timestamps || state.navHistory.timestamps.length === 0) { rebuildNavHistoryFromLedger(); }
             } catch(e) {} 
         } else {
-            state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [] };
+            state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] };
             rebuildNavHistoryFromLedger(); saveData();
         }
         stopLossAlertShown = false;
@@ -2935,7 +3063,7 @@
     }
     
     function saveData() { localStorage.setItem(getActiveAccount().storageKey, JSON.stringify(state)); updateAllViews(true); renderCards(); scheduleCloudSync(); checkAchievements(); }
-    function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { localStorage.removeItem(getActiveAccount().storageKey); state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, lastModified: Date.now(), recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [] }; initData(); fetchStockHistoryData(currentTicker, true); } }
+    function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { localStorage.removeItem(getActiveAccount().storageKey); state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, lastModified: Date.now(), recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] }; initData(); fetchStockHistoryData(currentTicker, true); } }
 
     function exportData() {
         const dataStr = JSON.stringify(state, null, 2), blob = new Blob([dataStr], { type: "application/json" }), url = URL.createObjectURL(blob), a = document.createElement("a");
@@ -2950,7 +3078,7 @@
             try {
                 const importedState = JSON.parse(e.target.result);
                 if (importedState && typeof importedState.cash === 'number') {
-                    state = importedState; state.cardTickers = state.cardTickers || []; state.recentTickers = state.recentTickers || []; state.holdings = state.holdings || {}; state.ledger = state.ledger || []; state.dividends = state.dividends || []; state.lastDividendCheck = state.lastDividendCheck || 0; state.lastModified = Date.now(); state.stopLoss = state.stopLoss || { enabled: false, percent: 10 }; state.dripEnabled = !!state.dripEnabled; state.unlockedAchievements = state.unlockedAchievements || [];
+                    state = importedState; state.cardTickers = state.cardTickers || []; state.recentTickers = state.recentTickers || []; state.holdings = state.holdings || {}; state.ledger = state.ledger || []; state.dividends = state.dividends || []; state.lastDividendCheck = state.lastDividendCheck || 0; state.lastModified = Date.now(); state.stopLoss = state.stopLoss || { enabled: false, percent: 10 }; state.dripEnabled = !!state.dripEnabled; state.unlockedAchievements = state.unlockedAchievements || []; state.friends = state.friends || []; state.achvShowcase = state.achvShowcase || [];
                     state.ledger.forEach(r => {
                         if (!r.timestamp) {
                             let d = new Date(), parts = r.time ? r.time.split(':') : [];
@@ -4490,6 +4618,9 @@
             cloudState.lastDividendCheck = cloudState.lastDividendCheck || 0;
             cloudState.lastModified = cloudState.lastModified || 0;
             cloudState.stopLoss = cloudState.stopLoss || { enabled: false, percent: 10 };
+            cloudState.unlockedAchievements = cloudState.unlockedAchievements || [];
+            cloudState.friends = cloudState.friends || [];
+            cloudState.achvShowcase = cloudState.achvShowcase || [];
 
             state = cloudState;
             localStorage.setItem(active.storageKey, JSON.stringify(state));
