@@ -229,6 +229,8 @@
         @keyframes modalPopIn { from { opacity:0; transform: scale(0.92) translateY(10px); } to { opacity:1; transform: scale(1) translateY(0); } }
         .modal-input { background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 11px 12px; border-radius: 8px; font-family: monospace; font-size: 14px; outline: none; width: 100%; text-align: center; letter-spacing: 2px; transition: border-color 0.2s; }
         .modal-input:focus { border-color: var(--color-acc); }
+        /* 🩹 以 type="text" + -webkit-text-security 視覺偽裝密碼輸入框，避免 Chrome 對 type="password" 強制觸發「密碼外洩」/「儲存密碼」等干擾提示 */
+        .pwd-mask { -webkit-text-security: disc; -moz-text-security: disc; text-security: disc; }
         .account-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; gap: 10px; flex-wrap: wrap; transition: border-color 0.3s, box-shadow 0.3s; }
         .account-row.active-account { border-color: var(--color-acc); box-shadow: 0 0 20px rgba(0,212,255,0.12); }
         .account-action-btn { border-radius: 6px; font-size: 11px; cursor: pointer; font-weight: bold; padding: 6px 10px; transition: all 0.2s; white-space: nowrap; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.08); color: #fff; }
@@ -623,7 +625,7 @@
             <div class="glass-panel setting-item">
                 <div>
                     <div style="font-weight:bold;"><i class="fa-solid fa-triangle-exclamation" style="color:var(--color-sell)"></i> 停損警示</div>
-                    <div style="font-size:11px; color:#777; margin-top:2px;">當帳戶未實現虧損百分比達到設定值時，將會警示</div>
+                    <div style="font-size:11px; color:#777; margin-top:2px;">當帳戶未實現虧損百分比達到設定值時，啟動時或使用中都會跳出警示提醒</div>
                 </div>
                 <label class="switch"><input type="checkbox" id="cfg-stoploss-enable"><span class="slider"></span></label>
             </div>
@@ -761,8 +763,8 @@
     <div class="glass-panel modal-box">
         <div id="password-modal-title" style="font-weight:bold; font-size:14px; display:flex; align-items:center; gap:8px;"><i class="fa-solid fa-lock" style="color:var(--color-acc)"></i> 輸入密碼</div>
         <div id="password-modal-desc" style="font-size:11px; color:#888; margin-top:-6px;"></div>
-        <input type="password" id="password-modal-input" class="modal-input" placeholder="密碼" autocomplete="new-password">
-        <input type="password" id="password-modal-input2" class="modal-input" placeholder="確認密碼" autocomplete="new-password" style="display:none;">
+        <input type="text" id="password-modal-input" class="modal-input pwd-mask" placeholder="密碼" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore>
+        <input type="text" id="password-modal-input2" class="modal-input pwd-mask" placeholder="確認密碼" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore style="display:none;">
         <div id="password-modal-error" style="display:none; color:var(--color-sell); font-size:11px;"><i class="fa-solid fa-triangle-exclamation"></i> <span id="password-modal-error-text"></span></div>
         <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:4px;">
             <button id="password-modal-cancel" style="background:transparent; border:1px solid rgba(255,255,255,0.2); color:#aaa; padding:9px 16px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:12px;">取消</button>
@@ -777,7 +779,7 @@
         <div class="glass-title-text" style="margin:0 0 4px 0;"><i class="fa-solid fa-cube" style="color:var(--color-acc)"></i> ALPHATRADE</div>
         <i class="fa-solid fa-lock" style="color:var(--color-acc); font-size:26px; margin:6px 0;"></i>
         <div style="color:#aaa; font-size:12.5px;">帳號「<span id="boot-lock-account-name" style="color:#fff; font-weight:bold;"></span>」已設定密碼保護</div>
-        <input type="password" id="boot-lock-input" class="modal-input" placeholder="請輸入密碼" autocomplete="current-password" style="margin-top:8px;">
+        <input type="text" id="boot-lock-input" class="modal-input pwd-mask" placeholder="請輸入密碼" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore style="margin-top:8px;">
         <div id="boot-lock-error" style="display:none; color:var(--color-sell); font-size:11px;"><i class="fa-solid fa-triangle-exclamation"></i> 密碼錯誤，請再試一次</div>
         <button id="boot-lock-confirm" style="width:100%; background:var(--color-acc); color:#000; border:none; padding:11px; border-radius:8px; font-weight:bold; cursor:pointer; margin-top:4px;">解鎖</button>
         <div id="boot-lock-switch-toggle" onclick="toggleBootLockSwitcher()" style="color:#666; font-size:11px; cursor:pointer; text-decoration:underline; margin-top:6px;">切換其他帳號</div>
@@ -1830,6 +1832,25 @@
         triggerDynamicFeedback(`已為「${acc.name}」設定密碼`, 'buy', null, null);
     }
 
+    // 🩹 修復：改名／改密碼屬於「帳號中介資料」異動，不會經過 executeTrade 等交易流程去更新 state.lastModified。
+    // 若不主動更新，推送到雲端的 sync 請求會被樂觀鎖判定為「本機資料未比雲端新」而遭拒絕（isOutdated），
+    // 導致改名/改密碼永遠同步不到雲端。這裡確保無論改的是不是目前使用中的帳號，都能正確蓋上新時間戳。
+    function touchAccountLastModified(accountId) {
+        if (accountId === activeAccountId) {
+            state.lastModified = Date.now();
+            return;
+        }
+        const acc = ACCOUNTS.find(a => a.id === accountId);
+        if (!acc) return;
+        try {
+            const raw = localStorage.getItem(acc.storageKey);
+            if (!raw) return;
+            const s = JSON.parse(raw);
+            s.lastModified = Date.now();
+            localStorage.setItem(acc.storageKey, JSON.stringify(s));
+        } catch (e) {}
+    }
+
     // 更改既有密碼：需先驗證舊密碼，再輸入並確認新密碼；若該帳號已啟用雲端同步，同步更新雲端的密碼雜湊
     async function changeAccountPassword(accountId) {
         const acc = ACCOUNTS.find(a => a.id === accountId); if (!acc || !acc.hasPassword) return;
@@ -1839,7 +1860,7 @@
         acc.passwordHash = await hashPassword(val);
         saveAccountsMeta(); renderAccountManagerList();
         triggerDynamicFeedback(`已更改「${acc.name}」的密碼`, 'buy', null, null);
-        if (acc.syncEnabled) cloudSyncAccount(acc.id, { silent: true }); // 密碼雜湊變更，需同步至雲端供日後驗證
+        if (acc.syncEnabled) { touchAccountLastModified(acc.id); cloudSyncAccount(acc.id, { silent: true }); } // 密碼雜湊變更，需同步至雲端供日後驗證
     }
 
     async function removeAccountPassword(accountId) {
@@ -1931,12 +1952,17 @@
         if (!adminPwdCache) return;
         const newName = prompt('請輸入新的帳號名稱：');
         if (newName === null || newName.trim() === '') return;
+        const trimmedName = newName.trim();
 
-        const result = await callCloudApi({ action: 'admin_rename', adminPwd: adminPwdCache, targetId, newName: newName.trim() });
+        const result = await callCloudApi({ action: 'admin_rename', adminPwd: adminPwdCache, targetId, newName: trimmedName });
         if (result && result.success) {
             const row = document.getElementById(`admin-acc-${targetId}`);
-            if (row) { const nameEl = row.querySelector('.admin-acc-name'); if (nameEl) nameEl.innerText = newName.trim(); }
-            triggerDynamicFeedback(`已將雲端帳號改名為：${newName.trim()}`, 'buy', null, null);
+            if (row) { const nameEl = row.querySelector('.admin-acc-name'); if (nameEl) nameEl.innerText = trimmedName; }
+            // 🩹 修復：若本機也存在這個帳號，一併更新本機名稱；否則下次自動同步 (scheduleCloudSync / Boot Pull 之外的其他觸發)
+            // 會用本機還沒改到的舊名稱去覆蓋雲端，讓開發者模式的強制改名看起來像「沒有真的生效」。
+            const localAcc = ACCOUNTS.find(a => a.id === targetId);
+            if (localAcc) { localAcc.name = trimmedName; saveAccountsMeta(); renderAccountManagerList(); }
+            triggerDynamicFeedback(`已將雲端帳號改名為：${trimmedName}`, 'buy', null, null);
         } else {
             alert((result && result.msg) || '改名失敗');
         }
@@ -1969,7 +1995,7 @@
         if (newName === null) return;
         const trimmed = newName.trim(); if (!trimmed) return;
         acc.name = trimmed; saveAccountsMeta(); renderAccountManagerList();
-        if (acc.syncEnabled) cloudSyncAccount(acc.id, { silent: true }); // 以 accountId 為主鍵更新雲端，不會新增一行
+        if (acc.syncEnabled) { touchAccountLastModified(acc.id); cloudSyncAccount(acc.id, { silent: true }); } // 以 accountId 為主鍵更新雲端，不會新增一行
     }
 
     // 註銷帳號時，若該帳號已啟用雲端同步，讓使用者選擇：一併刪除雲端資料 / 僅刪除本機資料（保留雲端，可日後憑登入碼取回） / 取消
@@ -3915,6 +3941,10 @@
         initData(); 
         setTradeMode('BUY');
         renderAccountManagerList();
+
+        // 🩹 先以本機暫存資料立即呈現畫面（此時報價尚未抓取，updateAllViews 會以持股均價暫時估值），
+        // 避免使用者開機時等待雲端同步／報價才看到內容；待雲端資料拉回或報價抓到後會再次刷新畫面
+        updateAllViews(true);
 
         await bootPullCloudData();
 
