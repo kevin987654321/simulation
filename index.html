@@ -1313,7 +1313,7 @@
     Chart.register(smoothCrosshairPlugin);
 
     const DATA_KEY = "ALPHATRADE_MANUAL_DATA";
-    let state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 } };
+    let state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 } };
     let stopLossAlertShown = false; // 避免同一次觸發反覆彈出警示，虧損回復到門檻之上才會重置
     let currentTicker = localStorage.getItem('LAST_SELECTED_TICKER') || "NVDA";
 
@@ -1348,6 +1348,13 @@
         if (!acc || !acc.syncEnabled || !acc.hasPassword) return { success: false, msg: '此帳號尚未啟用遠端同步' };
         const raw = (accountId === activeAccountId) ? JSON.stringify(state) : (localStorage.getItem(acc.storageKey) || '{}');
         const result = await callCloudApi({ action: 'sync', accountId: acc.id, accountName: acc.name, passwordHash: acc.passwordHash, stateJSON: raw });
+
+        // 🔒 樂觀鎖：雲端偵測到本機資料是舊版本（例如另一台裝置已上傳過更新版本），中止本次上傳避免覆蓋或造成重複交易
+        if (result && result.isOutdated === true) {
+            alert('⚠️ 雲端有更新的資料！為避免覆蓋進度或重複交易，系統已暫停上傳。\n請立刻【重新整理】網頁以下載最新資料！');
+            return result;
+        }
+
         if (!silent) {
             if (result.success) triggerDynamicFeedback(`「${acc.name}」已同步至雲端`, 'buy', null, null);
             else triggerDynamicFeedback(result.msg || '雲端同步失敗', 'sell', null, null);
@@ -2320,6 +2327,7 @@
                 state.ledger = state.ledger || [];
                 state.dividends = state.dividends || [];
                 state.lastDividendCheck = state.lastDividendCheck || 0;
+                state.lastModified = state.lastModified || 0;
                 state.stopLoss = state.stopLoss || { enabled: false, percent: 10 };
                 state.ledger.forEach(r => {
                     if (!r.timestamp) {
@@ -2331,7 +2339,7 @@
                 if (!state.navHistory || !state.navHistory.timestamps || state.navHistory.timestamps.length === 0) { rebuildNavHistoryFromLedger(); }
             } catch(e) {} 
         } else {
-            state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 } };
+            state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 } };
             rebuildNavHistoryFromLedger(); saveData();
         }
         stopLossAlertShown = false;
@@ -2374,7 +2382,7 @@
     }
     
     function saveData() { localStorage.setItem(getActiveAccount().storageKey, JSON.stringify(state)); updateAllViews(true); renderCards(); scheduleCloudSync(); }
-    function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { localStorage.removeItem(getActiveAccount().storageKey); state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 } }; initData(); fetchStockHistoryData(currentTicker, true); } }
+    function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { localStorage.removeItem(getActiveAccount().storageKey); state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, lastModified: Date.now(), recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 } }; initData(); fetchStockHistoryData(currentTicker, true); } }
 
     function exportData() {
         const dataStr = JSON.stringify(state, null, 2), blob = new Blob([dataStr], { type: "application/json" }), url = URL.createObjectURL(blob), a = document.createElement("a");
@@ -2389,7 +2397,7 @@
             try {
                 const importedState = JSON.parse(e.target.result);
                 if (importedState && typeof importedState.cash === 'number') {
-                    state = importedState; state.cardTickers = state.cardTickers || []; state.recentTickers = state.recentTickers || []; state.holdings = state.holdings || {}; state.ledger = state.ledger || []; state.dividends = state.dividends || []; state.lastDividendCheck = state.lastDividendCheck || 0; state.stopLoss = state.stopLoss || { enabled: false, percent: 10 };
+                    state = importedState; state.cardTickers = state.cardTickers || []; state.recentTickers = state.recentTickers || []; state.holdings = state.holdings || {}; state.ledger = state.ledger || []; state.dividends = state.dividends || []; state.lastDividendCheck = state.lastDividendCheck || 0; state.lastModified = Date.now(); state.stopLoss = state.stopLoss || { enabled: false, percent: 10 };
                     state.ledger.forEach(r => {
                         if (!r.timestamp) {
                             let d = new Date(), parts = r.time ? r.time.split(':') : [];
@@ -2535,7 +2543,7 @@
         reconcileDividendsAfterLedgerChange();
         state.cash = result.cash + getDividendsTotalTWD(); state.holdings = result.holdings;
         document.getElementById("tm-ticker").value = ''; document.getElementById("tm-price").value = ''; document.getElementById("tm-shares").value = ''; document.getElementById("tm-fxrate").value = ''; document.getElementById("tm-fxrate").disabled = false;
-        rebuildNavHistoryFromLedger(); saveData(); triggerDynamicFeedback("已成功補登時光機交易", "buy", null, "INSERTED");
+        rebuildNavHistoryFromLedger(); state.lastModified = Date.now(); saveData(); triggerDynamicFeedback("已成功補登時光機交易", "buy", null, "INSERTED");
     }
 
     function undoTrade(index) {
@@ -2549,7 +2557,7 @@
         state.ledger = testLedger;
         reconcileDividendsAfterLedgerChange();
         state.cash = result.cash + getDividendsTotalTWD(); state.holdings = result.holdings;
-        rebuildNavHistoryFromLedger(); saveData(); triggerDynamicFeedback("交易已成功撤銷", "buy", null, "UNDONE");
+        rebuildNavHistoryFromLedger(); state.lastModified = Date.now(); saveData(); triggerDynamicFeedback("交易已成功撤銷", "buy", null, "UNDONE");
     }
 
     // ============================================================
@@ -2640,6 +2648,7 @@
 
             state.dividends.sort((a, b) => b.date - a.date);
             state.lastDividendCheck = Date.now();
+            state.lastModified = Date.now();
             saveData();
             renderDividendsTable();
             updateLastDividendCheckLabel();
@@ -3204,8 +3213,11 @@
     }
 
     function executeTrade() {
-        if (isPriceLoading || currentRealPrice === null) { alert("報價連線中，請稍候！"); return; }
-        let s = parseInt(sharesInput.value); if(!s || s <= 0) return;
+        // 🔒 防止按鈕連點：一進入函式立刻鎖住按鈕，所有出口（成功或提前 return）都會呼叫 validateSharesInput() 依實際狀態恢復
+        document.getElementById("exec-trade-btn").disabled = true;
+
+        if (isPriceLoading || currentRealPrice === null) { alert("報價連線中，請稍候！"); validateSharesInput(); return; }
+        let s = parseInt(sharesInput.value); if(!s || s <= 0) { validateSharesInput(); return; }
         const rate = getCurrencyMultiplier(currentTicker), origSubtotal = s * currentRealPrice;
         const { feeRate, taxRate } = getMarketFeeConfig(currentTicker);
         const origFee = origSubtotal * feeRate;
@@ -3214,7 +3226,7 @@
         const timestamp = Date.now(), tradeTime = getFullFormattedTimeFromDate(timestamp);
         
         if(tradeMode === 'BUY') {
-            if(twdTotalSpend > state.cash) { alert("現有現金不足！"); return; }
+            if(twdTotalSpend > state.cash) { alert("現有現金不足！"); validateSharesInput(); return; }
             state.cash -= twdTotalSpend; 
             if(!state.holdings[currentTicker]) state.holdings[currentTicker] = { shares: 0, avgPrice: 0 };
             const h = state.holdings[currentTicker], origTotalSpend = origSubtotal + origFee;
@@ -3222,7 +3234,7 @@
             state.ledger.unshift({ time: tradeTime, timestamp: timestamp, action: "BUY", ticker: currentTicker, price: currentRealPrice, shares: s, fee: twdFee, total: twdTotalSpend, realizedPnL: null, rate: rate, origTotalSpend: origTotalSpend });
             triggerDynamicFeedback(`成功買進 ${s} 股 ${currentTicker}`, 'buy', document.getElementById('exec-trade-btn'), `+${s} Shares`);
         } else {
-            const h = state.holdings[currentTicker]; if(!h || h.shares < s) return;
+            const h = state.holdings[currentTicker]; if(!h || h.shares < s) { validateSharesInput(); return; }
             state.cash += twdTotalGet; 
             const costBasisTWD = s * h.avgPrice * rate, realizedPnL = twdTotalGet - costBasisTWD;
             h.shares -= s; if(h.shares === 0) delete state.holdings[currentTicker];
@@ -3231,6 +3243,7 @@
         }
         
         rebuildNavHistoryFromLedger(); 
+        state.lastModified = Date.now();
         saveData(); 
         validateSharesInput();
     }
@@ -3866,11 +3879,45 @@
         });
     }
 
+    // ☁️ 開機拉取 (Boot Pull)：若目前帳號已啟用雲端同步且已設密碼，開機時在背景向雲端取回最新進度，
+    // 避免使用者在其他裝置上的交易/庫存異動未同步回本機，導致看到過期畫面
+    async function bootPullCloudData() {
+        const active = getActiveAccount();
+        if (!active || active.syncEnabled !== true || active.hasPassword !== true) return;
+
+        try {
+            const result = await callCloudApi({ action: 'login', accountId: active.id, passwordHash: active.passwordHash });
+            if (!result || !result.success || !result.stateJSON) return;
+
+            let cloudState = null;
+            try { cloudState = JSON.parse(result.stateJSON); } catch (e) { cloudState = null; }
+            if (!cloudState || typeof cloudState.cash !== 'number') return;
+
+            cloudState.cardTickers = [...new Set(cloudState.cardTickers || ["NVDA", "2330.TW"])];
+            cloudState.recentTickers = cloudState.recentTickers || ["NVDA", "2330.TW"];
+            cloudState.holdings = cloudState.holdings || {};
+            cloudState.ledger = cloudState.ledger || [];
+            cloudState.dividends = cloudState.dividends || [];
+            cloudState.lastDividendCheck = cloudState.lastDividendCheck || 0;
+            cloudState.lastModified = cloudState.lastModified || 0;
+            cloudState.stopLoss = cloudState.stopLoss || { enabled: false, percent: 10 };
+
+            state = cloudState;
+            localStorage.setItem(active.storageKey, JSON.stringify(state));
+            updateAllViews(true);
+            triggerDynamicFeedback('已自動同步雲端最新進度', 'buy', null, null);
+        } catch (e) {
+            console.error('Boot Pull 失敗', e);
+        }
+    }
+
     async function bootSystem() {
         initData(); 
         setTradeMode('BUY');
         renderAccountManagerList();
-        
+
+        await bootPullCloudData();
+
         await Promise.all([
             fetchExchangeRate(),
             fetchHoldingsPrices()
