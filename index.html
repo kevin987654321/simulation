@@ -6,6 +6,7 @@
     <title>AlphaTrade</title>
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
     <style>
@@ -738,6 +739,9 @@
             <button onclick="openQrLoginModal()" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:10px 18px; border-radius:6px; font-weight:bold; cursor:pointer; white-space:nowrap;">
                 行動條碼登入
             </button>
+            <button onclick="openCameraScanModal()" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:10px 18px; border-radius:6px; font-weight:bold; cursor:pointer; white-space:nowrap;">
+                <i class="fa-solid fa-camera"></i> 相機掃描
+            </button>
         </div>
 
         <div id="accounts-list-container" style="max-width:650px; margin:0 auto; width:100%; display:flex; flex-direction:column; gap:10px;"></div>
@@ -799,17 +803,44 @@
     </div>
 </div>
 
-<!-- 📱 QR Code 掃碼登入彈窗（電腦端 Sender） -->
+<!-- 📱 QR Code 掃碼登入彈窗（可切換：顯示 QR Code / 開啟相機掃描） -->
 <div id="qr-login-overlay" class="modal-overlay">
     <div class="glass-panel modal-box" style="align-items:center; text-align:center;">
         <div style="font-weight:bold; font-size:14px; display:flex; align-items:center; gap:8px;"><i class="fa-solid fa-qrcode" style="color:var(--color-acc)"></i> 掃碼登入</div>
-        <div style="font-size:11px; color:#888; line-height:1.6;">請使用已啟用雲端同步帳號的手機，掃描下方 QR Code 進行授權登入</div>
+        <div id="qr-login-desc" style="font-size:11px; color:#888; line-height:1.6;">請使用已啟用雲端同步帳號的手機，掃描下方 QR Code 進行授權登入</div>
+
         <div id="qr-login-image-wrap" style="width:200px; height:200px; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.05); border-radius:8px;">
             <img id="qr-login-image" src="" alt="QR Code" style="width:200px; height:200px; border-radius:6px; display:none;">
             <i class="fa-solid fa-spinner fa-spin" id="qr-login-loading" style="color:#888; font-size:22px;"></i>
         </div>
+
+        <div id="qr-scan-camera-wrap" style="display:none; width:200px; height:200px; position:relative; border-radius:8px; overflow:hidden; background:#000;">
+            <video id="qr-scan-video" playsinline muted style="width:100%; height:100%; object-fit:cover;"></video>
+            <div style="position:absolute; inset:0; border:2px solid var(--color-acc); border-radius:8px; pointer-events:none;"></div>
+        </div>
+        <canvas id="qr-scan-canvas" style="display:none;"></canvas>
+
         <div id="qr-login-status" style="font-size:11px; color:#666;">正在產生 QR Code...</div>
+
+        <button id="qr-scan-toggle-btn" onclick="toggleQrScanMode()" style="width:100%; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.2); color:#ccc; padding:8px; border-radius:6px; cursor:pointer; font-size:11.5px; font-weight:bold;">
+            <i class="fa-solid fa-camera"></i> 改用相機掃描
+        </button>
+
         <button id="qr-login-cancel" onclick="closeQrLoginModal()" style="width:100%; background:transparent; border:1px solid rgba(255,255,255,0.2); color:#aaa; padding:9px 16px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:12px;">取消</button>
+    </div>
+</div>
+
+<!-- 📷 內建相機 QR Code 掃描器彈窗（Receiver 端，免經由手機原生相機 App） -->
+<div id="camera-scan-overlay" class="modal-overlay">
+    <div class="glass-panel modal-box" style="align-items:center; text-align:center;">
+        <div style="font-weight:bold; font-size:14px; display:flex; align-items:center; gap:8px;"><i class="fa-solid fa-camera" style="color:var(--color-acc)"></i> 相機掃描登入</div>
+        <div style="font-size:11px; color:#888;">請將鏡頭對準另一台裝置畫面上的 QR Code</div>
+        <div style="width:240px; height:240px; border-radius:8px; overflow:hidden; background:#000; position:relative;">
+            <video id="camera-scan-video" playsinline autoplay muted style="width:100%; height:100%; object-fit:cover; display:block;"></video>
+            <div style="position:absolute; inset:14%; border:2px solid var(--color-acc); border-radius:8px; pointer-events:none; opacity:0.7;"></div>
+        </div>
+        <div id="camera-scan-status" style="font-size:11px; color:#666;">正在啟動相機...</div>
+        <button id="camera-scan-cancel" onclick="closeCameraScanModal()" style="width:100%; background:transparent; border:1px solid rgba(255,255,255,0.2); color:#aaa; padding:9px 16px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:12px;">取消</button>
     </div>
 </div>
 
@@ -1413,6 +1444,12 @@
     let qrLoginToken = null;
 
     async function openQrLoginModal() {
+        stopCameraScan();
+        qrScanMode = 'display';
+        document.getElementById('qr-scan-camera-wrap').style.display = 'none';
+        document.getElementById('qr-scan-toggle-btn').innerHTML = '<i class="fa-solid fa-camera"></i> 改用相機掃描';
+        document.getElementById('qr-login-desc').innerText = '請使用已啟用雲端同步帳號的手機，掃描下方 QR Code 進行授權登入';
+
         const overlay = document.getElementById('qr-login-overlay');
         const img = document.getElementById('qr-login-image');
         const loading = document.getElementById('qr-login-loading');
@@ -1460,6 +1497,99 @@
         document.getElementById('qr-login-overlay').style.display = 'none';
         clearInterval(qrLoginPollTimer); qrLoginPollTimer = null;
         qrLoginToken = null;
+        stopCameraScan();
+        qrScanMode = 'display';
+    }
+
+    // --- 📷 內建相機掃描器：在同一個掃碼登入 Modal 中，切換為開啟相機掃描其他裝置顯示的 QR Code ---
+    let qrScanMode = 'display'; // 'display' 顯示自己的 QR Code | 'camera' 開啟相機掃描
+    let qrScanStream = null;
+    let qrScanRAF = null;
+
+    function toggleQrScanMode() {
+        if (qrScanMode === 'display') { switchToCameraScan(); }
+        else { switchToDisplayQr(); }
+    }
+
+    function switchToDisplayQr() {
+        stopCameraScan();
+        qrScanMode = 'display';
+        document.getElementById('qr-login-image-wrap').style.display = 'flex';
+        document.getElementById('qr-scan-camera-wrap').style.display = 'none';
+        document.getElementById('qr-scan-toggle-btn').innerHTML = '<i class="fa-solid fa-camera"></i> 改用相機掃描';
+        document.getElementById('qr-login-desc').innerText = '請使用已啟用雲端同步帳號的手機，掃描下方 QR Code 進行授權登入';
+        document.getElementById('qr-login-status').innerText = qrLoginToken ? '請使用手機掃描，掃描並授權後將自動登入' : '正在產生 QR Code...';
+    }
+
+    async function switchToCameraScan() {
+        qrScanMode = 'camera';
+        document.getElementById('qr-login-image-wrap').style.display = 'none';
+        document.getElementById('qr-scan-camera-wrap').style.display = 'block';
+        document.getElementById('qr-scan-toggle-btn').innerHTML = '<i class="fa-solid fa-qrcode"></i> 改用顯示 QR Code';
+        document.getElementById('qr-login-desc').innerText = '請將鏡頭對準另一台裝置上顯示的 QR Code';
+        document.getElementById('qr-login-status').innerText = '正在開啟相機...';
+        await startCameraScan();
+    }
+
+    async function startCameraScan() {
+        if (typeof jsQR === 'undefined') {
+            document.getElementById('qr-login-status').innerText = '掃描器元件載入失敗，請改用顯示 QR Code';
+            return;
+        }
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            document.getElementById('qr-login-status').innerText = '此瀏覽器不支援相機掃描，請改用顯示 QR Code';
+            return;
+        }
+        try {
+            qrScanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        } catch (e) {
+            document.getElementById('qr-login-status').innerText = '無法開啟相機，請確認已授權相機權限';
+            return;
+        }
+        if (qrScanMode !== 'camera') { qrScanStream.getTracks().forEach(t => t.stop()); qrScanStream = null; return; } // 開啟過程中使用者已切回顯示模式
+
+        const video = document.getElementById('qr-scan-video');
+        video.srcObject = qrScanStream;
+        try { await video.play(); } catch (e) {}
+        document.getElementById('qr-login-status').innerText = '掃描中...請將 QR Code 對準鏡頭';
+
+        const canvas = document.getElementById('qr-scan-canvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+        function tick() {
+            if (qrScanMode !== 'camera' || !qrScanStream) return;
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+                if (code && code.data) {
+                    const token = extractQrToken(code.data);
+                    if (token) { closeQrLoginModal(); handleQrAuthorizeAsReceiver(token); return; }
+                    document.getElementById('qr-login-status').innerText = '無法辨識此 QR Code，請確認掃描對象正確，持續掃描中...';
+                }
+            }
+            qrScanRAF = requestAnimationFrame(tick);
+        }
+        qrScanRAF = requestAnimationFrame(tick);
+    }
+
+    function stopCameraScan() {
+        if (qrScanRAF) { cancelAnimationFrame(qrScanRAF); qrScanRAF = null; }
+        if (qrScanStream) { qrScanStream.getTracks().forEach(t => t.stop()); qrScanStream = null; }
+        const video = document.getElementById('qr-scan-video');
+        if (video) video.srcObject = null;
+    }
+
+    // 從掃描到的 QR Code 內容中解析出 qr_token；非本 App 產生的網址格式則視為無法辨識
+    function extractQrToken(data) {
+        try {
+            const url = new URL(data);
+            return url.searchParams.get('qr_token');
+        } catch (e) {
+            return null;
+        }
     }
 
     // 掃碼授權成功後：與 remoteLoginAccount 相同的登入 / 建立本地帳號 / 切換邏輯
@@ -1496,6 +1626,82 @@
 
     let ACCOUNTS = [];
     let activeAccountId = null;
+
+    // --- 📷 內建相機 QR Code 掃描器：直接在頁面內開啟相機掃描，掃到後立即執行授權登入，免經由手機原生相機 App 開啟連結 ---
+    let cameraScanStream = null;
+    let cameraScanRAF = null;
+
+    async function openCameraScanModal() {
+        const overlay = document.getElementById('camera-scan-overlay');
+        const video = document.getElementById('camera-scan-video');
+        const status = document.getElementById('camera-scan-status');
+        status.innerText = '正在啟動相機...';
+        overlay.style.display = 'flex';
+
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            status.innerText = '此瀏覽器不支援相機掃描，請改用手機原生相機掃描 QR Code';
+            return;
+        }
+        if (typeof jsQR !== 'function') {
+            status.innerText = '掃描元件載入失敗，請檢查網路連線後重試';
+            return;
+        }
+
+        try {
+            cameraScanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        } catch (e) {
+            status.innerText = '無法取得相機權限，請確認已允許此網站存取相機';
+            return;
+        }
+        video.srcObject = cameraScanStream;
+        try { await video.play(); } catch (e) {}
+        status.innerText = '請將鏡頭對準 QR Code...';
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+        function scanFrame() {
+            if (!cameraScanStream) return; // 使用者已取消 / Modal 已關閉
+            if (video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+                if (code && code.data) {
+                    handleCameraScanResult(code.data);
+                    return;
+                }
+            }
+            cameraScanRAF = requestAnimationFrame(scanFrame);
+        }
+        cameraScanRAF = requestAnimationFrame(scanFrame);
+    }
+
+    function closeCameraScanModal() {
+        document.getElementById('camera-scan-overlay').style.display = 'none';
+        if (cameraScanRAF) { cancelAnimationFrame(cameraScanRAF); cameraScanRAF = null; }
+        if (cameraScanStream) { cameraScanStream.getTracks().forEach(t => t.stop()); cameraScanStream = null; }
+        const video = document.getElementById('camera-scan-video');
+        if (video) video.srcObject = null;
+    }
+
+    // 掃描到內容後：嘗試解析出 qr_token（可為完整網址或純代碼字串），關閉相機並直接執行與 URL 觸發相同的授權流程
+    function handleCameraScanResult(text) {
+        let token = null;
+        try {
+            const url = new URL(text);
+            token = url.searchParams.get('qr_token');
+        } catch (e) {
+            token = null; // 非合法網址格式
+        }
+        if (!token) token = (text || '').trim(); // 容錯：QR 內容本身即為 token 字串
+
+        closeCameraScanModal();
+        if (!token) { triggerDynamicFeedback('無法辨識掃描內容，請重新掃描', 'sell', null, null); return; }
+        handleQrAuthorizeAsReceiver(token);
+    }
+
 
     function generateAccountId() { return 'acc_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8); }
 
