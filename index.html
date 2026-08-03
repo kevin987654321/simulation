@@ -1715,6 +1715,7 @@
             if (state.achvShowcase.length >= 4) { triggerDynamicFeedback('展示櫃最多只能放 4 個成就', 'sell', null, null); return; }
             state.achvShowcase.push(id);
         }
+        state.lastModified = Date.now();
         saveData();
         renderAchievementsPage();
     }
@@ -1787,7 +1788,7 @@
     //    { success, displayName, totalAssets, winRate, unlockedAchievements: [id,...], achvShowcase: [id,...] }
     // ============================================================
     function getFriendsList() { return state.friends || []; }
-    function saveFriendsList(list) { state.friends = list; saveData(); }
+    function saveFriendsList(list) { state.friends = list; state.lastModified = Date.now(); saveData(); }
 
     async function addFriendByCode() {
         const code = prompt('請輸入對方的登入碼 (Account ID)：');
@@ -2734,6 +2735,10 @@
         checkDividendsIfDue();
 
         triggerDynamicFeedback(`已切換至帳號：${target.name}`, 'buy', null, null);
+
+        checkAchievements();
+        renderAchievementsPage();
+        renderFriendsList();
     }
 
     function updateSettingsAccountLabel() {
@@ -3045,6 +3050,9 @@
         const autoSyncEl = document.getElementById("cfg-auto-sync-enable"); if (autoSyncEl) autoSyncEl.checked = AUTO_SYNC_ENABLED;
         updateTimeframeButtons();
         initTimeMachineDefault(); renderRecentTickers(); renderCards();
+        checkAchievements();
+        renderAchievementsPage();
+        renderFriendsList();
     }
 
     // --- 🛑 停損警示：讀取/寫回目前帳號的停損設定至設定頁 UI ---
@@ -3087,6 +3095,9 @@
                     });
                     state.ledger.sort((a, b) => b.timestamp - a.timestamp); rebuildNavHistoryFromLedger(); saveData(); updateStopLossSettingsUI(); updateDripSettingsUI(); fetchAllCardsData(); 
                     triggerDynamicFeedback("資料已成功還原！", "buy", null, "RESTORED");
+                    checkAchievements();
+                    renderAchievementsPage();
+                    renderFriendsList();
                 } else alert("檔案格式錯誤或損毀！");
             } catch (err) { alert("檔案解析失敗！請確保貼上完整無重複內容。"); }
             event.target.value = ''; 
@@ -4629,6 +4640,10 @@
         } catch (e) {
             console.error('Boot Pull 失敗', e);
         }
+
+        checkAchievements();
+        renderAchievementsPage();
+        renderFriendsList();
     }
 
     async function bootSystem() {
