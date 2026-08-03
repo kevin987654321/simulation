@@ -621,6 +621,18 @@
 
             <div class="glass-panel setting-item">
                 <div>
+                    <div style="font-weight:bold;"><i class="fa-solid fa-triangle-exclamation" style="color:var(--color-sell)"></i> 停損警示</div>
+                    <div style="font-size:11px; color:#777; margin-top:2px;">當帳戶未實現虧損百分比達到設定值時，啟動時或使用中都會跳出警示提醒</div>
+                </div>
+                <label class="switch"><input type="checkbox" id="cfg-stoploss-enable"><span class="slider"></span></label>
+            </div>
+            <div class="glass-panel setting-item" id="stoploss-percent-wrapper" style="display:none;">
+                <div><div style="font-weight:bold;">停損虧損百分比 (%)</div><div style="font-size:11px; color:#777; margin-top:2px;">未實現虧損（依持股成本計算）達此百分比時觸發警示</div></div>
+                <input type="text" id="cfg-stoploss-percent" class="mobile-num" data-decimal="true" value="10" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
+            </div>
+
+            <div class="glass-panel setting-item">
+                <div>
                     <div style="font-weight:bold;"><i class="fa-solid fa-sack-dollar" style="color:#aaa"></i> 股息自動配發</div>
                     <div style="font-size:11px; color:#777; margin-top:2px;">每天自動查詢一次持股股息，歷史未配發者會自動補發　<span id="last-dividend-check-label" style="color:#555;">尚未查詢過</span></div>
                 </div>
@@ -759,6 +771,28 @@
         <button id="boot-lock-confirm" style="width:100%; background:var(--color-acc); color:#000; border:none; padding:11px; border-radius:8px; font-weight:bold; cursor:pointer; margin-top:4px;">解鎖</button>
         <div id="boot-lock-switch-toggle" onclick="toggleBootLockSwitcher()" style="color:#666; font-size:11px; cursor:pointer; text-decoration:underline; margin-top:6px;">切換其他帳號</div>
         <div id="boot-lock-switcher" style="display:none; flex-direction:column; gap:6px; width:100%; margin-top:2px; max-height:160px; overflow-y:auto;"></div>
+    </div>
+</div>
+
+<!-- ⚠️ 停損警示彈窗 -->
+<div id="stoploss-alert-overlay" class="modal-overlay">
+    <div class="glass-panel modal-box" style="align-items:center; text-align:center; border-color:var(--color-sell);">
+        <i class="fa-solid fa-triangle-exclamation" style="color:var(--color-sell); font-size:30px; margin:4px 0;"></i>
+        <div style="font-weight:bold; font-size:15px; color:var(--color-sell);">停損警示觸發！</div>
+        <div id="stoploss-alert-msg" style="color:#ccc; font-size:12.5px; line-height:1.7;"></div>
+        <button id="stoploss-alert-confirm" onclick="dismissStopLossAlert()" style="width:100%; background:var(--color-sell); color:#fff; border:none; padding:11px; border-radius:8px; font-weight:bold; cursor:pointer; margin-top:6px;">我知道了</button>
+    </div>
+</div>
+
+<!-- ☁️ 註銷帳號時，若已啟用雲端同步，選擇是否一併刪除雲端資料 -->
+<div id="delete-choice-overlay" class="modal-overlay">
+    <div class="glass-panel modal-box" style="align-items:center; text-align:center;">
+        <i class="fa-solid fa-cloud-arrow-up" style="color:var(--color-acc); font-size:26px; margin:4px 0;"></i>
+        <div style="font-weight:bold; font-size:14px;">帳號「<span id="delete-choice-account-name" style="color:var(--color-acc);"></span>」已啟用雲端同步</div>
+        <div style="color:#999; font-size:11.5px; line-height:1.6;">請選擇註銷方式：同時刪除雲端資料將無法復原；僅刪除本機則保留雲端資料，日後仍可用登入碼重新登入取回。</div>
+        <button id="delete-choice-both" style="width:100%; background:var(--color-sell); color:#fff; border:none; padding:10px; border-radius:8px; font-weight:bold; cursor:pointer;">同時刪除雲端資料</button>
+        <button id="delete-choice-local" style="width:100%; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:10px; border-radius:8px; font-weight:bold; cursor:pointer;">僅刪除本機資料</button>
+        <button id="delete-choice-cancel" style="width:100%; background:transparent; border:none; color:#888; padding:6px; cursor:pointer; font-size:12px;">取消</button>
     </div>
 </div>
 
@@ -1214,7 +1248,8 @@
     Chart.register(smoothCrosshairPlugin);
 
     const DATA_KEY = "ALPHATRADE_MANUAL_DATA";
-    let state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] } };
+    let state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 } };
+    let stopLossAlertShown = false; // 避免同一次觸發反覆彈出警示，虧損回復到門檻之上才會重置
     let currentTicker = localStorage.getItem('LAST_SELECTED_TICKER') || "NVDA";
 
     // ============================================================
@@ -1247,7 +1282,7 @@
         const acc = ACCOUNTS.find(a => a.id === accountId);
         if (!acc || !acc.syncEnabled || !acc.hasPassword) return { success: false, msg: '此帳號尚未啟用遠端同步' };
         const raw = (accountId === activeAccountId) ? JSON.stringify(state) : (localStorage.getItem(acc.storageKey) || '{}');
-        const result = await callCloudApi({ action: 'sync', accountName: acc.name, passwordHash: acc.passwordHash, stateJSON: raw });
+        const result = await callCloudApi({ action: 'sync', accountId: acc.id, accountName: acc.name, passwordHash: acc.passwordHash, stateJSON: raw });
         if (!silent) {
             if (result.success) triggerDynamicFeedback(`「${acc.name}」已同步至雲端`, 'buy', null, null);
             else triggerDynamicFeedback(result.msg || '雲端同步失敗', 'sell', null, null);
@@ -1294,31 +1329,36 @@
         }
     }
 
-    // 從雲端登入既有帳號：以帳號名稱＋密碼向雲端驗證，成功後在本機建立/還原該帳號
+    // 從雲端登入既有帳號：以獨一無二的 accountId（登入碼，如遊戲引繼碼）＋密碼向雲端驗證，避免同名帳號造成的登入衝突
     async function remoteLoginAccount() {
-        const accName = prompt('請輸入雲端帳號名稱：');
-        if (!accName || !accName.trim()) return;
-        const trimmedName = accName.trim();
+        const inputId = prompt('請輸入雲端帳號登入碼 (Account ID)：');
+        if (!inputId || !inputId.trim()) return;
+        const trimmedId = inputId.trim();
 
-        const pwd = await openPasswordModal({ title: `登入雲端帳號「${trimmedName}」`, desc: '請輸入此雲端帳號的密碼以取回資料' });
+        const pwd = await openPasswordModal({ title: `登入雲端帳號「${trimmedId}」`, desc: '請輸入此雲端帳號的密碼以取回資料' });
         if (pwd === null) return;
 
         const passwordHash = await hashPassword(pwd);
         triggerDynamicFeedback('正在連線雲端驗證帳號...', 'gray', null, null);
-        const result = await callCloudApi({ action: 'login', accountName: trimmedName, passwordHash });
+        const result = await callCloudApi({ action: 'login', accountId: trimmedId, passwordHash });
 
-        if (!result || !result.success) { triggerDynamicFeedback((result && result.msg) || '登入失敗，請確認帳號名稱與密碼是否正確', 'sell', null, null); return; }
+        if (!result || !result.success) { triggerDynamicFeedback((result && result.msg) || '登入失敗，請確認登入碼與密碼是否正確', 'sell', null, null); return; }
 
         let importedState = null;
         try { importedState = JSON.parse(result.stateJSON); } catch (e) { importedState = null; }
         if (!importedState) { triggerDynamicFeedback('雲端資料格式錯誤，無法還原', 'sell', null, null); return; }
+        importedState.stopLoss = importedState.stopLoss || { enabled: false, percent: 10 };
 
-        const id = generateAccountId(), storageKey = `ALPHATRADE_DATA_${id}`;
+        const id = result.accountId || trimmedId || generateAccountId();
+        if (ACCOUNTS.find(a => a.id === id)) { alert('本機已經存在此帳號，無法重複登入！'); return; }
+
+        const storageKey = `ALPHATRADE_DATA_${id}`;
+        const finalName = result.accountName || '雲端下載帳戶';
         localStorage.setItem(storageKey, JSON.stringify(importedState));
-        ACCOUNTS.push({ id, name: trimmedName, storageKey, hasPassword: true, passwordHash, syncEnabled: true, requirePasswordOnBoot: true, createdAt: Date.now() });
+        ACCOUNTS.push({ id, name: finalName, storageKey, hasPassword: true, passwordHash, syncEnabled: true, requirePasswordOnBoot: true, createdAt: Date.now() });
         saveAccountsMeta();
         renderAccountManagerList();
-        triggerDynamicFeedback(`已從雲端登入帳號「${trimmedName}」`, 'buy', null, null);
+        triggerDynamicFeedback(`已從雲端登入帳號「${finalName}」`, 'buy', null, null);
     }
     let ACCOUNTS = [];
     let activeAccountId = null;
@@ -1448,7 +1488,7 @@
         ACCOUNTS.push({ id, name, storageKey, hasPassword: false, passwordHash: null, syncEnabled: false, requirePasswordOnBoot: true, createdAt: Date.now() });
         saveAccountsMeta();
 
-        const freshState = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] } };
+        const freshState = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 } };
         localStorage.setItem(storageKey, JSON.stringify(freshState));
 
         nameInput.value = '';
@@ -1462,6 +1502,33 @@
         if (newName === null) return;
         const trimmed = newName.trim(); if (!trimmed) return;
         acc.name = trimmed; saveAccountsMeta(); renderAccountManagerList();
+        if (acc.syncEnabled) cloudSyncAccount(acc.id, { silent: true }); // 以 accountId 為主鍵更新雲端，不會新增一行
+    }
+
+    // 註銷帳號時，若該帳號已啟用雲端同步，讓使用者選擇：一併刪除雲端資料 / 僅刪除本機資料（保留雲端，可日後憑登入碼取回） / 取消
+    function openAccountDeleteChoiceModal(accName) {
+        return new Promise((resolve) => {
+            const overlay = document.getElementById('delete-choice-overlay');
+            document.getElementById('delete-choice-account-name').innerText = accName;
+            const bothBtn = document.getElementById('delete-choice-both');
+            const localBtn = document.getElementById('delete-choice-local');
+            const cancelBtn = document.getElementById('delete-choice-cancel');
+            overlay.style.display = 'flex';
+
+            function cleanup(result) {
+                overlay.style.display = 'none';
+                bothBtn.removeEventListener('click', onBoth);
+                localBtn.removeEventListener('click', onLocal);
+                cancelBtn.removeEventListener('click', onCancel);
+                resolve(result);
+            }
+            function onBoth() { cleanup('both'); }
+            function onLocal() { cleanup('local'); }
+            function onCancel() { cleanup(null); }
+            bothBtn.addEventListener('click', onBoth);
+            localBtn.addEventListener('click', onLocal);
+            cancelBtn.addEventListener('click', onCancel);
+        });
     }
 
     async function deleteAccount(accountId) {
@@ -1469,6 +1536,18 @@
         if (ACCOUNTS.length <= 1) { alert("至少須保留一個帳號，無法註銷！"); return; }
         if (acc.hasPassword) { const ok = await verifyAccountPassword(acc); if (!ok) return; }
         if (!confirm(`確定要註銷帳號「${acc.name}」嗎？\n此帳號的所有現金、持倉、交易與股息紀錄將被永久刪除，且無法復原！`)) return;
+
+        if (acc.syncEnabled) {
+            const choice = await openAccountDeleteChoiceModal(acc.name);
+            if (!choice) return; // 使用者取消
+            if (choice === 'both') {
+                triggerDynamicFeedback('正在刪除雲端資料...', 'gray', null, null);
+                const result = await callCloudApi({ action: 'delete', accountId: acc.id });
+                if (!result || !result.success) {
+                    if (!confirm((result && result.msg) || '雲端資料刪除失敗，是否仍要繼續刪除本機帳號？')) return;
+                }
+            }
+        }
 
         localStorage.removeItem(acc.storageKey);
         ACCOUNTS = ACCOUNTS.filter(a => a.id !== accountId);
@@ -1496,6 +1575,7 @@
         updateLiveNavNode();
         rebuildNavHistoryFromLedger();
         updateAllViews(true);
+        updateStopLossSettingsUI();
         renderCards();
         renderRecentTickers();
         renderAccountManagerList();
@@ -1528,6 +1608,10 @@
                         ${acc.syncEnabled ? '<i class="fa-solid fa-cloud" style="color:var(--color-buy); font-size:11px;" title="已啟用遠端同步"></i>' : ''}
                     </div>
                     <div style="font-size:10px; color:#666;">建立於 ${new Date(acc.createdAt).toLocaleDateString()}</div>
+                    <div onclick="copyAccountLoginCode('${acc.id}')" title="點擊複製登入碼" style="font-size:10px; color:#666; cursor:pointer; display:flex; align-items:center; gap:5px; width:fit-content;">
+                        <i class="fa-solid fa-copy" style="font-size:9px; color:#555;"></i>
+                        <span>登入碼: <span style="color:#999; font-family:monospace;">${acc.id}</span></span>
+                    </div>
                     <label style="display:flex; align-items:center; gap:8px; margin-top:2px; cursor:pointer;">
                         <span class="switch" style="transform:scale(0.72); transform-origin:left center;">
                             <input type="checkbox" ${acc.syncEnabled ? 'checked' : ''} onclick="toggleAccountSync('${acc.id}')">
@@ -1553,6 +1637,26 @@
                 </div>
             </div>`;
         }).join('');
+    }
+
+    // 複製帳號的登入碼 (accountId) 到剪貼簿，供遠端登入時輸入使用
+    function copyAccountLoginCode(accountId) {
+        const doFeedback = () => triggerDynamicFeedback('已複製登入碼', 'gray', null, null);
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(accountId).then(doFeedback).catch(() => {
+                const ta = document.createElement('textarea');
+                ta.value = accountId; document.body.appendChild(ta); ta.select();
+                try { document.execCommand('copy'); } catch (e) {}
+                document.body.removeChild(ta);
+                doFeedback();
+            });
+        } else {
+            const ta = document.createElement('textarea');
+            ta.value = accountId; document.body.appendChild(ta); ta.select();
+            try { document.execCommand('copy'); } catch (e) {}
+            document.body.removeChild(ta);
+            doFeedback();
+        }
     }
 
     // --- 📌 設定頁置頂展開式快速切換帳戶元件 ---
@@ -1738,6 +1842,7 @@
                 state.ledger = state.ledger || [];
                 state.dividends = state.dividends || [];
                 state.lastDividendCheck = state.lastDividendCheck || 0;
+                state.stopLoss = state.stopLoss || { enabled: false, percent: 10 };
                 state.ledger.forEach(r => {
                     if (!r.timestamp) {
                         let d = new Date(), parts = r.time ? r.time.split(':') : [];
@@ -1748,9 +1853,10 @@
                 if (!state.navHistory || !state.navHistory.timestamps || state.navHistory.timestamps.length === 0) { rebuildNavHistoryFromLedger(); }
             } catch(e) {} 
         } else {
-            state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] } };
+            state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 } };
             rebuildNavHistoryFromLedger(); saveData();
         }
+        stopLossAlertShown = false;
         updateLastDividendCheckLabel();
     }
 
@@ -1775,12 +1881,22 @@
         document.getElementById("trade-ticker").value = currentTicker; 
         document.getElementById("ai-mini-ticker-input").value = currentTicker;
         
+        updateStopLossSettingsUI();
         updateTimeframeButtons();
         initTimeMachineDefault(); renderRecentTickers(); renderCards();
     }
+
+    // --- 🛑 停損警示：讀取/寫回目前帳號的停損設定至設定頁 UI ---
+    function updateStopLossSettingsUI() {
+        state.stopLoss = state.stopLoss || { enabled: false, percent: 10 };
+        const enableEl = document.getElementById("cfg-stoploss-enable"), pctEl = document.getElementById("cfg-stoploss-percent"), wrapper = document.getElementById("stoploss-percent-wrapper");
+        if (enableEl) enableEl.checked = !!state.stopLoss.enabled;
+        if (pctEl) pctEl.value = (typeof state.stopLoss.percent === 'number' && !isNaN(state.stopLoss.percent)) ? state.stopLoss.percent : 10;
+        if (wrapper) wrapper.style.display = state.stopLoss.enabled ? 'flex' : 'none';
+    }
     
     function saveData() { localStorage.setItem(getActiveAccount().storageKey, JSON.stringify(state)); updateAllViews(true); renderCards(); scheduleCloudSync(); }
-    function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { localStorage.removeItem(getActiveAccount().storageKey); state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] } }; initData(); fetchStockHistoryData(currentTicker, true); } }
+    function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { localStorage.removeItem(getActiveAccount().storageKey); state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 } }; initData(); fetchStockHistoryData(currentTicker, true); } }
 
     function exportData() {
         const dataStr = JSON.stringify(state, null, 2), blob = new Blob([dataStr], { type: "application/json" }), url = URL.createObjectURL(blob), a = document.createElement("a");
@@ -1795,14 +1911,14 @@
             try {
                 const importedState = JSON.parse(e.target.result);
                 if (importedState && typeof importedState.cash === 'number') {
-                    state = importedState; state.cardTickers = state.cardTickers || []; state.recentTickers = state.recentTickers || []; state.holdings = state.holdings || {}; state.ledger = state.ledger || []; state.dividends = state.dividends || []; state.lastDividendCheck = state.lastDividendCheck || 0;
+                    state = importedState; state.cardTickers = state.cardTickers || []; state.recentTickers = state.recentTickers || []; state.holdings = state.holdings || {}; state.ledger = state.ledger || []; state.dividends = state.dividends || []; state.lastDividendCheck = state.lastDividendCheck || 0; state.stopLoss = state.stopLoss || { enabled: false, percent: 10 };
                     state.ledger.forEach(r => {
                         if (!r.timestamp) {
                             let d = new Date(), parts = r.time ? r.time.split(':') : [];
                             if (parts.length === 2) { d.setHours(parseInt(parts[0]), parseInt(parts[1]), 0, 0); r.timestamp = d.getTime(); } else if (r.time && r.time.includes('/')) { r.timestamp = new Date(r.time).getTime(); } else { r.timestamp = Date.now(); }
                         }
                     });
-                    state.ledger.sort((a, b) => b.timestamp - a.timestamp); rebuildNavHistoryFromLedger(); saveData(); fetchAllCardsData(); 
+                    state.ledger.sort((a, b) => b.timestamp - a.timestamp); rebuildNavHistoryFromLedger(); saveData(); updateStopLossSettingsUI(); fetchAllCardsData(); 
                     triggerDynamicFeedback("資料已成功還原！", "buy", null, "RESTORED");
                 } else alert("檔案格式錯誤或損毀！");
             } catch (err) { alert("檔案解析失敗！請確保貼上完整無重複內容。"); }
@@ -2656,6 +2772,8 @@
         document.getElementById("nav-pnl").innerText = `${pnl >= 0 ? '+' : ''}$ ${Math.floor(pnl).toLocaleString()} (${totalCost > 0 ? ((pnl/totalCost)*100).toFixed(1) : 0}%)`;
         document.getElementById("nav-pnl").style.color = pnl >= 0 ? "var(--color-buy)" : "var(--color-sell)";
 
+        checkStopLossTrigger(pnl, totalCost);
+
         document.getElementById("holdings-table-body").innerHTML = Object.keys(state.holdings).length ? Object.keys(state.holdings).map(t => {
             const rate = getCurrencyMultiplier(t), h = state.holdings[t];
             const curP = globalPriceCache[t] || (t === currentTicker && currentRealPrice !== null ? currentRealPrice : h.avgPrice);
@@ -2687,6 +2805,29 @@
         
         renderDividendsTable();
         renderAllCharts(animate);
+    }
+
+    // --- 🛑 停損警示：依「持股未實現虧損百分比」（成本基礎）判斷是否觸發，涵蓋開機檢查與使用中定時刷新兩種情境 ---
+    function checkStopLossTrigger(pnl, totalCost) {
+        if (!state.stopLoss || !state.stopLoss.enabled) { stopLossAlertShown = false; return; }
+        if (totalCost <= 0) { stopLossAlertShown = false; return; } // 尚無持股成本可供計算，不觸發
+        const pnlPercent = (pnl / totalCost) * 100;
+        const threshold = -Math.abs(parseFloat(state.stopLoss.percent) || 0);
+        if (pnlPercent <= threshold) {
+            if (!stopLossAlertShown) { stopLossAlertShown = true; showStopLossAlert(pnlPercent); }
+        } else {
+            stopLossAlertShown = false;
+        }
+    }
+
+    function showStopLossAlert(pnlPercent) {
+        const acc = getActiveAccount();
+        document.getElementById('stoploss-alert-msg').innerHTML = `帳號「${acc ? acc.name : ''}」目前持股未實現虧損已達 <span style="color:var(--color-sell); font-weight:bold;">${pnlPercent.toFixed(2)}%</span>，已超過您設定的停損警戒線 ${state.stopLoss.percent}%，請留意風險並考慮執行停損。`;
+        document.getElementById('stoploss-alert-overlay').style.display = 'flex';
+    }
+
+    function dismissStopLossAlert() {
+        document.getElementById('stoploss-alert-overlay').style.display = 'none';
     }
 
     const chartTooltipConfig = {
@@ -2897,6 +3038,24 @@
     document.getElementById("cfg-node-show").addEventListener("change", (e) => { localStorage.setItem('SETTING_NODE_SHOW', e.target.checked); document.getElementById("node-settings-wrapper").classList.toggle("disabled", !e.target.checked); renderAllCharts(); });
     document.getElementById("cfg-crosshair-show").addEventListener("change", (e) => { localStorage.setItem('SETTING_CROSSHAIR_SHOW', e.target.checked); });
     document.getElementById("cfg-node-slider").addEventListener("input", (e) => { const val = parseInt(e.target.value), displayVal = (val >= 60) ? 'All' : val; document.getElementById("cfg-node-val").value = displayVal; localStorage.setItem('SETTING_NODE_VAL', displayVal); const pct = (val - e.target.min) / (e.target.max - e.target.min); document.getElementById("jelly-thumb").style.left = `${pct * 162}px`; renderAllCharts(false); });
+
+    // 🛑 停損警示設定（依目前使用中帳號各自儲存於 state.stopLoss）
+    document.getElementById("cfg-stoploss-enable").addEventListener("change", (e) => {
+        state.stopLoss = state.stopLoss || { enabled: false, percent: 10 };
+        state.stopLoss.enabled = e.target.checked;
+        document.getElementById("stoploss-percent-wrapper").style.display = e.target.checked ? 'flex' : 'none';
+        if (!e.target.checked) { stopLossAlertShown = false; document.getElementById("stoploss-alert-overlay").style.display = 'none'; }
+        saveData();
+    });
+    document.getElementById("cfg-stoploss-percent").addEventListener("change", (e) => {
+        state.stopLoss = state.stopLoss || { enabled: false, percent: 10 };
+        let val = parseFloat(e.target.value);
+        if (isNaN(val) || val <= 0) val = 10;
+        state.stopLoss.percent = val;
+        e.target.value = val;
+        stopLossAlertShown = false;
+        saveData();
+    });
 
     function parseSimpleMarkdown(text) { return text.replace(/\*\*(.*?)\*\*/g, '<strong style="color:#fff">$1</strong>').replace(/^\s*[\-\*]\s+(.*)$/gim, '• $1').replace(/\n/g, '<br>'); }
     function quickAskAI(type) { const prompts = { 'diagnostic': `請針對 ${currentTicker} 當前的現價與 RSI 技術指標進行短線綜合體檢。`, 'risk': `請結合我目前的帳戶現金、${currentTicker} 持倉成本與當前走勢，評估整體風控與止損點設定。`, 'strategy': `考量我目前對 ${currentTicker} 的持股情況，現在適合加碼、減碼還是觀望？` }; document.getElementById("chat-input").value = prompts[type] || ""; askAI(); }
