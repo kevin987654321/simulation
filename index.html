@@ -551,6 +551,10 @@
                     <input type="text" id="tm-price" class="mobile-num" data-decimal="true" onfocus="this.select()" placeholder="自動查詢中..." style="width:100px; background:rgba(0,0,0,0.5); border:1px solid var(--color-acc); color:var(--color-acc); padding:6px; border-radius:6px; font-family:monospace; font-weight:bold;">
                 </div>
                 <div>
+                    <div style="font-size:11px; color:#888; margin-bottom:4px;" title="換算台幣所使用的匯率，預設自動查詢當日歷史匯率，可手動調整以凍結交易當下實際結匯成本">結匯匯率</div>
+                    <input type="text" id="tm-fxrate" class="mobile-num" data-decimal="true" onfocus="this.select()" placeholder="自動查詢中..." style="width:90px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-family:monospace;">
+                </div>
+                <div>
                     <div style="font-size:11px; color:#888; margin-bottom:4px;">股數</div>
                     <input type="text" id="tm-shares" class="mobile-num" onfocus="this.select()" placeholder="10" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-family:monospace;">
                 </div>
@@ -845,6 +849,46 @@
 
     let globalPriceCache = {};
 
+    // ============================================================
+    // 🌍 全球多幣別 Market → Currency 對照表
+    // 依 Ticker 後綴判定所屬市場的正確幣別，取代舊版「不是台股就當美股」的二分法。
+    // 日後擴充新市場（日股 .T、港股 .HK...等）只需在此新增一筆對照，
+    // 無需改動任何計算 NAV / 手續費的邏輯。
+    // ============================================================
+    const MARKET_CURRENCY_MAP = [
+        { suffixes: ['.TW', '.TWO'], currency: 'TWD' }, // 台股 / 台股興櫃
+        { suffixes: ['.T'],         currency: 'JPY' },  // 日股（東京證交所）
+        { suffixes: ['.HK'],        currency: 'HKD' },  // 港股
+        { suffixes: ['.SS', '.SZ'], currency: 'CNY' },  // 中國滬深
+        { suffixes: ['.KS', '.KQ'], currency: 'KRW' },  // 韓股
+        { suffixes: ['.L'],         currency: 'GBP' },  // 英股
+    ];
+
+    // 各幣別兌台幣匯率快取。USD 由 fetchExchangeRate() 即時更新；
+    // 其餘幣別為預留擴充欄位的參考匯率，尚未串接即時匯率 API，
+    // 待日後擴充對應市場時可在此替換為真實 API 來源。
+    let currencyRatesToTWD = {
+        TWD: 1,
+        USD: currentUSDTWD,
+        JPY: 0.21,
+        HKD: 4.15,
+        CNY: 4.5,
+        KRW: 0.024,
+        GBP: 40.5,
+    };
+
+    // 依 Ticker 後綴查表判定所屬幣別；找不到對應後綴時，防呆回退為 USD（維持舊版預設行為，不會讓系統崩潰）
+    function getCurrencyForTicker(ticker) {
+        if (!ticker) return 'USD';
+        const t = ticker.toUpperCase();
+        for (const entry of MARKET_CURRENCY_MAP) {
+            if (entry.suffixes.some(sfx => t.endsWith(sfx))) return entry.currency;
+        }
+        return 'USD'; // 防呆 Fallback：未知後綴一律視為美股/美金計價
+    }
+
+    function isTaiwanTicker(ticker) { return getCurrencyForTicker(ticker) === 'TWD'; }
+
     async function fetchExchangeRate() {
         try {
             const res = await fetch(`${myProxy}${encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/TWD=X')}`, { cache: "no-store" });
@@ -852,6 +896,7 @@
                 const json = await res.json();
                 if (json.chart.result[0].meta.regularMarketPrice) {
                     currentUSDTWD = json.chart.result[0].meta.regularMarketPrice;
+                    currencyRatesToTWD.USD = currentUSDTWD;
                 }
             }
         } catch (e) {}
@@ -876,8 +921,11 @@
         await Promise.all(promises);
     }
 
+    // 依 Ticker 判定的幣別，回傳「換算為台幣」所需的乘數；未知幣別防呆回退至 USD 匯率，避免 NAV 計算中斷
     function getCurrencyMultiplier(ticker) {
-        return (ticker.endsWith('.TW') || ticker.endsWith('.TWO')) ? 1 : currentUSDTWD;
+        const currency = getCurrencyForTicker(ticker);
+        if (currency === 'TWD') return 1;
+        return currencyRatesToTWD[currency] !== undefined ? currencyRatesToTWD[currency] : currentUSDTWD;
     }
 
     function getFullFormattedTimeFromDate(timestamp) {
@@ -909,6 +957,16 @@
 
     function padMinute(el) { if (el.value.length === 1) el.value = '0' + el.value; autoFetchHistoricalPrice(); }
 
+    // 各幣別對應 Yahoo Finance 歷史匯率查詢代碼（用於「結匯匯率」自動查詢，凍結交易當下的實際匯率）
+    const CURRENCY_FX_SYMBOL = {
+        USD: 'TWD=X',
+        JPY: 'JPYTWD=X',
+        HKD: 'HKDTWD=X',
+        CNY: 'CNYTWD=X',
+        KRW: 'KRWTWD=X',
+        GBP: 'GBPTWD=X',
+    };
+
     function initTimeMachineDefault() {
         const d = new Date(); const year = d.getFullYear(); const month = String(d.getMonth() + 1).padStart(2, '0'); const day = String(d.getDate()).padStart(2, '0'); const hours = String(d.getHours()).padStart(2, '0'); const minutes = String(d.getMinutes()).padStart(2, '0');
         document.getElementById('tm-date').value = `${year}-${month}-${day}`; document.getElementById('tm-hour').value = hours; document.getElementById('tm-minute').value = minutes;
@@ -916,6 +974,7 @@
 
     let fetchPriceTimer = null;
     function autoFetchHistoricalPrice() {
+        autoFetchHistoricalFxRate();
         clearTimeout(fetchPriceTimer);
         fetchPriceTimer = setTimeout(async () => {
             const dateVal = document.getElementById("tm-date").value, hVal = document.getElementById("tm-hour").value, mVal = document.getElementById("tm-minute").value;
@@ -954,6 +1013,58 @@
                 }
                 priceInput.placeholder = "查無此時段報價";
             } catch(e) { priceInput.placeholder = "查詢失敗"; }
+        }, 600);
+    }
+
+    // ============================================================
+    // 💱 時光機歷史匯率精準補登 (Historical FX Rate Accuracy)
+    // 補登歷史交易時，自動查詢「交易當下那天」的實際結匯匯率並填入
+    // 「結匯匯率」欄位（可手動覆寫），讓歷史對帳單的台幣成本被凍結在
+    // 交易當下的匯率，而不是隨著之後即時匯率浮動。
+    // ============================================================
+    let fetchFxTimer = null;
+    function autoFetchHistoricalFxRate() {
+        const fxInput = document.getElementById("tm-fxrate");
+        if (!fxInput) return;
+        clearTimeout(fetchFxTimer);
+
+        const dateVal = document.getElementById("tm-date").value, hVal = document.getElementById("tm-hour").value, mVal = document.getElementById("tm-minute").value;
+        const ticker = document.getElementById("tm-ticker").value.trim().toUpperCase();
+        if (!dateVal || !ticker || hVal.length !== 2 || mVal.length !== 2) return;
+
+        const currency = getCurrencyForTicker(ticker);
+        if (currency === 'TWD') { fxInput.value = '1'; fxInput.placeholder = ''; fxInput.disabled = true; return; }
+        fxInput.disabled = false;
+
+        const targetTime = new Date(`${dateVal}T${hVal}:${mVal}`).getTime();
+        if (isNaN(targetTime)) return;
+        const targetSec = Math.floor(targetTime / 1000);
+
+        const symbol = CURRENCY_FX_SYMBOL[currency];
+        if (!symbol) { fxInput.value = (currencyRatesToTWD[currency] !== undefined ? currencyRatesToTWD[currency] : currentUSDTWD).toString(); fxInput.placeholder = ''; return; }
+
+        fxInput.placeholder = "查詢歷史匯率中...";
+        fetchFxTimer = setTimeout(async () => {
+            try {
+                const p1 = targetSec - (86400 * 5), p2 = targetSec + (86400 * 5);
+                const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?period1=${p1}&period2=${p2}&interval=1d`)}`;
+                const res = await fetch(proxyUrl, { cache: "no-store" }), json = await res.json();
+
+                if (json.chart && json.chart.result && json.chart.result[0]) {
+                    const result = json.chart.result[0], timestamps = result.timestamp || [], closes = result.indicators.quote[0].close || [];
+                    let closestIdx = -1, minDiff = Infinity;
+                    for (let i = 0; i < timestamps.length; i++) {
+                        if (closes[i] === null || closes[i] === undefined) continue;
+                        const diff = Math.abs(timestamps[i] - targetSec); if (diff < minDiff) { minDiff = diff; closestIdx = i; }
+                    }
+                    if (closestIdx !== -1) {
+                        fxInput.value = closes[closestIdx].toFixed(4); fxInput.placeholder = '';
+                        triggerDynamicFeedback(`已鎖定當日結匯匯率 ${closes[closestIdx].toFixed(4)}`, 'gray', fxInput, closes[closestIdx].toFixed(4));
+                        return;
+                    }
+                }
+                fxInput.placeholder = "查無歷史匯率，請手動輸入";
+            } catch (e) { fxInput.placeholder = "查詢失敗，請手動輸入"; }
         }, 600);
     }
 
@@ -1204,7 +1315,7 @@
 
         const id = generateAccountId(), storageKey = `ALPHATRADE_DATA_${id}`;
         localStorage.setItem(storageKey, JSON.stringify(importedState));
-        ACCOUNTS.push({ id, name: trimmedName, storageKey, hasPassword: true, passwordHash, syncEnabled: true, createdAt: Date.now() });
+        ACCOUNTS.push({ id, name: trimmedName, storageKey, hasPassword: true, passwordHash, syncEnabled: true, requirePasswordOnBoot: true, createdAt: Date.now() });
         saveAccountsMeta();
         renderAccountManagerList();
         triggerDynamicFeedback(`已從雲端登入帳號「${trimmedName}」`, 'buy', null, null);
@@ -1221,10 +1332,10 @@
         } catch(e) { ACCOUNTS = []; }
 
         if (!Array.isArray(ACCOUNTS) || ACCOUNTS.length === 0) {
-            ACCOUNTS = [{ id: 'default', name: '主帳戶', storageKey: DATA_KEY, hasPassword: false, passwordHash: null, syncEnabled: false, createdAt: Date.now() }];
+            ACCOUNTS = [{ id: 'default', name: '主帳戶', storageKey: DATA_KEY, hasPassword: false, passwordHash: null, syncEnabled: false, requirePasswordOnBoot: true, createdAt: Date.now() }];
             saveAccountsMeta();
         }
-        ACCOUNTS.forEach(a => { if (typeof a.syncEnabled === 'undefined') a.syncEnabled = false; });
+        ACCOUNTS.forEach(a => { if (typeof a.syncEnabled === 'undefined') a.syncEnabled = false; if (typeof a.requirePasswordOnBoot === 'undefined') a.requirePasswordOnBoot = true; });
 
         activeAccountId = localStorage.getItem(ACTIVE_ACCOUNT_KEY);
         if (!activeAccountId || !ACCOUNTS.find(a => a.id === activeAccountId)) {
@@ -1305,6 +1416,7 @@
         const val = await openPasswordModal({ title: `為「${acc.name}」設定密碼`, desc: '請輸入並確認新密碼（之後切換至此帳號需要輸入）', needConfirm: true });
         if (val === null) return;
         acc.passwordHash = await hashPassword(val); acc.hasPassword = true;
+        if (typeof acc.requirePasswordOnBoot === 'undefined') acc.requirePasswordOnBoot = true;
         saveAccountsMeta(); renderAccountManagerList();
         triggerDynamicFeedback(`已為「${acc.name}」設定密碼`, 'buy', null, null);
     }
@@ -1319,13 +1431,21 @@
         triggerDynamicFeedback(wasSynced ? `已移除「${acc.name}」的密碼保護，遠端同步也已一併關閉` : `已移除「${acc.name}」的密碼保護`, 'gray', null, null);
     }
 
+    // 開關「啟動時是否需要輸入密碼」；僅已設定密碼的帳號可調整（密碼是此開關的前提）
+    function toggleRequirePasswordOnBoot(accountId) {
+        const acc = ACCOUNTS.find(a => a.id === accountId); if (!acc || !acc.hasPassword) return;
+        acc.requirePasswordOnBoot = !acc.requirePasswordOnBoot;
+        saveAccountsMeta(); renderAccountManagerList();
+        triggerDynamicFeedback(acc.requirePasswordOnBoot ? `「${acc.name}」啟動 App 時將需要輸入密碼` : `「${acc.name}」啟動 App 時將略過密碼輸入`, 'gray', null, null);
+    }
+
     // --- 帳號 CRUD ---
     function createAccount() {
         const nameInput = document.getElementById('new-account-name');
         let name = nameInput.value.trim();
         if (!name) name = `帳戶 ${ACCOUNTS.length + 1}`;
         const id = generateAccountId(), storageKey = `ALPHATRADE_DATA_${id}`;
-        ACCOUNTS.push({ id, name, storageKey, hasPassword: false, passwordHash: null, syncEnabled: false, createdAt: Date.now() });
+        ACCOUNTS.push({ id, name, storageKey, hasPassword: false, passwordHash: null, syncEnabled: false, requirePasswordOnBoot: true, createdAt: Date.now() });
         saveAccountsMeta();
 
         const freshState = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] } };
@@ -1415,6 +1535,13 @@
                         </span>
                         <span style="font-size:10.5px; color:#888;">遠端登入 / 雲端同步</span>
                     </label>
+                    ${acc.hasPassword ? `<label style="display:flex; align-items:center; gap:8px; margin-top:2px; cursor:pointer;">
+                        <span class="switch" style="transform:scale(0.72); transform-origin:left center;">
+                            <input type="checkbox" ${acc.requirePasswordOnBoot !== false ? 'checked' : ''} onclick="toggleRequirePasswordOnBoot('${acc.id}')">
+                            <span class="slider"></span>
+                        </span>
+                        <span style="font-size:10.5px; color:#888;">啟動 App 時需要輸入密碼</span>
+                    </label>` : ''}
                 </div>
                 <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
                     ${!isActive ? `<button class="account-action-btn accent" onclick="switchAccount('${acc.id}')">切換</button>` : ''}
@@ -1580,7 +1707,7 @@
 
             let holdingsVal = 0;
             for(let t in tempHoldings) {
-                let rateT = (t.endsWith('.TW') || t.endsWith('.TWO')) ? 1 : currentUSDTWD;
+                let rateT = getCurrencyMultiplier(t);
                 let priceToUse = (t === r.ticker) ? r.price : tempHoldings[t].avgPrice;
                 holdingsVal += tempHoldings[t].shares * priceToUse * rateT;
             }
@@ -1590,7 +1717,7 @@
 
         let currentHoldingsVal = 0;
         for(let t in state.holdings) {
-            let rateT = (t.endsWith('.TW') || t.endsWith('.TWO')) ? 1 : currentUSDTWD;
+            let rateT = getCurrencyMultiplier(t);
             let price = globalPriceCache[t] || (t === currentTicker && currentRealPrice !== null ? currentRealPrice : state.holdings[t].avgPrice);
             currentHoldingsVal += state.holdings[t].shares * price * rateT;
         }
@@ -1701,9 +1828,6 @@
         const pnl = holdingsVal - totalCost;
         const pnlPct = totalCost > 0 ? ((pnl / totalCost) * 100).toFixed(2) : "0.00";
 
-        const feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100 || 0;
-        const taxRate = parseFloat(document.getElementById("cfg-tax-rate").value) / 100 || 0;
-
         const DIV = "----------------------------------------";
         let lines = [];
         lines.push("【帳戶總覽】");
@@ -1725,7 +1849,8 @@
                 const curP = globalPriceCache[t] || (t === currentTicker && currentRealPrice !== null ? currentRealPrice : h.avgPrice);
                 const val = h.shares * curP * rate;
                 const itemPnl = val - (h.shares * h.avgPrice * rate);
-                const breakEvenPrice = h.avgPrice / (1 - feeRate - taxRate);
+                const { feeRate: itemFeeRate, taxRate: itemTaxRate } = getMarketFeeConfig(t);
+                const breakEvenPrice = h.avgPrice / (1 - itemFeeRate - itemTaxRate);
                 lines.push(`代號: ${t}`);
                 lines.push(`  持有股數:    ${h.shares}`);
                 lines.push(`  買入均價:    $${h.avgPrice.toFixed(2)}（損平賣價 $${breakEvenPrice.toFixed(2)}）`);
@@ -1797,9 +1922,12 @@
         const timestamp = new Date(`${dateVal}T${hVal}:${mVal}`).getTime();
         if (timestamp > Date.now()) { alert("不能登錄未來的交易時間！"); return; }
         
-        const rate = getCurrencyMultiplier(ticker), origSubtotal = shares * price;
-        const origFee = origSubtotal * (parseFloat(document.getElementById("cfg-fee-rate").value) / 100);
-        const origTax = action === 'SELL' ? origSubtotal * (parseFloat(document.getElementById("cfg-tax-rate").value) / 100) : 0;
+        const fxInputVal = parseFloat(document.getElementById("tm-fxrate")?.value);
+        const rate = (!isNaN(fxInputVal) && fxInputVal > 0) ? fxInputVal : getCurrencyMultiplier(ticker);
+        const origSubtotal = shares * price;
+        const { feeRate, taxRate } = getMarketFeeConfig(ticker);
+        const origFee = origSubtotal * feeRate;
+        const origTax = action === 'SELL' ? origSubtotal * taxRate : 0;
         const twdTotalSpend = (origSubtotal + origFee) * rate, twdTotalGet = (origSubtotal - origFee - origTax) * rate, twdFee = origFee * rate, twdTax = origTax * rate;
         
         let newTrade = { time: getFullFormattedTimeFromDate(timestamp), timestamp: timestamp, action: action, ticker: ticker, price: price, shares: shares, fee: action === 'BUY' ? twdFee : (twdFee + twdTax), tax: twdTax, total: action === 'BUY' ? twdTotalSpend : twdTotalGet, rate: rate, origTotalSpend: action === 'BUY' ? (origSubtotal + origFee) : null, realizedPnL: null };
@@ -1812,7 +1940,7 @@
         state.ledger = testLedger;
         reconcileDividendsAfterLedgerChange();
         state.cash = result.cash + getDividendsTotalTWD(); state.holdings = result.holdings;
-        document.getElementById("tm-ticker").value = ''; document.getElementById("tm-price").value = ''; document.getElementById("tm-shares").value = '';
+        document.getElementById("tm-ticker").value = ''; document.getElementById("tm-price").value = ''; document.getElementById("tm-shares").value = ''; document.getElementById("tm-fxrate").value = ''; document.getElementById("tm-fxrate").disabled = false;
         rebuildNavHistoryFromLedger(); saveData(); triggerDynamicFeedback("已成功補登時光機交易", "buy", null, "INSERTED");
     }
 
@@ -2189,7 +2317,7 @@
         state.cardTickers.forEach(t => {
             const rate = getCurrencyMultiplier(t);
             const cData = cardsDataCache[t] || { price: 0, rsi: null }, h = state.holdings[t] || { shares: 0, avgPrice: 0 };
-            const gross = h.shares * cData.price * rate, feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100, taxRate = parseFloat(document.getElementById("cfg-tax-rate").value) / 100;
+            const gross = h.shares * cData.price * rate, { feeRate, taxRate } = getMarketFeeConfig(t);
             const netValue = gross > 0 ? (gross - (gross * feeRate) - (gross * taxRate)) : 0, totalCost = h.shares * h.avgPrice * rate, pnl = netValue - totalCost;
             const pnlColor = pnl >= 0 ? 'var(--color-buy)' : 'var(--color-sell)';
             const deleteBtn = isCardEditMode ? `<div class="delete-btn" onclick="removeCard('${t}')" style="position:absolute; top:-8px; right:-8px; background:var(--color-sell); color:#fff; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:10; box-shadow:0 0 10px rgba(0,0,0,0.5);"><i class="fa-solid fa-minus"></i></div>` : '';
@@ -2437,9 +2565,25 @@
         validateSharesInput();
     }
     
+    // ============================================================
+    // 💸 多市場稅費分離 (Market-Specific Tax & Fee Segregation)
+    // 依 Ticker 判定所屬市場，決定該筆交易應套用的手續費/證交稅率：
+    // - 台股 (.TW / .TWO)：手續費 + 賣出證交稅 0.3%
+    // - 美股與其他無證交稅市場：僅手續費，證交稅為 0；
+    //   secFeeRate 為擴充欄位(如美股 SEC Fee)，目前先設為 0，
+    //   待日後有明確費率規則時可直接在此擴充，不影響其他市場邏輯。
+    // ============================================================
+    function getMarketFeeConfig(ticker) {
+        const feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100;
+        if (isTaiwanTicker(ticker)) {
+            return { feeRate, taxRate: parseFloat(document.getElementById("cfg-tax-rate").value) / 100, secFeeRate: 0 };
+        }
+        return { feeRate, taxRate: 0, secFeeRate: 0 };
+    }
+
     function validateSharesInput() {
         if (isPriceLoading || currentRealPrice === null) { document.getElementById("exec-trade-btn").disabled = true; return; }
-        let s = parseInt(sharesInput.value) || 0; const rate = getCurrencyMultiplier(currentTicker), feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100;
+        let s = parseInt(sharesInput.value) || 0; const rate = getCurrencyMultiplier(currentTicker), feeRate = getMarketFeeConfig(currentTicker).feeRate;
         const maxBuy = Math.max(0, Math.floor(state.cash / (currentRealPrice * rate * (1 + feeRate)))); const holding = state.holdings[currentTicker]?.shares || 0;
         document.getElementById("holding-shares-display").innerText = holding.toLocaleString();
         
@@ -2456,8 +2600,9 @@
     function recalculateOrder() {
         if (isPriceLoading || currentRealPrice === null) return;
         let s = parseInt(sharesInput.value) || 0; const rate = getCurrencyMultiplier(currentTicker);
-        const subtotal = s * currentRealPrice * rate, fee = subtotal * (parseFloat(document.getElementById("cfg-fee-rate").value) / 100);
-        const tax = tradeMode === 'SELL' ? subtotal * (parseFloat(document.getElementById("cfg-tax-rate").value) / 100) : 0;
+        const { feeRate, taxRate } = getMarketFeeConfig(currentTicker);
+        const subtotal = s * currentRealPrice * rate, fee = subtotal * feeRate;
+        const tax = tradeMode === 'SELL' ? subtotal * taxRate : 0;
         document.getElementById("calc-subtotal").innerText = `$ ${subtotal.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
         document.getElementById("calc-fee").innerText = `$ ${fee.toFixed(2)}`; document.getElementById("calc-tax").innerText = `$ ${tax.toFixed(2)}`;
         const total = tradeMode === 'BUY' ? (subtotal + fee) : (subtotal - fee - tax); const totalEl = document.getElementById("calc-total");
@@ -2468,8 +2613,9 @@
         if (isPriceLoading || currentRealPrice === null) { alert("報價連線中，請稍候！"); return; }
         let s = parseInt(sharesInput.value); if(!s || s <= 0) return;
         const rate = getCurrencyMultiplier(currentTicker), origSubtotal = s * currentRealPrice;
-        const origFee = origSubtotal * (parseFloat(document.getElementById("cfg-fee-rate").value) / 100);
-        const origTax = tradeMode === 'SELL' ? origSubtotal * (parseFloat(document.getElementById("cfg-tax-rate").value) / 100) : 0;
+        const { feeRate, taxRate } = getMarketFeeConfig(currentTicker);
+        const origFee = origSubtotal * feeRate;
+        const origTax = tradeMode === 'SELL' ? origSubtotal * taxRate : 0;
         const twdTotalSpend = (origSubtotal + origFee) * rate, twdTotalGet = (origSubtotal - origFee - origTax) * rate, twdFee = origFee * rate, twdTax = origTax * rate;
         const timestamp = Date.now(), tradeTime = getFullFormattedTimeFromDate(timestamp);
         
@@ -2514,7 +2660,7 @@
             const rate = getCurrencyMultiplier(t), h = state.holdings[t];
             const curP = globalPriceCache[t] || (t === currentTicker && currentRealPrice !== null ? currentRealPrice : h.avgPrice);
             const val = h.shares * curP * rate, itemPnl = val - (h.shares * h.avgPrice * rate);
-            const feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100, taxRate = parseFloat(document.getElementById("cfg-tax-rate").value) / 100;
+            const feeRate = getMarketFeeConfig(t).feeRate, taxRate = getMarketFeeConfig(t).taxRate;
             const breakEvenPrice = h.avgPrice / (1 - feeRate - taxRate);
 
             return `<tr>
@@ -3050,7 +3196,7 @@
 
     async function gateBootWithPassword() {
         const active = getActiveAccount();
-        if (!active || !active.hasPassword) return;
+        if (!active || !active.hasPassword || active.requirePasswordOnBoot === false) return;
 
         const overlay = document.getElementById('boot-lock-overlay');
         document.getElementById('boot-lock-account-name').innerText = active.name;
