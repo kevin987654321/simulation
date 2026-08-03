@@ -735,6 +735,9 @@
             <button onclick="remoteLoginAccount()" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:10px 18px; border-radius:6px; font-weight:bold; cursor:pointer; white-space:nowrap;">
                 <i class="fa-solid fa-cloud-arrow-down"></i> 遠端登入
             </button>
+            <button onclick="openQrLoginModal()" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:10px 18px; border-radius:6px; font-weight:bold; cursor:pointer; white-space:nowrap;">
+                行動條碼登入
+            </button>
         </div>
 
         <div id="accounts-list-container" style="max-width:650px; margin:0 auto; width:100%; display:flex; flex-direction:column; gap:10px;"></div>
@@ -793,6 +796,20 @@
         <button id="delete-choice-both" style="width:100%; background:var(--color-sell); color:#fff; border:none; padding:10px; border-radius:8px; font-weight:bold; cursor:pointer;">同時刪除雲端資料</button>
         <button id="delete-choice-local" style="width:100%; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:10px; border-radius:8px; font-weight:bold; cursor:pointer;">僅刪除本機資料</button>
         <button id="delete-choice-cancel" style="width:100%; background:transparent; border:none; color:#888; padding:6px; cursor:pointer; font-size:12px;">取消</button>
+    </div>
+</div>
+
+<!-- 📱 QR Code 掃碼登入彈窗（電腦端 Sender） -->
+<div id="qr-login-overlay" class="modal-overlay">
+    <div class="glass-panel modal-box" style="align-items:center; text-align:center;">
+        <div style="font-weight:bold; font-size:14px; display:flex; align-items:center; gap:8px;"><i class="fa-solid fa-qrcode" style="color:var(--color-acc)"></i> 掃碼登入</div>
+        <div style="font-size:11px; color:#888; line-height:1.6;">請使用已啟用雲端同步帳號的手機，掃描下方 QR Code 進行授權登入</div>
+        <div id="qr-login-image-wrap" style="width:200px; height:200px; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.05); border-radius:8px;">
+            <img id="qr-login-image" src="" alt="QR Code" style="width:200px; height:200px; border-radius:6px; display:none;">
+            <i class="fa-solid fa-spinner fa-spin" id="qr-login-loading" style="color:#888; font-size:22px;"></i>
+        </div>
+        <div id="qr-login-status" style="font-size:11px; color:#666;">正在產生 QR Code...</div>
+        <button id="qr-login-cancel" onclick="closeQrLoginModal()" style="width:100%; background:transparent; border:1px solid rgba(255,255,255,0.2); color:#aaa; padding:9px 16px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:12px;">取消</button>
     </div>
 </div>
 
@@ -1360,6 +1377,123 @@
         renderAccountManagerList();
         triggerDynamicFeedback(`已從雲端登入帳號「${finalName}」`, 'buy', null, null);
     }
+
+    // 修改雲端登入碼（accountId）：僅已啟用雲端同步的帳號可修改；需先向雲端查詢確認新代碼全域唯一，通過後才將雲端資料遷移至新代碼並刪除舊代碼
+    async function changeAccountLoginCode(accountId) {
+        const acc = ACCOUNTS.find(a => a.id === accountId); if (!acc || !acc.syncEnabled) return;
+        if (acc.hasPassword) { const ok = await verifyAccountPassword(acc); if (!ok) return; }
+
+        const inputId = prompt(`請輸入「${acc.name}」的新登入碼（英數字/底線/連字號，3-40字，需全域唯一）：`, acc.id);
+        if (!inputId || !inputId.trim()) return;
+        const newId = inputId.trim();
+        if (newId === acc.id) return;
+        if (!/^[a-zA-Z0-9_-]{3,40}$/.test(newId)) { alert('登入碼格式不正確，僅能包含英文字母、數字、底線與連字號，長度需為 3-40'); return; }
+        if (ACCOUNTS.find(a => a.id === newId)) { alert('本機已存在相同登入碼的帳號，請換一個'); return; }
+
+        triggerDynamicFeedback('正在向雲端查詢登入碼是否可用...', 'gray', null, null);
+        const check = await callCloudApi({ action: 'check_id', accountId: newId });
+        if (!check || !check.success) { triggerDynamicFeedback((check && check.msg) || '查詢失敗，請稍後再試', 'sell', null, null); return; }
+        if (check.exists) { triggerDynamicFeedback('此登入碼已被使用，請換一個', 'sell', null, null); return; }
+
+        const oldId = acc.id;
+        const raw = (oldId === activeAccountId) ? JSON.stringify(state) : (localStorage.getItem(acc.storageKey) || '{}');
+        triggerDynamicFeedback('查詢確認唯一，正在更新登入碼...', 'gray', null, null);
+        const createResult = await callCloudApi({ action: 'sync', accountId: newId, accountName: acc.name, passwordHash: acc.passwordHash, stateJSON: raw });
+        if (!createResult || !createResult.success) { triggerDynamicFeedback((createResult && createResult.msg) || '更新登入碼失敗', 'sell', null, null); return; }
+        await callCloudApi({ action: 'delete', accountId: oldId }); // 清除舊登入碼在雲端的資料
+
+        acc.id = newId;
+        if (activeAccountId === oldId) { activeAccountId = newId; localStorage.setItem(ACTIVE_ACCOUNT_KEY, activeAccountId); }
+        saveAccountsMeta(); renderAccountManagerList();
+        triggerDynamicFeedback(`登入碼已更新為「${newId}」`, 'buy', null, null);
+    }
+
+    // --- 📱 QR Code 掃碼登入：電腦端 (Sender) 產生並顯示 QR Code ---
+    let qrLoginPollTimer = null;
+    let qrLoginToken = null;
+
+    async function openQrLoginModal() {
+        const overlay = document.getElementById('qr-login-overlay');
+        const img = document.getElementById('qr-login-image');
+        const loading = document.getElementById('qr-login-loading');
+        const status = document.getElementById('qr-login-status');
+        img.style.display = 'none'; img.src = '';
+        loading.style.display = 'block';
+        status.innerText = '正在產生 QR Code...';
+        overlay.style.display = 'flex';
+
+        const result = await callCloudApi({ action: 'create_qr' });
+        if (!result || !result.success || !result.token) {
+            status.innerText = (result && result.msg) || '產生 QR Code 失敗，請稍後再試';
+            loading.style.display = 'none';
+            return;
+        }
+        qrLoginToken = result.token;
+        const authUrl = window.location.origin + window.location.pathname + '?qr_token=' + result.token;
+        const qrImgUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(authUrl);
+
+        img.onload = () => { loading.style.display = 'none'; img.style.display = 'block'; };
+        img.src = qrImgUrl;
+        status.innerText = '請使用手機掃描，掃描並授權後將自動登入';
+
+        clearInterval(qrLoginPollTimer);
+        qrLoginPollTimer = setInterval(pollQrLoginStatus, 2500);
+    }
+
+    async function pollQrLoginStatus() {
+        if (!qrLoginToken) return;
+        const result = await callCloudApi({ action: 'check_qr', token: qrLoginToken });
+        if (!result || !result.success) return; // 忽略暫時性錯誤，繼續輪詢
+
+        if (result.status === 'authorized') {
+            clearInterval(qrLoginPollTimer); qrLoginPollTimer = null;
+            closeQrLoginModal();
+            await handleQrAuthorized(result);
+        } else if (result.status === 'expired' || result.status === 'invalid') {
+            clearInterval(qrLoginPollTimer); qrLoginPollTimer = null;
+            document.getElementById('qr-login-status').innerText = 'QR Code 已過期，請重新開啟';
+        }
+        // status === 'pending' 時持續等待，不做任何動作
+    }
+
+    function closeQrLoginModal() {
+        document.getElementById('qr-login-overlay').style.display = 'none';
+        clearInterval(qrLoginPollTimer); qrLoginPollTimer = null;
+        qrLoginToken = null;
+    }
+
+    // 掃碼授權成功後：與 remoteLoginAccount 相同的登入 / 建立本地帳號 / 切換邏輯
+    async function handleQrAuthorized(result) {
+        let importedState = null;
+        try { importedState = JSON.parse(result.stateJSON); } catch (e) { importedState = null; }
+        if (!importedState) { triggerDynamicFeedback('雲端資料格式錯誤，無法還原', 'sell', null, null); return; }
+        importedState.stopLoss = importedState.stopLoss || { enabled: false, percent: 10 };
+
+        const id = result.accountId || generateAccountId();
+        const finalName = result.accountName || '雲端下載帳戶';
+
+        const existing = ACCOUNTS.find(a => a.id === id);
+        if (existing) {
+            // 本機已存在此帳號：更新資料並切換過去
+            localStorage.setItem(existing.storageKey, JSON.stringify(importedState));
+            existing.name = finalName;
+            saveAccountsMeta();
+            activeAccountId = null;
+            await switchAccount(id);
+            triggerDynamicFeedback(`已透過掃碼登入帳號「${finalName}」`, 'buy', null, null);
+            return;
+        }
+
+        const storageKey = `ALPHATRADE_DATA_${id}`;
+        localStorage.setItem(storageKey, JSON.stringify(importedState));
+        ACCOUNTS.push({ id, name: finalName, storageKey, hasPassword: true, passwordHash: result.passwordHash || null, syncEnabled: true, requirePasswordOnBoot: true, createdAt: Date.now() });
+        saveAccountsMeta();
+        renderAccountManagerList();
+        activeAccountId = null;
+        await switchAccount(id);
+        triggerDynamicFeedback(`已透過掃碼登入帳號「${finalName}」`, 'buy', null, null);
+    }
+
     let ACCOUNTS = [];
     let activeAccountId = null;
 
@@ -1461,6 +1595,18 @@
         triggerDynamicFeedback(`已為「${acc.name}」設定密碼`, 'buy', null, null);
     }
 
+    // 更改既有密碼：需先驗證舊密碼，再輸入並確認新密碼；若該帳號已啟用雲端同步，同步更新雲端的密碼雜湊
+    async function changeAccountPassword(accountId) {
+        const acc = ACCOUNTS.find(a => a.id === accountId); if (!acc || !acc.hasPassword) return;
+        const ok = await verifyAccountPassword(acc); if (!ok) return;
+        const val = await openPasswordModal({ title: `為「${acc.name}」更改密碼`, desc: '請輸入並確認新密碼', needConfirm: true });
+        if (val === null) return;
+        acc.passwordHash = await hashPassword(val);
+        saveAccountsMeta(); renderAccountManagerList();
+        triggerDynamicFeedback(`已更改「${acc.name}」的密碼`, 'buy', null, null);
+        if (acc.syncEnabled) cloudSyncAccount(acc.id, { silent: true }); // 密碼雜湊變更，需同步至雲端供日後驗證
+    }
+
     async function removeAccountPassword(accountId) {
         const acc = ACCOUNTS.find(a => a.id === accountId); if (!acc || !acc.hasPassword) return;
         const ok = await verifyAccountPassword(acc); if (!ok) return;
@@ -1529,6 +1675,21 @@
             localBtn.addEventListener('click', onLocal);
             cancelBtn.addEventListener('click', onCancel);
         });
+    }
+
+    // 僅註銷雲端帳號：刪除雲端上該帳號的資料並關閉本機的遠端同步標記，但完整保留本機帳號與所有本機資料
+    async function deleteCloudOnlyAccount(accountId) {
+        const acc = ACCOUNTS.find(a => a.id === accountId); if (!acc || !acc.syncEnabled) return;
+        if (acc.hasPassword) { const ok = await verifyAccountPassword(acc); if (!ok) return; }
+        if (!confirm(`確定要僅註銷「${acc.name}」的雲端帳號嗎？\n雲端上的資料將被永久刪除且無法復原，但本機資料會完整保留。`)) return;
+
+        triggerDynamicFeedback('正在刪除雲端資料...', 'gray', null, null);
+        const result = await callCloudApi({ action: 'delete', accountId: acc.id });
+        if (!result || !result.success) { triggerDynamicFeedback((result && result.msg) || '雲端資料刪除失敗', 'sell', null, null); return; }
+
+        acc.syncEnabled = false;
+        saveAccountsMeta(); renderAccountManagerList();
+        triggerDynamicFeedback(`已僅註銷「${acc.name}」的雲端帳號，本機資料已保留`, 'gray', null, null);
     }
 
     async function deleteAccount(accountId) {
@@ -1631,8 +1792,11 @@
                     ${!isActive ? `<button class="account-action-btn accent" onclick="switchAccount('${acc.id}')">切換</button>` : ''}
                     <button class="account-action-btn" onclick="renameAccount('${acc.id}')">重新命名</button>
                     ${acc.hasPassword
-                        ? `<button class="account-action-btn" onclick="removeAccountPassword('${acc.id}')">移除密碼</button>`
+                        ? `<button class="account-action-btn" onclick="changeAccountPassword('${acc.id}')">更改密碼</button>
+                           <button class="account-action-btn" onclick="removeAccountPassword('${acc.id}')">移除密碼</button>`
                         : `<button class="account-action-btn" onclick="setAccountPassword('${acc.id}')">設定密碼</button>`}
+                    ${acc.syncEnabled ? `<button class="account-action-btn" onclick="changeAccountLoginCode('${acc.id}')">修改登入碼</button>` : ''}
+                    ${acc.syncEnabled ? `<button class="account-action-btn danger" onclick="deleteCloudOnlyAccount('${acc.id}')">僅註銷雲端</button>` : ''}
                     <button class="account-action-btn danger" onclick="deleteAccount('${acc.id}')">註銷</button>
                 </div>
             </div>`;
@@ -3423,10 +3587,42 @@
         setInterval(() => { checkDividendsIfDue(); }, 30 * 60 * 1000);
     }
 
+    // --- 📱 QR Code 掃碼登入：手機端 (Receiver) 掃描網址並授權 ---
+    async function handleQrAuthorizeAsReceiver(qrToken) {
+        const active = getActiveAccount();
+        if (!active || !active.hasPassword || !active.syncEnabled) {
+            alert('目前帳號尚未啟用雲端同步，無法授權');
+            return;
+        }
+
+        if (!confirm(`是否授權其他裝置登入帳號：${active.name}？\n\n為確認身分，請輸入此帳號密碼：`)) return;
+
+        const pwd = await openPasswordModal({ title: `授權登入「${active.name}」`, desc: '請輸入此帳號密碼以確認身分並授權' });
+        if (pwd === null) return;
+
+        const passwordHash = await hashPassword(pwd);
+        triggerDynamicFeedback('正在向雲端送出授權...', 'gray', null, null);
+        const result = await callCloudApi({ action: 'auth_qr', token: qrToken, accountId: active.id, passwordHash });
+
+        if (result && result.success) {
+            triggerDynamicFeedback('授權成功！請查看您的另一台裝置。', 'buy', null, null);
+        } else {
+            triggerDynamicFeedback((result && result.msg) || '授權失敗，密碼可能有誤或 QR Code 已過期', 'sell', null, null);
+        }
+    }
+
     async function startApp() {
         loadAccountsMeta();
+
+        // 及早讀取網址列的 qr_token 參數，並立即清空網址，避免重新整理時重複觸發授權
+        const urlParams = new URLSearchParams(window.location.search);
+        const qrToken = urlParams.get('qr_token');
+        if (qrToken) { history.replaceState({}, document.title, window.location.pathname); }
+
         await gateBootWithPassword();
         await bootSystem();
+
+        if (qrToken) { handleQrAuthorizeAsReceiver(qrToken); }
     }
 
     startApp(); 
