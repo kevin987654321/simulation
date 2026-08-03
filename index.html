@@ -1830,6 +1830,25 @@
         triggerDynamicFeedback(`已為「${acc.name}」設定密碼`, 'buy', null, null);
     }
 
+    // 🩹 修復：改名／改密碼屬於「帳號中介資料」異動，不會經過 executeTrade 等交易流程去更新 state.lastModified。
+    // 若不主動更新，推送到雲端的 sync 請求會被樂觀鎖判定為「本機資料未比雲端新」而遭拒絕（isOutdated），
+    // 導致改名/改密碼永遠同步不到雲端。這裡確保無論改的是不是目前使用中的帳號，都能正確蓋上新時間戳。
+    function touchAccountLastModified(accountId) {
+        if (accountId === activeAccountId) {
+            state.lastModified = Date.now();
+            return;
+        }
+        const acc = ACCOUNTS.find(a => a.id === accountId);
+        if (!acc) return;
+        try {
+            const raw = localStorage.getItem(acc.storageKey);
+            if (!raw) return;
+            const s = JSON.parse(raw);
+            s.lastModified = Date.now();
+            localStorage.setItem(acc.storageKey, JSON.stringify(s));
+        } catch (e) {}
+    }
+
     // 更改既有密碼：需先驗證舊密碼，再輸入並確認新密碼；若該帳號已啟用雲端同步，同步更新雲端的密碼雜湊
     async function changeAccountPassword(accountId) {
         const acc = ACCOUNTS.find(a => a.id === accountId); if (!acc || !acc.hasPassword) return;
@@ -1839,7 +1858,7 @@
         acc.passwordHash = await hashPassword(val);
         saveAccountsMeta(); renderAccountManagerList();
         triggerDynamicFeedback(`已更改「${acc.name}」的密碼`, 'buy', null, null);
-        if (acc.syncEnabled) cloudSyncAccount(acc.id, { silent: true }); // 密碼雜湊變更，需同步至雲端供日後驗證
+        if (acc.syncEnabled) { touchAccountLastModified(acc.id); cloudSyncAccount(acc.id, { silent: true }); } // 密碼雜湊變更，需同步至雲端供日後驗證
     }
 
     async function removeAccountPassword(accountId) {
@@ -1931,12 +1950,17 @@
         if (!adminPwdCache) return;
         const newName = prompt('請輸入新的帳號名稱：');
         if (newName === null || newName.trim() === '') return;
+        const trimmedName = newName.trim();
 
-        const result = await callCloudApi({ action: 'admin_rename', adminPwd: adminPwdCache, targetId, newName: newName.trim() });
+        const result = await callCloudApi({ action: 'admin_rename', adminPwd: adminPwdCache, targetId, newName: trimmedName });
         if (result && result.success) {
             const row = document.getElementById(`admin-acc-${targetId}`);
-            if (row) { const nameEl = row.querySelector('.admin-acc-name'); if (nameEl) nameEl.innerText = newName.trim(); }
-            triggerDynamicFeedback(`已將雲端帳號改名為：${newName.trim()}`, 'buy', null, null);
+            if (row) { const nameEl = row.querySelector('.admin-acc-name'); if (nameEl) nameEl.innerText = trimmedName; }
+            // 🩹 修復：若本機也存在這個帳號，一併更新本機名稱；否則下次自動同步 (scheduleCloudSync / Boot Pull 之外的其他觸發)
+            // 會用本機還沒改到的舊名稱去覆蓋雲端，讓開發者模式的強制改名看起來像「沒有真的生效」。
+            const localAcc = ACCOUNTS.find(a => a.id === targetId);
+            if (localAcc) { localAcc.name = trimmedName; saveAccountsMeta(); renderAccountManagerList(); }
+            triggerDynamicFeedback(`已將雲端帳號改名為：${trimmedName}`, 'buy', null, null);
         } else {
             alert((result && result.msg) || '改名失敗');
         }
@@ -1969,7 +1993,7 @@
         if (newName === null) return;
         const trimmed = newName.trim(); if (!trimmed) return;
         acc.name = trimmed; saveAccountsMeta(); renderAccountManagerList();
-        if (acc.syncEnabled) cloudSyncAccount(acc.id, { silent: true }); // 以 accountId 為主鍵更新雲端，不會新增一行
+        if (acc.syncEnabled) { touchAccountLastModified(acc.id); cloudSyncAccount(acc.id, { silent: true }); } // 以 accountId 為主鍵更新雲端，不會新增一行
     }
 
     // 註銷帳號時，若該帳號已啟用雲端同步，讓使用者選擇：一併刪除雲端資料 / 僅刪除本機資料（保留雲端，可日後憑登入碼取回） / 取消
