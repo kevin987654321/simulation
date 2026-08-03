@@ -715,6 +715,13 @@
                 <div><div style="font-weight:bold; color:var(--color-sell);">重置初始帳戶資金</div><div style="font-size:11px; color:#777; margin-top:2px;">清空歷史帳本，還原現金 100 萬起始金額</div></div>
                 <button onclick="resetAccount()" style="background:var(--color-sell); border:none; color:#fff; padding:8px 14px; border-radius:6px; font-weight:bold; cursor:pointer;">執行重置</button>
             </div>
+
+            <div class="glass-panel setting-item" style="border-color: rgba(255,255,255,0.15); margin-top:10px;">
+                <div><div style="font-weight:bold; color:#999;"><i class="fa-solid fa-screwdriver-wrench"></i> 開發者模式</div><div style="font-size:11px; color:#777; margin-top:2px;">需輸入開發者密碼</div></div>
+                <button onclick="openAdminPanel()" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:8px 14px; border-radius:6px; font-weight:bold; cursor:pointer; white-space:nowrap;">
+                    進入管理
+                </button>
+            </div>
         </div>
     </main>
 
@@ -738,9 +745,6 @@
             </button>
             <button onclick="openQrLoginModal()" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:10px 18px; border-radius:6px; font-weight:bold; cursor:pointer; white-space:nowrap;">
                 行動條碼登入
-            </button>
-            <button onclick="openCameraScanModal()" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:10px 18px; border-radius:6px; font-weight:bold; cursor:pointer; white-space:nowrap;">
-                <i class="fa-solid fa-camera"></i> 相機掃描
             </button>
         </div>
 
@@ -841,6 +845,19 @@
         </div>
         <div id="camera-scan-status" style="font-size:11px; color:#666;">正在啟動相機...</div>
         <button id="camera-scan-cancel" onclick="closeCameraScanModal()" style="width:100%; background:transparent; border:1px solid rgba(255,255,255,0.2); color:#aaa; padding:9px 16px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:12px;">取消</button>
+    </div>
+</div>
+
+<!-- 🛠️ 開發者雲端管理 Modal：顯示雲端上的所有帳號，可強制改名 / 強制刪除 -->
+<div id="admin-panel-overlay" class="modal-overlay">
+    <div class="glass-panel modal-box" style="max-width:420px; max-height:80vh;">
+        <div style="font-weight:bold; font-size:14px; display:flex; align-items:center; justify-content:space-between; gap:8px;">
+            <span><i class="fa-solid fa-screwdriver-wrench" style="color:var(--color-acc)"></i> 開發者雲端管理</span>
+            <button onclick="closeAdminPanel()" style="background:transparent; border:none; color:#888; font-size:15px; cursor:pointer;"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div style="font-size:11px; color:#888; line-height:1.6;">以下為雲端上的所有帳號，強制刪除 / 改名將直接作用於雲端資料，請小心操作。</div>
+        <div id="admin-panel-status" style="font-size:11.5px; color:#666; text-align:center; padding:6px 0;"></div>
+        <div id="admin-panel-list" style="display:flex; flex-direction:column; gap:8px; overflow-y:auto; max-height:50vh;"></div>
     </div>
 </div>
 
@@ -1607,6 +1624,7 @@
             // 本機已存在此帳號：更新資料並切換過去
             localStorage.setItem(existing.storageKey, JSON.stringify(importedState));
             existing.name = finalName;
+            if (result.passwordHash) existing.passwordHash = result.passwordHash; // 🩹 確保密碼雜湊同步寫入，避免本機密碼與雲端不一致導致後續驗證失敗
             saveAccountsMeta();
             activeAccountId = null;
             await switchAccount(id);
@@ -1784,6 +1802,10 @@
     }
 
     async function verifyAccountPassword(acc) {
+        // 🩹 防卡死機制：若 passwordHash 為 null / 空字串（例如透過掃碼登入時雲端未回傳密碼雜湊導致的異常狀態），
+        // 代表本機已無從驗證任何密碼，直接放行，避免帳號因此被永久鎖死、無法刪除或移除密碼保護。
+        if (!acc.passwordHash) return true;
+
         const result = await openPasswordModal({
             title: `輸入「${acc.name}」的密碼`, desc: '此帳號已設定密碼保護',
             onSubmit: async (val) => (await hashPassword(val)) === acc.passwordHash
@@ -1829,6 +1851,92 @@
         acc.requirePasswordOnBoot = !acc.requirePasswordOnBoot;
         saveAccountsMeta(); renderAccountManagerList();
         triggerDynamicFeedback(acc.requirePasswordOnBoot ? `「${acc.name}」啟動 App 時將需要輸入密碼` : `「${acc.name}」啟動 App 時將略過密碼輸入`, 'gray', null, null);
+    }
+
+    // --- 🛠️ 開發者雲端管理 (Admin Panel)：直接管理雲端上的所有帳號 ---
+    let adminPwdCache = null; // 視窗開啟期間暫存已驗證成功的開發者密碼，避免重複輸入
+
+    async function openAdminPanel() {
+        let pwd = adminPwdCache;
+        if (!pwd) {
+            pwd = prompt('請輸入開發者密碼：');
+            if (pwd === null || pwd === '') return;
+        }
+
+        const overlay = document.getElementById('admin-panel-overlay');
+        const listEl = document.getElementById('admin-panel-list');
+        const statusEl = document.getElementById('admin-panel-status');
+        listEl.innerHTML = '';
+        statusEl.innerText = '正在向雲端驗證並取得帳號清單...';
+        overlay.style.display = 'flex';
+
+        const result = await callCloudApi({ action: 'admin_get_all', adminPwd: pwd });
+
+        if (!result || !result.success) {
+            statusEl.innerText = '';
+            overlay.style.display = 'none';
+            adminPwdCache = null;
+            alert((result && result.msg) || '開發者密碼錯誤');
+            return;
+        }
+
+        adminPwdCache = pwd; // 驗證成功後暫存，供後續改名 / 刪除操作直接帶入
+        renderAdminAccountList(result.accounts || []);
+        statusEl.innerText = (result.accounts && result.accounts.length) ? '' : '雲端目前沒有任何帳號';
+    }
+
+    function closeAdminPanel() {
+        document.getElementById('admin-panel-overlay').style.display = 'none';
+        adminPwdCache = null; // 關閉視窗即清除暫存的開發者密碼
+    }
+
+    function renderAdminAccountList(accounts) {
+        const listEl = document.getElementById('admin-panel-list');
+        listEl.innerHTML = accounts.map(acc => `
+            <div class="glass-panel" id="admin-acc-${acc.accountId}" style="padding:10px 12px; display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                <div style="min-width:0; flex:1;">
+                    <div class="admin-acc-name" style="font-weight:bold; font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(acc.accountName || '(未命名)')}</div>
+                    <div style="font-size:10.5px; color:#666; font-family:monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(acc.accountId)}</div>
+                </div>
+                <div style="display:flex; gap:6px; flex-shrink:0;">
+                    <button onclick="adminRenameAccount('${acc.accountId}')" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:6px 10px; border-radius:6px; font-size:11px; cursor:pointer; font-weight:bold; white-space:nowrap;">強制改名</button>
+                    <button onclick="adminDeleteAccount('${acc.accountId}')" style="background:rgba(255,69,96,0.15); border:1px solid var(--color-sell); color:var(--color-sell); padding:6px 10px; border-radius:6px; font-size:11px; cursor:pointer; font-weight:bold; white-space:nowrap;">強制刪除</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    async function adminDeleteAccount(targetId) {
+        if (!adminPwdCache) return;
+        if (!confirm(`確定要從雲端強制刪除帳號「${targetId}」嗎？此操作無法復原！`)) return;
+
+        const result = await callCloudApi({ action: 'admin_delete', adminPwd: adminPwdCache, targetId });
+        if (result && result.success) {
+            const row = document.getElementById(`admin-acc-${targetId}`);
+            if (row) row.remove();
+            triggerDynamicFeedback(`已從雲端刪除帳號：${targetId}`, 'sell', null, null);
+        } else {
+            alert((result && result.msg) || '刪除失敗');
+        }
+    }
+
+    async function adminRenameAccount(targetId) {
+        if (!adminPwdCache) return;
+        const newName = prompt('請輸入新的帳號名稱：');
+        if (newName === null || newName.trim() === '') return;
+
+        const result = await callCloudApi({ action: 'admin_rename', adminPwd: adminPwdCache, targetId, newName: newName.trim() });
+        if (result && result.success) {
+            const row = document.getElementById(`admin-acc-${targetId}`);
+            if (row) { const nameEl = row.querySelector('.admin-acc-name'); if (nameEl) nameEl.innerText = newName.trim(); }
+            triggerDynamicFeedback(`已將雲端帳號改名為：${newName.trim()}`, 'buy', null, null);
+        } else {
+            alert((result && result.msg) || '改名失敗');
+        }
+    }
+
+    function escapeHtml(str) {
+        return String(str).replace(/[&<>"']/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
     }
 
     // --- 帳號 CRUD ---
@@ -3803,7 +3911,13 @@
 
         if (!confirm(`是否授權其他裝置登入帳號：${active.name}？\n\n為確認身分，請輸入此帳號密碼：`)) return;
 
-        const pwd = await openPasswordModal({ title: `授權登入「${active.name}」`, desc: '請輸入此帳號密碼以確認身分並授權' });
+        const pwd = await openPasswordModal({
+            title: `授權登入「${active.name}」`, desc: '請輸入此帳號密碼以確認身分並授權',
+            onSubmit: async (val) => {
+                if (!active.passwordHash) return true; // 容錯：本機無密碼雜湊可比對時，交由雲端驗證結果決定
+                return (await hashPassword(val)) === active.passwordHash;
+            }
+        });
         if (pwd === null) return;
 
         const passwordHash = await hashPassword(pwd);
