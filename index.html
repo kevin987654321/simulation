@@ -20,6 +20,18 @@
             --color-sell: #ff4560;
             --color-acc: #00d4ff;
             --color-warn: #feb019;
+
+            /* ✨ 流光特效（Glow Border FX）相關變數 */
+            --glow-color: rgba(255, 255, 255, 0.25);
+            --glow-radius: 300px;
+            --glow-brightness: 1;
+            --glow-user-strength: 1;   /* 由設定頁滑桿控制，0 ~ 2 */
+            --glow-platform-scale: 1;  /* 桌機為 1，手機（陀螺儀模式）自動減弱 */
+        }
+
+        /* 📱 觸控/手機裝置：流光特效強度自動減弱 */
+        @media (hover: none), (pointer: coarse) {
+            :root { --glow-platform-scale: 0.45; }
         }
 
         * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
@@ -62,36 +74,42 @@
             border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px;
             backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
             box-shadow: 0 10px 35px rgba(0, 0, 0, 0.7); transition: border-color 0.4s ease, box-shadow 0.4s ease;
-            --glow-x: 50%; --glow-y: 50%;
         }
         .panel-flash-buy { border-color: var(--color-buy) !important; box-shadow: 0 0 25px rgba(0, 255, 170, 0.3) !important; }
         .panel-flash-sell { border-color: var(--color-sell) !important; box-shadow: 0 0 25px rgba(255, 69, 96, 0.3) !important; }
 
         /* =========================================
-           ✨ 流光特效 (Flowing Light Border Glow)
-           桌面：滑鼠位置即時追蹤；手機：陀螺儀傾斜角度追蹤（強度減弱）
+           ✨ 流光特效（Glow Border FX）
+           套用於所有 .glass-panel 區塊與子區塊（含 Gemini 顧問室）。
+           採用 mask-composite 技巧，只讓「邊框」發光，游標/光源正下方
+           的卡片內容不會出現光暈色塊。
+           桌機：滑鼠移動時，離游標最近的邊框會亮起（:hover 觸發，跟參考版本行為一致）。
+           手機：改由陀螺儀（裝置傾斜）驅動虛擬光源位置，效果會自動減弱。
            ========================================= */
-        .glass-panel::before {
+        .glass-panel { --gx: 50%; --gy: 50%; }
+        .glass-panel::after {
             content: "";
             position: absolute;
             inset: 0;
             border-radius: inherit;
-            padding: 1px;
-            background: radial-gradient(260px circle at var(--glow-x) var(--glow-y), rgba(255,255,255,0.6), rgba(0,212,255,0.15) 35%, transparent 62%);
+            padding: 1.5px;
+            background: radial-gradient(var(--glow-radius) circle at var(--gx) var(--gy), var(--glow-color), transparent 45%);
+            filter: brightness(var(--glow-brightness));
             -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
             -webkit-mask-composite: xor;
-                    mask-composite: exclude;
+            mask-composite: exclude;
             opacity: 0;
-            transition: opacity 0.35s ease;
+            transition: opacity 0.3s ease;
             pointer-events: none;
+            z-index: 6;
         }
         @media (hover: hover) and (pointer: fine) {
-            .glass-panel:hover::before { opacity: 1; }
+            .glass-panel:hover::after {
+                opacity: calc(min(1, var(--glow-user-strength)) * var(--glow-platform-scale));
+            }
         }
-        /* 手機（陀螺儀模式）：光效持續存在但強度減弱，不依賴 hover */
-        body.gyro-glow-active .glass-panel::before {
-            opacity: 0.32;
-            background: radial-gradient(180px circle at var(--glow-x) var(--glow-y), rgba(255,255,255,0.4), rgba(0,212,255,0.1) 35%, transparent 58%);
+        .glass-panel.glow-gyro-active::after {
+            opacity: calc(min(1, var(--glow-user-strength)) * var(--glow-platform-scale));
         }
 
         #toast-container { position: fixed; top: 20px; right: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
@@ -507,7 +525,7 @@
                     <div class="chart-wrapper"><canvas id="navChart"></canvas></div>
                 </div>
 
-                <div id="ai-commander">
+                <div id="ai-commander" class="glass-panel">
                     <div class="ai-header">
                         <span><i class="fa-solid fa-robot" style="color: var(--color-acc)"></i> GEMINI 戰略操盤顧問室</span>
                         <span style="color:#666; font-size:11px;">深度數據連線中</span>
@@ -825,13 +843,28 @@
                 </button>
             </div>
 
-            <div class="glass-panel setting-item" id="setting-gyro-permission">
+            <div class="glass-panel setting-item">
                 <div>
-                    <div style="font-weight:bold;"><i class="fa-solid fa-compass" style="color:var(--color-acc)"></i> 陀螺儀權限（手機流光特效）</div>
-                    <div style="font-size:11px; color:#777; margin-top:2px;">開啟後，卡片邊框的流光將隨手機傾斜角度即時變化；狀態：<span id="gyro-permission-status" style="color:var(--color-acc); font-weight:bold;">尚未詢問</span></div>
+                    <div style="font-weight:bold;"><i class="fa-solid fa-wand-magic-sparkles" style="color:#aaa"></i> 流光特效強度</div>
+                    <div style="font-size:11px; color:#777; margin-top:2px;">調整卡片邊框流光特效的強度，預設 100% 與初始外觀相同</div>
                 </div>
-                <button onclick="openGyroPermissionFromSettings()" style="background:rgba(0,212,255,0.15); border:1px solid var(--color-acc); color:var(--color-acc); padding:8px 14px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s; white-space:nowrap;">
-                    <i class="fa-solid fa-mobile-screen-button"></i> 允許取用陀螺儀
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <div class="jelly-slider-container">
+                        <div class="jelly-slider-track"></div>
+                        <div class="jelly-slider-thumb" id="glow-jelly-thumb"></div>
+                        <input type="range" id="cfg-glow-intensity" min="0" max="200" value="100" class="jelly-slider-input">
+                    </div>
+                    <input type="text" id="cfg-glow-intensity-val" class="jelly-input" value="100%" readonly>
+                </div>
+            </div>
+
+            <div class="glass-panel setting-item" id="gyro-permission-setting-item">
+                <div>
+                    <div style="font-weight:bold;"><i class="fa-solid fa-mobile-screen-button" style="color:#aaa"></i> 陀螺儀權限</div>
+                    <div id="gyro-permission-desc" style="font-size:11px; color:#777; margin-top:2px;">授權後，手機版流光特效可依裝置傾斜方向呈現（僅手機需要）</div>
+                </div>
+                <button id="gyro-permission-btn" onclick="requestGyroPermission(true)" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:8px 14px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s; white-space:nowrap;">
+                    <i class="fa-solid fa-arrows-rotate"></i> 允許取用陀螺儀
                 </button>
             </div>
 
@@ -1062,16 +1095,16 @@
     </div>
 </div>
 
-<!-- 🧭 陀螺儀流光特效授權 Onboarding 彈窗（僅首次載入顯示一次，授權狀態會寫入 localStorage） -->
-<div id="gyro-onboarding-overlay" class="modal-overlay" style="z-index:40000;">
-    <div class="glass-panel modal-box" style="align-items:center; text-align:center;">
-        <i class="fa-solid fa-compass" style="color:var(--color-acc); font-size:30px; margin:4px 0;"></i>
-        <div style="font-weight:bold; font-size:15px;">啟用陀螺儀流光特效</div>
-        <div style="color:#999; font-size:12px; line-height:1.7;">偵測到您正在使用行動裝置。允許取用陀螺儀（方向感測器）後，卡片邊框的流光將隨手機傾斜角度即時變化；若不允許，卡片仍可正常使用，僅不會有此動態效果。之後仍可到「系統設定」重新開啟。</div>
-        <button onclick="closeGyroOnboarding(true)" style="width:100%; background:var(--color-acc); color:#000; border:none; padding:11px; border-radius:8px; font-weight:bold; cursor:pointer; margin-top:6px;">
-            <i class="fa-solid fa-mobile-screen-button"></i> 允許取用陀螺儀
+<!-- ✨ 流光特效：手機陀螺儀「僅限一次」首次載入授權彈窗 -->
+<div id="gyro-onboarding-overlay" class="modal-overlay">
+    <div class="glass-panel modal-box" style="align-items:center; text-align:center; max-width:340px;">
+        <i class="fa-solid fa-mobile-screen-button" style="color:var(--color-acc); font-size:28px; margin:4px 0;"></i>
+        <div style="font-weight:bold; font-size:15px;">開啟陀螺儀流光特效？</div>
+        <div style="color:#999; font-size:12px; line-height:1.7;">授權後，手機版的卡片邊框流光特效可依裝置傾斜方向呈現（效果已自動減弱）。您也可以之後在「系統設定」中隨時開啟或重新授權，這不會影響其他功能的使用。</div>
+        <button id="gyro-onboarding-allow-btn" style="width:100%; background:var(--color-acc); color:#000; border:none; padding:11px; border-radius:8px; font-weight:bold; cursor:pointer; margin-top:6px;">
+            <i class="fa-solid fa-arrows-rotate"></i> 允許取用陀螺儀
         </button>
-        <button onclick="closeGyroOnboarding(false)" style="width:100%; background:transparent; border:1px solid rgba(255,255,255,0.2); color:#aaa; padding:9px 16px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:12px;">暫不開啟</button>
+        <button id="gyro-onboarding-skip-btn" style="width:100%; background:transparent; border:1px solid rgba(255,255,255,0.2); color:#aaa; padding:9px 16px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:12px;">暫不開啟</button>
     </div>
 </div>
 
@@ -4827,181 +4860,6 @@
         }
     }
 
-    /* =========================================================
-       ✨ 流光特效控制模組 (Flowing Light Glow Controller)
-       - 桌面：滑鼠位置即時追蹤所有 .glass-panel 卡片邊框
-       - 手機：DeviceOrientation 陀螺儀傾斜角度追蹤，強度減弱
-       - iOS 13+：透過使用者手勢呼叫 DeviceOrientationEvent.requestPermission()
-       - Android 等：不需手動要求權限，偵測到即直接綁定
-       - 授權彈窗僅在首次載入顯示一次，結果（granted/denied）寫入 localStorage
-       ========================================================= */
-    const GYRO_PERM_KEY = 'gyroGlowPermissionState'; // 'granted' | 'denied'
-    let gyroListenerBound = false;
-
-    function isTouchDevice() {
-        return ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) ||
-               (window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches);
-    }
-    function supportsGyro() {
-        return typeof DeviceOrientationEvent !== 'undefined';
-    }
-    function needsExplicitGyroPermission() {
-        return supportsGyro() && typeof DeviceOrientationEvent.requestPermission === 'function';
-    }
-
-    // ---- 桌面：滑鼠追蹤（rAF 節流，避免每次 mousemove 都重排） ----
-    function initMouseGlow() {
-        let mx = 0, my = 0, ticking = false;
-        document.addEventListener('mousemove', (e) => {
-            mx = e.clientX; my = e.clientY;
-            if (ticking) return;
-            ticking = true;
-            requestAnimationFrame(() => {
-                document.querySelectorAll('.glass-panel').forEach(el => {
-                    const rect = el.getBoundingClientRect();
-                    if (rect.bottom < 0 || rect.top > window.innerHeight || rect.right < 0 || rect.left > window.innerWidth) return;
-                    el.style.setProperty('--glow-x', (mx - rect.left) + 'px');
-                    el.style.setProperty('--glow-y', (my - rect.top) + 'px');
-                });
-                ticking = false;
-            });
-        }, { passive: true });
-    }
-
-    // ---- 手機：陀螺儀追蹤（帶阻尼平滑，強度已於 CSS 中減弱） ----
-    function bindGyroListener() {
-        if (gyroListenerBound) return;
-        gyroListenerBound = true;
-        document.body.classList.add('gyro-glow-active');
-
-        let targetX = 0.5, targetY = 0.5, curX = 0.5, curY = 0.5;
-
-        window.addEventListener('deviceorientation', (e) => {
-            const gamma = e.gamma || 0;   // 左右傾斜 -90 ~ 90
-            const beta = e.beta || 0;     // 前後傾斜 -180 ~ 180
-            targetX = Math.min(1, Math.max(0, 0.5 + (gamma / 45)));
-            targetY = Math.min(1, Math.max(0, 0.5 + ((beta - 45) / 45)));
-        }, true);
-
-        function tick() {
-            curX += (targetX - curX) * 0.08;
-            curY += (targetY - curY) * 0.08;
-            document.querySelectorAll('.glass-panel').forEach(el => {
-                const rect = el.getBoundingClientRect();
-                if (rect.bottom < -50 || rect.top > window.innerHeight + 50) return;
-                el.style.setProperty('--glow-x', (rect.width * curX) + 'px');
-                el.style.setProperty('--glow-y', (rect.height * curY) + 'px');
-            });
-            requestAnimationFrame(tick);
-        }
-        requestAnimationFrame(tick);
-    }
-
-    // ---- 實際發出權限請求（iOS 需使用者手勢 / Android 直接綁定）----
-    function requestGyroPermission(onDone) {
-        if (needsExplicitGyroPermission()) {
-            DeviceOrientationEvent.requestPermission()
-                .then(state => {
-                    if (state === 'granted') {
-                        localStorage.setItem(GYRO_PERM_KEY, 'granted');
-                        bindGyroListener();
-                    } else {
-                        localStorage.setItem(GYRO_PERM_KEY, 'denied');
-                    }
-                    if (onDone) onDone(state);
-                })
-                .catch(() => {
-                    localStorage.setItem(GYRO_PERM_KEY, 'denied');
-                    if (onDone) onDone('denied');
-                });
-        } else if (supportsGyro()) {
-            // Android 等不需手動授權的裝置
-            localStorage.setItem(GYRO_PERM_KEY, 'granted');
-            bindGyroListener();
-            if (onDone) onDone('granted');
-        } else {
-            if (onDone) onDone('unsupported');
-        }
-    }
-
-    // ---- 曾經授權過（granted）：iOS 每次頁面重新載入仍需一次使用者手勢才能重新取得資料，
-    //      但依規格「不再顯示彈窗」，因此改為監聽使用者第一次點擊/觸控時「靜默」重新綁定 ----
-    function silentlyRebindOnFirstInteraction() {
-        if (!needsExplicitGyroPermission()) {
-            bindGyroListener();
-            return;
-        }
-        const rebind = () => {
-            DeviceOrientationEvent.requestPermission().then(state => {
-                if (state === 'granted') bindGyroListener();
-            }).catch(() => {});
-        };
-        document.addEventListener('click', rebind, { once: true, passive: true });
-        document.addEventListener('touchstart', rebind, { once: true, passive: true });
-    }
-
-    // ---- 首次載入 Onboarding 彈窗：已詢問過（無論同意或拒絕）就永不再顯示 ----
-    function initGyroOnboarding() {
-        if (!isTouchDevice() || !supportsGyro()) return;
-
-        const savedState = localStorage.getItem(GYRO_PERM_KEY);
-        if (savedState === 'granted') {
-            silentlyRebindOnFirstInteraction();
-            return;
-        }
-        if (savedState === 'denied') {
-            return; // 已拒絕過，不再打擾，可從系統設定重新開啟
-        }
-        const overlay = document.getElementById('gyro-onboarding-overlay');
-        if (overlay) overlay.style.display = 'flex';
-    }
-
-    window.closeGyroOnboarding = function (grant) {
-        const overlay = document.getElementById('gyro-onboarding-overlay');
-        if (grant) {
-            requestGyroPermission(() => {
-                if (overlay) overlay.style.display = 'none';
-                updateGyroSettingsStatusUI();
-            });
-        } else {
-            localStorage.setItem(GYRO_PERM_KEY, 'denied');
-            if (overlay) overlay.style.display = 'none';
-            updateGyroSettingsStatusUI();
-        }
-    };
-
-    // ---- 系統設定內「陀螺儀權限」按鈕：略過首次彈窗或想重新啟用時使用 ----
-    window.openGyroPermissionFromSettings = function () {
-        if (!supportsGyro()) {
-            triggerDynamicFeedback('此裝置不支援陀螺儀功能', 'gray', null, null);
-            return;
-        }
-        requestGyroPermission((state) => {
-            updateGyroSettingsStatusUI();
-            if (state === 'granted') {
-                triggerDynamicFeedback('已啟用陀螺儀流光特效', 'buy', null, null);
-            } else {
-                triggerDynamicFeedback('未取得陀螺儀權限，如需開啟請至裝置系統設定允許此網站使用動作與方向感測器', 'sell', null, null);
-            }
-        });
-    };
-
-    function updateGyroSettingsStatusUI() {
-        const label = document.getElementById('gyro-permission-status');
-        if (!label) return;
-        if (!supportsGyro()) { label.textContent = '此裝置不支援'; return; }
-        const savedState = localStorage.getItem(GYRO_PERM_KEY);
-        if (savedState === 'granted') label.textContent = '已授權';
-        else if (savedState === 'denied') label.textContent = '未授權（可點擊右側按鈕重新啟用）';
-        else label.textContent = '尚未詢問';
-    }
-
-    function initGlowEffect() {
-        initMouseGlow();
-        initGyroOnboarding();
-        updateGyroSettingsStatusUI();
-    }
-
     async function startApp() {
         loadAccountsMeta();
 
@@ -5016,8 +4874,192 @@
         if (qrToken) { handleQrAuthorizeAsReceiver(qrToken); }
     }
 
+    /* =========================================
+       ✨ 流光特效 (Glow Border FX)
+       桌機：滑鼠移動追蹤，只有滑鼠所在的卡片邊框會亮起（與參考版本行為一致）。
+       手機：改由陀螺儀（裝置傾斜）驅動虛擬光源位置，效果自動減弱；
+             不需要使用者持續觸摸螢幕，且游標/光源正下方不會出現填色光暈，
+             只有卡片「邊框」會依距離發亮。
+       ========================================= */
+    const GlowFX = (function () {
+        let rafId = null;
+        let gyroActive = false;
+        let gyroBaseline = null;
+
+        function isTouchDevice() {
+            return (('ontouchstart' in window) || navigator.maxTouchPoints > 0) &&
+                   window.matchMedia('(pointer: coarse)').matches;
+        }
+
+        function updateTargets(clientX, clientY, markGyro) {
+            const panels = document.querySelectorAll('.glass-panel');
+            for (let i = 0; i < panels.length; i++) {
+                const el = panels[i];
+                const rect = el.getBoundingClientRect();
+                if (rect.bottom < -80 || rect.top > window.innerHeight + 80 || rect.right < -80 || rect.left > window.innerWidth + 80) continue;
+                el.style.setProperty('--gx', (clientX - rect.left) + 'px');
+                el.style.setProperty('--gy', (clientY - rect.top) + 'px');
+                if (markGyro && !el.classList.contains('glow-gyro-active')) el.classList.add('glow-gyro-active');
+            }
+        }
+
+        function schedule(clientX, clientY, markGyro) {
+            if (rafId) return;
+            rafId = requestAnimationFrame(() => {
+                rafId = null;
+                updateTargets(clientX, clientY, markGyro);
+            });
+        }
+
+        // --- 桌機：滑鼠追蹤 ---
+        document.addEventListener('mousemove', (e) => {
+            if (gyroActive) return;
+            schedule(e.clientX, e.clientY, false);
+        }, { passive: true });
+
+        // --- 手機：陀螺儀驅動虛擬光源 ---
+        function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+        function handleOrientation(e) {
+            if (e.beta === null || e.beta === undefined || e.gamma === null || e.gamma === undefined) return;
+            if (!gyroBaseline) gyroBaseline = { beta: e.beta, gamma: e.gamma };
+
+            const dBeta = clamp(e.beta - gyroBaseline.beta, -35, 35);
+            const dGamma = clamp(e.gamma - gyroBaseline.gamma, -35, 35);
+
+            const vx = window.innerWidth / 2 + (dGamma / 35) * (window.innerWidth * 0.5);
+            const vy = window.innerHeight / 2 + (dBeta / 35) * (window.innerHeight * 0.5);
+
+            schedule(vx, vy, true);
+        }
+
+        function activateGyro() {
+            if (gyroActive) return;
+            gyroActive = true;
+            gyroBaseline = null;
+            window.addEventListener('deviceorientation', handleOrientation, true);
+        }
+
+        return { activateGyro, isTouchDevice };
+    })();
+
+    /* =========================================
+       ✨ 陀螺儀權限機制
+       - iOS 13+：DeviceOrientationEvent.requestPermission()，必須在使用者手勢中呼叫
+       - Android 等裝置：不需手動要求權限，偵測到 API 存在即可直接綁定
+       - 使用 localStorage 記錄「是否已詢問過」與「授權結果」，僅首次載入詢問一次
+       ========================================= */
+    const GYRO_STATUS_KEY = 'GYRO_PERMISSION_STATUS';   // 'granted' | 'denied'
+    const GYRO_SEEN_KEY = 'GYRO_ONBOARDING_SEEN';       // '1' 代表已經詢問過（無論結果為何）
+
+    function updateGyroPermissionUI() {
+        const btn = document.getElementById('gyro-permission-btn');
+        const desc = document.getElementById('gyro-permission-desc');
+        if (!btn) return;
+        const status = localStorage.getItem(GYRO_STATUS_KEY);
+        if (status === 'granted') {
+            btn.innerHTML = '<i class="fa-solid fa-check"></i> 已授權（點此重新綁定）';
+            if (desc) desc.textContent = '陀螺儀已授權，手機版流光特效會依裝置傾斜方向呈現';
+        } else {
+            btn.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> 允許取用陀螺儀';
+            if (desc) desc.textContent = status === 'denied'
+                ? '目前尚未授權陀螺儀，點擊按鈕可重新請求權限'
+                : '授權後，手機版流光特效可依裝置傾斜方向呈現（僅手機需要）';
+        }
+    }
+
+    async function requestGyroPermission(fromSettings) {
+        try {
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                // iOS 13+：務必在使用者手勢（click）中同步呼叫，不可先 await 其他非同步流程
+                const result = await DeviceOrientationEvent.requestPermission();
+                if (result === 'granted') {
+                    localStorage.setItem(GYRO_STATUS_KEY, 'granted');
+                    GlowFX.activateGyro();
+                } else {
+                    localStorage.setItem(GYRO_STATUS_KEY, 'denied');
+                }
+            } else if (typeof DeviceOrientationEvent !== 'undefined') {
+                // Android 等不需手動授權的裝置
+                localStorage.setItem(GYRO_STATUS_KEY, 'granted');
+                GlowFX.activateGyro();
+            } else {
+                localStorage.setItem(GYRO_STATUS_KEY, 'denied');
+            }
+        } catch (err) {
+            localStorage.setItem(GYRO_STATUS_KEY, 'denied');
+        }
+        localStorage.setItem(GYRO_SEEN_KEY, '1');
+        updateGyroPermissionUI();
+        if (fromSettings) {
+            const s = localStorage.getItem(GYRO_STATUS_KEY);
+            triggerDynamicFeedback(s === 'granted' ? '陀螺儀已授權！' : '未取得陀螺儀權限', s === 'granted' ? 'buy' : 'gray', null, null);
+        }
+    }
+    window.requestGyroPermission = requestGyroPermission;
+
+    function initGyroOnboarding() {
+        updateGyroPermissionUI();
+        if (!GlowFX.isTouchDevice()) return; // 僅手機/觸控裝置需要詢問
+
+        const status = localStorage.getItem(GYRO_STATUS_KEY);
+        if (status === 'granted') { GlowFX.activateGyro(); return; }
+        if (localStorage.getItem(GYRO_SEEN_KEY)) return; // 先前已詢問過（無論成功或拒絕），不再顯示
+
+        const overlay = document.getElementById('gyro-onboarding-overlay');
+        if (!overlay) return;
+        overlay.style.display = 'flex';
+
+        document.getElementById('gyro-onboarding-allow-btn').addEventListener('click', async function onAllow() {
+            await requestGyroPermission(false);
+            overlay.style.display = 'none';
+        }, { once: true });
+
+        document.getElementById('gyro-onboarding-skip-btn').addEventListener('click', function onSkip() {
+            localStorage.setItem(GYRO_STATUS_KEY, 'denied');
+            localStorage.setItem(GYRO_SEEN_KEY, '1');
+            overlay.style.display = 'none';
+            updateGyroPermissionUI();
+        }, { once: true });
+    }
+
+    /* =========================================
+       ✨ 流光特效強度設定（系統設定頁滑桿）
+       預設 100% = 與參考版本外觀完全相同
+       ========================================= */
+    function applyGlowIntensity(pct) {
+        const f = pct / 100; // 0 ~ 2
+        document.documentElement.style.setProperty('--glow-user-strength', f.toFixed(2));
+        document.documentElement.style.setProperty('--glow-radius', Math.round(300 * Math.max(f, 0.15)) + 'px');
+        document.documentElement.style.setProperty('--glow-brightness', Math.max(f, 0.05).toFixed(2));
+    }
+
+    function initGlowIntensityControl() {
+        const slider = document.getElementById('cfg-glow-intensity');
+        const valDisplay = document.getElementById('cfg-glow-intensity-val');
+        const thumb = document.getElementById('glow-jelly-thumb');
+        if (!slider) return;
+
+        const saved = parseInt(localStorage.getItem('SETTING_GLOW_INTENSITY'), 10);
+        const initVal = isNaN(saved) ? 100 : Math.max(0, Math.min(200, saved));
+        slider.value = initVal;
+        valDisplay.value = initVal + '%';
+        applyGlowIntensity(initVal);
+        thumb.style.left = `${((initVal - slider.min) / (slider.max - slider.min)) * 162}px`;
+
+        slider.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value, 10);
+            valDisplay.value = val + '%';
+            localStorage.setItem('SETTING_GLOW_INTENSITY', val);
+            applyGlowIntensity(val);
+            thumb.style.left = `${((val - e.target.min) / (e.target.max - e.target.min)) * 162}px`;
+        });
+    }
+
+    initGlowIntensityControl();
+    initGyroOnboarding();
+
     startApp(); 
-    initGlowEffect();
 
 </script>
 </body>
