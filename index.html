@@ -25,8 +25,8 @@
             --glow-color: rgba(255, 255, 255, 0.25);
             --glow-radius: 300px;
             --glow-brightness: 1;
-            --glow-user-strength: 1;   /* 由設定頁滑桿控制，0 ~ 2 */
-            --glow-platform-scale: 1;  /* 桌機為 1，手機（陀螺儀模式）自動減弱 */
+            --glow-user-strength: 0.9;   /* 由設定頁滑桿控制，0 ~ 2 */
+            --glow-platform-scale: 0.9;  /* 桌機為 1，手機（陀螺儀模式）自動減弱 */
         }
 
         /* 📱 觸控/手機裝置：流光特效強度自動減弱 */
@@ -92,7 +92,7 @@
             position: absolute;
             inset: 0;
             border-radius: inherit;
-            padding: 1.5px;
+            padding: 0.4px;
             background: radial-gradient(var(--glow-radius) circle at var(--gx) var(--gy), var(--glow-color), transparent 45%);
             filter: brightness(var(--glow-brightness));
             -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
@@ -551,7 +551,7 @@
 
                     <div class="chat-output-wrapper">
                         <div class="chat-display" id="chat-output">
-                            <span style="color: rgba(255,255,255,0.4)">[SYSTEM]</span> 戰略助理連線成功。已同步 <strong style="color:#fff" id="ai-current-ticker">NVDA</strong> 之 RSI、持倉成本與帳戶資金。<br>
+                            <span style="color: rgba(255,255,255,0.4)">[SYSTEM]</span> 連線成功。已同步 <strong style="color:#fff" id="ai-current-ticker">NVDA</strong> 之 RSI、持倉成本與帳戶資金。<br>
                         </div>
 
                         <!-- 📒 歷史帳本時間範圍選擇器：偵測到「(歷史帳本)」標記時顯示 -->
@@ -622,7 +622,7 @@
 
     <main id="view-ledger" class="view-section">
         <div class="glass-panel" style="padding:16px; margin-bottom:14px; position:relative; z-index:10;">
-            <div style="font-weight:bold; font-size:14px; margin-bottom:12px;"><i class="fa-solid fa-plus-circle" style="color:var(--color-acc)"></i> 補登歷史交易 (時光機回溯)</div>
+            <div style="font-weight:bold; font-size:14px; margin-bottom:12px;"><i class="fa-solid fa-plus-circle" style="color:var(--color-acc)"></i> 補登歷史交易</div>
             <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
                 <div>
                     <div style="font-size:11px; color:#888; margin-bottom:4px;">日期</div>
@@ -718,7 +718,7 @@
             <div class="glass-panel setting-item" style="border-color: rgba(0,212,255,0.3);">
                 <div>
                     <div style="font-weight:bold;"><i class="fa-solid fa-users" style="color:var(--color-acc)"></i> 帳號管理</div>
-                    <div style="font-size:11px; color:#777; margin-top:2px;">目前使用中：<span id="settings-current-account-name" style="color:var(--color-acc); font-weight:bold;">--</span>　可新增、切換、重新命名或註銷帳號</div>
+                    <div style="font-size:11px; color:#777; margin-top:2px;">目前使用中：<span id="settings-current-account-name" style="color:var(--color-acc); font-weight:bold;">--</span></div>
                 </div>
                 <button onclick="switchView('view-accounts', null)" style="background:rgba(0,212,255,0.15); border:1px solid var(--color-acc); color:var(--color-acc); padding:8px 14px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s; white-space:nowrap;">
                     管理帳號 <i class="fa-solid fa-chevron-right" style="font-size:10px;"></i>
@@ -728,7 +728,7 @@
             <div class="glass-panel setting-item">
                 <div>
                     <div style="font-weight:bold;"><i class="fa-solid fa-cloud-arrow-up" style="color:var(--color-acc)"></i> 自動雲端同步</div>
-                    <div style="font-size:11px; color:#777; margin-top:2px;">關閉後，開機將不再自動拉取雲端進度，交易後也不會自動推送；仍可到「帳號管理」頁對個別帳號手動同步</div>
+                    <div style="font-size:11px; color:#777; margin-top:2px;">關閉後，將不再自動同步雲端進度<br>仍可到「帳號管理」進行手動同步至雲端</div>
                 </div>
                 <label class="switch"><input type="checkbox" id="cfg-auto-sync-enable"><span class="slider"></span></label>
             </div>
@@ -736,7 +736,7 @@
             <div class="glass-panel setting-item">
                 <div>
                     <div style="font-weight:bold;"><i class="fa-solid fa-triangle-exclamation" style="color:var(--color-sell)"></i> 停損警示</div>
-                    <div style="font-size:11px; color:#777; margin-top:2px;">當帳戶未實現虧損百分比達到設定值時，啟動時或使用中都會跳出警示提醒</div>
+                    <div style="font-size:11px; color:#777; margin-top:2px;">未實現虧損百分比達到設定值時警示提醒</div>
                 </div>
                 <label class="switch"><input type="checkbox" id="cfg-stoploss-enable"><span class="slider"></span></label>
             </div>
@@ -757,7 +757,7 @@
             <div class="glass-panel setting-item">
                 <div>
                     <div style="font-weight:bold;"><i class="fa-solid fa-arrows-spin" style="color:#aaa"></i> 股息再投資</div>
-                    <div style="font-size:11px; color:#777; margin-top:2px;">開啟後，入帳的股息將依當前市價自動買回同一標的（無法湊足 1 股的餘額仍保留為現金）</div>
+                    <div style="font-size:11px; color:#777; margin-top:2px;">入帳的股息將自動買回同一標的</div>
                 </div>
                 <label class="switch"><input type="checkbox" id="cfg-dividend-reinvest"><span class="slider"></span></label>
             </div>
@@ -765,7 +765,7 @@
             <div class="glass-panel setting-item">
                 <div>
                     <div style="font-weight:bold;"><i class="fa-solid fa-floppy-disk" style="color:#aaa"></i> 帳本資料備份與還原</div>
-                    <div style="font-size:11px; color:#777; margin-top:2px;">將所有交易紀錄、自選卡片匯出為本機檔案，或從檔案還原</div>
+                    <div style="font-size:11px; color:#777; margin-top:2px;">將所有交易紀錄匯出為本機檔案，或從檔案還原</div>
                 </div>
                 <div style="display:flex; gap:8px;">
                     <button onclick="exportData()" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s;">匯出</button>
@@ -778,7 +778,7 @@
             <div class="glass-panel setting-item">
                 <div>
                     <div style="font-weight:bold;"><i class="fa-solid fa-file-lines" style="color:#aaa"></i> 匯出對帳報告</div>
-                    <div style="font-size:11px; color:#777; margin-top:2px;">將目前帳戶狀態與完整交易紀錄匯出成純文字檔，方便列印或傳給他人查看</div>
+                    <div style="font-size:11px; color:#777; margin-top:2px;">將目前帳戶狀態與完整交易紀錄匯出成純文字檔</div>
                 </div>
                 <div style="display:flex; gap:8px;">
                     <button onclick="exportReport()" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s;">匯出報告</button>
@@ -794,7 +794,7 @@
             </div>
             
             <div class="glass-panel setting-item" id="setting-kline-interval" style="display:none; border-top:1px solid rgba(255,255,255,0.05);">
-                <div><div style="font-weight:bold; color:#aaa;">K線週期設定</div><div style="font-size:11px; color:#777; margin-top:2px;">圖表時間範圍選項會依照此設定變動</div></div>
+                <div><div style="font-weight:bold; color:#aaa;">K線週期設定</div><div style="font-size:11px; color:#777; margin-top:2px;">設定K線圖種類</div></div>
                 <select id="cfg-kline-interval" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#fff; padding:6px; border-radius:6px; font-weight:bold; outline:none;">
                     <option value="5m">5分K</option>
                     <option value="15m">15分K</option>
@@ -813,15 +813,15 @@
                 <input type="text" id="cfg-tax-rate" class="mobile-num" data-decimal="true" value="0.30" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
             </div>
             <div class="glass-panel setting-item">
-                <div><div style="font-weight:bold;">圖表動態十字輔助線</div><div style="font-size:11px; color:#777; margin-top:2px;">按住圖表滑動時，顯示絲滑跟隨的垂直輔助線</div></div>
+                <div><div style="font-weight:bold;">圖表動態十字輔助線</div><div style="font-size:11px; color:#777; margin-top:2px;">滑動時，顯示垂直輔助線</div></div>
                 <label class="switch"><input type="checkbox" id="cfg-crosshair-show"><span class="slider"></span></label>
             </div>
             <div class="glass-panel setting-item">
-                <div><div style="font-weight:bold;">圖表轉折節點顯示</div><div style="font-size:11px; color:#777; margin-top:2px;">開啟以在折線圖上方顯示數據圓點</div></div>
+                <div><div style="font-weight:bold;">圖表轉折節點顯示</div><div style="font-size:11px; color:#777; margin-top:2px;">在折線圖上方顯示數據節點</div></div>
                 <label class="switch"><input type="checkbox" id="cfg-node-show"><span class="slider"></span></label>
             </div>
             <div class="glass-panel setting-item" id="node-settings-wrapper">
-                <div><div style="font-weight:bold;">轉折節點密度篩選</div><div style="font-size:11px; color:#777; margin-top:2px;">隱藏平緩區間圓圈，拉到上限顯示 All</div></div>
+                <div><div style="font-weight:bold;">轉折節點密度篩選</div><div style="font-size:11px; color:#777; margin-top:2px;">隱藏平緩區間圓圈，拉到上限為 All</div></div>
                 <div style="display:flex; align-items:center; gap:12px;">
                     <div class="jelly-slider-container">
                         <div class="jelly-slider-track"></div>
@@ -832,7 +832,7 @@
                 </div>
             </div>
             <div class="glass-panel setting-item" style="border-color: rgba(255,69,96,0.3); margin-top:10px;">
-                <div><div style="font-weight:bold; color:var(--color-sell);">重置初始帳戶資金</div><div style="font-size:11px; color:#777; margin-top:2px;">清空歷史帳本，還原現金 100 萬起始金額</div></div>
+                <div><div style="font-weight:bold; color:var(--color-sell);">重置初始帳戶資金</div><div style="font-size:11px; color:#777; margin-top:2px;">完全還原為初始狀態</div></div>
                 <button onclick="resetAccount()" style="background:var(--color-sell); border:none; color:#fff; padding:8px 14px; border-radius:6px; font-weight:bold; cursor:pointer;">執行重置</button>
             </div>
 
@@ -846,7 +846,7 @@
             <div class="glass-panel setting-item">
                 <div>
                     <div style="font-weight:bold;"><i class="fa-solid fa-wand-magic-sparkles" style="color:#aaa"></i> 流光特效強度</div>
-                    <div style="font-size:11px; color:#777; margin-top:2px;">調整卡片邊框流光特效的強度，預設 100% 與初始外觀相同</div>
+                    <div style="font-size:11px; color:#777; margin-top:2px;">調整邊框流光的特效強度</div>
                 </div>
                 <div style="display:flex; align-items:center; gap:12px;">
                     <div class="jelly-slider-container">
@@ -861,7 +861,7 @@
             <div class="glass-panel setting-item" id="gyro-permission-setting-item">
                 <div>
                     <div style="font-weight:bold;"><i class="fa-solid fa-mobile-screen-button" style="color:#aaa"></i> 陀螺儀權限</div>
-                    <div id="gyro-permission-desc" style="font-size:11px; color:#777; margin-top:2px;">授權後，手機版流光特效可依裝置傾斜方向呈現（僅手機需要）</div>
+                    <div id="gyro-permission-desc" style="font-size:11px; color:#777; margin-top:2px;">授權後，流光特效可依裝置傾斜方向呈現</div>
                 </div>
                 <button id="gyro-permission-btn" onclick="requestGyroPermission(true)" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:8px 14px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s; white-space:nowrap;">
                     <i class="fa-solid fa-arrows-rotate"></i> 允許取用陀螺儀
@@ -871,7 +871,7 @@
             <div class="glass-panel setting-item" style="flex-direction:column; align-items:stretch; gap:10px;">
                 <div>
                     <div style="font-weight:bold;"><i class="fa-solid fa-key" style="color:#aaa"></i> 自訂 Proxy / Gemini API Key</div>
-                    <div style="font-size:11px; color:#777; margin-top:2px;">用於報價轉發與 AI 分析功能，留空則使用系統預設值；資料僅儲存於本機瀏覽器</div>
+                    <div style="font-size:11px; color:#777; margin-top:2px;">用於報價轉發與 AI 分析功能，資料僅儲存於本機瀏覽器</div>
                 </div>
                 <div style="display:flex; flex-direction:column; gap:8px;">
                     <div>
@@ -900,7 +900,7 @@
         <div class="glass-panel" style="max-width:650px; margin:0 auto; width:100%; padding:16px; display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
             <div style="flex:1; min-width:160px;">
                 <div style="font-size:11px; color:#888; margin-bottom:4px;">新帳號名稱（可留空）</div>
-                <input type="text" id="new-account-name" placeholder="例如：長期投資、模擬盤 A" onkeydown="if(event.key==='Enter') createAccount()" style="width:100%; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:9px 10px; border-radius:6px; outline:none;">
+                <input type="text" id="new-account-name" placeholder="請輸入新帳號名稱" onkeydown="if(event.key==='Enter') createAccount()" style="width:100%; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:9px 10px; border-radius:6px; outline:none;">
             </div>
             <button onclick="createAccount()" style="background:var(--color-acc); color:#000; border:none; padding:10px 18px; border-radius:6px; font-weight:bold; cursor:pointer; white-space:nowrap;">
                 <i class="fa-solid fa-plus"></i> 新增帳號
@@ -920,17 +920,17 @@
         </div>
     </main>
 
-    <!-- 🏆 娛樂中心：成就殿堂 + 好友系統 -->
+    <!-- 🏆 娛樂中心：成就 + 好友系統 -->
     <main id="view-achievements" class="view-section">
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px; padding:0 4px;">
-            <div class="ent-tab-btn active" id="ent-tab-btn-achv" onclick="switchEntTab('achv')"><i class="fa-solid fa-trophy"></i> 成就殿堂</div>
+            <div class="ent-tab-btn active" id="ent-tab-btn-achv" onclick="switchEntTab('achv')"><i class="fa-solid fa-trophy"></i> 成就</div>
             <div class="ent-tab-btn" id="ent-tab-btn-friends" onclick="switchEntTab('friends')"><i class="fa-solid fa-user-group"></i> 好友</div>
         </div>
 
         <div id="ent-tab-achv">
             <div style="display:flex; align-items:center; gap:12px; margin-bottom: 4px; padding:0 4px;">
                 <i class="fa-solid fa-trophy" style="color:#ffd447; font-size:18px;"></i>
-                <span style="font-size:16px; font-weight:bold;">成就殿堂</span>
+                <span style="font-size:16px; font-weight:bold;">成就</span>
                 <span id="achv-progress-label" style="font-size:12px; color:#888; margin-left:auto;">0 / 0 已達成</span>
             </div>
             <div style="display:flex; align-items:center; gap:8px; margin:6px 4px 4px; max-width:750px; margin-left:auto; margin-right:auto; width:100%;">
@@ -4462,7 +4462,7 @@
 
     function setLedgerPickerLockUI(locked) {
         const input = document.getElementById("chat-input"), quickRow = document.getElementById("ai-quick-buttons-row"), sendBtn = document.getElementById("chat-send-btn");
-        input.disabled = locked; input.placeholder = locked ? "請於上方選擇時間範圍..." : "請輸入欲諮詢之戰略問題...";
+        input.disabled = locked; input.placeholder = locked ? "請於上方選擇時間範圍..." : "請輸入欲諮詢之問題...";
         quickRow.style.pointerEvents = locked ? "none" : ""; quickRow.style.opacity = locked ? "0.35" : "";
         sendBtn.classList.toggle("pending-confirm", locked);
     }
