@@ -1605,17 +1605,26 @@
 
     // ============================================================
     // 🏆 成就系統：解鎖判定、畫面渲染、慶祝動畫
+    // 規則：條件只被偵測到「達成的當下」判定一次，一旦記錄進 state.unlockedAchievements 就永久跳過、
+    // 不再重新偵測該成就的 condition（即使之後條件變成不成立也一樣維持已解鎖）
     // ============================================================
     function checkAchievements() {
         if (!state.unlockedAchievements) state.unlockedAchievements = [];
         const newlyUnlocked = [];
         for (const a of achievementsConfig) {
-            if (state.unlockedAchievements.includes(a.id)) continue;
+            if (state.unlockedAchievements.includes(a.id)) continue; // 已解鎖過，永久跳過、不再偵測
             let ok = false;
             try { ok = !!a.condition(state, globalPriceCache); } catch (e) { ok = false; }
             if (ok) { state.unlockedAchievements.push(a.id); newlyUnlocked.push(a); }
         }
         if (newlyUnlocked.length > 0) {
+            // 🩹 修復：解鎖當下就立即寫入 localStorage／排程雲端同步，而不是只停留在記憶體裡的 state。
+            // 過去 checkAchievements() 常在 saveData() 之外被單獨呼叫（例如開機流程），若解鎖後使用者
+            // 沒有再觸發其他會存檔的操作就重新整理或關閉分頁，這筆解鎖紀錄就沒被寫進 localStorage，
+            // 下次開機時同一個成就會被誤判成「還沒解鎖」而重新判定、重新解鎖一次（例如「開發者 !」）
+            state.lastModified = Date.now();
+            localStorage.setItem(getActiveAccount().storageKey, JSON.stringify(state));
+            scheduleCloudSync();
             renderAchievementsPage();
             // 一次解鎖多個時依序顯示慶祝彈窗，避免疊在一起
             newlyUnlocked.forEach((a, i) => setTimeout(() => triggerAchievementCelebration(a), i * 1600));
@@ -1653,30 +1662,34 @@
         const { families, singles } = achv_groupFamilies();
 
         // 分級成就：每個家族只顯示「目前挑戰中／已完成」的單一目標，並附上進度條；
-        // 已達成的較低品質不再重複顯示，唯有達成前一品質後才會顯示下一個新目標
+        // 徽章圖示／名稱固定顯示「目前已握有的品質」（尚未解鎖任何品質時預設顯示銅），
+        // 進度條與說明文字則是追蹤「下一個尚未達成的品質」門檻——例如目前只有銅牌，
+        // 卡片仍顯示銅牌徽章，但進度條會往銀牌門檻累積，累積滿了才整個晉升為銀牌徽章
         const familyCards = Object.keys(families).map(famKey => {
             const tiers = families[famKey];
             let highestIdx = -1;
             tiers.forEach((t, i) => { if (unlocked.includes(t.id)) highestIdx = i; });
             const isMaxed = highestIdx === tiers.length - 1;
-            const target = tiers[isMaxed ? highestIdx : highestIdx + 1];
+            const labelTier = tiers[Math.max(highestIdx, 0)]; // 退一檔：徽章顯示目前已握有的品質（預設銅）
+            const progressTier = tiers[Math.min(highestIdx + 1, tiers.length - 1)]; // 進度條追蹤下一個尚未達成的品質
             const achieved = highestIdx >= 0 ? tiers[highestIdx] : null; // 可被釘選進展示櫃的最高已達成品質
-            const color = ACHV_TIER_COLOR[target.tier] || '#888';
+            const badgeColor = ACHV_TIER_COLOR[labelTier.tier] || '#888';
+            const barColor = ACHV_TIER_COLOR[progressTier.tier] || '#888';
             let value = 0;
-            try { value = target.metricFn(state, globalPriceCache); } catch (e) { value = 0; }
-            const pct = isMaxed ? 100 : Math.max(0, Math.min(100, (value / target.threshold) * 100));
+            try { value = progressTier.metricFn(state, globalPriceCache); } catch (e) { value = 0; }
+            const pct = isMaxed ? 100 : Math.max(0, Math.min(100, (value / progressTier.threshold) * 100));
 
-            return `<div class="glass-panel achv-card" style="padding:14px; display:flex; gap:12px; align-items:flex-start; ${isMaxed ? `border-color:${color}40;` : ''}">
-                <div style="font-size:26px; flex-shrink:0; width:32px; text-align:center;">${target.icon}</div>
+            return `<div class="glass-panel achv-card" style="padding:14px; display:flex; gap:12px; align-items:flex-start; ${isMaxed ? `border-color:${badgeColor}40;` : ''}">
+                <div style="font-size:26px; flex-shrink:0; width:32px; text-align:center;">${labelTier.icon}</div>
                 <div style="min-width:0; flex:1;">
                     <div style="display:flex; align-items:center; gap:6px;">
-                        <div style="font-weight:bold; font-size:13px; color:${isMaxed ? '#fff' : '#ccc'};">${target.name}</div>
-                        ${isMaxed ? `<i class="fa-solid fa-circle-check" style="color:${color}; font-size:11px;"></i>` : ''}
+                        <div style="font-weight:bold; font-size:13px; color:${isMaxed ? '#fff' : '#ccc'};">${labelTier.name}</div>
+                        ${isMaxed ? `<i class="fa-solid fa-circle-check" style="color:${badgeColor}; font-size:11px;"></i>` : ''}
                         ${achv_pinButtonHtml(achieved)}
                     </div>
-                    <div style="font-size:11px; color:#888; margin-top:4px; line-height:1.5;">${target.description}</div>
+                    <div style="font-size:11px; color:#888; margin-top:4px; line-height:1.5;">${isMaxed ? labelTier.description : progressTier.description}</div>
                     <div style="margin-top:8px; height:5px; border-radius:3px; background:rgba(255,255,255,0.08); overflow:hidden;">
-                        <div style="height:100%; width:${pct}%; background:${color}; box-shadow:0 0 6px ${color}88; transition:width 0.4s ease;"></div>
+                        <div style="height:100%; width:${pct}%; background:${barColor}; box-shadow:0 0 6px ${barColor}88; transition:width 0.4s ease;"></div>
                     </div>
                     <div style="font-size:10px; color:#666; margin-top:3px; text-align:right;">${isMaxed ? '已達成最高品質' : `${Math.floor(pct)}%`}</div>
                 </div>
@@ -1717,6 +1730,7 @@
         }
         state.lastModified = Date.now();
         saveData();
+        flushPendingCloudSync(); // 🩹 展示櫃屬於低頻操作，立即同步，避免使用者調整展示櫃後很快切換帳號或關閉分頁導致沒送出
         renderAchievementsPage();
     }
 
@@ -1788,7 +1802,12 @@
     //    { success, displayName, totalAssets, winRate, unlockedAchievements: [id,...], achvShowcase: [id,...] }
     // ============================================================
     function getFriendsList() { return state.friends || []; }
-    function saveFriendsList(list) { state.friends = list; state.lastModified = Date.now(); saveData(); }
+    function saveFriendsList(list) {
+        state.friends = list;
+        state.lastModified = Date.now();
+        saveData();
+        flushPendingCloudSync(); // 🩹 好友新增/移除屬於低頻操作，立即同步，避免使用者新增好友後很快切換帳號或關閉分頁導致沒送出
+    }
 
     async function addFriendByCode() {
         const code = prompt('請輸入對方的登入碼 (Account ID)：');
@@ -1986,12 +2005,26 @@
 
     // 依目前使用中帳號的變動，延遲(去抖動)自動推送至雲端，避免頻繁操作時過度發送請求
     let cloudSyncDebounceTimer = null;
+    let cloudSyncPendingAccountId = null; // 目前正排隊等待去抖動送出同步的帳號 id
     function scheduleCloudSync() {
         if (!AUTO_SYNC_ENABLED) return; // 🩹 使用者已關閉「自動雲端同步」，僅保留帳號管理頁的手動同步按鈕可用
         const acc = getActiveAccount();
         if (!acc || !acc.syncEnabled || !acc.hasPassword) return;
         clearTimeout(cloudSyncDebounceTimer);
-        cloudSyncDebounceTimer = setTimeout(() => { cloudSyncAccount(acc.id, { silent: true }); }, 2500);
+        cloudSyncPendingAccountId = acc.id;
+        cloudSyncDebounceTimer = setTimeout(() => { cloudSyncPendingAccountId = null; cloudSyncAccount(acc.id, { silent: true }); }, 2500);
+    }
+
+    // 🩹 修復「好友／展示櫃不會同步」：立即取消尚在排隊(去抖動)中的雲端同步計時器，並馬上補推一次，
+    // 不要讓這類「一次性、不頻繁」的操作繼續等待原本給連續交易用的 2.5 秒去抖動延遲——
+    // 也用於「切換本機帳號前」，確保切換前尚未送出的異動不會被遺留在計時器裡而遺失或跑錯帳號
+    async function flushPendingCloudSync() {
+        if (!cloudSyncDebounceTimer) return;
+        clearTimeout(cloudSyncDebounceTimer);
+        cloudSyncDebounceTimer = null;
+        const id = cloudSyncPendingAccountId;
+        cloudSyncPendingAccountId = null;
+        if (id) { await cloudSyncAccount(id, { silent: true }); }
     }
 
     // 啟用/關閉指定帳號的遠端同步；啟用前提為該帳號必須已設定密碼 (雲端驗證需要 passwordHash)
@@ -2716,7 +2749,17 @@
         if (accountId === activeAccountId) return;
         const target = ACCOUNTS.find(a => a.id === accountId); if (!target) return;
 
+        // 🩹 修復「切換帳號在刷新頁面前好友列表會錯亂」：切換前先把舊帳號還在去抖動計時器裡、尚未送出的
+        // 雲端同步（例如剛新增的好友／展示櫃異動）立即補推出去，避免計時器帶著舊帳號的資料在切換後才觸發，
+        // 也避免異動因為還沒送出就被切換掉而遺失
+        await flushPendingCloudSync();
+
         if (target.hasPassword) { const ok = await verifyAccountPassword(target); if (!ok) return; }
+
+        // 🩹 切換帳號前先關閉好友詳細資料 Modal 並清空目前選取的好友 id，避免殘留上一個帳號查詢到的畫面
+        currentFriendDetailId = null;
+        const friendDetailOverlay = document.getElementById('friend-detail-overlay');
+        if (friendDetailOverlay) friendDetailOverlay.style.display = 'none';
 
         activeAccountId = target.id;
         localStorage.setItem(ACTIVE_ACCOUNT_KEY, activeAccountId);
