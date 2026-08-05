@@ -18,6 +18,10 @@
             --text-sub: #666;
             --color-buy: #00ffaa;
             --color-sell: #ff4560;
+            /* 📈📉 專用於「顯示漲跌／損益」色彩的變數，與 --color-buy/--color-sell（下單按鈕、警示、危險動作等通用色）分開，
+               這樣「紅綠反轉」設定只會影響漲跌顏色本身，不會波及其他無關的紅／綠色 UI */
+            --color-up: #00ffaa;
+            --color-down: #ff4560;
             --color-acc: #00d4ff;
             --color-warn: #feb019;
 
@@ -140,10 +144,15 @@
         .menu-item i { width: 18px; font-size: 15px; text-align: center; }
         .mobile-only { display: none !important; }
 
-        /* 📍 側邊選單：純白垂直線指示器（常駐顯示，選中時放大變長並展開） */
-        .menu-item .nav-line { display: block; flex-shrink: 0; width: 2px; height: 14px; border-radius: 2px; background: rgba(255, 255, 255, 0.35); transform-origin: center; transition: height 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), width 0.25s ease, background-color 0.25s ease, box-shadow 0.25s ease; }
-        .menu-item.active .nav-line { width: 3px; height: 26px; background: #fff; box-shadow: 0 0 10px rgba(255, 255, 255, 0.7); animation: navLineExpand 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
-        @keyframes navLineExpand { 0% { height: 14px; opacity: 0.5; } 55% { height: 32px; } 100% { height: 26px; opacity: 1; } }
+        /* 📍 側邊選單：純白垂直線指示器（常駐顯示，選中時放大變長並展開）
+           科技感 × 極簡：單純以 transition 做線性生長 + 光暈淡入，完全不使用 keyframe 彈跳效果
+           🩹 修復：原本「高度」14px→26px 是用 height 動畫，height 屬於會影響版面配置的屬性，
+           在 flex row（align-items:center）裡每一幀都會讓整列跟著變高/變矮，導致文字被瞬間頂上去、
+           動畫結束又彈回原位。改成 box 本身固定 26px 高、用 transform:scaleY() 做視覺上的「長高」，
+           transform 不會觸發 reflow，所以完全不影響 .menu-item 的版面高度、文字也不會跳動。
+           「寬度」2px→3px 維持原本寫法（仍在文件流內正常過渡），展開變寬的視覺效果完全不變。 */
+        .menu-item .nav-line { display: block; flex-shrink: 0; width: 2px; height: 26px; border-radius: 1px; background: rgba(255, 255, 255, 0.3); box-shadow: 0 0 0 rgba(255, 255, 255, 0); transform: scaleY(0.5385); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), width 0.3s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.3s ease, box-shadow 0.3s ease; }
+        .menu-item.active .nav-line { width: 3px; transform: scaleY(1); background: #fff; box-shadow: 0 0 8px rgba(255, 255, 255, 0.6); }
 
         #content-area { flex: 1; position: relative; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
         .view-section { position: absolute; inset: 0; padding: 16px; display: flex; flex-direction: column; gap: 14px; opacity: 0; pointer-events: none; transition: opacity 0.25s ease; overflow-y: auto; overflow-x: hidden; }
@@ -517,7 +526,7 @@
             </div>
             <div class="glass-panel stat-card">
                 <div class="stat-title"><i class="fa-solid fa-scale-balanced" style="color: #a855f7"></i> 未實現總損益</div>
-                <div class="stat-value" id="nav-pnl" style="color: var(--color-buy)">+$ 0 (+0.0%)</div>
+                <div class="stat-value" id="nav-pnl" style="color: var(--color-up)">+$ 0 (+0.0%)</div>
             </div>
         </div>
 
@@ -805,7 +814,7 @@
                 </select>
             </div>
             
-            <div class="glass-panel setting-item" id="setting-kline-interval" style="display:none; border-top:1px solid rgba(255,255,255,0.05);">
+            <div class="glass-panel setting-item kline-branch-setting" id="setting-kline-interval" style="display:none; border-top:1px solid rgba(255,255,255,0.05);">
                 <div><div style="font-weight:bold; color:#aaa;">K線週期設定</div><div style="font-size:11px; color:#777; margin-top:2px;">設定K線圖種類</div></div>
                 <select id="cfg-kline-interval" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#fff; padding:6px; border-radius:6px; font-weight:bold; outline:none;">
                     <option value="5m">5分K</option>
@@ -825,6 +834,10 @@
                 <input type="text" id="cfg-tax-rate" class="mobile-num" data-decimal="true" value="0.30" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
             </div>
             <div class="glass-panel setting-item">
+                <div><div style="font-weight:bold;">紅綠反轉</div><div style="font-size:11px; color:#777; margin-top:2px;">預設綠漲紅跌，開啟為紅漲綠跌</div></div>
+                <label class="switch"><input type="checkbox" id="cfg-color-invert"><span class="slider"></span></label>
+            </div>
+            <div class="glass-panel setting-item">
                 <div><div style="font-weight:bold;">圖表動態十字輔助線</div><div style="font-size:11px; color:#777; margin-top:2px;">滑動時，顯示垂直輔助線</div></div>
                 <label class="switch"><input type="checkbox" id="cfg-crosshair-show"><span class="slider"></span></label>
             </div>
@@ -840,7 +853,7 @@
                         <div class="jelly-slider-thumb" id="jelly-thumb"></div>
                         <input type="range" id="cfg-node-slider" min="5" max="60" value="60" class="jelly-slider-input">
                     </div>
-                    <input type="text" id="cfg-node-val" class="jelly-input" value="All" readonly>
+                    <input type="text" id="cfg-node-val" class="jelly-input mobile-num" data-decimal="false" inputmode="numeric" value="All" onfocus="this.select()">
                 </div>
             </div>
             <div class="glass-panel setting-item" style="border-color: rgba(255,69,96,0.3); margin-top:10px;">
@@ -866,7 +879,7 @@
                         <div class="jelly-slider-thumb" id="glow-jelly-thumb"></div>
                         <input type="range" id="cfg-glow-intensity" min="0" max="200" value="100" class="jelly-slider-input">
                     </div>
-                    <input type="text" id="cfg-glow-intensity-val" class="jelly-input" value="100%" readonly>
+                    <input type="text" id="cfg-glow-intensity-val" class="jelly-input mobile-num" data-decimal="false" inputmode="numeric" value="100%" onfocus="this.select()">
                 </div>
             </div>
 
@@ -1888,22 +1901,22 @@
         layer.innerHTML = '';
         if (!toast) return;
 
-        // 🎊 以訊息卡本身作為拉炮噴發源頭
+        // 🎊 從螢幕最右側邊緣噴出（垂直位置對齊訊息卡），而非從卡片本身噴發
         const rect = toast.getBoundingClientRect();
-        const originX = rect.left + rect.width * 0.3;
-        const originY = rect.bottom - 12;
+        const originX = window.innerWidth;
+        const originY = Math.max(10, rect.top + rect.height * 0.4);
 
         const colors = ['#ffd447', '#00d4ff', '#ff4560', '#a18cd1', '#fbc2eb', '#00ffaa'];
-        const pieceCount = 55;
+        const pieceCount = 60;
         for (let i = 0; i < pieceCount; i++) {
             const piece = document.createElement('div');
             piece.className = 'achv-confetti-piece';
             piece.style.setProperty('--origin-x', `${originX}px`);
             piece.style.setProperty('--origin-y', `${originY}px`);
 
-            // 拉炮效果：以源頭為中心往左下方扇形噴射，再受重力墜落
-            const tx = (Math.random() - 0.72) * 320;
-            const ty = 220 + Math.random() * 260;
+            // 拉炮效果：從畫面邊緣往左下方扇形噴射，再受重力墜落
+            const tx = -(140 + Math.random() * 420);
+            const ty = 200 + Math.random() * 300;
             const rot = (Math.random() > 0.5 ? 1 : -1) * (360 + Math.random() * 540);
             piece.style.setProperty('--tx', `${tx}px`);
             piece.style.setProperty('--ty', `${ty}px`);
@@ -3050,7 +3063,16 @@
 
     function updateChartSettingsUI() {
         const type = document.getElementById("cfg-chart-type").value;
-        document.getElementById("setting-kline-interval").style.display = type === 'KLINE' ? 'flex' : 'none';
+        const display = type === 'KLINE' ? 'flex' : 'none';
+        document.querySelectorAll('.kline-branch-setting').forEach(el => { el.style.display = display; });
+    }
+
+    // 🔴🟢 紅綠反轉：預設漲=綠、跌=紅（國際慣例），開啟後改為漲=紅、跌=綠（台股慣例）
+    // 僅改寫 --color-up / --color-down 這兩個「專用於漲跌顯示」的變數，
+    // 不動 --color-buy / --color-sell（下單按鈕、危險操作、警示訊息等通用色維持不變）。
+    function applyColorInvert(inverted) {
+        document.documentElement.style.setProperty('--color-up', inverted ? '#ff4560' : '#00ffaa');
+        document.documentElement.style.setProperty('--color-down', inverted ? '#00ffaa' : '#ff4560');
     }
 
     function updateTimeframeButtons() {
@@ -3223,6 +3245,7 @@
         
         const savedShow = localStorage.getItem('SETTING_NODE_SHOW'); if (savedShow !== null) document.getElementById("cfg-node-show").checked = savedShow === 'true'; else document.getElementById("cfg-node-show").checked = false;
         const savedCrosshair = localStorage.getItem('SETTING_CROSSHAIR_SHOW'); if (savedCrosshair !== null) document.getElementById("cfg-crosshair-show").checked = savedCrosshair === 'true'; else document.getElementById("cfg-crosshair-show").checked = false;
+        const savedColorInvert = localStorage.getItem('SETTING_COLOR_INVERT'); document.getElementById("cfg-color-invert").checked = savedColorInvert === 'true'; applyColorInvert(savedColorInvert === 'true');
         const savedVal = localStorage.getItem('SETTING_NODE_VAL');
         const effectiveVal = (savedVal !== null) ? savedVal : 'All';
         document.getElementById("cfg-node-slider").value = (effectiveVal === 'All') ? 60 : effectiveVal; document.getElementById("cfg-node-val").value = effectiveVal;
@@ -3820,7 +3843,7 @@
             const cData = cardsDataCache[t] || { price: 0, rsi: null }, h = state.holdings[t] || { shares: 0, avgPrice: 0 };
             const gross = h.shares * cData.price * rate, { feeRate, taxRate } = getMarketFeeConfig(t);
             const netValue = gross > 0 ? (gross - (gross * feeRate) - (gross * taxRate)) : 0, totalCost = h.shares * h.avgPrice * rate, pnl = netValue - totalCost;
-            const pnlColor = pnl >= 0 ? 'var(--color-buy)' : 'var(--color-sell)';
+            const pnlColor = pnl >= 0 ? 'var(--color-up)' : 'var(--color-down)';
             const deleteBtn = isCardEditMode ? `<div class="delete-btn" onclick="removeCard('${t}')" style="position:absolute; top:-8px; right:-8px; background:var(--color-sell); color:#fff; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:10; box-shadow:0 0 10px rgba(0,0,0,0.5);"><i class="fa-solid fa-minus"></i></div>` : '';
 
             html += `
@@ -4163,7 +4186,7 @@
         document.getElementById("nav-total").innerText = `$ ${Math.floor(nav).toLocaleString()}`; document.getElementById("nav-cash").innerText = `$ ${Math.floor(state.cash).toLocaleString()}`;
         document.getElementById("nav-holdings").innerText = `$ ${Math.floor(holdingsVal).toLocaleString()}`;
         document.getElementById("nav-pnl").innerText = `${pnl >= 0 ? '+' : ''}$ ${Math.floor(pnl).toLocaleString()} (${totalCost > 0 ? ((pnl/totalCost)*100).toFixed(1) : 0}%)`;
-        document.getElementById("nav-pnl").style.color = pnl >= 0 ? "var(--color-buy)" : "var(--color-sell)";
+        document.getElementById("nav-pnl").style.color = pnl >= 0 ? "var(--color-up)" : "var(--color-down)";
 
         checkStopLossTrigger(pnl, totalCost);
 
@@ -4178,14 +4201,14 @@
                 <td style="font-weight:bold; color:var(--color-acc)">${t}</td><td>${h.shares}</td>
                 <td><div style="font-weight:bold;">$${h.avgPrice.toFixed(2)}</div><div style="font-size:10px; color:var(--color-warn); margin-top:2px;">低於 $${breakEvenPrice.toFixed(2)} 虧損</div></td>
                 <td>$${curP.toFixed(2)}</td><td>$${Math.floor(val).toLocaleString()}</td>
-                <td style="color:${itemPnl>=0?'var(--color-buy)':'var(--color-sell)'}; font-weight:bold;">${itemPnl>=0?'+':''}$${Math.floor(itemPnl).toLocaleString()}</td>
+                <td style="color:${itemPnl>=0?'var(--color-up)':'var(--color-down)'}; font-weight:bold;">${itemPnl>=0?'+':''}$${Math.floor(itemPnl).toLocaleString()}</td>
                 <td><button onclick="selectTicker('${t}')" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:#fff; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:bold; transition:all 0.2s;">即時交易</button></td>
             </tr>`;
         }).join("") : `<tr><td colspan="7" style="text-align:center; color:#555; padding:40px;">尚未持有任何證券</td></tr>`;
 
         document.getElementById("ledger-table-body").innerHTML = state.ledger.length ? state.ledger.map((r, index) => {
             const pnlHtml = (r.realizedPnL !== null && r.realizedPnL !== undefined) 
-                ? `<td style="color:${r.realizedPnL >= 0 ? 'var(--color-buy)' : 'var(--color-sell)'}; font-weight:bold;">${r.realizedPnL >= 0 ? '+' : ''}$${Math.floor(r.realizedPnL).toLocaleString()}</td>`
+                ? `<td style="color:${r.realizedPnL >= 0 ? 'var(--color-up)' : 'var(--color-down)'}; font-weight:bold;">${r.realizedPnL >= 0 ? '+' : ''}$${Math.floor(r.realizedPnL).toLocaleString()}</td>`
                 : `<td style="color:#666;">-</td>`;
             const displayTime = r.timestamp ? getFullFormattedTimeFromDate(r.timestamp) : r.time;
             return `<tr>
@@ -4215,7 +4238,7 @@
 
     function showStopLossAlert(pnlPercent) {
         const acc = getActiveAccount();
-        document.getElementById('stoploss-alert-msg').innerHTML = `帳號「${acc ? acc.name : ''}」目前持股未實現虧損已達 <span style="color:var(--color-sell); font-weight:bold;">${pnlPercent.toFixed(2)}%</span>，已超過您設定的停損警戒線 ${state.stopLoss.percent}%，請留意風險並考慮執行停損。`;
+        document.getElementById('stoploss-alert-msg').innerHTML = `帳號「${acc ? acc.name : ''}」目前持股未實現虧損已達 <span style="color:var(--color-down); font-weight:bold;">${pnlPercent.toFixed(2)}%</span>，已超過您設定的停損警戒線 ${state.stopLoss.percent}%，請留意風險並考慮執行停損。`;
         document.getElementById('stoploss-alert-overlay').style.display = 'flex';
     }
 
@@ -4316,15 +4339,28 @@
         }
     }
 
+    function hexToRgba(hex, alpha) {
+        const h = hex.replace('#', '');
+        const full = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+        const bigint = parseInt(full, 16);
+        const r = (bigint >> 16) & 255, g = (bigint >> 8) & 255, b = bigint & 255;
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
     function getStockDatasets(data, showNodes, densityVal) {
         const chartType = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
         
         if (chartType === 'KLINE') {
-            const upColor = 'rgba(0, 255, 170, 0.9)';
-            const downColor = 'rgba(255, 69, 96, 0.9)';
-            
-            const colors = data.ohlc.map(d => d.c >= d.o ? upColor : downColor);
-            const borderColors = data.ohlc.map(d => d.c >= d.o ? '#00ffaa' : '#ff4560');
+            // 顏色改讀取即時的 --color-up / --color-down（僅代表漲跌方向的專用變數），
+            // 讓「紅綠反轉」設定能連動 K 線配色，但不影響其他用途的紅／綠色
+            const rootStyle = getComputedStyle(document.documentElement);
+            const upHex = rootStyle.getPropertyValue('--color-up').trim() || '#00ffaa';
+            const downHex = rootStyle.getPropertyValue('--color-down').trim() || '#ff4560';
+            const upSolid = hexToRgba(upHex, 0.9);
+            const downSolid = hexToRgba(downHex, 0.9);
+
+            const colors = data.ohlc.map(d => d.c >= d.o ? upSolid : downSolid);
+            const borderColors = data.ohlc.map(d => d.c >= d.o ? upHex : downHex);
             const dataBody = data.ohlc.map(d => {
                 let o = d.o, c = d.c;
                 if(Math.abs(o - c) < 0.0001) c = o + 0.01; 
@@ -4430,7 +4466,33 @@
 
     document.getElementById("cfg-node-show").addEventListener("change", (e) => { localStorage.setItem('SETTING_NODE_SHOW', e.target.checked); document.getElementById("node-settings-wrapper").classList.toggle("disabled", !e.target.checked); renderAllCharts(); });
     document.getElementById("cfg-crosshair-show").addEventListener("change", (e) => { localStorage.setItem('SETTING_CROSSHAIR_SHOW', e.target.checked); });
+    document.getElementById("cfg-color-invert").addEventListener("change", (e) => { localStorage.setItem('SETTING_COLOR_INVERT', e.target.checked); applyColorInvert(e.target.checked); renderAllCharts(false); });
     document.getElementById("cfg-node-slider").addEventListener("input", (e) => { const val = parseInt(e.target.value), displayVal = (val >= 60) ? 'All' : val; document.getElementById("cfg-node-val").value = displayVal; localStorage.setItem('SETTING_NODE_VAL', displayVal); const pct = (val - e.target.min) / (e.target.max - e.target.min); document.getElementById("jelly-thumb").style.left = `${pct * 162}px`; renderAllCharts(false); });
+
+    // 🩹 修復：轉折節點密度篩選拉桿右側數值框，讓使用者可直接輸入數字（原本為 readonly）
+    function commitNodeDensityInput() {
+        const input = document.getElementById("cfg-node-val");
+        const slider = document.getElementById("cfg-node-slider");
+        const min = parseInt(slider.min, 10), max = parseInt(slider.max, 10);
+        const raw = input.value.trim();
+        let val;
+        if (raw === '' || /^all$/i.test(raw)) {
+            val = max;
+        } else {
+            val = parseInt(raw, 10);
+            if (isNaN(val)) val = parseInt(slider.value, 10);
+            val = Math.max(min, Math.min(max, val));
+        }
+        const displayVal = (val >= max) ? 'All' : val;
+        slider.value = val;
+        input.value = displayVal;
+        localStorage.setItem('SETTING_NODE_VAL', displayVal);
+        const pct = (val - min) / (max - min);
+        document.getElementById("jelly-thumb").style.left = `${pct * 162}px`;
+        renderAllCharts(false);
+    }
+    document.getElementById("cfg-node-val").addEventListener("change", commitNodeDensityInput);
+    document.getElementById("cfg-node-val").addEventListener("keydown", (e) => { if (e.key === "Enter") e.target.blur(); });
 
     // 🛑 停損警示設定（依目前使用中帳號各自儲存於 state.stopLoss）
     document.getElementById("cfg-stoploss-enable").addEventListener("change", (e) => {
@@ -5101,6 +5163,21 @@
             applyGlowIntensity(val);
             thumb.style.left = `${((val - e.target.min) / (e.target.max - e.target.min)) * 162}px`;
         });
+
+        // 🩹 修復：流光特效強度拉桿右側數值框，讓使用者可直接輸入數字（原本為 readonly）
+        function commitGlowIntensityInput() {
+            const min = parseInt(slider.min, 10), max = parseInt(slider.max, 10);
+            let val = parseInt(valDisplay.value.replace('%', '').trim(), 10);
+            if (isNaN(val)) val = parseInt(slider.value, 10);
+            val = Math.max(min, Math.min(max, val));
+            slider.value = val;
+            valDisplay.value = val + '%';
+            localStorage.setItem('SETTING_GLOW_INTENSITY', val);
+            applyGlowIntensity(val);
+            thumb.style.left = `${((val - min) / (max - min)) * 162}px`;
+        }
+        valDisplay.addEventListener('change', commitGlowIntensityInput);
+        valDisplay.addEventListener('keydown', (e) => { if (e.key === 'Enter') e.target.blur(); });
     }
 
     initGlowIntensityControl();
