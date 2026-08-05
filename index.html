@@ -491,7 +491,7 @@
 <div id="sidebar-overlay" onclick="toggleSidebar()"></div>
 
 <aside id="sidebar">
-    <div class="glass-title-text" onclick="switchView('view-achievements', null)" style="cursor:pointer;" title="娛樂中心：成就與好友"><i class="fa-solid fa-cube" style="color: var(--color-acc)"></i> ALPHATRADE</div>
+    <div class="glass-title-text" onclick="switchView('view-achievements', null)" style="cursor:pointer;" title="娛樂中心：成就與好友"><img src="logo.png" width="25" height="25"> ALPHATRADE</div>
     <div class="menu-item active" onclick="switchView('view-dashboard', this)"><span class="nav-line"></span> 指揮操盤中心</div>
     <div class="menu-item mobile-only" onclick="switchView('view-mobile-trade', this)"><span class="nav-line"></span> 下單櫃檯</div>
     <div class="menu-item" onclick="switchView('view-cards', this)"><span class="nav-line"></span> 自選資產卡片</div>
@@ -504,7 +504,7 @@
     <div id="mobile-header">
         <button class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
         <div class="mobile-header-title" onclick="switchView('view-dashboard', document.querySelectorAll('.menu-item')[0])">
-            <i class="fa-solid fa-cube"></i> ALPHATRADE
+            ALPHATRADE
         </div>
         <div class="mobile-reload-btn" onclick="location.reload()"></div>
     </div>
@@ -554,9 +554,9 @@
                     
                     <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 12px; background:rgba(0,0,0,0.2);">
                         <div id="ai-quick-buttons-row" style="display:flex; gap:6px; overflow-x:auto; scrollbar-width:none; flex: 1; transition: opacity 0.2s;">
-                            <button class="qp-btn" onclick="quickAskAI('diagnostic')" style="padding: 4px 10px; flex-shrink:0;"><span class="hide-on-mobile">📊 </span>綜合體檢</button>
-                            <button class="qp-btn" onclick="quickAskAI('risk')" style="padding: 4px 10px; flex-shrink:0;"><span class="hide-on-mobile">🛡️ </span>風險診斷</button>
-                            <button class="qp-btn" onclick="quickAskAI('strategy')" style="padding: 4px 10px; flex-shrink:0;"><span class="hide-on-mobile">💡 </span>加減碼策略</button>
+                            <button class="qp-btn" onclick="quickAskAI('diagnostic')" style="padding: 4px 10px; flex-shrink:0;"><span class="hide-on-mobile"><i class="fa-solid fa-list-check"></i> </span>綜合體檢</button>
+                            <button class="qp-btn" onclick="quickAskAI('risk')" style="padding: 4px 10px; flex-shrink:0;"><span class="hide-on-mobile"><i class="fa-regular fa-file"></i> </span>風險診斷</button>
+                            <button class="qp-btn" onclick="quickAskAI('strategy')" style="padding: 4px 10px; flex-shrink:0;"><span class="hide-on-mobile"><i class="fa-regular fa-lightbulb"></i> </span>加減碼策略</button>
                         </div>
                         
                         <div class="mobile-only custom-select-wrapper ai-mini-ticker" id="ai-ticker-wrapper" style="width: 75px; flex-shrink: 0; margin-left: 6px;">
@@ -620,7 +620,7 @@
 
     <main id="view-cards" class="view-section">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 4px; padding:0 4px;">
-            <span style="font-size:16px; font-weight:bold;"><i class="fa-solid fa-address-card" style="color:var(--color-acc)"></i> 自選監控看板</span>
+            <span style="font-size:16px; font-weight:bold;">自選監控看板</span>
             <button id="edit-cards-btn" onclick="toggleCardEditMode()" style="background:transparent; border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px 14px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s;">
                 編輯
             </button>
@@ -631,7 +631,7 @@
 
     <main id="view-holdings" class="view-section">
         <div class="glass-panel" style="padding:16px;">
-            <div style="font-weight:bold; font-size:15px; margin-bottom:12px; white-space:nowrap;"><i class="fa-solid fa-briefcase"></i> 當前證券持倉帳務</div>
+            <div style="font-weight:bold; font-size:15px; margin-bottom:12px; white-space:nowrap;">當前證券持倉帳務</div>
             <div class="table-responsive">
                 <table>
                     <thead><tr><th>代號</th><th>持有股數</th><th>買入均價<br><span style="font-size:10px; font-weight:normal; color:#888;">(損平賣價)</span></th><th>當前現價</th><th>市值</th><th>未實現損益</th><th>操作</th></tr></thead>
@@ -643,7 +643,7 @@
 
     <main id="view-ledger" class="view-section">
         <div class="glass-panel" style="padding:16px; margin-bottom:14px; position:relative; z-index:10;">
-            <div style="font-weight:bold; font-size:14px; margin-bottom:12px;"><i class="fa-solid fa-plus-circle" style="color:var(--color-acc)"></i> 補登歷史交易</div>
+            <div style="font-weight:bold; font-size:14px; margin-bottom:12px;">補登歷史交易</div>
             <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
                 <div>
                     <div style="font-size:11px; color:#888; margin-bottom:4px;">日期</div>
@@ -738,7 +738,7 @@
 
             <div class="glass-panel setting-item" style="border-color: rgba(0,212,255,0.3);">
                 <div>
-                    <div style="font-weight:bold;"><i class="fa-solid fa-users" style="color:var(--color-acc)"></i> 帳號管理</div>
+                    <div style="font-weight:bold;"></i> 帳號管理</div>
                     <div style="font-size:11px; color:#777; margin-top:2px;">目前使用中：<span id="settings-current-account-name" style="color:var(--color-acc); font-weight:bold;">--</span></div>
                 </div>
                 <button onclick="switchView('view-accounts', null)" style="background:rgba(0,212,255,0.15); border:1px solid var(--color-acc); color:var(--color-acc); padding:8px 14px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s; white-space:nowrap;">
