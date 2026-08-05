@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>AlphaTrade</title>
+    <title>AcornTrade</title>
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
@@ -125,7 +125,12 @@
         .toast.buy .toast-progress { background: var(--color-buy); box-shadow: 0 0 10px var(--color-buy); }
         .toast.sell .toast-progress { background: var(--color-sell); box-shadow: 0 0 10px var(--color-sell); }
         .toast.gray .toast-progress { background: #888; box-shadow: 0 0 10px rgba(255,255,255,0.3); }
+        /* 🩹 修復：退場時原本用行內 style 蓋掉 opacity/transform，但 CSS animation（toastEnter, forwards）
+           的優先權高於一般的行內樣式，導致退場的 opacity/transform 完全不會生效，只能瞬間消失。
+           改成切換到專屬的 .toast.leaving（同樣用 animation 覆蓋掉 toastEnter），才能真正播放退場動畫。 */
+        .toast.leaving { animation: toastExit 0.35s cubic-bezier(0.4, 0, 1, 1) forwards; }
         @keyframes toastEnter { from { opacity: 0; transform: translateY(-20px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        @keyframes toastExit { from { opacity: 1; transform: translateY(0) scale(1); } to { opacity: 0; transform: translateY(-20px) scale(0.9); } }
         @keyframes toastBar { from { width: 100%; } to { width: 0%; } }
 
         .float-popup { position: fixed; z-index: 9999; font-family: monospace; font-weight: 900; font-size: 15px; pointer-events: none; animation: floatUpFade 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; text-shadow: 0 0 12px currentColor; }
@@ -151,7 +156,7 @@
            動畫結束又彈回原位。改成 box 本身固定 26px 高、用 transform:scaleY() 做視覺上的「長高」，
            transform 不會觸發 reflow，所以完全不影響 .menu-item 的版面高度、文字也不會跳動。
            「寬度」2px→3px 維持原本寫法（仍在文件流內正常過渡），展開變寬的視覺效果完全不變。 */
-        .menu-item .nav-line { display: block; flex-shrink: 0; width: 2px; height: 26px; border-radius: 1px; background: rgba(255, 255, 255, 0.3); box-shadow: 0 0 0 rgba(255, 255, 255, 0); transform: scaleY(0.5385); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), width 0.3s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.3s ease, box-shadow 0.3s ease; }
+        .menu-item .nav-line { display: block; flex-shrink: 0; width: 2px; height: 26px; border-radius: 1px; background: rgba(255, 255, 255, 0.3); box-shadow: 0 0 0 rgba(255, 255, 255, 0); transform: scaleY(0.5385); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), width 0.3s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease; }
         .menu-item.active .nav-line { width: 3px; transform: scaleY(1); background: #fff; box-shadow: 0 0 8px rgba(255, 255, 255, 0.6); }
 
         #content-area { flex: 1; position: relative; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
@@ -456,6 +461,10 @@
             .view-section::-webkit-scrollbar, .trade-panel::-webkit-scrollbar { display: none !important; width: 0 !important; }
             .view-section, .trade-panel { scrollbar-width: none !important; }
 
+            /* 📍 手機版側邊選單：僅顯示當前選中項目的線條指示器，其餘未選中項目的線條隱藏 */
+            .menu-item .nav-line { opacity: 0; }
+            .menu-item.active .nav-line { opacity: 1; }
+
             .view-section { top: 60px; height: calc(100dvh - 60px); padding: 12px; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
             .stat-grid { grid-template-columns: repeat(2, 1fr); height: auto; margin-bottom: 5px; }
             .stat-card { padding: 12px; }
@@ -491,7 +500,7 @@
 <div id="sidebar-overlay" onclick="toggleSidebar()"></div>
 
 <aside id="sidebar">
-    <div class="glass-title-text" onclick="switchView('view-achievements', null)" style="cursor:pointer;" title="娛樂中心：成就與好友"><img src="logo.png" width="25" height="25"> ALPHATRADE</div>
+    <div class="glass-title-text" onclick="switchView('view-achievements', null)" style="cursor:pointer;" title="娛樂中心：成就與好友"><img src="logo.png" width="25" height="25"> ACORNTRADE</div>
     <div class="menu-item active" onclick="switchView('view-dashboard', this)"><span class="nav-line"></span> 指揮操盤中心</div>
     <div class="menu-item mobile-only" onclick="switchView('view-mobile-trade', this)"><span class="nav-line"></span> 下單櫃檯</div>
     <div class="menu-item" onclick="switchView('view-cards', this)"><span class="nav-line"></span> 自選資產卡片</div>
@@ -504,7 +513,7 @@
     <div id="mobile-header">
         <button class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
         <div class="mobile-header-title" onclick="switchView('view-dashboard', document.querySelectorAll('.menu-item')[0])">
-            ALPHATRADE
+            ACORNTRADE
         </div>
         <div class="mobile-reload-btn" onclick="location.reload()"></div>
     </div>
@@ -630,6 +639,20 @@
     </main>
 
     <main id="view-holdings" class="view-section">
+        <div class="glass-panel" style="padding:16px;" id="holdings-allocation-panel">
+            <div style="font-weight:bold; font-size:15px; margin-bottom:12px; white-space:nowrap;">資產配置佔比</div>
+            <div style="display:flex; align-items:center; gap:24px; flex-wrap:wrap;">
+                <div style="position:relative; width:150px; height:150px; flex-shrink:0;">
+                    <canvas id="holdingsAllocationChart"></canvas>
+                    <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:none; text-align:center;">
+                        <div style="font-size:10px; color:#888;">總市值</div>
+                        <div id="holdings-allocation-total" style="font-size:12px; font-weight:bold; font-family:monospace; margin-top:2px;">$0</div>
+                    </div>
+                </div>
+                <div id="holdings-allocation-legend" style="flex:1; min-width:180px; display:flex; flex-direction:column; gap:10px;"></div>
+            </div>
+        </div>
+
         <div class="glass-panel" style="padding:16px;">
             <div style="font-weight:bold; font-size:15px; margin-bottom:12px; white-space:nowrap;">當前證券持倉帳務</div>
             <div class="table-responsive">
@@ -1453,7 +1476,7 @@
         toast.className = `toast ${type}`; 
         toast.innerHTML = `<i class="fa-solid ${iconClass}" style="font-size:18px;"></i> <span>${msg}</span> <div class="toast-progress"></div>`;
         container.appendChild(toast); 
-        setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateY(-20px) scale(0.9)'; toast.style.transition = 'all 0.35s'; setTimeout(() => toast.remove(), 350); }, 3000);
+        setTimeout(() => { toast.classList.add('leaving'); setTimeout(() => toast.remove(), 350); }, 3000);
 
         if (targetBtn && valueText) {
             const rect = targetBtn.getBoundingClientRect(), floatEl = document.createElement('div'); floatEl.className = 'float-popup';
@@ -3283,7 +3306,7 @@
 
     function exportData() {
         const dataStr = JSON.stringify(state, null, 2), blob = new Blob([dataStr], { type: "application/json" }), url = URL.createObjectURL(blob), a = document.createElement("a");
-        const date = new Date().toISOString().slice(0, 10).replace(/-/g, ""); a.href = url; a.download = `AlphaTrade_Backup_${date}.json`;
+        const date = new Date().toISOString().slice(0, 10).replace(/-/g, ""); a.href = url; a.download = `AcornTrade_Backup_${date}.json`;
         document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
         triggerDynamicFeedback("已成功匯出備份檔案", "buy", null, "EXPORTED");
     }
@@ -3390,7 +3413,7 @@
         const a = document.createElement("a");
         const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
         const timeStr = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
-        a.href = url; a.download = `AlphaTrade_Report_${dateStr}_${timeStr}.txt`;
+        a.href = url; a.download = `AcornTrade_Report_${dateStr}_${timeStr}.txt`;
         document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
         triggerDynamicFeedback("已成功匯出對帳報告", "buy", null, "REPORT EXPORTED");
     }
@@ -4206,6 +4229,8 @@
             </tr>`;
         }).join("") : `<tr><td colspan="7" style="text-align:center; color:#555; padding:40px;">尚未持有任何證券</td></tr>`;
 
+        renderHoldingsAllocationChart();
+
         document.getElementById("ledger-table-body").innerHTML = state.ledger.length ? state.ledger.map((r, index) => {
             const pnlHtml = (r.realizedPnL !== null && r.realizedPnL !== undefined) 
                 ? `<td style="color:${r.realizedPnL >= 0 ? 'var(--color-up)' : 'var(--color-down)'}; font-weight:bold;">${r.realizedPnL >= 0 ? '+' : ''}$${Math.floor(r.realizedPnL).toLocaleString()}</td>`
@@ -4305,6 +4330,58 @@
             } 
         } 
     });
+
+    // 🍩 庫存與資產損益：各檔標的資金佔比圓環圖
+    const ALLOCATION_CHART_COLORS = ['#00d4ff', '#00ffaa', '#feb019', '#ff4560', '#a18cd1', '#fbc2eb', '#ff9f40', '#4bc0c0', '#c9cbcf', '#9966ff'];
+    const holdingsAllocationChart = new Chart(document.getElementById('holdingsAllocationChart').getContext('2d'), {
+        type: 'doughnut',
+        data: { labels: [], datasets: [{ data: [], backgroundColor: [], borderColor: 'rgba(10,10,10,0.9)', borderWidth: 2 }] },
+        options: {
+            responsive: true, maintainAspectRatio: false, cutout: '68%',
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const val = context.parsed, total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const pct = total > 0 ? (val / total * 100).toFixed(1) : '0.0';
+                            return ` ${context.label}：$${Math.floor(val).toLocaleString()} (${pct}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+    function renderHoldingsAllocationChart() {
+        const legendEl = document.getElementById('holdings-allocation-legend');
+        const totalEl = document.getElementById('holdings-allocation-total');
+        const tickers = Object.keys(state.holdings);
+
+        const entries = tickers.map(t => {
+            const rate = getCurrencyMultiplier(t), h = state.holdings[t];
+            const curP = globalPriceCache[t] || (t === currentTicker && currentRealPrice !== null ? currentRealPrice : h.avgPrice);
+            return { ticker: t, val: h.shares * curP * rate };
+        }).filter(e => e.val > 0).sort((a, b) => b.val - a.val);
+
+        const total = entries.reduce((sum, e) => sum + e.val, 0);
+        totalEl.innerText = `$${Math.floor(total).toLocaleString()}`;
+
+        holdingsAllocationChart.data.labels = entries.map(e => e.ticker);
+        holdingsAllocationChart.data.datasets[0].data = entries.map(e => e.val);
+        holdingsAllocationChart.data.datasets[0].backgroundColor = entries.map((e, i) => ALLOCATION_CHART_COLORS[i % ALLOCATION_CHART_COLORS.length]);
+        holdingsAllocationChart.update();
+
+        legendEl.innerHTML = entries.length ? entries.map((e, i) => {
+            const pct = total > 0 ? (e.val / total * 100).toFixed(1) : '0.0';
+            const color = ALLOCATION_CHART_COLORS[i % ALLOCATION_CHART_COLORS.length];
+            return `<div style="display:flex; align-items:center; gap:8px; font-size:12px;">
+                <span style="width:10px; height:10px; border-radius:3px; background:${color}; flex-shrink:0;"></span>
+                <span style="font-weight:bold; color:#fff; min-width:56px;">${e.ticker}</span>
+                <span style="color:#888; font-family:monospace; flex:1;">$${Math.floor(e.val).toLocaleString()}</span>
+                <span style="font-weight:bold; color:var(--color-acc); font-family:monospace;">${pct}%</span>
+            </div>`;
+        }).join("") : `<div style="color:#555; font-size:12px;">尚未持有任何證券</div>`;
+    }
 
     function toggleDesktopChartMode() { 
         desktopChartMode = (desktopChartMode === 'NAV') ? 'STOCK' : 'NAV'; 
