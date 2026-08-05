@@ -140,6 +140,11 @@
         .menu-item i { width: 18px; font-size: 15px; text-align: center; }
         .mobile-only { display: none !important; }
 
+        /* 📍 側邊選單：純白垂直線指示器（常駐顯示，選中時放大變長並展開） */
+        .menu-item .nav-line { display: block; flex-shrink: 0; width: 2px; height: 14px; border-radius: 2px; background: rgba(255, 255, 255, 0.35); transform-origin: center; transition: height 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), width 0.25s ease, background-color 0.25s ease, box-shadow 0.25s ease; }
+        .menu-item.active .nav-line { width: 3px; height: 26px; background: #fff; box-shadow: 0 0 10px rgba(255, 255, 255, 0.7); animation: navLineExpand 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        @keyframes navLineExpand { 0% { height: 14px; opacity: 0.5; } 55% { height: 32px; } 100% { height: 26px; opacity: 1; } }
+
         #content-area { flex: 1; position: relative; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
         .view-section { position: absolute; inset: 0; padding: 16px; display: flex; flex-direction: column; gap: 14px; opacity: 0; pointer-events: none; transition: opacity 0.25s ease; overflow-y: auto; overflow-x: hidden; }
         .view-section.active { opacity: 1; pointer-events: auto; }
@@ -272,8 +277,13 @@
         .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(3,3,3,0.88); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); z-index: 20000; align-items: center; justify-content: center; animation: modalFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
         @keyframes modalFadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes achvIconPop { 0% { transform: scale(0); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
-        @keyframes achvConfettiFall { 0% { transform: translateY(-10vh) rotate(0deg); opacity:1; } 100% { transform: translateY(110vh) rotate(540deg); opacity:0.9; } }
-        .achv-confetti-piece { position:absolute; top:0; width:8px; height:14px; opacity:0; animation-name: achvConfettiFall; animation-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94); animation-fill-mode: forwards; }
+        /* 🎊 拉炮式彩帶：以訊息卡為噴發源頭，先向外噴射再受重力墜落 */
+        @keyframes achvConfettiFall {
+            0%   { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+            14%  { transform: translate(calc(var(--tx) * 0.4), -16px) rotate(calc(var(--rot) * 0.3)); opacity: 1; }
+            100% { transform: translate(var(--tx), var(--ty)) rotate(var(--rot)); opacity: 0; }
+        }
+        .achv-confetti-piece { position:fixed; top: var(--origin-y, 78px); left: var(--origin-x, calc(100% - 90px)); width:7px; height:12px; opacity:0; animation-name: achvConfettiFall; animation-timing-function: cubic-bezier(0.2, 0.55, 0.35, 1); animation-fill-mode: forwards; will-change: transform, opacity; }
         .achv-card { padding:14px; display:flex; gap:12px; align-items:flex-start; transition: all 0.2s; }
         .achv-card.locked { opacity:0.45; filter:grayscale(0.6); }
         .achv-card .achv-icon { font-size:26px; width:44px; height:44px; flex-shrink:0; display:flex; align-items:center; justify-content:center; border-radius:10px; background:rgba(255,212,71,0.1); }
@@ -324,11 +334,13 @@
         .ent-tab-btn:hover { color:#ccc; }
         .ent-tab-btn.active { color:var(--color-acc); background:rgba(0,212,255,0.1); border-color:rgba(0,212,255,0.3); }
 
-        /* 🎊 成就慶祝彩帶 */
-        .achv-confetti-piece { position:absolute; top:-10px; width:8px; height:8px; opacity:0.9; animation: achvConfettiFall linear forwards; }
-        @keyframes achvConfettiFall {
-            0%   { transform: translateY(0) rotate(0deg); opacity:1; }
-            100% { transform: translateY(320px) rotate(540deg); opacity:0; }
+        /* 🎉 成就解鎖：右上角限時訊息卡（取代原本的置中慶祝彈窗） */
+        .achv-toast { position: fixed; top: 20px; right: 20px; z-index: 30000; width: 300px; max-width: calc(100vw - 32px); cursor: pointer; opacity: 0; pointer-events: none; transform: translateX(40px) scale(0.9); transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        .achv-toast.show { opacity: 1; pointer-events: auto; transform: translateX(0) scale(1); }
+        .achv-toast.hide { opacity: 0; transform: translateX(30px) scale(0.94); }
+        .achv-toast-inner { padding: 12px 14px; }
+        @media (max-width: 768px) {
+            .achv-toast { top: calc(70px + env(safe-area-inset-top)); right: 12px; width: 260px; }
         }
 
         /* 🔒 已鎖定成就卡片樣式 */
@@ -471,11 +483,11 @@
 
 <aside id="sidebar">
     <div class="glass-title-text" onclick="switchView('view-achievements', null)" style="cursor:pointer;" title="娛樂中心：成就與好友"><i class="fa-solid fa-cube" style="color: var(--color-acc)"></i> ALPHATRADE</div>
-    <div class="menu-item active" onclick="switchView('view-dashboard', this)"><i class="fa-solid fa-chart-line"></i> 指揮操盤中心</div>
-    <div class="menu-item mobile-only" onclick="switchView('view-mobile-trade', this)"><i class="fa-solid fa-hand-holding-dollar"></i> 下單櫃檯</div>
-    <div class="menu-item" onclick="switchView('view-cards', this)"><i class="fa-solid fa-address-card"></i> 自選資產卡片</div>
-    <div class="menu-item" onclick="switchView('view-holdings', this)"><i class="fa-solid fa-wallet"></i> 庫存與資產損益</div>
-    <div class="menu-item" onclick="switchView('view-ledger', this)"><i class="fa-solid fa-clock-rotate-left"></i> 時光機與歷史帳本</div>
+    <div class="menu-item active" onclick="switchView('view-dashboard', this)"><span class="nav-line"></span> 指揮操盤中心</div>
+    <div class="menu-item mobile-only" onclick="switchView('view-mobile-trade', this)"><span class="nav-line"></span> 下單櫃檯</div>
+    <div class="menu-item" onclick="switchView('view-cards', this)"><span class="nav-line"></span> 自選資產卡片</div>
+    <div class="menu-item" onclick="switchView('view-holdings', this)"><span class="nav-line"></span> 庫存與資產損益</div>
+    <div class="menu-item" onclick="switchView('view-ledger', this)"><span class="nav-line"></span> 時光機與歷史帳本</div>
     <div class="menu-item" style="margin-top: auto;" onclick="switchView('view-settings', this)"><i class="fa-solid fa-sliders"></i> 系統設定</div>
 </aside>
 
@@ -929,8 +941,7 @@
 
         <div id="ent-tab-achv">
             <div style="display:flex; align-items:center; gap:12px; margin-bottom: 4px; padding:0 4px;">
-                <i class="fa-solid fa-trophy" style="color:#aaa; font-size:18px;"></i>
-                <span style="font-size:16px; font-weight:bold;">成就</span>
+
                 <span id="achv-progress-label" style="font-size:12px; color:#888; margin-left:auto;">0 / 0 已達成</span>
             </div>
             <div style="display:flex; align-items:center; gap:8px; margin:6px 4px 4px; max-width:750px; margin-left:auto; margin-right:auto; width:100%;">
@@ -977,15 +988,18 @@
     </div>
 </div>
 
-<!-- 🎉 成就達成慶祝彈窗 -->
-<div id="achv-celebration-overlay" class="modal-overlay" style="z-index:30000; overflow:hidden;" onclick="closeAchievementCelebration()">
-    <div id="achv-confetti-layer" style="position:absolute; inset:0; pointer-events:none;"></div>
-    <div class="glass-panel modal-box" style="max-width:340px; text-align:center; border-color:rgba(255,212,71,0.5); box-shadow:0 0 40px rgba(255,212,71,0.25);" onclick="event.stopPropagation()">
-        <div style="font-size:11px; color:#ffd447; letter-spacing:2px; font-weight:bold;">ACHIEVEMENT UNLOCKED</div>
-        <div id="achv-celebration-icon" style="font-size:48px; margin:10px 0; animation: achvIconPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);">🏆</div>
-        <div id="achv-celebration-title" style="font-size:16px; font-weight:bold; color:#fff;"></div>
-        <div id="achv-celebration-desc" style="font-size:12px; color:#999; margin-top:6px; line-height:1.5;"></div>
-        <button onclick="closeAchievementCelebration()" style="margin-top:14px; background:rgba(255,212,71,0.15); border:1px solid #ffd447; color:#ffd447; padding:8px 20px; border-radius:6px; font-weight:bold; cursor:pointer;">太棒了！</button>
+<!-- 🎉 成就達成慶祝訊息：右上角限時通知，同時作為拉炮彩帶特效的噴發源頭 -->
+<div id="achv-confetti-layer" style="position:fixed; inset:0; z-index:29999; overflow:hidden; pointer-events:none;"></div>
+<div id="achv-celebration-toast" class="achv-toast" onclick="closeAchievementCelebration()">
+    <div class="glass-panel achv-toast-inner" style="border-color:rgba(255,212,71,0.5); box-shadow:0 0 30px rgba(255,212,71,0.22), 0 10px 30px rgba(0,0,0,0.5);">
+        <div style="font-size:10px; color:#ffd447; letter-spacing:2px; font-weight:bold;">ACHIEVEMENT UNLOCKED</div>
+        <div style="display:flex; align-items:center; gap:10px; margin-top:6px;">
+            <div id="achv-celebration-icon" style="font-size:30px; flex-shrink:0; animation: achvIconPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);">🏆</div>
+            <div style="min-width:0;">
+                <div id="achv-celebration-title" style="font-size:13.5px; font-weight:bold; color:#fff;"></div>
+                <div id="achv-celebration-desc" style="font-size:10.5px; color:#999; margin-top:3px; line-height:1.45;"></div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -1844,32 +1858,66 @@
         el.innerHTML = slots.join('');
     }
 
-    let achvCelebrationQueueBusy = false;
+    let achvToastHideTimer = null;
+    const ACHV_TOAST_DURATION = 5500; // 🎉 較長的限時顯示時間（一般 toast 為 3000ms）
     function triggerAchievementCelebration(a) {
-        const overlay = document.getElementById('achv-celebration-overlay');
+        const toast = document.getElementById('achv-celebration-toast');
         document.getElementById('achv-celebration-icon').innerHTML = a.icon;
         document.getElementById('achv-celebration-title').innerText = a.name;
         document.getElementById('achv-celebration-desc').innerText = a.description;
-        overlay.style.display = 'flex';
+
+        // 若連續解鎖，重新觸發進場動畫並重置限時計時器
+        toast.classList.remove('hide');
+        void toast.offsetWidth;
+        toast.classList.add('show');
+
         spawnAchvConfetti();
+
+        clearTimeout(achvToastHideTimer);
+        achvToastHideTimer = setTimeout(closeAchievementCelebration, ACHV_TOAST_DURATION);
     }
     function closeAchievementCelebration() {
-        document.getElementById('achv-celebration-overlay').style.display = 'none';
-        document.getElementById('achv-confetti-layer').innerHTML = '';
+        clearTimeout(achvToastHideTimer);
+        const toast = document.getElementById('achv-celebration-toast');
+        toast.classList.remove('show');
+        toast.classList.add('hide');
     }
     function spawnAchvConfetti() {
         const layer = document.getElementById('achv-confetti-layer');
+        const toast = document.getElementById('achv-celebration-toast');
         layer.innerHTML = '';
-        const colors = ['#ffd447', '#00d4ff', '#ff4560', '#a18cd1', '#fbc2eb'];
-        for (let i = 0; i < 40; i++) {
+        if (!toast) return;
+
+        // 🎊 以訊息卡本身作為拉炮噴發源頭
+        const rect = toast.getBoundingClientRect();
+        const originX = rect.left + rect.width * 0.3;
+        const originY = rect.bottom - 12;
+
+        const colors = ['#ffd447', '#00d4ff', '#ff4560', '#a18cd1', '#fbc2eb', '#00ffaa'];
+        const pieceCount = 55;
+        for (let i = 0; i < pieceCount; i++) {
             const piece = document.createElement('div');
             piece.className = 'achv-confetti-piece';
-            piece.style.left = `${Math.random() * 100}%`;
+            piece.style.setProperty('--origin-x', `${originX}px`);
+            piece.style.setProperty('--origin-y', `${originY}px`);
+
+            // 拉炮效果：以源頭為中心往左下方扇形噴射，再受重力墜落
+            const tx = (Math.random() - 0.72) * 320;
+            const ty = 220 + Math.random() * 260;
+            const rot = (Math.random() > 0.5 ? 1 : -1) * (360 + Math.random() * 540);
+            piece.style.setProperty('--tx', `${tx}px`);
+            piece.style.setProperty('--ty', `${ty}px`);
+            piece.style.setProperty('--rot', `${rot}deg`);
+
             piece.style.background = colors[Math.floor(Math.random() * colors.length)];
-            piece.style.animationDuration = `${1.2 + Math.random() * 1.2}s`;
-            piece.style.animationDelay = `${Math.random() * 0.4}s`;
+            piece.style.width = `${5 + Math.random() * 4}px`;
+            piece.style.height = `${9 + Math.random() * 7}px`;
+            piece.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
+            piece.style.animationDuration = `${1.1 + Math.random() * 0.9}s`;
+            piece.style.animationDelay = `${Math.random() * 0.25}s`;
             layer.appendChild(piece);
         }
+        setTimeout(() => { layer.innerHTML = ''; }, 2800);
     }
 
     // 🎮 娛樂中心：成就殿堂 / 好友 分頁切換
