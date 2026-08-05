@@ -513,19 +513,19 @@
     <main id="view-dashboard" class="view-section active">
         <div class="stat-grid">
             <div class="glass-panel stat-card">
-                <div class="stat-title"><i class="fa-solid fa-coins" style="color: var(--color-acc)"></i> 總資產估值 (NAV)</div>
+                <div class="stat-title"><span><img src="總資產.png" width="12" height="12"> 總資產估值 (NAV)</div>
                 <div class="stat-value" id="nav-total">$ 1,000,000</div>
             </div>
             <div class="glass-panel stat-card">
-                <div class="stat-title"><i class="fa-solid fa-money-bill-transfer" style="color: var(--color-buy)"></i> 可用現金餘額</div>
+                <div class="stat-title"><img src="現金餘額.png" width="12" height="12"> 可用現金餘額</div>
                 <div class="stat-value" id="nav-cash">$ 1,000,000</div>
             </div>
             <div class="glass-panel stat-card">
-                <div class="stat-title"><i class="fa-solid fa-chart-pie" style="color: var(--color-warn)"></i> 證券庫存總值</div>
+                <div class="stat-title"><img src="證劵庫存.png" width="12" height="12"> 證券庫存總值</div>
                 <div class="stat-value" id="nav-holdings">$ 0</div>
             </div>
             <div class="glass-panel stat-card">
-                <div class="stat-title"><i class="fa-solid fa-scale-balanced" style="color: #a855f7"></i> 未實現總損益</div>
+                <div class="stat-title"><img src="損益.png" width="12" height="12"> 未實現總損益</div>
                 <div class="stat-value" id="nav-pnl" style="color: var(--color-up)">+$ 0 (+0.0%)</div>
             </div>
         </div>
@@ -1136,7 +1136,7 @@
 
 <div id="shared-trade-panel" class="glass-panel trade-panel">
     <div class="panel-header">
-        <span><i class="fa-solid fa-terminal" style="color: var(--color-buy)"></i> 即時報價與下單</span>
+        <span><img src="終端.png" width="14" height="14"> 即時報價與下單</span>
         <span id="market-status" style="font-size:11px; color:#00ffaa;">● 市場連線中</span>
     </div>
 
@@ -4397,7 +4397,7 @@
         } : function(value) { return value.toLocaleString(); };
 
         if (showNav) {
-            document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-area" style="color:var(--color-acc)"></i> <span class="hide-on-mobile" style="margin-left:4px;">投資組合總淨值走勢</span>`;
+            document.getElementById("main-chart-title").innerHTML = `<img src="走勢圖.png" width="12" height="12"> <span class="hide-on-mobile" style="margin-left:4px;">投資組合總淨值走勢</span>`;
             let cutoff = 0; const now = Date.now();
             if (currentRange === '1D') cutoff = now - 86400000; 
             else if (currentRange === '1W') cutoff = now - 86400000 * 7; 
