@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>AcornTrade</title>
+    <link rel="icon" type="image/png" href="logo.png">
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
@@ -581,7 +582,7 @@
 
                     <div class="chat-output-wrapper">
                         <div class="chat-display" id="chat-output">
-                            <span style="color: rgba(255,255,255,0.4)">[SYSTEM]</span> 連線成功。已同步 <strong style="color:#fff" id="ai-current-ticker">NVDA</strong> 之 RSI、持倉成本與帳戶資金。<br>
+                            <span style="color: rgba(255,255,255,0.4)">[SYSTEM]</span> 已同步 <strong style="color:#fff" id="ai-current-ticker">NVDA</strong> 之 RSI、持倉成本與帳戶資金。<br>
                         </div>
 
                         <!-- 📒 歷史帳本時間範圍選擇器：偵測到「(歷史帳本)」標記時顯示 -->
@@ -615,7 +616,7 @@
 
                     <div class="chat-input-area">
                         <input type="text" id="chat-input" placeholder="問問 Gemini" onkeypress="if(event.key==='Enter') askAI()">
-                        <button class="send-btn" id="chat-send-btn" onclick="askAI()">發送</button>
+                        <button class="send-btn" id="chat-send-btn" onclick="askAI()"><i class="fa-solid fa-arrow-right-long"></i></button>
                     </div>
                 </div>
             </div>
@@ -771,7 +772,7 @@
 
             <div class="glass-panel setting-item">
                 <div>
-                    <div style="font-weight:bold;"><i class="fa-solid fa-cloud-arrow-up" style="color:var(--color-acc)"></i> 自動雲端同步</div>
+                    <div style="font-weight:bold;">自動雲端同步</div>
                     <div style="font-size:11px; color:#777; margin-top:2px;">關閉後，將不再自動同步雲端進度<br>仍可到「帳號管理」進行手動同步至雲端</div>
                 </div>
                 <label class="switch"><input type="checkbox" id="cfg-auto-sync-enable"><span class="slider"></span></label>
@@ -779,7 +780,7 @@
 
             <div class="glass-panel setting-item">
                 <div>
-                    <div style="font-weight:bold;"><i class="fa-solid fa-triangle-exclamation" style="color:var(--color-sell)"></i> 停損警示</div>
+                    <div style="font-weight:bold;">停損警示</div>
                     <div style="font-size:11px; color:#777; margin-top:2px;">未實現虧損百分比達到設定值時警示提醒</div>
                 </div>
                 <label class="switch"><input type="checkbox" id="cfg-stoploss-enable"><span class="slider"></span></label>
@@ -791,7 +792,7 @@
 
             <div class="glass-panel setting-item">
                 <div>
-                    <div style="font-weight:bold;"><i class="fa-solid fa-sack-dollar" style="color:#aaa"></i> 股息自動配發</div>
+                    <div style="font-weight:bold;">股息自動配發</div>
                     <div style="font-size:11px; color:#777; margin-top:2px;">每天自動查詢一次持股股息，歷史未配發者會自動補發　<span id="last-dividend-check-label" style="color:#555;">尚未查詢過</span></div>
                 </div>
                 <button onclick="checkDividends(true)" id="manual-dividend-check-btn" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:8px 14px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s; white-space:nowrap;">
@@ -800,7 +801,7 @@
             </div>
             <div class="glass-panel setting-item">
                 <div>
-                    <div style="font-weight:bold;"><i class="fa-solid fa-arrows-spin" style="color:#aaa"></i> 股息再投資</div>
+                    <div style="font-weight:bold;">股息再投資</div>
                     <div style="font-size:11px; color:#777; margin-top:2px;">入帳的股息將自動買回同一標的</div>
                 </div>
                 <label class="switch"><input type="checkbox" id="cfg-dividend-reinvest"><span class="slider"></span></label>
@@ -808,7 +809,7 @@
 
             <div class="glass-panel setting-item">
                 <div>
-                    <div style="font-weight:bold;"><i class="fa-solid fa-floppy-disk" style="color:#aaa"></i> 帳本資料備份與還原</div>
+                    <div style="font-weight:bold;">帳本資料備份與還原</div>
                     <div style="font-size:11px; color:#777; margin-top:2px;">將所有交易紀錄匯出為本機檔案，或從檔案還原</div>
                 </div>
                 <div style="display:flex; gap:8px;">
@@ -821,7 +822,7 @@
 
             <div class="glass-panel setting-item">
                 <div>
-                    <div style="font-weight:bold;"><i class="fa-solid fa-file-lines" style="color:#aaa"></i> 匯出對帳報告</div>
+                    <div style="font-weight:bold;">匯出對帳報告</div>
                     <div style="font-size:11px; color:#777; margin-top:2px;">將目前帳戶狀態與完整交易紀錄匯出成純文字檔</div>
                 </div>
                 <div style="display:flex; gap:8px;">
