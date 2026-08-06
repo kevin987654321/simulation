@@ -5294,7 +5294,7 @@
             thumb.style.left = `${((val - e.target.min) / (e.target.max - e.target.min)) * 162}px`;
         });
 
-        // 🩹 修復：流光特效強度拉桿右側數值框，讓使用者可直接輸入數字（原本為 readonly）
+        // 修復：流光特效強度拉桿右側數值框，讓使用者可直接輸入數字（原本為 readonly）
         function commitGlowIntensityInput() {
             const min = parseInt(slider.min, 10), max = parseInt(slider.max, 10);
             let val = parseInt(valDisplay.value.replace('%', '').trim(), 10);
