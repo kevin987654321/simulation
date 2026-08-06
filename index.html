@@ -557,7 +557,7 @@
     <div class="menu-item" onclick="switchView('view-cards', this)"><span class="nav-line"></span> 自選資產卡片</div>
     <div class="menu-item" onclick="switchView('view-holdings', this)"><span class="nav-line"></span> 庫存與資產損益</div>
     <div class="menu-item" onclick="switchView('view-ledger', this)"><span class="nav-line"></span> 時光機與歷史帳本</div>
-    <div class="menu-item" style="margin-top: auto;" onclick="switchView('view-settings', this)"><i class="fa-solid fa-sliders"></i></div>
+    <div class="menu-item" style="margin-top: auto;" onclick="switchView('view-settings', this)"><i class="fa-solid fa-sliders"></i> 系統設定</div>
 </aside>
 
 <div id="content-area">
@@ -724,20 +724,20 @@
             <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
                 <div>
                     <div style="font-size:11px; color:#888; margin-bottom:4px;">日期</div>
-                    <input type="date" id="tm-date" onfocus="this.select()" onchange="autoFetchHistoricalPrice()" style="height:34px; box-sizing:border-box; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-family:monospace;">
+                    <input type="date" id="tm-date" onfocus="this.select()" onchange="autoFetchHistoricalPrice()" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-family:monospace;">
                 </div>
                 <div>
                     <div style="font-size:11px; color:#888; margin-bottom:4px;">時間 (24H)</div>
-                    <div style="height:34px; box-sizing:border-box; display:flex; align-items:center; gap:2px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); border-radius:6px; padding:0 8px; width:fit-content;">
-                        <input type="text" id="tm-hour" class="mobile-num" data-maxlen="2" onfocus="this.select()" oninput="handleHourInput(this)" onblur="padHour(this)" placeholder="00" style="width:22px; background:transparent; border:none; color:#fff; padding:0; font-family:monospace; text-align:center; outline:none; font-size:14px;">
+                    <div style="display:flex; align-items:center; gap:2px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); border-radius:6px; padding:0 8px; width:fit-content;">
+                        <input type="text" id="tm-hour" class="mobile-num" data-maxlen="2" onfocus="this.select()" oninput="handleHourInput(this)" onblur="padHour(this)" placeholder="00" style="width:22px; background:transparent; border:none; color:#fff; padding:6px 0; font-family:monospace; text-align:center; outline:none; font-size:14px;">
                         <span style="color:#888; font-weight:bold; padding-bottom:2px;">:</span>
-                        <input type="text" id="tm-minute" class="mobile-num" data-maxlen="2" onfocus="this.select()" oninput="handleMinuteInput(this)" onblur="padMinute(this)" placeholder="00" style="width:22px; background:transparent; border:none; color:#fff; padding:0; font-family:monospace; text-align:center; outline:none; font-size:14px;">
+                        <input type="text" id="tm-minute" class="mobile-num" data-maxlen="2" onfocus="this.select()" oninput="handleMinuteInput(this)" onblur="padMinute(this)" placeholder="00" style="width:22px; background:transparent; border:none; color:#fff; padding:6px 0; font-family:monospace; text-align:center; outline:none; font-size:14px;">
                     </div>
                 </div>
                 <div>
                     <div style="font-size:11px; color:#888; margin-bottom:4px;">代號</div>
                     <div class="custom-select-wrapper" id="tm-ticker-wrapper" style="width: 90px; position: relative; z-index: 9999;">
-                        <input type="text" id="tm-ticker" onfocus="this.select()" placeholder="" style="height:34px; box-sizing:border-box; width:100%; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-transform:uppercase; font-family:monospace; font-weight:bold;">
+                        <input type="text" id="tm-ticker" onfocus="this.select()" placeholder="" style="width:100%; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-transform:uppercase; font-family:monospace; font-weight:bold;">
                         <div class="opaque-dropdown-list" id="tm-ticker-dropdown" style="width: 220px; top: 100%; left: 0;">
                             <div id="tm-live-search-list"></div>
                         </div>
@@ -745,24 +745,24 @@
                 </div>
                 <div>
                     <div style="font-size:11px; color:#888; margin-bottom:4px;">動作</div>
-                    <select id="tm-action" style="height:34px; box-sizing:border-box; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-weight:bold;">
+                    <select id="tm-action" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-weight:bold;">
                         <option value="BUY">買進</option>
                         <option value="SELL">賣出</option>
                     </select>
                 </div>
                 <div>
                     <div style="font-size:11px; color:#888; margin-bottom:4px;">單價</div>
-                    <input type="text" id="tm-price" class="mobile-num" data-decimal="true" onfocus="this.select()" placeholder="自動查詢中..." style="height:34px; box-sizing:border-box; width:100px; background:rgba(0,0,0,0.5); border:1px solid var(--color-acc); color:var(--color-acc); padding:6px; border-radius:6px; font-family:monospace; font-weight:bold;">
+                    <input type="text" id="tm-price" class="mobile-num" data-decimal="true" onfocus="this.select()" placeholder="自動查詢中..." style="width:100px; background:rgba(0,0,0,0.5); border:1px solid var(--color-acc); color:var(--color-acc); padding:6px; border-radius:6px; font-family:monospace; font-weight:bold;">
                 </div>
                 <div>
                     <div style="font-size:11px; color:#888; margin-bottom:4px;" title="換算台幣所使用的匯率，預設自動查詢當日歷史匯率，可手動調整以凍結交易當下實際結匯成本">結匯匯率</div>
-                    <input type="text" id="tm-fxrate" class="mobile-num" data-decimal="true" onfocus="this.select()" placeholder="自動查詢中..." style="height:34px; box-sizing:border-box; width:90px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-family:monospace;">
+                    <input type="text" id="tm-fxrate" class="mobile-num" data-decimal="true" onfocus="this.select()" placeholder="自動查詢中..." style="width:90px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-family:monospace;">
                 </div>
                 <div>
                     <div style="font-size:11px; color:#888; margin-bottom:4px;">股數</div>
-                    <input type="text" id="tm-shares" class="mobile-num" onfocus="this.select()" placeholder="10" style="height:34px; box-sizing:border-box; width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-family:monospace;">
+                    <input type="text" id="tm-shares" class="mobile-num" onfocus="this.select()" placeholder="10" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-family:monospace;">
                 </div>
-                <button onclick="insertHistoricalTrade()" style="height:34px; box-sizing:border-box; background:var(--color-acc); color:#000; border:none; padding:0 16px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:12px; transition:all 0.2s; display:inline-flex; align-items:center; justify-content:center;">
+                <button onclick="insertHistoricalTrade()" style="background:var(--color-acc); color:#000; border:none; padding:8px 16px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:12px; transition:all 0.2s;">
                     確認插入
                 </button>
             </div>
@@ -2624,7 +2624,7 @@
         } catch(e) { ACCOUNTS = []; }
 
         if (!Array.isArray(ACCOUNTS) || ACCOUNTS.length === 0) {
-            ACCOUNTS = [{ id: generateAccountId(), name: '主帳戶', storageKey: DATA_KEY, hasPassword: false, passwordHash: null, syncEnabled: false, requirePasswordOnBoot: true, createdAt: Date.now() }];
+            ACCOUNTS = [{ id: 'default', name: '主帳戶', storageKey: DATA_KEY, hasPassword: false, passwordHash: null, syncEnabled: false, requirePasswordOnBoot: true, createdAt: Date.now() }];
             saveAccountsMeta();
         }
         ACCOUNTS.forEach(a => { if (typeof a.syncEnabled === 'undefined') a.syncEnabled = false; if (typeof a.requirePasswordOnBoot === 'undefined') a.requirePasswordOnBoot = true; });
