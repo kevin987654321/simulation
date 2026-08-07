@@ -46,6 +46,10 @@
         input[type="number"] { -moz-appearance: textfield; }
         /* 🩹 修復：輸入框文字選取（讓 onfocus="this.select()" 與手動選取範圍對玻璃數字鍵盤生效） */
         input, textarea { user-select: text; -webkit-user-select: text; -webkit-touch-callout: default; }
+        /* 🩹 修復：手機瀏覽器原生 date input 內部文字列高不受外層 height 限制，
+           會導致「補登歷史交易」列中「日期」欄位比其他欄位明顯偏高，這裡強制內部列高與其他欄位一致 */
+        input[type="date"] { line-height: 16px; }
+        input[type="date"]::-webkit-date-and-time-value { text-align: left; height: 16px; margin: 0; padding: 0; }
 
         ::-webkit-scrollbar { width: 5px; height: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -557,7 +561,7 @@
     <div class="menu-item" id="menu-item-cards" onclick="switchView('view-cards', this)"><span class="nav-line"></span> 自選資產卡片</div>
     <div class="menu-item" id="menu-item-holdings" onclick="switchView('view-holdings', this)"><span class="nav-line"></span> 庫存與資產損益</div>
     <div class="menu-item" id="menu-item-ledger" onclick="switchView('view-ledger', this)"><span class="nav-line"></span> 時光機與歷史帳本</div>
-    <div class="menu-item" id="menu-item-settings" style="margin-top: auto;" onclick="switchView('view-settings', this)"><i class="fa-solid fa-sliders"></i> 系統設定</div>
+    <div class="menu-item" id="menu-item-settings" style="margin-top: auto;" onclick="switchView('view-settings', this)"><i class="fa-solid fa-sliders"></i></div>
 </aside>
 
 <div id="content-area">
@@ -951,6 +955,22 @@
                     <input type="text" id="cfg-timeaxis-val" class="jelly-input mobile-num" data-decimal="false" inputmode="numeric" value="8" onfocus="this.select()">
                 </div>
             </div>
+            <div class="glow-divide-top setting-item">
+                <div><div style="font-weight:bold;">圖表數值軸</div><div style="font-size:11px; color:#777; margin-top:2px;">開關圖表左側的數值刻度標籤（關閉後仍會保留灰色水平格線）</div></div>
+                <label class="switch"><input type="checkbox" id="cfg-valueaxis-show" checked><span class="slider"></span></label>
+            </div>
+            <div class="glow-divide-top setting-item" id="valueaxis-settings-wrapper">
+                <div><div style="font-weight:bold;">數值軸顯示數量上限</div><div style="font-size:11px; color:#777; margin-top:2px;">限制數值軸（水平格線）最多顯示幾筆，拉到上限為 All</div></div>
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <div class="jelly-slider-container">
+                        <div class="jelly-slider-track"></div>
+                        <div class="jelly-slider-thumb" id="valueaxis-jelly-thumb"></div>
+                        <input type="range" id="cfg-valueaxis-slider" min="2" max="15" value="7" class="jelly-slider-input">
+                    </div>
+                    <input type="text" id="cfg-valueaxis-val" class="jelly-input mobile-num" data-decimal="false" inputmode="numeric" value="7" onfocus="this.select()">
+                </div>
+            </div>
+
             <div class="glow-divide-top setting-item" style="border-color: rgba(255,69,96,0.3); margin-top:10px;">
                 <div><div style="font-weight:bold; color:var(--color-sell);">重置初始帳戶資金</div><div style="font-size:11px; color:#777; margin-top:2px;">完全還原為初始狀態</div></div>
                 <button onclick="resetAccount()" style="background:var(--color-sell); border:none; color:#fff; padding:8px 14px; border-radius:6px; font-weight:bold; cursor:pointer;">執行重置</button>
@@ -1262,16 +1282,15 @@
     <div class="price-rsi-container">
         <div style="display:flex; justify-content:space-between; align-items:center;">
             <div>
-                <div style="font-size:11px; color:#888;">當前真實現價</div>
                 <div id="trade-price-display" style="font-size:20px; font-weight:800; font-family:monospace; color:#fff;">$ ----</div>
             </div>
             <div style="text-align:right;">
-                <div style="font-size:11px; color:#888;">持股 / <span id="limit-label">可買上限</span></div>
+                <div style="font-size:11px; color:#888;">持股 / <span id="limit-label">上限</span></div>
                 <div style="font-size:13px; font-family:monospace; color:var(--color-acc);"><span id="holding-shares-display">0</span> / <span id="max-buy-display">0</span> 股</div>
             </div>
         </div>
         <div style="border-top:1px solid rgba(255,255,255,0.05); padding-top:6px; display:flex; justify-content:space-between; align-items:center;">
-            <span style="font-size:11px; color:#aaa;">14 週期相對強弱指標 (RSI)</span>
+            <span style="font-size:11px; color:#aaa;">RSI</span>
             <div>
                 <span id="rsi-val-display" style="font-family:monospace; font-weight:bold; font-size:13px;">--</span>
                 <span id="rsi-status-badge" class="rsi-badge" style="background:rgba(255,255,255,0.1); color:#ccc;">計算中</span>
@@ -3379,6 +3398,18 @@
         document.getElementById("timeaxis-jelly-thumb").style.left = `${timeAxisPct * 162}px`;
         document.getElementById("timeaxis-settings-wrapper").classList.toggle("disabled", !document.getElementById("cfg-timeaxis-show").checked);
 
+        // 📏 圖表數值軸開關與顯示數量上限
+        const savedValueAxisShow = localStorage.getItem('SETTING_VALUEAXIS_SHOW');
+        document.getElementById("cfg-valueaxis-show").checked = (savedValueAxisShow !== null) ? savedValueAxisShow === 'true' : true;
+        const savedValueAxisVal = localStorage.getItem('SETTING_VALUEAXIS_VAL');
+        const effectiveValueAxisVal = (savedValueAxisVal !== null) ? savedValueAxisVal : '7';
+        document.getElementById("cfg-valueaxis-slider").value = (effectiveValueAxisVal === 'All') ? 15 : effectiveValueAxisVal;
+        document.getElementById("cfg-valueaxis-val").value = effectiveValueAxisVal;
+        const valueAxisValNum = (effectiveValueAxisVal === 'All') ? 15 : parseInt(effectiveValueAxisVal);
+        const valueAxisPct = (valueAxisValNum - 2) / (15 - 2);
+        document.getElementById("valueaxis-jelly-thumb").style.left = `${valueAxisPct * 162}px`;
+        document.getElementById("valueaxis-settings-wrapper").classList.toggle("disabled", !document.getElementById("cfg-valueaxis-show").checked);
+
         document.getElementById("trade-ticker").value = currentTicker; 
         document.getElementById("ai-mini-ticker-input").value = currentTicker;
         
@@ -4289,10 +4320,10 @@
         document.getElementById("holding-shares-display").innerText = holding.toLocaleString();
         
         if (tradeMode === 'BUY') {
-            document.getElementById('limit-label').innerText = '可買上限'; document.getElementById('max-buy-display').innerText = maxBuy.toLocaleString();
+            document.getElementById('limit-label').innerText = '上限'; document.getElementById('max-buy-display').innerText = maxBuy.toLocaleString();
             document.getElementById("exec-trade-btn").disabled = (s <= 0 || s > maxBuy);
         } else {
-            document.getElementById('limit-label').innerText = '可賣上限'; document.getElementById('max-buy-display').innerText = holding.toLocaleString();
+            document.getElementById('limit-label').innerText = '上限'; document.getElementById('max-buy-display').innerText = holding.toLocaleString();
             document.getElementById("exec-trade-btn").disabled = (s <= 0 || s > holding);
         }
         recalculateOrder();
@@ -4637,8 +4668,25 @@
             return Math.round(value);
         } : function(value) { return value.toLocaleString(); };
 
+        // 📏 圖表數值軸開關與顯示數量上限（關閉數值軸標籤後，仍保留灰色水平格線）
+        const valueAxisShowEl = document.getElementById("cfg-valueaxis-show");
+        const valueAxisShow = valueAxisShowEl ? valueAxisShowEl.checked : true;
+        const valueAxisValEl = document.getElementById("cfg-valueaxis-val");
+        const valueAxisRaw = valueAxisValEl ? valueAxisValEl.value : '7';
+        [navChart, mobileChart].forEach(chart => {
+            if (!chart.options.scales.y.ticks) chart.options.scales.y.ticks = {};
+            if (!chart.options.scales.y.grid) chart.options.scales.y.grid = {};
+            chart.options.scales.y.ticks.display = valueAxisShow;
+            chart.options.scales.y.grid.display = true;
+            if (valueAxisRaw === 'All') {
+                delete chart.options.scales.y.ticks.maxTicksLimit;
+            } else {
+                chart.options.scales.y.ticks.maxTicksLimit = parseInt(valueAxisRaw) || 7;
+            }
+        });
+
         if (showNav) {
-            document.getElementById("main-chart-title").innerHTML = `<img src="走勢圖.png" width="12" height="12"> <span class="hide-on-mobile" style="margin-left:4px;">投資組合總淨值走勢</span>`;
+            document.getElementById("main-chart-title").innerHTML = `<img src="走勢圖.png" width="12" height="12"> <span class="hide-on-mobile" style="margin-left:4px;">總淨值走勢</span>`;
             let cutoff = 0; const now = Date.now();
             if (currentRange === '1D') cutoff = now - 86400000; 
             else if (currentRange === '1W') cutoff = now - 86400000 * 7; 
@@ -4772,6 +4820,44 @@
     }
     document.getElementById("cfg-timeaxis-val").addEventListener("change", commitTimeAxisInput);
     document.getElementById("cfg-timeaxis-val").addEventListener("keydown", (e) => { if (e.key === "Enter") e.target.blur(); });
+
+    // 📏 圖表數值軸開關與顯示數量上限
+    document.getElementById("cfg-valueaxis-show").addEventListener("change", (e) => {
+        localStorage.setItem('SETTING_VALUEAXIS_SHOW', e.target.checked);
+        document.getElementById("valueaxis-settings-wrapper").classList.toggle("disabled", !e.target.checked);
+        renderAllCharts(false);
+    });
+    document.getElementById("cfg-valueaxis-slider").addEventListener("input", (e) => {
+        const val = parseInt(e.target.value), max = parseInt(e.target.max, 10), displayVal = (val >= max) ? 'All' : val;
+        document.getElementById("cfg-valueaxis-val").value = displayVal;
+        localStorage.setItem('SETTING_VALUEAXIS_VAL', displayVal);
+        const pct = (val - e.target.min) / (e.target.max - e.target.min);
+        document.getElementById("valueaxis-jelly-thumb").style.left = `${pct * 162}px`;
+        renderAllCharts(false);
+    });
+    function commitValueAxisInput() {
+        const input = document.getElementById("cfg-valueaxis-val");
+        const slider = document.getElementById("cfg-valueaxis-slider");
+        const min = parseInt(slider.min, 10), max = parseInt(slider.max, 10);
+        const raw = input.value.trim();
+        let val;
+        if (raw === '' || /^all$/i.test(raw)) {
+            val = max;
+        } else {
+            val = parseInt(raw, 10);
+            if (isNaN(val)) val = parseInt(slider.value, 10);
+            val = Math.max(min, Math.min(max, val));
+        }
+        const displayVal = (val >= max) ? 'All' : val;
+        slider.value = val;
+        input.value = displayVal;
+        localStorage.setItem('SETTING_VALUEAXIS_VAL', displayVal);
+        const pct = (val - min) / (max - min);
+        document.getElementById("valueaxis-jelly-thumb").style.left = `${pct * 162}px`;
+        renderAllCharts(false);
+    }
+    document.getElementById("cfg-valueaxis-val").addEventListener("change", commitValueAxisInput);
+    document.getElementById("cfg-valueaxis-val").addEventListener("keydown", (e) => { if (e.key === "Enter") e.target.blur(); });
 
     // 🛑 停損警示設定（依目前使用中帳號各自儲存於 state.stopLoss）
     document.getElementById("cfg-stoploss-enable").addEventListener("change", (e) => {
