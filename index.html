@@ -762,9 +762,12 @@
                     <div style="font-size:11px; color:#888; margin-bottom:4px;">股數</div>
                     <input type="text" id="tm-shares" class="mobile-num" onfocus="this.select()" placeholder="10" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-family:monospace; height:30px; box-sizing:border-box;">
                 </div>
-                <button onclick="insertHistoricalTrade()" style="background:var(--color-acc); color:#000; border:none; padding:8px 16px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:12px; transition:all 0.2s;">
-                    確認插入
-                </button>
+                <div>
+                    <div style="font-size:11px; margin-bottom:4px; visibility:hidden;">操作</div>
+                    <button onclick="insertHistoricalTrade()" style="background:var(--color-acc); color:#000; border:none; padding:0 16px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:12px; transition:all 0.2s; height:30px; box-sizing:border-box; display:flex; align-items:center; justify-content:center;">
+                        確認插入
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -1241,6 +1244,8 @@
             <div class="opaque-dropdown-list" id="ticker-dropdown">
                 <div class="dropdown-group-title" id="recent-group-title" style="color:var(--color-buy)">★ 最近選過</div>
                 <div id="recent-tickers-list"></div>
+                <div class="dropdown-group-title" id="pinned-group-title" style="color:var(--color-acc); border-top:1px solid rgba(255,255,255,0.05);">📌 已釘選</div>
+                <div id="pinned-tickers-list"></div>
                 <div class="dropdown-group-title" style="border-top:1px solid rgba(255,255,255,0.05);">即時搜尋結果</div>
                 <div id="live-search-list">
                     <div style="padding:10px 12px; font-size:11px; color:#666;">輸入代號以搜尋全球市場...</div>
@@ -3919,6 +3924,7 @@
             
             state.cardTickers = [...new Set(newOrder)];
             saveData();
+            renderPinnedTickers();
         }, 300);
     }
 
@@ -3928,6 +3934,7 @@
         state.cardTickers = state.cardTickers.filter(t => t !== ticker); 
         state.cardTickers = [...new Set(state.cardTickers)];
         saveData(); 
+        renderPinnedTickers();
     }
     
     function addCardPrompt() {
@@ -3936,7 +3943,7 @@
         box.innerHTML = `<input type="text" id="new-card-input" placeholder="代號 (如 AAPL)" autocomplete="off" style="width:80%; padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:rgba(0,0,0,0.6); color:#fff; text-align:center; font-weight:bold; font-size:14px; outline:none; text-transform:uppercase; margin-bottom:12px;"> <div style="display:flex; gap:10px;"><button onclick="confirmAddCard()" style="background:var(--color-acc); color:#000; border:none; padding:6px 16px; border-radius:6px; font-weight:bold; cursor:pointer;">新增</button><button onclick="renderCards()" style="background:rgba(255,255,255,0.1); color:#fff; border:none; padding:6px 16px; border-radius:6px; cursor:pointer;">取消</button></div>`;
         grid.replaceChild(box, grid.lastElementChild); document.getElementById('new-card-input').focus();
     }
-    function confirmAddCard() { const val = document.getElementById('new-card-input').value.trim().toUpperCase(); if(val && !state.cardTickers.includes(val)) { state.cardTickers.push(val); saveData(); fetchAllCardsData(); } else { renderCards(); } }
+    function confirmAddCard() { const val = document.getElementById('new-card-input').value.trim().toUpperCase(); if(val && !state.cardTickers.includes(val)) { state.cardTickers.push(val); saveData(); renderPinnedTickers(); fetchAllCardsData(); } else { renderCards(); } }
 
     async function fetchAllCardsData() {
         if (state.cardTickers.length === 0) return;
@@ -3993,13 +4000,25 @@
         attachCardDragEvents();
     }
 
+    // 🩹 「最近選過」上限固定為 5 筆，最新選取的代號會排到最前面，超過上限則自動移除最舊的
     function addToRecentlySelected(t) { state.recentTickers = [t, ...state.recentTickers.filter(item => item !== t)].slice(0, 5); saveData(); renderRecentTickers(); }
-    function renderRecentTickers() { document.getElementById("recent-tickers-list").innerHTML = state.recentTickers.map(t => `<div class="dropdown-item" onclick="selectTicker('${t}')"><span style="font-weight:bold; color:var(--color-buy)">${t}</span><span style="color:#888; font-size:11px;">最近選取</span></div>`).join(""); }
+    function renderRecentTickers() { document.getElementById("recent-tickers-list").innerHTML = state.recentTickers.map(t => `<div class="dropdown-item" onclick="selectTicker('${t}')"><span style="font-weight:bold; color:var(--color-buy)">${t}</span><span style="color:#888; font-size:11px;">最近選取</span></div>`).join(""); renderPinnedTickers(); }
+
+    // 📌 「已釘選」顯示自選資產卡片（cardTickers）內釘選的股票代號，不限數量
+    function renderPinnedTickers() {
+        const titleEl = document.getElementById("pinned-group-title"), listEl = document.getElementById("pinned-tickers-list");
+        if (!titleEl || !listEl) return;
+        const pinned = state.cardTickers || [];
+        if (pinned.length === 0) { titleEl.style.display = 'none'; listEl.style.display = 'none'; listEl.innerHTML = ''; return; }
+        titleEl.style.display = 'block'; listEl.style.display = 'block';
+        listEl.innerHTML = pinned.map(t => `<div class="dropdown-item" onclick="selectTicker('${t}')"><span style="font-weight:bold; color:var(--color-acc)">${t}</span><span style="color:#888; font-size:11px;">已釘選</span></div>`).join("");
+    }
 
     const tickerInput = document.getElementById("trade-ticker");
     tickerInput.addEventListener("input", (e) => {
         const query = e.target.value.trim().toUpperCase(); document.getElementById("ticker-dropdown").classList.add("show");
         document.getElementById("recent-group-title").style.display = 'none'; document.getElementById("recent-tickers-list").style.display = 'none';
+        document.getElementById("pinned-group-title").style.display = 'none'; document.getElementById("pinned-tickers-list").style.display = 'none';
         clearTimeout(searchDebounceTimer);
         searchDebounceTimer = setTimeout(async () => {
             if(!query) { document.getElementById("live-search-list").innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#666;">輸入代號以搜尋全球市場...</div>`; return; }
@@ -4042,11 +4061,45 @@
     }
 
     // AI 迷你搜尋器的邏輯
+    function positionAiTickerDropdown() {
+        const dropdown = document.getElementById("ai-ticker-dropdown");
+        const wrapper = document.getElementById("ai-ticker-wrapper");
+        // 🩹 修復：手機版 #ai-commander 設有 overflow:hidden，下拉選單若留在容器內會被裁切，
+        // 造成選單看起來「無法下滑」。開啟時改將選單搬到 <body> 下並以 fixed 定位，
+        // 依輸入框當下位置計算座標，脫離容器的裁切範圍。
+        if (dropdown.parentElement !== document.body) document.body.appendChild(dropdown);
+        const rect = wrapper.getBoundingClientRect();
+        const gap = 5, spaceBelow = window.innerHeight - rect.bottom - gap, spaceAbove = rect.top - gap;
+        const openUpward = spaceBelow < 150 && spaceAbove > spaceBelow;
+        dropdown.style.position = 'fixed';
+        dropdown.style.left = 'auto';
+        dropdown.style.right = (window.innerWidth - rect.right) + 'px';
+        if (openUpward) {
+            dropdown.style.top = 'auto';
+            dropdown.style.bottom = (window.innerHeight - rect.top + gap) + 'px';
+            dropdown.style.maxHeight = Math.min(240, spaceAbove) + 'px';
+        } else {
+            dropdown.style.bottom = 'auto';
+            dropdown.style.top = (rect.bottom + gap) + 'px';
+            dropdown.style.maxHeight = Math.min(240, spaceBelow) + 'px';
+        }
+    }
+    function renderAiTickerDefaultList() {
+        const pinned = state.cardTickers || [];
+        document.getElementById("ai-live-search-list").innerHTML =
+            `<div class="dropdown-group-title" style="color:var(--color-buy)">★ 最近選取</div>` +
+            state.recentTickers.map(t => `<div class="dropdown-item" onclick="selectTicker('${t}')"><span style="font-weight:bold; color:var(--color-buy)">${t}</span><span style="color:#888; font-size:11px;">最近</span></div>`).join("") +
+            (pinned.length ? `<div class="dropdown-group-title" style="color:var(--color-acc); border-top:1px solid rgba(255,255,255,0.05);">📌 已釘選</div>` +
+                pinned.map(t => `<div class="dropdown-item" onclick="selectTicker('${t}')"><span style="font-weight:bold; color:var(--color-acc)">${t}</span><span style="color:#888; font-size:11px;">已釘選</span></div>`).join("") : "");
+    }
     function toggleAiTickerDropdown() { 
         const dropdown = document.getElementById("ai-ticker-dropdown");
-        dropdown.classList.toggle("show"); 
-        if(dropdown.classList.contains("show")) {
-            document.getElementById("ai-live-search-list").innerHTML = `<div class="dropdown-group-title" style="color:var(--color-buy)">★ 最近選取</div>` + state.recentTickers.map(t => `<div class="dropdown-item" onclick="selectTicker('${t}')"><span style="font-weight:bold; color:var(--color-buy)">${t}</span><span style="color:#888; font-size:11px;">最近</span></div>`).join("");
+        if (!dropdown.classList.contains("show")) {
+            positionAiTickerDropdown();
+            dropdown.classList.add("show");
+            renderAiTickerDefaultList();
+        } else {
+            dropdown.classList.remove("show");
         }
     }
     
@@ -4058,6 +4111,7 @@
         const list = document.getElementById("ai-live-search-list");
         
         if(!query) { dropdown.classList.remove("show"); return; }
+        positionAiTickerDropdown();
         dropdown.classList.add("show");
         list.innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> 搜尋 ${query}...</div>`;
         
@@ -4077,7 +4131,7 @@
     document.addEventListener("click", (e) => { 
         if(!document.getElementById("ticker-select-wrapper").contains(e.target)) document.getElementById("ticker-dropdown").classList.remove("show"); 
         if(!document.getElementById("tm-ticker-wrapper").contains(e.target)) document.getElementById("tm-ticker-dropdown").classList.remove("show"); 
-        if(!document.getElementById("ai-ticker-wrapper").contains(e.target)) document.getElementById("ai-ticker-dropdown").classList.remove("show"); 
+        if(!document.getElementById("ai-ticker-wrapper").contains(e.target) && !document.getElementById("ai-ticker-dropdown").contains(e.target)) document.getElementById("ai-ticker-dropdown").classList.remove("show"); 
     });
 
     function selectTicker(t) {
@@ -5015,6 +5069,10 @@
         }
         
         activeNumInput.dispatchEvent(new Event('input', {bubbles: true}));
+        // 🩹 修復：流光特效強度輸入框的套用邏輯僅監聽 'change'（於失焦時觸發），
+        // 但手機小鍵盤只會派發 'input'，導致畫面顯示新數值卻從未真正套用，效果永遠停留在 100%。
+        // 這裡額外同步派發 'change'，讓每次按鍵都立即生效。
+        if (isGlowIntensity) activeNumInput.dispatchEvent(new Event('change', {bubbles: true}));
     }
 
     /* =========================================
