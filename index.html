@@ -46,10 +46,6 @@
         input[type="number"] { -moz-appearance: textfield; }
         /* 🩹 修復：輸入框文字選取（讓 onfocus="this.select()" 與手動選取範圍對玻璃數字鍵盤生效） */
         input, textarea { user-select: text; -webkit-user-select: text; -webkit-touch-callout: default; }
-        /* 🩹 修復：手機瀏覽器原生 date input 內部文字列高不受外層 height 限制，
-           會導致「補登歷史交易」列中「日期」欄位比其他欄位明顯偏高，這裡強制內部列高與其他欄位一致 */
-        input[type="date"] { line-height: 16px; }
-        input[type="date"]::-webkit-date-and-time-value { text-align: left; height: 16px; margin: 0; padding: 0; }
 
         ::-webkit-scrollbar { width: 5px; height: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -543,6 +539,15 @@
             .lr-preset-btn { padding: 5px 0; font-size: 10.5px; }
             .lr-date-box input[type="date"] { padding: 6px 4px; font-size: 11px; }
             .lr-hint { font-size: 9.5px; padding-top: 6px; }
+
+            /* 🩹 修復：手機版「補登歷史交易」日期輸入框高度異常偏高
+               行動瀏覽器（尤其 iOS Safari）的 input[type=date] 內部元件有自己的預設留白，
+               不完全遵守外層 height，這裡改用 line-height 撐滿並清除內部元件的留白，
+               讓它與同一列的其他欄位（時間／代號／動作…）等高對齊。 */
+            #tm-date { padding: 0 6px; line-height: 28px; }
+            #tm-date::-webkit-datetime-edit { padding: 0; line-height: 28px; }
+            #tm-date::-webkit-datetime-edit-fields-wrapper { padding: 0; }
+            #tm-date::-webkit-date-and-time-value { padding: 0; margin: 0; text-align: left; }
         }
     </style>
 </head>
@@ -956,21 +961,20 @@
                 </div>
             </div>
             <div class="glow-divide-top setting-item">
-                <div><div style="font-weight:bold;">圖表數值軸</div><div style="font-size:11px; color:#777; margin-top:2px;">開關圖表左側的數值刻度標籤（關閉後仍會保留灰色水平格線）</div></div>
+                <div><div style="font-weight:bold;">圖表數值軸</div><div style="font-size:11px; color:#777; margin-top:2px;">開關主圖表左側的數值座標軸文字，關閉後灰色水平格線依然會顯示</div></div>
                 <label class="switch"><input type="checkbox" id="cfg-valueaxis-show" checked><span class="slider"></span></label>
             </div>
             <div class="glow-divide-top setting-item" id="valueaxis-settings-wrapper">
-                <div><div style="font-weight:bold;">數值軸顯示數量上限</div><div style="font-size:11px; color:#777; margin-top:2px;">限制數值軸（水平格線）最多顯示幾筆，拉到上限為 All</div></div>
+                <div><div style="font-weight:bold;">數值軸顯示數量上限</div><div style="font-size:11px; color:#777; margin-top:2px;">限制數值軸格線最多顯示幾條，拉到上限為 All</div></div>
                 <div style="display:flex; align-items:center; gap:12px;">
                     <div class="jelly-slider-container">
                         <div class="jelly-slider-track"></div>
                         <div class="jelly-slider-thumb" id="valueaxis-jelly-thumb"></div>
-                        <input type="range" id="cfg-valueaxis-slider" min="2" max="15" value="7" class="jelly-slider-input">
+                        <input type="range" id="cfg-valueaxis-slider" min="2" max="20" value="7" class="jelly-slider-input">
                     </div>
                     <input type="text" id="cfg-valueaxis-val" class="jelly-input mobile-num" data-decimal="false" inputmode="numeric" value="7" onfocus="this.select()">
                 </div>
             </div>
-
             <div class="glow-divide-top setting-item" style="border-color: rgba(255,69,96,0.3); margin-top:10px;">
                 <div><div style="font-weight:bold; color:var(--color-sell);">重置初始帳戶資金</div><div style="font-size:11px; color:#777; margin-top:2px;">完全還原為初始狀態</div></div>
                 <button onclick="resetAccount()" style="background:var(--color-sell); border:none; color:#fff; padding:8px 14px; border-radius:6px; font-weight:bold; cursor:pointer;">執行重置</button>
@@ -3398,17 +3402,16 @@
         document.getElementById("timeaxis-jelly-thumb").style.left = `${timeAxisPct * 162}px`;
         document.getElementById("timeaxis-settings-wrapper").classList.toggle("disabled", !document.getElementById("cfg-timeaxis-show").checked);
 
-        // 📏 圖表數值軸開關與顯示數量上限
+        // 📏 圖表數值軸開關與顯示數量上限（關閉後灰色水平格線依然顯示，故上限拉桿維持可調整）
         const savedValueAxisShow = localStorage.getItem('SETTING_VALUEAXIS_SHOW');
         document.getElementById("cfg-valueaxis-show").checked = (savedValueAxisShow !== null) ? savedValueAxisShow === 'true' : true;
         const savedValueAxisVal = localStorage.getItem('SETTING_VALUEAXIS_VAL');
         const effectiveValueAxisVal = (savedValueAxisVal !== null) ? savedValueAxisVal : '7';
-        document.getElementById("cfg-valueaxis-slider").value = (effectiveValueAxisVal === 'All') ? 15 : effectiveValueAxisVal;
+        document.getElementById("cfg-valueaxis-slider").value = (effectiveValueAxisVal === 'All') ? 20 : effectiveValueAxisVal;
         document.getElementById("cfg-valueaxis-val").value = effectiveValueAxisVal;
-        const valueAxisValNum = (effectiveValueAxisVal === 'All') ? 15 : parseInt(effectiveValueAxisVal);
-        const valueAxisPct = (valueAxisValNum - 2) / (15 - 2);
+        const valueAxisValNum = (effectiveValueAxisVal === 'All') ? 20 : parseInt(effectiveValueAxisVal);
+        const valueAxisPct = (valueAxisValNum - 2) / (20 - 2);
         document.getElementById("valueaxis-jelly-thumb").style.left = `${valueAxisPct * 162}px`;
-        document.getElementById("valueaxis-settings-wrapper").classList.toggle("disabled", !document.getElementById("cfg-valueaxis-show").checked);
 
         document.getElementById("trade-ticker").value = currentTicker; 
         document.getElementById("ai-mini-ticker-input").value = currentTicker;
@@ -4667,23 +4670,16 @@
             if (Math.abs(value) >= 1000) return Math.round(value / 1000) + 'k';
             return Math.round(value);
         } : function(value) { return value.toLocaleString(); };
-
-        // 📏 圖表數值軸開關與顯示數量上限（關閉數值軸標籤後，仍保留灰色水平格線）
+        // 📏 圖表數值軸開關（僅隱藏文字標籤，灰色水平格線 grid 依然顯示）與顯示數量上限
         const valueAxisShowEl = document.getElementById("cfg-valueaxis-show");
-        const valueAxisShow = valueAxisShowEl ? valueAxisShowEl.checked : true;
+        navChart.options.scales.y.ticks.display = valueAxisShowEl ? valueAxisShowEl.checked : true;
         const valueAxisValEl = document.getElementById("cfg-valueaxis-val");
         const valueAxisRaw = valueAxisValEl ? valueAxisValEl.value : '7';
-        [navChart, mobileChart].forEach(chart => {
-            if (!chart.options.scales.y.ticks) chart.options.scales.y.ticks = {};
-            if (!chart.options.scales.y.grid) chart.options.scales.y.grid = {};
-            chart.options.scales.y.ticks.display = valueAxisShow;
-            chart.options.scales.y.grid.display = true;
-            if (valueAxisRaw === 'All') {
-                delete chart.options.scales.y.ticks.maxTicksLimit;
-            } else {
-                chart.options.scales.y.ticks.maxTicksLimit = parseInt(valueAxisRaw) || 7;
-            }
-        });
+        if (valueAxisRaw === 'All') {
+            delete navChart.options.scales.y.ticks.maxTicksLimit;
+        } else {
+            navChart.options.scales.y.ticks.maxTicksLimit = parseInt(valueAxisRaw) || 7;
+        }
 
         if (showNav) {
             document.getElementById("main-chart-title").innerHTML = `<img src="走勢圖.png" width="12" height="12"> <span class="hide-on-mobile" style="margin-left:4px;">總淨值走勢</span>`;
@@ -4821,10 +4817,9 @@
     document.getElementById("cfg-timeaxis-val").addEventListener("change", commitTimeAxisInput);
     document.getElementById("cfg-timeaxis-val").addEventListener("keydown", (e) => { if (e.key === "Enter") e.target.blur(); });
 
-    // 📏 圖表數值軸開關與顯示數量上限
+    // 📏 圖表數值軸開關與顯示數量上限（關閉開關僅隱藏文字，灰色格線依然顯示）
     document.getElementById("cfg-valueaxis-show").addEventListener("change", (e) => {
         localStorage.setItem('SETTING_VALUEAXIS_SHOW', e.target.checked);
-        document.getElementById("valueaxis-settings-wrapper").classList.toggle("disabled", !e.target.checked);
         renderAllCharts(false);
     });
     document.getElementById("cfg-valueaxis-slider").addEventListener("input", (e) => {
@@ -5177,6 +5172,7 @@
         'cfg-tax-rate':          { type: 'decimal', min: 0, step: 0.01, decimals: 4 },
         'cfg-node-val':          { type: 'slider', sliderId: 'cfg-node-slider' },
         'cfg-timeaxis-val':      { type: 'slider', sliderId: 'cfg-timeaxis-slider' },
+        'cfg-valueaxis-val':     { type: 'slider', sliderId: 'cfg-valueaxis-slider' },
         'cfg-glow-intensity-val':{ type: 'slider', sliderId: 'cfg-glow-intensity' },
         'trade-shares':          { type: 'stepShares' }
     };
