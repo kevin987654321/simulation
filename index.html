@@ -552,12 +552,12 @@
 
 <aside id="sidebar">
     <div class="glass-title-text" onclick="switchView('view-achievements', null)" style="cursor:pointer;" title="娛樂中心：成就與好友"><img src="logo.png" width="25" height="25"> ACORNTRADE</div>
-    <div class="menu-item active" onclick="switchView('view-dashboard', this)"><span class="nav-line"></span> 指揮操盤中心</div>
+    <div class="menu-item active" id="menu-item-dashboard" onclick="switchView('view-dashboard', this)"><span class="nav-line"></span> 指揮操盤中心</div>
     <div class="menu-item mobile-only" onclick="switchView('view-mobile-trade', this)"><span class="nav-line"></span> 下單櫃檯</div>
-    <div class="menu-item" onclick="switchView('view-cards', this)"><span class="nav-line"></span> 自選資產卡片</div>
-    <div class="menu-item" onclick="switchView('view-holdings', this)"><span class="nav-line"></span> 庫存與資產損益</div>
-    <div class="menu-item" onclick="switchView('view-ledger', this)"><span class="nav-line"></span> 時光機與歷史帳本</div>
-    <div class="menu-item" style="margin-top: auto;" onclick="switchView('view-settings', this)"><i class="fa-solid fa-sliders"></i> 系統設定</div>
+    <div class="menu-item" id="menu-item-cards" onclick="switchView('view-cards', this)"><span class="nav-line"></span> 自選資產卡片</div>
+    <div class="menu-item" id="menu-item-holdings" onclick="switchView('view-holdings', this)"><span class="nav-line"></span> 庫存與資產損益</div>
+    <div class="menu-item" id="menu-item-ledger" onclick="switchView('view-ledger', this)"><span class="nav-line"></span> 時光機與歷史帳本</div>
+    <div class="menu-item" id="menu-item-settings" style="margin-top: auto;" onclick="switchView('view-settings', this)"><i class="fa-solid fa-sliders"></i> 系統設定</div>
 </aside>
 
 <div id="content-area">
@@ -724,20 +724,20 @@
             <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
                 <div>
                     <div style="font-size:11px; color:#888; margin-bottom:4px;">日期</div>
-                    <input type="date" id="tm-date" onfocus="this.select()" onchange="autoFetchHistoricalPrice()" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-family:monospace;">
+                    <input type="date" id="tm-date" onfocus="this.select()" onchange="autoFetchHistoricalPrice()" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-family:monospace; height:30px; box-sizing:border-box;">
                 </div>
                 <div>
                     <div style="font-size:11px; color:#888; margin-bottom:4px;">時間 (24H)</div>
-                    <div style="display:flex; align-items:center; gap:2px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); border-radius:6px; padding:0 8px; width:fit-content;">
-                        <input type="text" id="tm-hour" class="mobile-num" data-maxlen="2" onfocus="this.select()" oninput="handleHourInput(this)" onblur="padHour(this)" placeholder="00" style="width:22px; background:transparent; border:none; color:#fff; padding:6px 0; font-family:monospace; text-align:center; outline:none; font-size:14px;">
+                    <div style="display:flex; align-items:center; gap:2px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); border-radius:6px; padding:0 8px; width:fit-content; height:30px; box-sizing:border-box;">
+                        <input type="text" id="tm-hour" class="mobile-num" data-maxlen="2" onfocus="this.select()" oninput="handleHourInput(this)" onblur="padHour(this)" placeholder="00" style="width:22px; background:transparent; border:none; color:#fff; padding:0; font-family:monospace; text-align:center; outline:none; font-size:14px;">
                         <span style="color:#888; font-weight:bold; padding-bottom:2px;">:</span>
-                        <input type="text" id="tm-minute" class="mobile-num" data-maxlen="2" onfocus="this.select()" oninput="handleMinuteInput(this)" onblur="padMinute(this)" placeholder="00" style="width:22px; background:transparent; border:none; color:#fff; padding:6px 0; font-family:monospace; text-align:center; outline:none; font-size:14px;">
+                        <input type="text" id="tm-minute" class="mobile-num" data-maxlen="2" onfocus="this.select()" oninput="handleMinuteInput(this)" onblur="padMinute(this)" placeholder="00" style="width:22px; background:transparent; border:none; color:#fff; padding:0; font-family:monospace; text-align:center; outline:none; font-size:14px;">
                     </div>
                 </div>
                 <div>
                     <div style="font-size:11px; color:#888; margin-bottom:4px;">代號</div>
                     <div class="custom-select-wrapper" id="tm-ticker-wrapper" style="width: 90px; position: relative; z-index: 9999;">
-                        <input type="text" id="tm-ticker" onfocus="this.select()" placeholder="" style="width:100%; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-transform:uppercase; font-family:monospace; font-weight:bold;">
+                        <input type="text" id="tm-ticker" onfocus="this.select()" placeholder="" style="width:100%; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-transform:uppercase; font-family:monospace; font-weight:bold; height:30px; box-sizing:border-box;">
                         <div class="opaque-dropdown-list" id="tm-ticker-dropdown" style="width: 220px; top: 100%; left: 0;">
                             <div id="tm-live-search-list"></div>
                         </div>
@@ -745,22 +745,22 @@
                 </div>
                 <div>
                     <div style="font-size:11px; color:#888; margin-bottom:4px;">動作</div>
-                    <select id="tm-action" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-weight:bold;">
+                    <select id="tm-action" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-weight:bold; height:30px; box-sizing:border-box;">
                         <option value="BUY">買進</option>
                         <option value="SELL">賣出</option>
                     </select>
                 </div>
                 <div>
                     <div style="font-size:11px; color:#888; margin-bottom:4px;">單價</div>
-                    <input type="text" id="tm-price" class="mobile-num" data-decimal="true" onfocus="this.select()" placeholder="自動查詢中..." style="width:100px; background:rgba(0,0,0,0.5); border:1px solid var(--color-acc); color:var(--color-acc); padding:6px; border-radius:6px; font-family:monospace; font-weight:bold;">
+                    <input type="text" id="tm-price" class="mobile-num" data-decimal="true" onfocus="this.select()" placeholder="自動查詢中..." style="width:100px; background:rgba(0,0,0,0.5); border:1px solid var(--color-acc); color:var(--color-acc); padding:6px; border-radius:6px; font-family:monospace; font-weight:bold; height:30px; box-sizing:border-box;">
                 </div>
                 <div>
                     <div style="font-size:11px; color:#888; margin-bottom:4px;" title="換算台幣所使用的匯率，預設自動查詢當日歷史匯率，可手動調整以凍結交易當下實際結匯成本">結匯匯率</div>
-                    <input type="text" id="tm-fxrate" class="mobile-num" data-decimal="true" onfocus="this.select()" placeholder="自動查詢中..." style="width:90px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-family:monospace;">
+                    <input type="text" id="tm-fxrate" class="mobile-num" data-decimal="true" onfocus="this.select()" placeholder="自動查詢中..." style="width:90px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-family:monospace; height:30px; box-sizing:border-box;">
                 </div>
                 <div>
                     <div style="font-size:11px; color:#888; margin-bottom:4px;">股數</div>
-                    <input type="text" id="tm-shares" class="mobile-num" onfocus="this.select()" placeholder="10" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-family:monospace;">
+                    <input type="text" id="tm-shares" class="mobile-num" onfocus="this.select()" placeholder="10" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-family:monospace; height:30px; box-sizing:border-box;">
                 </div>
                 <button onclick="insertHistoricalTrade()" style="background:var(--color-acc); color:#000; border:none; padding:8px 16px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:12px; transition:all 0.2s;">
                     確認插入
@@ -931,6 +931,21 @@
                         <input type="range" id="cfg-node-slider" min="5" max="60" value="60" class="jelly-slider-input">
                     </div>
                     <input type="text" id="cfg-node-val" class="jelly-input mobile-num" data-decimal="false" inputmode="numeric" value="All" onfocus="this.select()">
+                </div>
+            </div>
+            <div class="glow-divide-top setting-item hide-on-mobile">
+                <div><div style="font-weight:bold;">圖表時間軸</div><div style="font-size:11px; color:#777; margin-top:2px;">開關主圖表下方的時間座標軸（僅電腦版）</div></div>
+                <label class="switch"><input type="checkbox" id="cfg-timeaxis-show" checked><span class="slider"></span></label>
+            </div>
+            <div class="glow-divide-top setting-item hide-on-mobile" id="timeaxis-settings-wrapper">
+                <div><div style="font-weight:bold;">時間軸顯示數量上限</div><div style="font-size:11px; color:#777; margin-top:2px;">限制時間軸標籤最多顯示幾筆，拉到上限為 All</div></div>
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <div class="jelly-slider-container">
+                        <div class="jelly-slider-track"></div>
+                        <div class="jelly-slider-thumb" id="timeaxis-jelly-thumb"></div>
+                        <input type="range" id="cfg-timeaxis-slider" min="2" max="20" value="8" class="jelly-slider-input">
+                    </div>
+                    <input type="text" id="cfg-timeaxis-val" class="jelly-input mobile-num" data-decimal="false" inputmode="numeric" value="8" onfocus="this.select()">
                 </div>
             </div>
             <div class="glow-divide-top setting-item" style="border-color: rgba(255,69,96,0.3); margin-top:10px;">
@@ -2135,6 +2150,25 @@
         if(id === 'view-achievements') { renderAchievementsPage(); }
     }
 
+    /* =========================================
+       ⌨️ 電腦版快捷鍵：Alt+1~4 切換左側選單四個主要頁面，Alt+I 切換到系統設定
+       ========================================= */
+    const SIDEBAR_SHORTCUT_MAP = {
+        'Digit1': { view: 'view-dashboard', menuId: 'menu-item-dashboard' },
+        'Digit2': { view: 'view-cards',     menuId: 'menu-item-cards' },
+        'Digit3': { view: 'view-holdings',  menuId: 'menu-item-holdings' },
+        'Digit4': { view: 'view-ledger',    menuId: 'menu-item-ledger' },
+        'KeyI':   { view: 'view-settings',  menuId: 'menu-item-settings' }
+    };
+    document.addEventListener('keydown', (e) => {
+        if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+        const target = SIDEBAR_SHORTCUT_MAP[e.code];
+        if (!target) return;
+        e.preventDefault();
+        const btn = document.getElementById(target.menuId);
+        switchView(target.view, btn);
+    });
+
     const holdToPreviewPlugin = {
         id: 'holdToPreviewPlugin',
         beforeEvent(chart, args) {
@@ -2624,7 +2658,7 @@
         } catch(e) { ACCOUNTS = []; }
 
         if (!Array.isArray(ACCOUNTS) || ACCOUNTS.length === 0) {
-            ACCOUNTS = [{ id: 'default', name: '主帳戶', storageKey: DATA_KEY, hasPassword: false, passwordHash: null, syncEnabled: false, requirePasswordOnBoot: true, createdAt: Date.now() }];
+            ACCOUNTS = [{ id: generateAccountId(), name: '主帳戶', storageKey: DATA_KEY, hasPassword: false, passwordHash: null, syncEnabled: false, requirePasswordOnBoot: true, createdAt: Date.now() }];
             saveAccountsMeta();
         }
         ACCOUNTS.forEach(a => { if (typeof a.syncEnabled === 'undefined') a.syncEnabled = false; if (typeof a.requirePasswordOnBoot === 'undefined') a.requirePasswordOnBoot = true; });
@@ -3327,6 +3361,19 @@
         document.getElementById("cfg-node-slider").value = (effectiveVal === 'All') ? 60 : effectiveVal; document.getElementById("cfg-node-val").value = effectiveVal;
         const valNum = (effectiveVal === 'All') ? 60 : parseInt(effectiveVal); const pct = (valNum - 5) / (60 - 5); document.getElementById("jelly-thumb").style.left = `${pct * 162}px`;
         document.getElementById("node-settings-wrapper").classList.toggle("disabled", !document.getElementById("cfg-node-show").checked);
+
+        // 🕒 圖表時間軸開關與顯示數量上限（電腦版限定）
+        const savedTimeAxisShow = localStorage.getItem('SETTING_TIMEAXIS_SHOW');
+        document.getElementById("cfg-timeaxis-show").checked = (savedTimeAxisShow !== null) ? savedTimeAxisShow === 'true' : true;
+        const savedTimeAxisVal = localStorage.getItem('SETTING_TIMEAXIS_VAL');
+        const effectiveTimeAxisVal = (savedTimeAxisVal !== null) ? savedTimeAxisVal : '8';
+        document.getElementById("cfg-timeaxis-slider").value = (effectiveTimeAxisVal === 'All') ? 20 : effectiveTimeAxisVal;
+        document.getElementById("cfg-timeaxis-val").value = effectiveTimeAxisVal;
+        const timeAxisValNum = (effectiveTimeAxisVal === 'All') ? 20 : parseInt(effectiveTimeAxisVal);
+        const timeAxisPct = (timeAxisValNum - 2) / (20 - 2);
+        document.getElementById("timeaxis-jelly-thumb").style.left = `${timeAxisPct * 162}px`;
+        document.getElementById("timeaxis-settings-wrapper").classList.toggle("disabled", !document.getElementById("cfg-timeaxis-show").checked);
+
         document.getElementById("trade-ticker").value = currentTicker; 
         document.getElementById("ai-mini-ticker-input").value = currentTicker;
         
@@ -4517,7 +4564,17 @@
         // 動態根據狀態調整 Padding、位移與坐標軸外觀 (還原 NAV 參考版樣貌與手機版需求)
         navChart.options.layout.padding = showNav ? 0 : { top: 15, bottom: 15, left: 10, right: 10 };
         navChart.options.scales.x.offset = !showNav;
-        navChart.options.scales.x.display = !isMobile;
+        const timeAxisShowEl = document.getElementById("cfg-timeaxis-show");
+        const timeAxisShow = timeAxisShowEl ? timeAxisShowEl.checked : true;
+        navChart.options.scales.x.display = !isMobile && timeAxisShow;
+        if (!navChart.options.scales.x.ticks) navChart.options.scales.x.ticks = {};
+        const timeAxisValEl = document.getElementById("cfg-timeaxis-val");
+        const timeAxisRaw = timeAxisValEl ? timeAxisValEl.value : '8';
+        if (timeAxisRaw === 'All') {
+            delete navChart.options.scales.x.ticks.maxTicksLimit;
+        } else {
+            navChart.options.scales.x.ticks.maxTicksLimit = parseInt(timeAxisRaw) || 8;
+        }
         
         if (!navChart.options.scales.y.ticks) navChart.options.scales.y.ticks = {};
         navChart.options.scales.y.ticks.font = { size: isMobile ? 9 : 12 };
@@ -4623,6 +4680,44 @@
     }
     document.getElementById("cfg-node-val").addEventListener("change", commitNodeDensityInput);
     document.getElementById("cfg-node-val").addEventListener("keydown", (e) => { if (e.key === "Enter") e.target.blur(); });
+
+    // 🕒 圖表時間軸開關與顯示數量上限（電腦版限定）
+    document.getElementById("cfg-timeaxis-show").addEventListener("change", (e) => {
+        localStorage.setItem('SETTING_TIMEAXIS_SHOW', e.target.checked);
+        document.getElementById("timeaxis-settings-wrapper").classList.toggle("disabled", !e.target.checked);
+        renderAllCharts(false);
+    });
+    document.getElementById("cfg-timeaxis-slider").addEventListener("input", (e) => {
+        const val = parseInt(e.target.value), max = parseInt(e.target.max, 10), displayVal = (val >= max) ? 'All' : val;
+        document.getElementById("cfg-timeaxis-val").value = displayVal;
+        localStorage.setItem('SETTING_TIMEAXIS_VAL', displayVal);
+        const pct = (val - e.target.min) / (e.target.max - e.target.min);
+        document.getElementById("timeaxis-jelly-thumb").style.left = `${pct * 162}px`;
+        renderAllCharts(false);
+    });
+    function commitTimeAxisInput() {
+        const input = document.getElementById("cfg-timeaxis-val");
+        const slider = document.getElementById("cfg-timeaxis-slider");
+        const min = parseInt(slider.min, 10), max = parseInt(slider.max, 10);
+        const raw = input.value.trim();
+        let val;
+        if (raw === '' || /^all$/i.test(raw)) {
+            val = max;
+        } else {
+            val = parseInt(raw, 10);
+            if (isNaN(val)) val = parseInt(slider.value, 10);
+            val = Math.max(min, Math.min(max, val));
+        }
+        const displayVal = (val >= max) ? 'All' : val;
+        slider.value = val;
+        input.value = displayVal;
+        localStorage.setItem('SETTING_TIMEAXIS_VAL', displayVal);
+        const pct = (val - min) / (max - min);
+        document.getElementById("timeaxis-jelly-thumb").style.left = `${pct * 162}px`;
+        renderAllCharts(false);
+    }
+    document.getElementById("cfg-timeaxis-val").addEventListener("change", commitTimeAxisInput);
+    document.getElementById("cfg-timeaxis-val").addEventListener("keydown", (e) => { if (e.key === "Enter") e.target.blur(); });
 
     // 🛑 停損警示設定（依目前使用中帳號各自儲存於 state.stopLoss）
     document.getElementById("cfg-stoploss-enable").addEventListener("change", (e) => {
@@ -4872,9 +4967,18 @@
         e.preventDefault(); 
         if(!activeNumInput || key === '') return;
         
+        // 🩹 流光特效強度輸入框固定以「%」結尾，選取/游標範圍需排除該符號，避免使用者誤刪或把數字打進符號後方
+        const isGlowIntensity = activeNumInput.id === 'cfg-glow-intensity-val';
+
         let val = activeNumInput.value;
         let start = activeNumInput.selectionStart, end = activeNumInput.selectionEnd;
         if (start === null || start === undefined || end === null || end === undefined) { start = val.length; end = val.length; }
+
+        if (isGlowIntensity) {
+            const digitsLen = val.endsWith('%') ? val.length - 1 : val.length;
+            start = Math.min(start, digitsLen);
+            end = Math.min(end, digitsLen);
+        }
 
         if(key === 'backspace') {
             if (start !== end) {
@@ -4901,9 +5005,97 @@
             const newPos = start + key.length;
             activeNumInput.setSelectionRange(newPos, newPos);
         }
+
+        if (isGlowIntensity) {
+            // 使用數字小鍵盤輸入時，即時在數字後方自動補上「%」，並讓游標停留在符號之前
+            const digits = activeNumInput.value.replace(/%/g, '');
+            const caret = Math.min(activeNumInput.selectionStart, digits.length);
+            activeNumInput.value = digits + '%';
+            activeNumInput.setSelectionRange(caret, caret);
+        }
         
         activeNumInput.dispatchEvent(new Event('input', {bubbles: true}));
     }
+
+    /* =========================================
+       🖱️ 電腦版：上下鍵 / 滑鼠滾輪調整數值框
+       - 下單櫃檯的股數輸入框：滑鼠移到框上即可直接用滾輪調整（不需先點擊聚焦）
+       - 其他數值輸入框：需先點擊進入輸入狀態（聚焦）後，才能用滾輪調整；上下鍵一律需聚焦後才可使用
+       ========================================= */
+    const NUM_ADJUST_CONFIG = {
+        'tm-hour':               { type: 'wrap', min: 0, max: 23, step: 1, pad: 2, after: 'padHour' },
+        'tm-minute':             { type: 'wrap', min: 0, max: 59, step: 1, pad: 2, after: 'padMinute' },
+        'tm-price':              { type: 'decimal', min: 0, step: 0.01, decimals: 2 },
+        'tm-fxrate':             { type: 'decimal', min: 0, step: 0.01, decimals: 2 },
+        'tm-shares':             { type: 'decimal', min: 0, step: 1, decimals: 0 },
+        'cfg-stoploss-percent':  { type: 'decimal', min: 0.1, step: 1, decimals: 2 },
+        'cfg-fee-rate':          { type: 'decimal', min: 0, step: 0.01, decimals: 4 },
+        'cfg-tax-rate':          { type: 'decimal', min: 0, step: 0.01, decimals: 4 },
+        'cfg-node-val':          { type: 'slider', sliderId: 'cfg-node-slider' },
+        'cfg-timeaxis-val':      { type: 'slider', sliderId: 'cfg-timeaxis-slider' },
+        'cfg-glow-intensity-val':{ type: 'slider', sliderId: 'cfg-glow-intensity' },
+        'trade-shares':          { type: 'stepShares' }
+    };
+
+    function adjustNumInput(input, dir) {
+        const cfg = NUM_ADJUST_CONFIG[input.id];
+        if (!cfg) return;
+
+        if (cfg.type === 'stepShares') {
+            stepShares(dir);
+            return;
+        }
+
+        if (cfg.type === 'slider') {
+            const slider = document.getElementById(cfg.sliderId);
+            if (!slider) return;
+            const min = parseInt(slider.min, 10), max = parseInt(slider.max, 10), step = parseInt(slider.step, 10) || 1;
+            let val = parseInt(slider.value, 10) || min;
+            val = Math.max(min, Math.min(max, val + dir * step));
+            slider.value = val;
+            slider.dispatchEvent(new Event('input', { bubbles: true }));
+            return;
+        }
+
+        if (cfg.type === 'wrap') {
+            let val = parseInt(input.value, 10); if (isNaN(val)) val = 0;
+            const span = cfg.max - cfg.min + 1;
+            val = cfg.min + (((val - cfg.min) + dir * cfg.step) % span + span) % span;
+            input.value = String(val).padStart(cfg.pad, '0');
+            if (cfg.after === 'padHour') padHour(input); else if (cfg.after === 'padMinute') padMinute(input);
+            return;
+        }
+
+        if (cfg.type === 'decimal') {
+            let val = parseFloat(input.value); if (isNaN(val)) val = 0;
+            val = val + dir * cfg.step;
+            if (typeof cfg.min === 'number') val = Math.max(cfg.min, val);
+            if (typeof cfg.max === 'number') val = Math.min(cfg.max, val);
+            val = parseFloat(val.toFixed(cfg.decimals));
+            input.value = cfg.decimals > 0 ? val.toFixed(cfg.decimals) : String(Math.round(val));
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            return;
+        }
+    }
+
+    document.querySelectorAll('.mobile-num').forEach(input => {
+        if (!NUM_ADJUST_CONFIG[input.id]) return;
+
+        // ⌨️ 上下鍵調整（一律需先聚焦該輸入框）
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowUp') { e.preventDefault(); adjustNumInput(input, 1); }
+            else if (e.key === 'ArrowDown') { e.preventDefault(); adjustNumInput(input, -1); }
+        });
+
+        // 🖱️ 滑鼠滾輪調整：下單櫃檯股數框滑過即可調整；其餘輸入框需先聚焦
+        input.addEventListener('wheel', (e) => {
+            const isOrderPanelInput = input.id === 'trade-shares';
+            if (!isOrderPanelInput && document.activeElement !== input) return;
+            e.preventDefault();
+            adjustNumInput(input, e.deltaY < 0 ? 1 : -1);
+        }, { passive: false });
+    });
 
     document.addEventListener('touchstart', handleOutsideClick);
     document.addEventListener('mousedown', handleOutsideClick);
@@ -5238,28 +5430,13 @@
     window.requestGyroPermission = requestGyroPermission;
 
     function initGyroOnboarding() {
+        // 已取消手機版首次進站自動跳出的陀螺儀授權視窗；使用者可自行於「設定」頁手動點擊授權
         updateGyroPermissionUI();
-        if (!GlowFX.isTouchDevice()) return; // 僅手機/觸控裝置需要詢問
+        if (!GlowFX.isTouchDevice()) return; // 僅手機/觸控裝置需要處理
 
         const status = localStorage.getItem(GYRO_STATUS_KEY);
         if (status === 'granted') { GlowFX.activateGyro(); return; }
-        if (localStorage.getItem(GYRO_SEEN_KEY)) return; // 先前已詢問過（無論成功或拒絕），不再顯示
-
-        const overlay = document.getElementById('gyro-onboarding-overlay');
-        if (!overlay) return;
-        overlay.style.display = 'flex';
-
-        document.getElementById('gyro-onboarding-allow-btn').addEventListener('click', async function onAllow() {
-            await requestGyroPermission(false);
-            overlay.style.display = 'none';
-        }, { once: true });
-
-        document.getElementById('gyro-onboarding-skip-btn').addEventListener('click', function onSkip() {
-            localStorage.setItem(GYRO_STATUS_KEY, 'denied');
-            localStorage.setItem(GYRO_SEEN_KEY, '1');
-            overlay.style.display = 'none';
-            updateGyroPermissionUI();
-        }, { once: true });
+        // 不再自動跳出授權視窗，僅靜靜等待使用者於設定頁手動授權
     }
 
     /* =========================================
