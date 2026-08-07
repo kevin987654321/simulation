@@ -540,14 +540,21 @@
             .lr-date-box input[type="date"] { padding: 6px 4px; font-size: 11px; }
             .lr-hint { font-size: 9.5px; padding-top: 6px; }
 
-            /* 🩹 修復：手機版「補登歷史交易」日期輸入框高度異常偏高
-               行動瀏覽器（尤其 iOS Safari）的 input[type=date] 內部元件有自己的預設留白，
-               不完全遵守外層 height，這裡改用 line-height 撐滿並清除內部元件的留白，
-               讓它與同一列的其他欄位（時間／代號／動作…）等高對齊。 */
+            /* 🩹 手機版「補登歷史交易」日期輸入框：iOS Safari 等行動瀏覽器的 input[type=date]
+               內部元件有自己的預設留白，無法完全靠外層 height 校正、與同列其他欄位等高對齊，
+               因此改讓「日期」整塊獨立一行、放在標題文字右側並拉長寬度（見下方 #tm-date-field 規則），
+               不再與時間／代號／動作…等欄位同列比高度。這裡保留基本留白清除，讓輸入框本身視覺仍舊工整。 */
             #tm-date { padding: 0 6px; line-height: 28px; }
             #tm-date::-webkit-datetime-edit { padding: 0; line-height: 28px; }
             #tm-date::-webkit-datetime-edit-fields-wrapper { padding: 0; }
             #tm-date::-webkit-date-and-time-value { padding: 0; margin: 0; text-align: left; }
+
+            /* 📱 手機版：「日期」欄位獨立成一行，放在「補登歷史交易」文字右側並拉長整體寬度 */
+            #tm-form-wrap { display: flex; flex-wrap: wrap; align-items: center; column-gap: 10px; row-gap: 10px; }
+            #tm-title { margin-bottom: 0 !important; flex: 0 0 auto; }
+            #tm-fields-row { display: contents !important; }
+            #tm-date-field { flex: 1 1 140px; min-width: 120px; }
+            #tm-date-field input#tm-date { width: 100%; }
         }
     </style>
 </head>
@@ -728,10 +735,10 @@
     </main>
 
     <main id="view-ledger" class="view-section">
-        <div style="padding:16px; margin-bottom:14px; position:relative; z-index:10;">
-            <div style="font-weight:bold; font-size:14px; margin-bottom:12px;">補登歷史交易</div>
-            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
-                <div>
+        <div style="padding:16px; margin-bottom:14px; position:relative; z-index:10;" id="tm-form-wrap">
+            <div style="font-weight:bold; font-size:14px; margin-bottom:12px;" id="tm-title">補登歷史交易</div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;" id="tm-fields-row">
+                <div id="tm-date-field">
                     <div style="font-size:11px; color:#888; margin-bottom:4px;">日期</div>
                     <input type="date" id="tm-date" onfocus="this.select()" onchange="autoFetchHistoricalPrice()" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-family:monospace; height:30px; box-sizing:border-box;">
                 </div>
@@ -1431,10 +1438,22 @@
         return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
     }
 
+    // 🩹 修復：手機端使用自訂玻璃數字小鍵盤輸入時，小鍵盤按鍵是在 touchstart/mousedown
+    // 觸發（且已 preventDefault），此時同步呼叫 .focus() 切換到下一個欄位，
+    // 常與小鍵盤自身正在重繪（renderNumpad 會整個重建 DOM）的時序互相干擾，
+    // 導致焦點沒有真正轉移到下一欄。改用 setTimeout 延到下一個事件循環再切換焦點，
+    // 讓目前這次按鍵事件（含小鍵盤重繪）完全結束後才轉移，避免時序衝突。
+    function focusMobileField(id) {
+        setTimeout(() => {
+            const target = document.getElementById(id);
+            if (target) { target.focus(); target.select(); }
+        }, 0);
+    }
+
     function handleHourInput(el) {
         let val = el.value.replace(/\D/g, '');
-        if (val.length === 1) { if (parseInt(val) > 2) { el.value = '0' + val; document.getElementById('tm-minute').focus(); } else { el.value = val; }
-        } else if (val.length >= 2) { val = val.substring(0, 2); if (parseInt(val) > 23) val = '23'; el.value = val; document.getElementById('tm-minute').focus();
+        if (val.length === 1) { if (parseInt(val) > 2) { el.value = '0' + val; focusMobileField('tm-minute'); } else { el.value = val; }
+        } else if (val.length >= 2) { val = val.substring(0, 2); if (parseInt(val) > 23) val = '23'; el.value = val; focusMobileField('tm-minute');
         } else { el.value = ''; }
         if (el.value.length === 2) autoFetchHistoricalPrice();
     }
@@ -1443,7 +1462,7 @@
 
     function handleMinuteInput(el) {
         let val = el.value.replace(/\D/g, '');
-        if (val.length >= 2) { val = val.substring(0, 2); if (parseInt(val) > 59) val = '59'; el.value = val; document.getElementById('tm-ticker').focus(); 
+        if (val.length >= 2) { val = val.substring(0, 2); if (parseInt(val) > 59) val = '59'; el.value = val; focusMobileField('tm-ticker'); 
         } else { el.value = val; }
         if (el.value.length === 2) autoFetchHistoricalPrice();
     }
@@ -2180,6 +2199,7 @@
 
     /* =========================================
        ⌨️ 電腦版快捷鍵：Alt+1~4 切換左側選單四個主要頁面，Alt+I 切換到系統設定
+       ⌨️ Esc：直接回到主頁（指揮操盤中心）
        ========================================= */
     const SIDEBAR_SHORTCUT_MAP = {
         'Digit1': { view: 'view-dashboard', menuId: 'menu-item-dashboard' },
@@ -2189,6 +2209,11 @@
         'KeyI':   { view: 'view-settings',  menuId: 'menu-item-settings' }
     };
     document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+            if (document.activeElement && typeof document.activeElement.blur === 'function') document.activeElement.blur();
+            switchView('view-dashboard', document.getElementById('menu-item-dashboard'));
+            return;
+        }
         if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
         const target = SIDEBAR_SHORTCUT_MAP[e.code];
         if (!target) return;
