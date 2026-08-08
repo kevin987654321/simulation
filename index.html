@@ -465,9 +465,16 @@
         .ledger-tab-btn.active { background: rgba(0,212,255,0.15); color: var(--color-acc); box-shadow: 0 0 10px rgba(0,212,255,0.15); }
 
         /* 📅 歷史帳本：日期跳轉選擇器 */
-        .ledger-jump-date-wrap { display: inline-flex; align-items: center; gap: 5px; }
-        .ledger-jump-date-wrap input[type="date"] { background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: #ccc; padding: 5px 7px; border-radius: 6px; font-family: monospace; font-size: 11.5px; outline: none; }
+        .ledger-jump-date-wrap { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; touch-action: manipulation; }
+        .ledger-jump-date-wrap input[type="date"] { background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: #ccc; padding: 5px 7px; border-radius: 6px; font-family: monospace; font-size: 11.5px; outline: none; min-width: 122px; flex-shrink: 0; touch-action: manipulation; -webkit-text-fill-color: #ccc; }
         .ledger-jump-date-wrap input[type="date"]:focus { border-color: var(--color-acc); }
+        .ledger-jump-date-wrap input[type="date"]::-webkit-datetime-edit,
+        .ledger-jump-date-wrap input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+        .ledger-jump-date-wrap input[type="date"]::-webkit-datetime-edit-text,
+        .ledger-jump-date-wrap input[type="date"]::-webkit-datetime-edit-month-field,
+        .ledger-jump-date-wrap input[type="date"]::-webkit-datetime-edit-day-field,
+        .ledger-jump-date-wrap input[type="date"]::-webkit-datetime-edit-year-field { color: #ccc; -webkit-text-fill-color: #ccc; opacity: 1; }
+        .ledger-jump-date-wrap input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.8); opacity: 0.8; }
 
         /* 📄 歷史帳本：分頁控制列 */
         .ledger-pagination { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 14px 0 2px 0; }
@@ -1753,7 +1760,7 @@
         activeTouches = e.touches.length;
         if (window.innerWidth > 768) return;
         if (isCardEditMode) { sIsDragging = false; return; }
-        if (e.target.closest('canvas, .tf-btn, .jelly-slider-input, .jelly-slider-container, .table-responsive')) { sIsDragging = false; return; }
+        if (e.target.closest('canvas, .tf-btn, .jelly-slider-input, .jelly-slider-container, .table-responsive, input, select, textarea, .ledger-jump-date-wrap')) { sIsDragging = false; return; }
         
         sStartX = e.touches[0].clientX; sStartY = e.touches[0].clientY; sIsDragging = true; sIsDetermined = false;
         if (!sidebarEl.classList.contains('open') && sStartX > window.innerWidth * 0.66) sIsDragging = false;
@@ -4022,38 +4029,33 @@
             let totalNewTWD = 0, newCount = 0;
 
             for (const ticker of tickers) {
-                // 📅 查詢「下一次除息日」：改用 quoteSummary 的 calendarEvents（含未來預告的除息日），
-                // 獨立於下方歷史股息入帳查詢執行，避免因該股票查無歷史股息事件（continue）而被連帶跳過
+                // 📅 「下一次除息日」查詢方式修正：v10/finance/quoteSummary 透過一般 CORS 代理呼叫時，
+                // Yahoo 端會因缺少 crumb 驗證權杖而回應失敗（fetch 雖不噴錯但回傳空/無效資料），導致這裡永遠查不到結果。
+                // 改回與其他功能（報價、K線、股票分割）共用、已證實可透過本站代理穩定運作的 v8/finance/chart 端點，
+                // 並將查詢區間的 period2（結束時間）明確延伸至未來約 120 天，讓已公告但尚未除息的事件也能一併回傳，
+                // 與「歷史股息入帳」查詢合併為單一請求，不再額外多打一次 API。
                 try {
-                    const qsUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v10/finance/quoteSummary/${ticker}?modules=calendarEvents,defaultKeyStatistics`)}`;
-                    const qsRes = await fetch(qsUrl, { cache: "no-store" });
-                    if (qsRes.ok) {
-                        const qsJson = await qsRes.json();
-                        const qsResult = qsJson && qsJson.quoteSummary && qsJson.quoteSummary.result && qsJson.quoteSummary.result[0];
-                        const exDivRaw = qsResult && qsResult.calendarEvents && qsResult.calendarEvents.exDividendDate && qsResult.calendarEvents.exDividendDate.raw;
-                        const lastDivValue = qsResult && qsResult.defaultKeyStatistics && qsResult.defaultKeyStatistics.lastDividendValue && qsResult.defaultKeyStatistics.lastDividendValue.raw;
-                        if (exDivRaw && (exDivRaw * 1000) > Date.now()) {
-                            state.nextExDividend[ticker] = { date: exDivRaw * 1000, perShare: lastDivValue || null };
-                        } else {
-                            delete state.nextExDividend[ticker];
-                        }
-                    }
-                } catch (e) { console.error(`下次除息日查詢失敗: ${ticker}`, e); }
-
-                try {
-                    const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=5y&interval=1d&events=div`)}`;
+                    const nowSec = Math.floor(Date.now() / 1000);
+                    const period1 = nowSec - 5 * 365 * 86400; // 回溯 5 年，涵蓋歷史股息入帳所需範圍
+                    const period2 = nowSec + 120 * 86400;     // 延伸至未來 120 天，涵蓋已公告的下次除息日
+                    const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?period1=${period1}&period2=${period2}&interval=1d&events=div`)}`;
                     const res = await fetch(proxyUrl, { cache: "no-store" });
                     if (!res.ok) continue;
                     const json = await res.json();
                     const result = json && json.chart && json.chart.result && json.chart.result[0];
                     const divEvents = result && result.events && result.events.dividends;
-                    if (!divEvents) continue;
+                    if (!divEvents) { delete state.nextExDividend[ticker]; continue; }
 
                     const rate = getCurrencyMultiplier(ticker);
+                    let nearestFutureTs = null, nearestFuturePerShare = null;
                     for (const key in divEvents) {
                         const ev = divEvents[key];
                         const exTimestamp = ev.date * 1000;
-                        if (exTimestamp > Date.now()) continue; // 尚未發生的除息事件已由上方 calendarEvents 查詢處理，這裡僅處理已發生、待入帳的股息
+                        if (exTimestamp > Date.now()) {
+                            // 📅 尚未發生的除息事件：記錄下最接近現在的一筆，作為「下次除息日」顯示於自選資產卡片
+                            if (nearestFutureTs === null || exTimestamp < nearestFutureTs) { nearestFutureTs = exTimestamp; nearestFuturePerShare = ev.amount; }
+                            continue;
+                        }
                         const exDateStr = new Date(exTimestamp).toISOString().slice(0, 10);
                         const dividendKey = `${ticker}_${exDateStr}`;
                         if (paidKeys.has(dividendKey)) continue;
@@ -4090,6 +4092,13 @@
 
                         totalNewTWD += amountTWD;
                         newCount++;
+                    }
+
+                    // 📅 將本次查詢到「最接近的下一次除息日」寫入 state，供自選資產卡片顯示（跟隨本次自動查詢結果，不額外查詢）
+                    if (nearestFutureTs !== null) {
+                        state.nextExDividend[ticker] = { date: nearestFutureTs, perShare: nearestFuturePerShare };
+                    } else {
+                        delete state.nextExDividend[ticker];
                     }
                 } catch (e) { console.error(`股息查詢失敗: ${ticker}`, e); }
             }
