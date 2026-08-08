@@ -46,6 +46,10 @@
         input[type="number"]::-webkit-inner-spin-button,
         input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         input[type="number"] { -moz-appearance: textfield; }
+        /* 🩹 修復：手機版（iOS/Android）瀏覽器會依 color-scheme 決定 input[type="date"] 內建文字／圖示的顏色，
+           本站為深色主題但未宣告 color-scheme，行動瀏覽器預設以淺色配色渲染，導致深色底、淺色字近乎「看不見」
+           （桌機版 Chrome 對此較不敏感故未察覺此問題）。這裡明確宣告深色配色，讓日期輸入框的文字在深色底上正常可見。 */
+        input[type="date"] { color-scheme: dark; }
         /* 🩹 修復：輸入框文字選取（讓 onfocus="this.select()" 與手動選取範圍對玻璃數字鍵盤生效） */
         input, textarea { user-select: text; -webkit-user-select: text; -webkit-touch-callout: default; }
 
@@ -1036,7 +1040,7 @@
                 </div>
             </div>
             <div class="glow-divide-top setting-item">
-                <div><div style="font-weight:bold;">圖表數值軸</div><div style="font-size:11px; color:#777; margin-top:2px;">開關主圖表左側的數值座標軸文字<br>關閉後灰色水平格線依然會顯示</div></div>
+                <div><div style="font-weight:bold;">圖表數值軸</div><div style="font-size:11px; color:#777; margin-top:2px;">開關主圖表左側的數值座標軸文字，關閉後灰色水平格線依然會顯示</div></div>
                 <label class="switch"><input type="checkbox" id="cfg-valueaxis-show" checked><span class="slider"></span></label>
             </div>
             <div class="glow-divide-top setting-item" id="valueaxis-settings-wrapper">
@@ -4018,6 +4022,24 @@
             let totalNewTWD = 0, newCount = 0;
 
             for (const ticker of tickers) {
+                // 📅 查詢「下一次除息日」：改用 quoteSummary 的 calendarEvents（含未來預告的除息日），
+                // 獨立於下方歷史股息入帳查詢執行，避免因該股票查無歷史股息事件（continue）而被連帶跳過
+                try {
+                    const qsUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v10/finance/quoteSummary/${ticker}?modules=calendarEvents,defaultKeyStatistics`)}`;
+                    const qsRes = await fetch(qsUrl, { cache: "no-store" });
+                    if (qsRes.ok) {
+                        const qsJson = await qsRes.json();
+                        const qsResult = qsJson && qsJson.quoteSummary && qsJson.quoteSummary.result && qsJson.quoteSummary.result[0];
+                        const exDivRaw = qsResult && qsResult.calendarEvents && qsResult.calendarEvents.exDividendDate && qsResult.calendarEvents.exDividendDate.raw;
+                        const lastDivValue = qsResult && qsResult.defaultKeyStatistics && qsResult.defaultKeyStatistics.lastDividendValue && qsResult.defaultKeyStatistics.lastDividendValue.raw;
+                        if (exDivRaw && (exDivRaw * 1000) > Date.now()) {
+                            state.nextExDividend[ticker] = { date: exDivRaw * 1000, perShare: lastDivValue || null };
+                        } else {
+                            delete state.nextExDividend[ticker];
+                        }
+                    }
+                } catch (e) { console.error(`下次除息日查詢失敗: ${ticker}`, e); }
+
                 try {
                     const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=5y&interval=1d&events=div`)}`;
                     const res = await fetch(proxyUrl, { cache: "no-store" });
@@ -4028,15 +4050,10 @@
                     if (!divEvents) continue;
 
                     const rate = getCurrencyMultiplier(ticker);
-                    let nearestFutureTs = null, nearestFuturePerShare = null;
                     for (const key in divEvents) {
                         const ev = divEvents[key];
                         const exTimestamp = ev.date * 1000;
-                        if (exTimestamp > Date.now()) {
-                            // 📅 尚未發生的除息事件：記錄下最接近現在的一筆，作為「下次除息日」顯示於自選資產卡片
-                            if (nearestFutureTs === null || exTimestamp < nearestFutureTs) { nearestFutureTs = exTimestamp; nearestFuturePerShare = ev.amount; }
-                            continue;
-                        }
+                        if (exTimestamp > Date.now()) continue; // 尚未發生的除息事件已由上方 calendarEvents 查詢處理，這裡僅處理已發生、待入帳的股息
                         const exDateStr = new Date(exTimestamp).toISOString().slice(0, 10);
                         const dividendKey = `${ticker}_${exDateStr}`;
                         if (paidKeys.has(dividendKey)) continue;
@@ -4073,13 +4090,6 @@
 
                         totalNewTWD += amountTWD;
                         newCount++;
-                    }
-
-                    // 📅 將本次查詢到「最接近的下一次除息日」寫入 state，供自選資產卡片顯示（跟隨本次自動查詢結果，不額外查詢）
-                    if (nearestFutureTs !== null) {
-                        state.nextExDividend[ticker] = { date: nearestFutureTs, perShare: nearestFuturePerShare };
-                    } else {
-                        delete state.nextExDividend[ticker];
                     }
                 } catch (e) { console.error(`股息查詢失敗: ${ticker}`, e); }
             }
@@ -4995,7 +5005,12 @@
     // 📅 依指定日期跳轉至該日「第一筆交易」（當日最早成交的一筆）所在的分頁，並捲動、閃爍高亮該列
     function jumpLedgerToDate(dateStr) {
         if (!dateStr) return;
-        const [y, m, d] = dateStr.split('-').map(Number);
+        const parts = dateStr.split('-').map(Number);
+        const [y, m, d] = parts;
+        // 🩹 部分行動裝置瀏覽器（尤其 iOS/Android 原生日期選擇器）在使用者僅是點開、尚未實際選定日期時，
+        // 仍可能提前觸發 onchange 並帶出空白或不合理的數值，這裡加上基本合理性檢查以避免誤判為「查無交易紀錄」
+        if (parts.length !== 3 || parts.some(n => !Number.isFinite(n)) || y < 1990 || y > 2100 || m < 1 || m > 12 || d < 1 || d > 31) return;
+
         const dayStart = new Date(y, m - 1, d, 0, 0, 0, 0).getTime();
         const dayEnd = new Date(y, m - 1, d, 23, 59, 59, 999).getTime();
 
