@@ -460,6 +460,20 @@
         .ledger-tab-btn { background: transparent; border: none; color: #777; padding: 6px 13px; border-radius: 5px; cursor: pointer; font-size: 11.5px; font-weight: bold; transition: all 0.2s; white-space: nowrap; }
         .ledger-tab-btn.active { background: rgba(0,212,255,0.15); color: var(--color-acc); box-shadow: 0 0 10px rgba(0,212,255,0.15); }
 
+        /* 📅 歷史帳本：日期跳轉選擇器 */
+        .ledger-jump-date-wrap { display: inline-flex; align-items: center; gap: 5px; }
+        .ledger-jump-date-wrap input[type="date"] { background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: #ccc; padding: 5px 7px; border-radius: 6px; font-family: monospace; font-size: 11.5px; outline: none; }
+        .ledger-jump-date-wrap input[type="date"]:focus { border-color: var(--color-acc); }
+
+        /* 📄 歷史帳本：分頁控制列 */
+        .ledger-pagination { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 14px 0 2px 0; }
+        .ledger-page-btn { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #ccc; padding: 6px 13px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: bold; transition: all 0.2s; }
+        .ledger-page-btn:hover:not(:disabled) { background: rgba(255,255,255,0.16); color: #fff; }
+        .ledger-page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        .ledger-page-info { font-size: 12px; color: #888; font-family: monospace; min-width: 76px; text-align: center; }
+        @keyframes ledgerRowFlash { 0% { background: rgba(0,212,255,0.35); } 100% { background: transparent; } }
+        .ledger-row-flash { animation: ledgerRowFlash 1.8s ease-out; }
+
         /* AI Mini Ticker 手機專屬外觀 */
         .ai-mini-ticker .select-input-box { border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; min-height: 26px; padding: 0 4px; background: rgba(0,0,0,0.5); }
         .ai-mini-ticker .select-input-box:focus-within { border-color: var(--color-acc); }
@@ -816,7 +830,11 @@
         <div class="glow-divide-top" style="padding:16px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
                 <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-                    <div style="font-weight:bold; font-size:15px; white-space:nowrap;"><i class="fa-solid fa-list-ul" id="ledger-tab-icon"></i> <span id="ledger-tab-title">歷史帳本與撤銷管理</span>　<span id="dividend-total-label" style="font-size:12px; color:var(--color-buy); font-weight:normal;"></span></div>
+                    <div style="font-weight:bold; font-size:15px; white-space:nowrap;"><i class="fa-solid fa-list-ul" id="ledger-tab-icon"></i> <span id="ledger-tab-title">歷史帳本與撤銷管理</span>
+                        <span class="ledger-jump-date-wrap" id="ledger-jump-date-wrap" style="margin-left:10px;">
+                            <input type="date" id="ledger-jump-date" onchange="jumpLedgerToDate(this.value)" title="跳轉至指定日期的交易紀錄">
+                        </span>
+                        　<span id="dividend-total-label" style="font-size:12px; color:var(--color-buy); font-weight:normal;"></span></div>
                     <div class="ledger-tab-toggle">
                         <button class="ledger-tab-btn active" id="ledger-tab-btn-ledger" onclick="switchLedgerTab('ledger')">交易帳本</button>
                         <button class="ledger-tab-btn" id="ledger-tab-btn-dividends" onclick="switchLedgerTab('dividends')">股息紀錄</button>
@@ -831,6 +849,7 @@
                     <thead><tr><th>時間</th><th>動作</th><th>代號</th><th>成交均價</th><th>股數</th><th>手續費/稅</th><th>交割金額(TWD)</th><th>已實現損益(TWD)</th><th>操作</th></tr></thead>
                     <tbody id="ledger-table-body"></tbody>
                 </table>
+                <div class="ledger-pagination" id="ledger-pagination"></div>
             </div>
             <div class="table-responsive" id="ledger-tab-view-dividends" style="display:none;">
                 <table>
@@ -1017,7 +1036,7 @@
                 </div>
             </div>
             <div class="glow-divide-top setting-item">
-                <div><div style="font-weight:bold;">圖表數值軸</div><div style="font-size:11px; color:#777; margin-top:2px;">開關主圖表左側的數值座標軸文字，關閉後灰色水平格線依然會顯示</div></div>
+                <div><div style="font-weight:bold;">圖表數值軸</div><div style="font-size:11px; color:#777; margin-top:2px;">開關主圖表左側的數值座標軸文字<br>關閉後灰色水平格線依然會顯示</div></div>
                 <label class="switch"><input type="checkbox" id="cfg-valueaxis-show" checked><span class="slider"></span></label>
             </div>
             <div class="glow-divide-top setting-item" id="valueaxis-settings-wrapper">
@@ -2370,7 +2389,7 @@
     Chart.register(smoothCrosshairPlugin);
 
     const DATA_KEY = "ALPHATRADE_MANUAL_DATA";
-    let state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] };
+    let state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, nextExDividend: {}, splits: [], lastSplitCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] };
     let stopLossAlertShown = false; // 避免同一次觸發反覆彈出警示，虧損回復到門檻之上才會重置
     let currentTicker = localStorage.getItem('LAST_SELECTED_TICKER') || "NVDA";
 
@@ -3165,7 +3184,7 @@
         ACCOUNTS.push({ id, name, storageKey, hasPassword: false, passwordHash: null, syncEnabled: false, requirePasswordOnBoot: true, createdAt: Date.now() });
         saveAccountsMeta();
 
-        const freshState = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 } };
+        const freshState = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, nextExDividend: {}, splits: [], lastSplitCheck: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 } };
         persistAccountState(storageKey, freshState);
 
         nameInput.value = '';
@@ -3566,6 +3585,7 @@
                 state.ledger = state.ledger || [];
                 state.dividends = state.dividends || [];
                 state.lastDividendCheck = state.lastDividendCheck || 0;
+                state.nextExDividend = state.nextExDividend || {};
                 state.splits = state.splits || [];
                 state.lastSplitCheck = state.lastSplitCheck || 0;
                 state.lastModified = state.lastModified || 0;
@@ -3586,7 +3606,7 @@
                 if (!state.navHistory || !state.navHistory.timestamps || state.navHistory.timestamps.length === 0) { rebuildNavHistoryFromLedger(); }
             } catch(e) {} 
         } else {
-            state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] };
+            state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, nextExDividend: {}, splits: [], lastSplitCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] };
             rebuildNavHistoryFromLedger(); saveData();
         }
         stopLossAlertShown = false;
@@ -3665,7 +3685,7 @@
     }
     
     function saveData() { persistAccountState(getActiveAccount().storageKey, state); updateAllViews(true); renderCards(); scheduleCloudSync(); checkAchievements(); }
-    async function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { const storageKey = getActiveAccount().storageKey; localStorage.removeItem(storageKey); await idbDeleteLedger(storageKey); state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: Date.now(), recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] }; await initData(); fetchStockHistoryData(currentTicker, true); } }
+    async function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { const storageKey = getActiveAccount().storageKey; localStorage.removeItem(storageKey); await idbDeleteLedger(storageKey); state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, nextExDividend: {}, splits: [], lastSplitCheck: 0, lastModified: Date.now(), recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] }; await initData(); fetchStockHistoryData(currentTicker, true); } }
 
     function exportData() {
         const dataStr = JSON.stringify(state, null, 2), blob = new Blob([dataStr], { type: "application/json" }), url = URL.createObjectURL(blob), a = document.createElement("a");
@@ -3680,7 +3700,7 @@
             try {
                 const importedState = JSON.parse(e.target.result);
                 if (importedState && typeof importedState.cash === 'number') {
-                    state = importedState; state.cardTickers = state.cardTickers || []; state.recentTickers = state.recentTickers || []; state.holdings = state.holdings || {}; state.ledger = state.ledger || []; state.dividends = state.dividends || []; state.lastDividendCheck = state.lastDividendCheck || 0; state.splits = state.splits || []; state.lastSplitCheck = state.lastSplitCheck || 0; state.lastModified = Date.now(); state.stopLoss = state.stopLoss || { enabled: false, percent: 10 }; state.dripEnabled = !!state.dripEnabled; state.unlockedAchievements = state.unlockedAchievements || []; state.friends = state.friends || []; state.achvShowcase = state.achvShowcase || [];
+                    state = importedState; state.cardTickers = state.cardTickers || []; state.recentTickers = state.recentTickers || []; state.holdings = state.holdings || {}; state.ledger = state.ledger || []; state.dividends = state.dividends || []; state.lastDividendCheck = state.lastDividendCheck || 0; state.nextExDividend = state.nextExDividend || {}; state.splits = state.splits || []; state.lastSplitCheck = state.lastSplitCheck || 0; state.lastModified = Date.now(); state.stopLoss = state.stopLoss || { enabled: false, percent: 10 }; state.dripEnabled = !!state.dripEnabled; state.unlockedAchievements = state.unlockedAchievements || []; state.friends = state.friends || []; state.achvShowcase = state.achvShowcase || [];
                     state.ledger.forEach(r => {
                         if (!r.timestamp) {
                             let d = new Date(), parts = r.time ? r.time.split(':') : [];
@@ -3989,8 +4009,11 @@
         if (manual) btns.forEach(b => { b.disabled = true; b.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 查詢中...`; });
 
         try {
-            const tickers = Object.keys(state.holdings).filter(t => state.holdings[t] && state.holdings[t].shares > 0);
+            const heldTickers = Object.keys(state.holdings).filter(t => state.holdings[t] && state.holdings[t].shares > 0);
+            // 🩹 除了持股標的外，也一併查詢「自選資產卡片」的標的，讓卡片可顯示下次除息日（不額外新增查詢時機，僅擴充同一次自動查詢涵蓋的代號）
+            const tickers = [...new Set([...heldTickers, ...(state.cardTickers || [])])];
             state.dividends = state.dividends || [];
+            state.nextExDividend = state.nextExDividend || {};
             const paidKeys = new Set(state.dividends.map(d => d.key));
             let totalNewTWD = 0, newCount = 0;
 
@@ -4005,10 +4028,15 @@
                     if (!divEvents) continue;
 
                     const rate = getCurrencyMultiplier(ticker);
+                    let nearestFutureTs = null, nearestFuturePerShare = null;
                     for (const key in divEvents) {
                         const ev = divEvents[key];
                         const exTimestamp = ev.date * 1000;
-                        if (exTimestamp > Date.now()) continue;
+                        if (exTimestamp > Date.now()) {
+                            // 📅 尚未發生的除息事件：記錄下最接近現在的一筆，作為「下次除息日」顯示於自選資產卡片
+                            if (nearestFutureTs === null || exTimestamp < nearestFutureTs) { nearestFutureTs = exTimestamp; nearestFuturePerShare = ev.amount; }
+                            continue;
+                        }
                         const exDateStr = new Date(exTimestamp).toISOString().slice(0, 10);
                         const dividendKey = `${ticker}_${exDateStr}`;
                         if (paidKeys.has(dividendKey)) continue;
@@ -4045,6 +4073,13 @@
 
                         totalNewTWD += amountTWD;
                         newCount++;
+                    }
+
+                    // 📅 將本次查詢到「最接近的下一次除息日」寫入 state，供自選資產卡片顯示（跟隨本次自動查詢結果，不額外查詢）
+                    if (nearestFutureTs !== null) {
+                        state.nextExDividend[ticker] = { date: nearestFutureTs, perShare: nearestFuturePerShare };
+                    } else {
+                        delete state.nextExDividend[ticker];
                     }
                 } catch (e) { console.error(`股息查詢失敗: ${ticker}`, e); }
             }
@@ -4229,6 +4264,7 @@
         document.getElementById('ledger-tab-icon').className = tab === 'ledger' ? 'fa-solid fa-list-ul' : (tab === 'dividends' ? 'fa-solid fa-sack-dollar' : 'fa-solid fa-code-compare');
         document.getElementById('ledger-tab-icon').style.color = tab === 'ledger' ? '' : 'var(--color-acc)';
         document.getElementById('ledger-tab-title').innerText = tab === 'ledger' ? '歷史帳本與撤銷管理' : (tab === 'dividends' ? '股息發放紀錄' : '股票分割紀錄');
+        document.getElementById('ledger-jump-date-wrap').style.display = tab === 'ledger' ? '' : 'none';
         document.getElementById('ledger-dividend-check-btn').style.display = tab === 'dividends' ? '' : 'none';
         document.getElementById('ledger-split-check-btn').style.display = tab === 'splits' ? '' : 'none';
         if (tab === 'dividends') renderDividendsTable();
@@ -4456,6 +4492,12 @@
             const pnlColor = pnl >= 0 ? 'var(--color-up)' : 'var(--color-down)';
             const deleteBtn = isCardEditMode ? `<div class="delete-btn" onclick="removeCard('${t}')" style="position:absolute; top:-8px; right:-8px; background:var(--color-sell); color:#fff; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:10; box-shadow:0 0 10px rgba(0,0,0,0.5);"><i class="fa-solid fa-minus"></i></div>` : '';
 
+            // 📅 下次除息日：跟隨上一次「股息自動配發」自動查詢的結果顯示，不另外觸發查詢
+            const nextDiv = (state.nextExDividend && state.nextExDividend[t]) || null;
+            const nextDivHtml = nextDiv
+                ? `<span style="font-family:monospace; font-weight:bold; font-size:13px; color:var(--color-warn);">${new Date(nextDiv.date).toISOString().slice(0,10)}${nextDiv.perShare ? ` <span style="color:#777; font-weight:normal; font-size:11px;">(${nextDiv.perShare}/股)</span>` : ''}</span>`
+                : `<span style="font-family:monospace; font-weight:bold; font-size:13px; color:#555;">--</span>`;
+
             html += `
             <div class="glass-panel draggable-card" data-ticker="${t}" style="padding: 18px; display:flex; flex-direction:column; gap:12px; cursor:${isCardEditMode ? 'grab' : 'default'};">
                 ${deleteBtn}
@@ -4468,6 +4510,7 @@
                     <div style="display:flex; flex-direction:column; gap:4px; text-align:right;"><span style="color:#777;">持有數量</span><span style="font-family:monospace; font-weight:bold; font-size:13px;">${h.shares} 股</span></div>
                     <div style="display:flex; flex-direction:column; gap:4px;"><span style="color:#777;">買入均價</span><span style="font-family:monospace; font-weight:bold; font-size:13px;">$${h.avgPrice.toFixed(2)}</span></div>
                     <div style="display:flex; flex-direction:column; gap:4px; text-align:right;"><span style="color:#777;">買入總成本(TWD)</span><span style="font-family:monospace; font-weight:bold; font-size:13px;">$${totalCost.toLocaleString(undefined, {minimumFractionDigits:2})}</span></div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; grid-column: span 2;"><span style="color:#777;">下次除息日</span>${nextDivHtml}</div>
                     <div style="display:flex; flex-direction:column; gap:6px; grid-column: span 2; background:rgba(0,0,0,0.4); padding:10px 12px; border-radius:8px; margin-top:4px;">
                         <div style="display:flex; justify-content:space-between; align-items:center;"><span style="color:#888;">實收總價值 <span style="font-size:10px">(扣稅費)</span></span><span style="font-family:monospace; font-weight:bold; font-size:14px; color:${netValue > 0 ? '#fff' : '#888'};">$${netValue.toLocaleString(undefined, {minimumFractionDigits:2})}</span></div>
                         <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid rgba(255,255,255,0.05); padding-top:6px;"><span style="color:#888;">預估淨損益</span><span style="font-family:monospace; font-weight:bold; font-size:14px; color:${pnlColor};">${pnl >= 0 ? '+' : ''}$${pnl.toLocaleString(undefined, {minimumFractionDigits:2})}</span></div>
@@ -4894,21 +4937,95 @@
 
         renderHoldingsAllocationChart();
 
-        document.getElementById("ledger-table-body").innerHTML = state.ledger.length ? state.ledger.map((r, index) => {
+        renderLedgerTable();
+
+        renderDividendsTable();
+        renderAllCharts(animate);
+    }
+
+    // --- 📒 歷史帳本分頁功能：每頁 20 筆，依交易時間新到舊排序（state.ledger[0] 為最新一筆）---
+    const LEDGER_PAGE_SIZE = 20;
+    let ledgerCurrentPage = 1;
+
+    function renderLedgerTable() {
+        const totalRecords = state.ledger.length;
+        const totalPages = Math.max(1, Math.ceil(totalRecords / LEDGER_PAGE_SIZE));
+        if (ledgerCurrentPage > totalPages) ledgerCurrentPage = totalPages;
+        if (ledgerCurrentPage < 1) ledgerCurrentPage = 1;
+
+        const startIdx = (ledgerCurrentPage - 1) * LEDGER_PAGE_SIZE;
+        const pageItems = state.ledger.slice(startIdx, startIdx + LEDGER_PAGE_SIZE);
+
+        document.getElementById("ledger-table-body").innerHTML = pageItems.length ? pageItems.map((r, i) => {
+            const index = startIdx + i; // 對應 state.ledger 原始索引，供撤銷/跳轉定位使用
             const pnlHtml = (r.realizedPnL !== null && r.realizedPnL !== undefined) 
                 ? `<td style="color:${r.realizedPnL >= 0 ? 'var(--color-up)' : 'var(--color-down)'}; font-weight:bold;">${r.realizedPnL >= 0 ? '+' : ''}$${Math.floor(r.realizedPnL).toLocaleString()}</td>`
                 : `<td style="color:#666;">-</td>`;
             const displayTime = r.timestamp ? getFullFormattedTimeFromDate(r.timestamp) : r.time;
-            return `<tr>
+            return `<tr id="ledger-row-${index}">
                 <td>${displayTime}</td><td><span class="badge ${r.action==='BUY'?'badge-buy':'badge-sell'}">${r.action}</span></td>
                 <td style="font-weight:bold;">${r.ticker}</td><td>$${r.price.toFixed(2)}</td><td>${r.shares}</td><td>$${r.fee.toFixed(1)}</td>
                 <td style="font-weight:bold;">$${Math.floor(r.total).toLocaleString()}</td>${pnlHtml}
                 <td><button onclick="undoTrade(${index})" style="background:rgba(255,69,96,0.15); color:var(--color-sell); border:1px solid rgba(255,69,96,0.3); padding:4px 10px; border-radius:4px; cursor:pointer; font-weight:bold; font-size:11px; transition:all 0.2s;">撤銷</button></td>
             </tr>`;
         }).join("") : `<tr><td colspan="9" style="text-align:center; color:#555; padding:40px;">尚無紀錄</td></tr>`;
-        
-        renderDividendsTable();
-        renderAllCharts(animate);
+
+        renderLedgerPagination(totalPages, totalRecords);
+    }
+
+    function renderLedgerPagination(totalPages, totalRecords) {
+        const el = document.getElementById("ledger-pagination");
+        if (!el) return;
+        if (totalRecords === 0) { el.innerHTML = ""; return; }
+        el.innerHTML = `
+            <button class="ledger-page-btn" onclick="goToLedgerPage(1)" ${ledgerCurrentPage <= 1 ? 'disabled' : ''}><i class="fa-solid fa-angles-left"></i></button>
+            <button class="ledger-page-btn" onclick="goToLedgerPage(${ledgerCurrentPage - 1})" ${ledgerCurrentPage <= 1 ? 'disabled' : ''}><i class="fa-solid fa-angle-left"></i></button>
+            <span class="ledger-page-info">第 ${ledgerCurrentPage} / ${totalPages} 頁</span>
+            <button class="ledger-page-btn" onclick="goToLedgerPage(${ledgerCurrentPage + 1})" ${ledgerCurrentPage >= totalPages ? 'disabled' : ''}><i class="fa-solid fa-angle-right"></i></button>
+            <button class="ledger-page-btn" onclick="goToLedgerPage(${totalPages})" ${ledgerCurrentPage >= totalPages ? 'disabled' : ''}><i class="fa-solid fa-angles-right"></i></button>
+        `;
+    }
+
+    function goToLedgerPage(page) {
+        const totalPages = Math.max(1, Math.ceil(state.ledger.length / LEDGER_PAGE_SIZE));
+        ledgerCurrentPage = Math.max(1, Math.min(totalPages, page));
+        renderLedgerTable();
+    }
+
+    // 📅 依指定日期跳轉至該日「第一筆交易」（當日最早成交的一筆）所在的分頁，並捲動、閃爍高亮該列
+    function jumpLedgerToDate(dateStr) {
+        if (!dateStr) return;
+        const [y, m, d] = dateStr.split('-').map(Number);
+        const dayStart = new Date(y, m - 1, d, 0, 0, 0, 0).getTime();
+        const dayEnd = new Date(y, m - 1, d, 23, 59, 59, 999).getTime();
+
+        // state.ledger 由新到舊排序：同一天內，索引值越大代表時間越早，因此篩選後取「最大索引」即為當日最早（第一筆）交易
+        let targetIndex = -1;
+        for (let i = state.ledger.length - 1; i >= 0; i--) {
+            const ts = state.ledger[i].timestamp;
+            if (ts >= dayStart && ts <= dayEnd) { targetIndex = i; break; }
+        }
+
+        if (targetIndex === -1) {
+            // 當日無交易紀錄：改為跳轉至「最近一筆早於該日期」的交易，找不到則提示無資料
+            for (let i = 0; i < state.ledger.length; i++) {
+                if (state.ledger[i].timestamp < dayStart) { targetIndex = i; break; }
+            }
+            if (targetIndex === -1) { triggerDynamicFeedback('查無此日期（含之前）的交易紀錄', 'gray', null, null); return; }
+            triggerDynamicFeedback('該日期無交易紀錄，已跳轉至最近的較早交易', 'gray', null, null);
+        }
+
+        switchLedgerTab('ledger');
+        ledgerCurrentPage = Math.floor(targetIndex / LEDGER_PAGE_SIZE) + 1;
+        renderLedgerTable();
+
+        setTimeout(() => {
+            const row = document.getElementById(`ledger-row-${targetIndex}`);
+            if (!row) return;
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            row.classList.add('ledger-row-flash');
+            setTimeout(() => row.classList.remove('ledger-row-flash'), 1800);
+        }, 50);
     }
 
     // --- 🛑 停損警示：依「持股未實現虧損百分比」（成本基礎）判斷是否觸發，涵蓋開機檢查與使用中定時刷新兩種情境 ---
@@ -5363,8 +5480,8 @@
 
     function parseSimpleMarkdown(text) { return text.replace(/\*\*(.*?)\*\*/g, '<strong style="color:#fff">$1</strong>').replace(/^\s*[\-\*]\s+(.*)$/gim, '• $1').replace(/\n/g, '<br>'); }
 
-    // ⌨️ 打字機效果：以每秒約 40 個字的速度，將 rawText 逐字顯示於 el（每次更新時同步套用 parseSimpleMarkdown）
-    function typewriterRender(el, rawText, charsPerSec = 40, onTick = null) {
+    // ⌨️ 打字機效果：以每秒約 50 個字的速度，將 rawText 逐字顯示於 el（每次更新時同步套用 parseSimpleMarkdown）
+    function typewriterRender(el, rawText, charsPerSec = 50, onTick = null) {
         return new Promise(resolve => {
             const total = rawText.length;
             if (!el || total === 0) { if (el) el.innerHTML = ''; resolve(); return; }
@@ -5895,6 +6012,7 @@
             cloudState.ledger = cloudState.ledger || [];
             cloudState.dividends = cloudState.dividends || [];
             cloudState.lastDividendCheck = cloudState.lastDividendCheck || 0;
+            cloudState.nextExDividend = cloudState.nextExDividend || {};
             cloudState.lastModified = cloudState.lastModified || 0;
             cloudState.stopLoss = cloudState.stopLoss || { enabled: false, percent: 10 };
             cloudState.unlockedAchievements = cloudState.unlockedAchievements || [];
