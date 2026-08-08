@@ -323,6 +323,8 @@
         .badge-sell { background: rgba(255,69,96,0.12); color: var(--color-sell); border: 1px solid rgba(255,69,96,0.3); }
 
         .settings-list { max-width: 650px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; width: 100%; }
+        .settings-category-title { font-size: 11px; color: #666; padding: 14px 6px 2px 6px; font-weight: bold; text-transform: uppercase; letter-spacing: 1.5px; }
+        .settings-category-title:first-child { padding-top: 2px; }
         .setting-item { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; }
         .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
         .switch input { opacity: 0; width: 0; height: 0; }
@@ -357,6 +359,21 @@
         .achv-card .achv-desc { font-size:11px; color:#888; margin-top:3px; line-height:1.5; }
         .achv-card .achv-date { font-size:10px; color:#ffd447; margin-top:5px; }
         .modal-box { width: 90%; max-width: 320px; padding: 22px; display: flex; flex-direction: column; gap: 12px; animation: modalPopIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+        /* 📲 iOS Safari「加入主畫面」引導彈窗：刻意全灰階（不使用任何彩色變數），僅以粗細/大小/底線強調 Safari 字樣 */
+        .ios-a2hs-box { padding: 26px 24px; gap: 10px; max-height: 85vh; overflow-y: auto; }
+        .ios-a2hs-icon { font-size: 30px; color: #e6e6e6; margin: 2px 0 4px 0; }
+        .ios-a2hs-title { font-weight: 900; font-size: 16px; color: #f2f2f2; line-height: 1.5; }
+        .ios-a2hs-desc { font-size: 12.5px; color: #999; line-height: 1.7; }
+        .ios-a2hs-safari { font-weight: 900; color: #ffffff; text-decoration: underline; text-underline-offset: 2px; padding: 0 1px; }
+        .ios-a2hs-steps { text-align: left; margin: 4px 0 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 9px; font-size: 12.5px; color: #ccc; line-height: 1.6; }
+        .ios-a2hs-steps li { padding-left: 2px; }
+        .ios-a2hs-steps i { color: #aaa; margin: 0 1px; }
+        .ios-a2hs-footer { font-size: 12px; color: #888; margin-top: 2px; }
+        .ios-a2hs-dontshow { display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 12px; color: #888; margin-top: 6px; cursor: pointer; user-select: none; }
+        .ios-a2hs-dontshow input { width: 15px; height: 15px; accent-color: #888; cursor: pointer; }
+        .ios-a2hs-close-btn { width: 100%; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25); color: #eee; padding: 11px; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 4px; transition: background 0.2s; }
+        .ios-a2hs-close-btn:hover { background: rgba(255,255,255,0.18); }
         @keyframes modalPopIn { from { opacity:0; transform: scale(0.92) translateY(10px); } to { opacity:1; transform: scale(1) translateY(0); } }
         .modal-input { background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 11px 12px; border-radius: 8px; font-family: monospace; font-size: 14px; outline: none; width: 100%; text-align: center; letter-spacing: 2px; transition: border-color 0.2s; }
         .modal-input:focus { border-color: var(--color-acc); }
@@ -869,45 +886,6 @@
 
             <div class="glow-divide-top setting-item">
                 <div>
-                    <div style="font-weight:bold;">停損警示</div>
-                    <div style="font-size:11px; color:#777; margin-top:2px;">未實現虧損百分比達到設定值時警示提醒</div>
-                </div>
-                <label class="switch"><input type="checkbox" id="cfg-stoploss-enable"><span class="slider"></span></label>
-            </div>
-            <div class="glow-divide-top setting-item" id="stoploss-percent-wrapper" style="display:none;">
-                <div><div style="font-weight:bold;">停損虧損百分比 (%)</div><div style="font-size:11px; color:#777; margin-top:2px;">未實現虧損（依持股成本計算）達此百分比時觸發警示</div></div>
-                <input type="text" id="cfg-stoploss-percent" class="mobile-num" data-decimal="true" value="10" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
-            </div>
-
-            <div class="glow-divide-top setting-item">
-                <div>
-                    <div style="font-weight:bold;">股息自動配發</div>
-                    <div style="font-size:11px; color:#777; margin-top:2px;">每天自動查詢一次持股股息，歷史未配發者會自動補發　<span id="last-dividend-check-label" style="color:#555;">尚未查詢過</span></div>
-                </div>
-                <button onclick="checkDividends(true)" id="manual-dividend-check-btn" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:8px 14px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s; white-space:nowrap;">
-                    <i class="fa-solid fa-arrows-rotate"></i> 立即查詢
-                </button>
-            </div>
-            <div class="glow-divide-top setting-item">
-                <div>
-                    <div style="font-weight:bold;">股息再投資</div>
-                    <div style="font-size:11px; color:#777; margin-top:2px;">入帳的股息將自動買回同一標的</div>
-                </div>
-                <label class="switch"><input type="checkbox" id="cfg-dividend-reinvest"><span class="slider"></span></label>
-            </div>
-
-            <div class="glow-divide-top setting-item">
-                <div>
-                    <div style="font-weight:bold;">股票分割自動偵測</div>
-                    <div style="font-size:11px; color:#777; margin-top:2px;">每天自動查詢一次持股的股票分割（拆股/合股），偵測到時會自動回溯調整歷史股數與均價　<span id="last-split-check-label" style="color:#555;">尚未查詢過</span></div>
-                </div>
-                <button onclick="checkSplits(true)" id="manual-split-check-btn" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:8px 14px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s; white-space:nowrap;">
-                    <i class="fa-solid fa-arrows-rotate"></i> 立即查詢
-                </button>
-            </div>
-
-            <div class="glow-divide-top setting-item">
-                <div>
                     <div style="font-weight:bold;">帳本資料備份與還原</div>
                     <div style="font-size:11px; color:#777; margin-top:2px;">將所有交易紀錄匯出為本機檔案，或從檔案還原</div>
                 </div>
@@ -928,8 +906,60 @@
                     <button onclick="exportReportWithFormatChoice()" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s;">匯出報告</button>
                 </div>
             </div>
-            
+
+            <div class="settings-category-title">交易與自動化</div>
+
+            <div class="setting-item">
+                <div><div style="font-weight:bold;">手續費費率設定 (%)</div><div style="font-size:11px; color:#777; margin-top:2px;">預設折扣 0.1425%</div></div>
+                <input type="text" id="cfg-fee-rate" class="mobile-num" data-decimal="true" value="0.1425" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
+            </div>
             <div class="glow-divide-top setting-item">
+                <div><div style="font-weight:bold;">證交稅率設定 (%)</div><div style="font-size:11px; color:#777; margin-top:2px;">賣出徵收，預設 0.3%</div></div>
+                <input type="text" id="cfg-tax-rate" class="mobile-num" data-decimal="true" value="0.30" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
+            </div>
+
+            <div class="glow-divide-top setting-item">
+                <div>
+                    <div style="font-weight:bold;">停損警示</div>
+                    <div style="font-size:11px; color:#777; margin-top:2px;">未實現虧損百分比達到設定值時警示提醒</div>
+                </div>
+                <label class="switch"><input type="checkbox" id="cfg-stoploss-enable"><span class="slider"></span></label>
+            </div>
+            <div class="glow-divide-top setting-item" id="stoploss-percent-wrapper" style="display:none;">
+                <div><div style="font-weight:bold;">停損虧損百分比 (%)</div><div style="font-size:11px; color:#777; margin-top:2px;">未實現虧損（依持股成本計算）達此百分比時觸發警示</div></div>
+                <input type="text" id="cfg-stoploss-percent" class="mobile-num" data-decimal="true" value="10" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
+            </div>
+
+            <div class="glow-divide-top setting-item">
+                <div>
+                    <div style="font-weight:bold;">股票分割自動偵測</div>
+                    <div style="font-size:11px; color:#777; margin-top:2px;">每天自動查詢一次持股的股票分割（拆股/合股），偵測到時會自動回溯調整歷史股數與均價　<span id="last-split-check-label" style="color:#555;">尚未查詢過</span></div>
+                </div>
+                <button onclick="checkSplits(true)" id="manual-split-check-btn" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:8px 14px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s; white-space:nowrap;">
+                    <i class="fa-solid fa-arrows-rotate"></i> 立即查詢
+                </button>
+            </div>
+
+            <div class="glow-divide-top setting-item">
+                <div>
+                    <div style="font-weight:bold;">股息自動配發</div>
+                    <div style="font-size:11px; color:#777; margin-top:2px;">每天自動查詢一次持股股息，歷史未配發者會自動補發　<span id="last-dividend-check-label" style="color:#555;">尚未查詢過</span></div>
+                </div>
+                <button onclick="checkDividends(true)" id="manual-dividend-check-btn" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:8px 14px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s; white-space:nowrap;">
+                    <i class="fa-solid fa-arrows-rotate"></i> 立即查詢
+                </button>
+            </div>
+            <div class="glow-divide-top setting-item">
+                <div>
+                    <div style="font-weight:bold;">股息再投資</div>
+                    <div style="font-size:11px; color:#777; margin-top:2px;">入帳的股息將自動買回同一標的</div>
+                </div>
+                <label class="switch"><input type="checkbox" id="cfg-dividend-reinvest"><span class="slider"></span></label>
+            </div>
+
+            <div class="settings-category-title">圖表與外觀</div>
+
+            <div class="setting-item">
                 <div><div style="font-weight:bold;">個股圖表類型切換</div><div style="font-size:11px; color:#777; margin-top:2px;">選擇以 K線圖 (Candlestick) 或折線圖顯示個股走勢</div></div>
                 <select id="cfg-chart-type" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-weight:bold; outline:none;">
                     <option value="KLINE">K線圖</option>
@@ -948,14 +978,6 @@
                 </select>
             </div>
 
-            <div class="glow-divide-top setting-item">
-                <div><div style="font-weight:bold;">手續費費率設定 (%)</div><div style="font-size:11px; color:#777; margin-top:2px;">預設折扣 0.1425%</div></div>
-                <input type="text" id="cfg-fee-rate" class="mobile-num" data-decimal="true" value="0.1425" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
-            </div>
-            <div class="glow-divide-top setting-item">
-                <div><div style="font-weight:bold;">證交稅率設定 (%)</div><div style="font-size:11px; color:#777; margin-top:2px;">賣出徵收，預設 0.3%</div></div>
-                <input type="text" id="cfg-tax-rate" class="mobile-num" data-decimal="true" value="0.30" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
-            </div>
             <div class="glow-divide-top setting-item">
                 <div><div style="font-weight:bold;">紅綠反轉</div><div style="font-size:11px; color:#777; margin-top:2px;">預設綠漲紅跌，開啟為紅漲綠跌</div></div>
                 <label class="switch"><input type="checkbox" id="cfg-color-invert"><span class="slider"></span></label>
@@ -1009,17 +1031,6 @@
                     <input type="text" id="cfg-valueaxis-val" class="jelly-input mobile-num" data-decimal="false" inputmode="numeric" value="7" onfocus="this.select()">
                 </div>
             </div>
-            <div class="glow-divide-top setting-item" style="border-color: rgba(255,69,96,0.3); margin-top:10px;">
-                <div><div style="font-weight:bold; color:var(--color-sell);">重置初始帳戶資金</div><div style="font-size:11px; color:#777; margin-top:2px;">完全還原為初始狀態</div></div>
-                <button onclick="resetAccount()" style="background:var(--color-sell); border:none; color:#fff; padding:8px 14px; border-radius:6px; font-weight:bold; cursor:pointer;">執行重置</button>
-            </div>
-
-            <div class="glow-divide-top setting-item" style="border-color: rgba(255,255,255,0.15); margin-top:10px;">
-                <div><div style="font-weight:bold; color:#999;"><i class="fa-solid fa-screwdriver-wrench"></i> 開發者模式</div><div style="font-size:11px; color:#777; margin-top:2px;">需輸入開發者密碼</div></div>
-                <button onclick="openAdminPanel()" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:8px 14px; border-radius:6px; font-weight:bold; cursor:pointer; white-space:nowrap;">
-                    進入管理
-                </button>
-            </div>
 
             <div class="glow-divide-top setting-item">
                 <div>
@@ -1046,7 +1057,9 @@
                 </button>
             </div>
 
-            <div class="glow-divide-top setting-item" style="flex-direction:column; align-items:stretch; gap:10px;">
+            <div class="settings-category-title">進階</div>
+
+            <div class="setting-item" style="flex-direction:column; align-items:stretch; gap:10px;">
                 <div>
                     <div style="font-weight:bold;"><i class="fa-solid fa-key" style="color:#aaa"></i> 自訂 Proxy / Gemini API Key</div>
                     <div style="font-size:11px; color:#777; margin-top:2px;">用於報價轉發與 AI 分析功能，資料僅儲存於本機瀏覽器</div>
@@ -1064,6 +1077,18 @@
                         <button onclick="saveCustomApiSettings()" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:7px 14px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold;">儲存</button>
                     </div>
                 </div>
+            </div>
+
+            <div class="glow-divide-top setting-item" style="border-color: rgba(255,69,96,0.3); margin-top:10px;">
+                <div><div style="font-weight:bold; color:var(--color-sell);">重置初始帳戶資金</div><div style="font-size:11px; color:#777; margin-top:2px;">完全還原為初始狀態</div></div>
+                <button onclick="resetAccount()" style="background:var(--color-sell); border:none; color:#fff; padding:8px 14px; border-radius:6px; font-weight:bold; cursor:pointer;">執行重置</button>
+            </div>
+
+            <div class="glow-divide-top setting-item" style="border-color: rgba(255,255,255,0.15); margin-top:10px;">
+                <div><div style="font-weight:bold; color:#999;"><i class="fa-solid fa-screwdriver-wrench"></i> 開發者模式</div><div style="font-size:11px; color:#777; margin-top:2px;">需輸入開發者密碼</div></div>
+                <button onclick="openAdminPanel()" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:8px 14px; border-radius:6px; font-weight:bold; cursor:pointer; white-space:nowrap;">
+                    進入管理
+                </button>
             </div>
         </div>
     </main>
@@ -1296,6 +1321,28 @@
             <i class="fa-solid fa-arrows-rotate"></i> 允許取用陀螺儀
         </button>
         <button id="gyro-onboarding-skip-btn" style="width:100%; background:transparent; border:1px solid rgba(255,255,255,0.2); color:#aaa; padding:9px 16px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:12px;">暫不開啟</button>
+    </div>
+</div>
+
+<!-- 📲 iOS Safari「加入主畫面」引導彈窗：僅在 iOS + 非 Web App（未以獨立模式啟動）時顯示，全灰階不使用色彩 -->
+<div id="ios-a2hs-overlay" class="modal-overlay">
+    <div class="glass-panel modal-box ios-a2hs-box" style="align-items:center; text-align:center; max-width:360px;">
+        <i class="fa-solid fa-mobile-screen-button ios-a2hs-icon"></i>
+        <div class="ios-a2hs-title">取得最佳體驗：請新增至 iPhone 主畫面</div>
+        <div class="ios-a2hs-desc">為獲得全螢幕無干擾的 App 體驗，請使用 <span class="ios-a2hs-safari">Safari</span> 依以下步驟安裝：</div>
+        <ol class="ios-a2hs-steps">
+            <li>確保目前使用 <span class="ios-a2hs-safari">Safari</span> 瀏覽器開啟本網站。</li>
+            <li>點擊下方的選單 <i class="fa-solid fa-bars"></i></li>
+            <li>點擊分享 <i class="fa-solid fa-arrow-up-from-bracket"></i>。</li>
+            <li>在彈出的選單中往下滑（或點擊「更多 <i class="fa-solid fa-chevron-down"></i>」），找到並點擊「加入主畫面 <i class="fa-regular fa-square-plus"></i>」（Add to Home Screen）。</li>
+            <li>確認「以網頁 App 開啟」（Open as Web App）已開啟（預設為開啟），然後點擊「加入」（Add）。</li>
+        </ol>
+        <div class="ios-a2hs-footer">現在，你將可以體驗到最佳視覺效果與操作體驗！</div>
+        <label class="ios-a2hs-dontshow">
+            <input type="checkbox" id="ios-a2hs-dontshow-checkbox">
+            <span>不再提示</span>
+        </label>
+        <button id="ios-a2hs-close-btn" class="ios-a2hs-close-btn">我知道了</button>
     </div>
 </div>
 
@@ -6027,6 +6074,51 @@
     }
 
     /* =========================================
+       📲 iOS Safari「加入主畫面」引導彈窗
+       僅在「iOS 裝置」且「非以獨立網頁 App 模式啟動」時，於啟動時跳出提示，
+       引導使用者以 Safari 加入主畫面以獲得全螢幕體驗；可勾選「不再提示」關閉。
+       ========================================= */
+    const IOS_A2HS_DONTSHOW_KEY = 'IOS_A2HS_DONTSHOW';
+
+    function isIosDevice() {
+        const ua = window.navigator.userAgent || '';
+        const isIPhoneIpadIpod = /iPad|iPhone|iPod/.test(ua);
+        // iPadOS 13+ 的 UA 會偽裝成 Mac，需另外用觸控點數判斷
+        const isIpadOS13Plus = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+        return isIPhoneIpadIpod || isIpadOS13Plus;
+    }
+
+    function isRunningAsWebApp() {
+        // iOS Safari：加入主畫面後以獨立模式啟動會有 navigator.standalone === true
+        // 一般瀏覽器規範：display-mode: standalone
+        return window.navigator.standalone === true
+            || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+    }
+
+    function initIosAddToHomeScreenPrompt() {
+        try {
+            if (!isIosDevice() || isRunningAsWebApp()) return;
+            if (localStorage.getItem(IOS_A2HS_DONTSHOW_KEY) === '1') return;
+
+            const overlay = document.getElementById('ios-a2hs-overlay');
+            const closeBtn = document.getElementById('ios-a2hs-close-btn');
+            const dontShowCheckbox = document.getElementById('ios-a2hs-dontshow-checkbox');
+            if (!overlay || !closeBtn) return;
+
+            overlay.style.display = 'flex';
+
+            closeBtn.addEventListener('click', () => {
+                if (dontShowCheckbox && dontShowCheckbox.checked) {
+                    localStorage.setItem(IOS_A2HS_DONTSHOW_KEY, '1');
+                }
+                overlay.style.display = 'none';
+            });
+        } catch (e) {
+            console.error('iOS 加入主畫面提示初始化失敗', e);
+        }
+    }
+
+    /* =========================================
        ✨ 流光特效強度設定（系統設定頁滑桿）
        預設 100% = 與參考版本外觀完全相同
        ========================================= */
@@ -6076,6 +6168,7 @@
 
     initGlowIntensityControl();
     initGyroOnboarding();
+    initIosAddToHomeScreenPrompt();
 
     startApp(); 
 
