@@ -466,8 +466,8 @@
 
         /* 📅 歷史帳本：日期跳轉選擇器 */
         .ledger-jump-date-wrap { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; touch-action: manipulation; }
-        .ledger-jump-date-wrap input[type="date"] { background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: #ccc; padding: 5px 7px; border-radius: 6px; font-family: monospace; font-size: 11.5px; outline: none; min-width: 122px; flex-shrink: 0; touch-action: manipulation; -webkit-text-fill-color: #ccc; }
-        .ledger-jump-date-wrap input[type="date"]:focus { border-color: var(--color-acc); }
+        .ledger-jump-date-wrap input { background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: #ccc; padding: 5px 7px; border-radius: 6px; font-family: monospace; font-size: 11.5px; outline: none; min-width: 122px; flex-shrink: 0; touch-action: manipulation; -webkit-text-fill-color: #ccc; }
+        .ledger-jump-date-wrap input:focus { border-color: var(--color-acc); }
         .ledger-jump-date-wrap input[type="date"]::-webkit-datetime-edit,
         .ledger-jump-date-wrap input[type="date"]::-webkit-datetime-edit-fields-wrapper,
         .ledger-jump-date-wrap input[type="date"]::-webkit-datetime-edit-text,
@@ -1622,8 +1622,6 @@
     function initTimeMachineDefault() {
         const d = new Date(); const year = d.getFullYear(); const month = String(d.getMonth() + 1).padStart(2, '0'); const day = String(d.getDate()).padStart(2, '0'); const hours = String(d.getHours()).padStart(2, '0'); const minutes = String(d.getMinutes()).padStart(2, '0');
         document.getElementById('tm-date').value = `${year}-${month}-${day}`; document.getElementById('tm-hour').value = hours; document.getElementById('tm-minute').value = minutes;
-        const jumpDateEl = document.getElementById('ledger-jump-date');
-        if (jumpDateEl) jumpDateEl.value = `${year}-${month}-${day}`;
     }
 
     let fetchPriceTimer = null;
@@ -4096,34 +4094,11 @@
                         newCount++;
                     }
 
-                    // 📅 將本次查詢到「最接近的下一次除息日」寫入 state
+                    // 📅 將本次查詢到「最接近的下一次除息日」寫入 state，供自選資產卡片顯示（跟隨本次自動查詢結果，不額外查詢）
                     if (nearestFutureTs !== null) {
                         state.nextExDividend[ticker] = { date: nearestFutureTs, perShare: nearestFuturePerShare };
                     } else {
-                        // 🌟 修正：v8/chart 查不到未來事件時，補打 v7/quote 取得未來配息日
-                        try {
-                            const quoteUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${ticker}`)}`;
-                           const qRes = await fetch(quoteUrl, { cache: "no-store" });
-                          if (qRes.ok) {
-                              const qJson = await qRes.json();
-                              const quoteData = qJson.quoteResponse && qJson.quoteResponse.result && qJson.quoteResponse.result[0];
-                              // v7 提供的 dividendDate 通常是 UNIX 時間戳（秒）
-                            if (quoteData && quoteData.dividendDate) {
-                                 const divTs = quoteData.dividendDate * 1000; 
-                                    if (divTs > Date.now()) {
-                                        state.nextExDividend[ticker] = { date: divTs, perShare: null }; // v7 沒有直接提供預估配息金額，故設 null
-                                    } else {
-                                        delete state.nextExDividend[ticker];
-                                    }
-                                } else {
-                                  delete state.nextExDividend[ticker];
-                              }
-                           } else {
-                               delete state.nextExDividend[ticker];
-                            }
-                     } catch (e) {
-                         delete state.nextExDividend[ticker];
-                       }
+                        delete state.nextExDividend[ticker];
                     }
                 } catch (e) { console.error(`股息查詢失敗: ${ticker}`, e); }
             }
