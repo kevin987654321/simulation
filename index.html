@@ -1426,6 +1426,21 @@
         return 'USD'; // 防呆 Fallback：未知後綴一律視為美股/美金計價
     }
 
+    // 🛡️ 幣別判定風險偵測：Yahoo Finance 代碼常見格式為「代碼.交易所後綴」（如 .TW、.T、.L），
+    // 若代碼含有這種「點號 + 1~4 碼英文字母」的後綴樣式，但該後綴不在 MARKET_CURRENCY_MAP 已知清單中
+    // （例如加拿大 .TO、澳洲 .AX、德國 .DE、印度 .NS 等系統尚未支援的市場），
+    // 代表這很可能是「非美股、但幣別未知」的代碼——若此時仍靜默 fallback 為 USD 去換算 NAV，
+    // 會用美金匯率（約 32.5）去放大實際上可能是其他幣別（如 CAD/AUD/EUR/INR 等）的價格，
+    // 造成資產淨值瞬間暴增或暴跌。純代碼（無後綴，如 AAPL、BTC-USD）視為真的美股/美元計價，不算風險。
+    function isCurrencySuffixUnrecognized(ticker) {
+        if (!ticker) return false;
+        const t = ticker.toUpperCase();
+        const suffixMatch = t.match(/\.[A-Z]{1,4}$/); // 是否符合「.XX」交易所後綴樣式
+        if (!suffixMatch) return false; // 沒有後綴 → 視為一般美股代碼，非風險情況
+        const knownSuffixes = MARKET_CURRENCY_MAP.flatMap(entry => entry.suffixes);
+        return !knownSuffixes.includes(suffixMatch[0]);
+    }
+
     function isTaiwanTicker(ticker) { return getCurrencyForTicker(ticker) === 'TWD'; }
 
     // 🩹 修復：過去只有 USD 會即時查詢匯率，JPY / HKD / CNY / KRW / GBP 皆為寫死的常數，
@@ -4561,7 +4576,7 @@
         document.getElementById("recent-group-title").style.display = 'block'; document.getElementById("recent-tickers-list").style.display = 'block';
         addToRecentlySelected(t); 
         
-        isPriceLoading = true; currentRealPrice = null;
+        isPriceLoading = true; currentRealPrice = null; priceFetchFailCount = 0;
         document.getElementById("trade-price-display").innerHTML = `<span style="font-size:14px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> 報價連線中...</span>`;
         document.getElementById("exec-trade-btn").disabled = true;
         
@@ -4569,20 +4584,36 @@
         fetchStockHistoryData(t, true); 
     }
 
+    // 🩹 修復：過去無論是「首次連線查詢中」還是「已重試多次仍查不到報價」（例如代碼打錯、
+    // 該代碼已下市、或離線），畫面都只會顯示同一句「報價連線中...」的轉圈動畫，
+    // 使用者完全無法分辨系統是還在查，還是其實已經查詢失敗、永遠不會有結果——
+    // 導致「確認買進/賣出」按鈕被無限期鎖住卻沒有任何說明。
+    // 改為：每次選定代碼時重置失敗計數；只要曾經失敗過一次，就明確顯示「查詢失敗」並提供重試按鈕，
+    // 不再讓使用者卡在無限期的假性「連線中」狀態。
+    let priceFetchFailCount = 0;
     async function fetchRealPrice(ticker) {
+        let fetchSucceeded = false;
         try {
             const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}`)}`;
             const res = await fetch(proxyUrl, { cache: "no-store" });
             if(res.ok) { 
                 const json = await res.json(), price = json.chart.result[0].meta.regularMarketPrice; 
-                if(price) { currentRealPrice = price; globalPriceCache[ticker] = price; isPriceLoading = false; }
+                if(price) { currentRealPrice = price; globalPriceCache[ticker] = price; isPriceLoading = false; fetchSucceeded = true; }
             }
         } catch(e) {}
         finally {
             if (currentRealPrice !== null && !isPriceLoading) {
+                priceFetchFailCount = 0;
                 document.getElementById("trade-price-display").innerText = `$ ${currentRealPrice.toFixed(2)}`;
                 document.getElementById("ai-current-ticker").innerText = currentTicker; validateSharesInput();
-            } else { document.getElementById("trade-price-display").innerHTML = `<span style="font-size:14px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> 報價連線中...</span>`; }
+            } else if (!fetchSucceeded && ticker === currentTicker) {
+                priceFetchFailCount++;
+                if (priceFetchFailCount >= 1) {
+                    document.getElementById("trade-price-display").innerHTML = `<span style="font-size:13px; color:var(--color-sell);"><i class="fa-solid fa-triangle-exclamation"></i> 查詢失敗，請確認代碼是否正確</span> <button type="button" onclick="event.stopPropagation(); fetchRealPrice('${ticker}');" style="margin-left:6px; font-size:11px; padding:2px 8px; border-radius:4px; border:1px solid var(--color-acc); background:transparent; color:var(--color-acc); cursor:pointer;">重試</button>`;
+                } else {
+                    document.getElementById("trade-price-display").innerHTML = `<span style="font-size:14px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> 報價連線中...</span>`;
+                }
+            }
             updateAllViews(false); 
         }
     }
@@ -4733,6 +4764,13 @@
         document.getElementById("exec-trade-btn").disabled = true;
 
         if (isPriceLoading || currentRealPrice === null) { alert("報價連線中，請稍候！"); validateSharesInput(); return; }
+        // 🛡️ 幣別未知風險攔截：代碼後綴不在系統已知的市場清單中，代表計價幣別是用美金 Fallback「猜測」出來的，
+        // 若該代碼實際上是其他幣別計價（如 CAD/AUD/EUR/INR），直接執行會用錯誤匯率算出離譜的 NAV。
+        // 交易前強制跳出警告並要求使用者明確確認，避免帳戶淨值被靜默污染。
+        if (isCurrencySuffixUnrecognized(currentTicker)) {
+            const proceed = confirm(`⚠️ 無法辨識「${currentTicker}」的交易所後綴，系統暫時無法判斷正確計價幣別，將暫以美金匯率（約 ${currentUSDTWD}）換算。\n\n若此代碼實際上並非美元計價，換算出的金額將會嚴重錯誤！\n\n請確認代碼是否輸入正確，或聯絡開發者新增此市場支援。\n\n仍要以美金匯率繼續執行此筆交易嗎？`);
+            if (!proceed) { validateSharesInput(); return; }
+        }
         let s = parseInt(sharesInput.value); if(!s || s <= 0) { validateSharesInput(); return; }
         const rate = getCurrencyMultiplier(currentTicker), origSubtotal = s * currentRealPrice;
         const { feeRate, taxRate } = getMarketFeeConfig(currentTicker);
