@@ -5362,6 +5362,56 @@
     });
 
     function parseSimpleMarkdown(text) { return text.replace(/\*\*(.*?)\*\*/g, '<strong style="color:#fff">$1</strong>').replace(/^\s*[\-\*]\s+(.*)$/gim, '• $1').replace(/\n/g, '<br>'); }
+
+    // ⌨️ 打字機效果：以每秒約 40 個字的速度，將 rawText 逐字顯示於 el（每次更新時同步套用 parseSimpleMarkdown）
+    function typewriterRender(el, rawText, charsPerSec = 40, onTick = null) {
+        return new Promise(resolve => {
+            const total = rawText.length;
+            if (!el || total === 0) { if (el) el.innerHTML = ''; resolve(); return; }
+            const msPerChar = 1000 / charsPerSec;
+            let startTime = null;
+            function step(ts) {
+                if (startTime === null) startTime = ts;
+                const elapsed = ts - startTime;
+                const charsToShow = Math.min(total, Math.floor(elapsed / msPerChar) + 1);
+                el.innerHTML = parseSimpleMarkdown(rawText.slice(0, charsToShow));
+                if (onTick) onTick();
+                if (charsToShow < total) requestAnimationFrame(step);
+                else resolve();
+            }
+            requestAnimationFrame(step);
+        });
+    }
+
+    // 📖 於 AI 顧問室輸入「使用說明」時攔截並顯示的固定使用說明書（不呼叫 Gemini API）
+    const USAGE_MANUAL_TEXT = `**AcornTrade 使用說明書**
+
+**一、帳戶與資料**
+- 於左側選單點擊帳戶圖示可進行「快速切換帳戶」或「完整帳號管理」，可新增、刪除、設定密碼保護。
+- 「自動雲端同步」開啟後，交易紀錄會自動同步至雲端；亦可於帳號管理頁手動同步。
+- 「帳本資料備份與還原」可將所有交易紀錄匯出為本機檔案，或從檔案還原；「匯出對帳報告」可匯出目前帳戶狀態的純文字報告。
+
+**二、交易與自動化**
+- 系統會依「手續費費率」與「證交稅率」設定自動計算買賣成本，可於系統設定調整。
+- 開啟「停損警示」並設定百分比後，未實現虧損達門檻時會跳出提醒。
+- 「股票分割自動偵測」與「股息自動配發」會每天自動查詢一次，偵測到時自動調整持股或入帳股息；開啟「股息再投資」後，入帳股息會自動買回同一標的。
+
+**三、圖表與外觀**
+- 可切換「K線圖」或「折線圖」顯示個股走勢，K線圖另可設定週期（5分K～月K）。
+- 「紅綠反轉」可切換漲跌顏色；「動態十字輔助線」與「轉折節點」可輔助閱讀圖表細節。
+- 「流光特效強度」可調整卡片邊框光效亮度；手機版可另外授權「陀螺儀權限」，讓光效依裝置傾斜方向呈現。
+
+**四、AI 顧問室**
+- 於下方輸入框輸入問題並送出，即可獲得根據您目前持股與市場數據的專業分析。
+- 可使用上方的快速提問按鈕，快速詢問「技術體檢」「風控評估」「操作建議」。
+- 輸入含有「(歷史帳本)」文字的問題，可針對指定時間範圍的歷史交易紀錄進行分析。
+- 輸入「使用說明」即可隨時查看本說明書。
+
+**五、進階設定**
+- 可於「自訂 Proxy / Gemini API Key」欄位填入您自己的服務位址與金鑰，僅儲存於本機瀏覽器。
+- 「重置初始帳戶資金」會完全還原帳戶為初始狀態，請謹慎使用。
+- 「開發者模式」需輸入開發者密碼方可進入。`;
+
     function quickAskAI(type) { const prompts = { 'diagnostic': `請針對 ${currentTicker} 當前的現價與 RSI 技術指標進行短線綜合體檢。`, 'risk': `請結合我目前的帳戶現金、${currentTicker} 持倉成本與當前走勢，評估整體風控與止損點設定。`, 'strategy': `考量我目前對 ${currentTicker} 的持股情況，現在適合加碼、減碼還是觀望？` }; document.getElementById("chat-input").value = prompts[type] || ""; askAI(); }
 
     // 📒 歷史帳本功能：輸入含有 "(歷史帳本)" 標記的訊息並發送時，攔截並改為請使用者選擇時間範圍
@@ -5379,6 +5429,15 @@
         // 偵測到「(歷史帳本)」標記：攔截本次發送，改為顯示時間範圍選擇器
         if (LEDGER_MARKER_REGEX.test(q)) { openLedgerRangePicker(q); return; }
 
+        // 📖 「使用說明」關鍵字攔截：直接顯示固定使用說明書，不呼叫 Gemini
+        if (q === "使用說明") {
+            const out = document.getElementById("chat-output"), msgId = "ai-" + Date.now();
+            out.innerHTML += `<br><span style="color:#fff">> ${q}</span><br><div id="${msgId}"><span style="color:var(--color-acc)">[系統手冊]</span> <span id="${msgId}-text" style="color:#ddd"></span></div>`;
+            input.value = ""; out.scrollTop = out.scrollHeight;
+            await typewriterRender(document.getElementById(`${msgId}-text`), USAGE_MANUAL_TEXT, 50, () => { out.scrollTop = out.scrollHeight; });
+            return;
+        }
+
         let key = localStorage.getItem("MY_GEMINI_KEY") || prompt("請輸入 Gemini API Key："); if(!key) return; localStorage.setItem("MY_GEMINI_KEY", key);
 
         const out = document.getElementById("chat-output"), msgId = "ai-" + Date.now();
@@ -5392,11 +5451,14 @@
     }
 
     // 實際呼叫 Gemini API 並將結果渲染到指定訊息節點（一般提問與歷史帳本分析共用）
+    // 回應以打字機效果（約每秒 50 字）逐字顯示，模擬一般 AI 軟體的輸出體驗
     async function callGeminiAPI(fullPrompt, msgId, out, key) {
         try {
             const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${key}`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ contents: [{ parts: [{ text: fullPrompt }] }] }) });
             const json = await res.json(), rawReply = json.candidates[0].content.parts[0].text;
-            document.getElementById(msgId).innerHTML = `<span style="color:var(--color-acc)">[GEMINI]</span> <span style="color:#ddd">${parseSimpleMarkdown(rawReply)}</span>`;
+            const msgEl = document.getElementById(msgId);
+            msgEl.innerHTML = `<span style="color:var(--color-acc)">[GEMINI]</span> <span id="${msgId}-text" style="color:#ddd"></span>`;
+            await typewriterRender(document.getElementById(`${msgId}-text`), rawReply, 50, () => { out.scrollTop = out.scrollHeight; });
         } catch(e) { document.getElementById(msgId).innerHTML = `<span style="color:var(--color-sell)">連線失敗或 Key 無效</span>`; } out.scrollTop = out.scrollHeight;
     }
 
