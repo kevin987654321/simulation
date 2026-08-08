@@ -12,6 +12,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
     <style>
+        /* 桌機版：手機專用的斷行輔助元素預設隱藏，避免在桌機版 flex 列中多出空隙 */
+        #tm-row-break { display: none; }
         :root {
             --bg-color: #030303;
             --bg-gradient: radial-gradient(circle at 50% 0%, #121212 0%, #030303 85%);
@@ -555,6 +557,12 @@
             #tm-fields-row { display: contents !important; }
             #tm-date-field { flex: 1 1 140px; min-width: 120px; }
             #tm-date-field input#tm-date { width: 100%; }
+            /* 📱 手機版隱藏「日期」這兩個字的標題列，只保留日期選擇器本身，並讓它與左側「補登歷史交易」文字同一水平線 */
+            #tm-date-label { display: none; }
+            /* 🩹 強制在「日期」區塊後方換行：flexbox 換行是依 flex-basis（成長前的基準寬度）決定哪些項目落在同一行，
+               單靠 flex-grow 撐滿剩餘空間並不保證换行，遇到窄螢幕仍可能被「時間」欄位擠上同一行。
+               這裡插入一個寬度 100% 的隱形斷行元素，確保日期區塊之後一定會另起一行。 */
+            #tm-row-break { display: block; flex: 1 1 100%; width: 100%; height: 0; margin: 0; padding: 0; }
         }
     </style>
 </head>
@@ -739,9 +747,10 @@
             <div style="font-weight:bold; font-size:14px; margin-bottom:12px;" id="tm-title">補登歷史交易</div>
             <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;" id="tm-fields-row">
                 <div id="tm-date-field">
-                    <div style="font-size:11px; color:#888; margin-bottom:4px;">日期</div>
+                    <div style="font-size:11px; color:#888; margin-bottom:4px;" id="tm-date-label">日期</div>
                     <input type="date" id="tm-date" onfocus="this.select()" onchange="autoFetchHistoricalPrice()" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-family:monospace; height:30px; box-sizing:border-box;">
                 </div>
+                <div id="tm-row-break" aria-hidden="true"></div>
                 <div>
                     <div style="font-size:11px; color:#888; margin-bottom:4px;">時間 (24H)</div>
                     <div style="display:flex; align-items:center; gap:2px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); border-radius:6px; padding:0 8px; width:fit-content; height:30px; box-sizing:border-box;">
@@ -1872,7 +1881,7 @@
             // 沒有再觸發其他會存檔的操作就重新整理或關閉分頁，這筆解鎖紀錄就沒被寫進 localStorage，
             // 下次開機時同一個成就會被誤判成「還沒解鎖」而重新判定、重新解鎖一次（例如「開發者 !」）
             state.lastModified = Date.now();
-            localStorage.setItem(getActiveAccount().storageKey, JSON.stringify(state));
+            persistAccountState(getActiveAccount().storageKey, state);
             scheduleCloudSync();
             renderAchievementsPage();
             // 一次解鎖多個時依序顯示慶祝彈窗，避免疊在一起
@@ -2265,6 +2274,84 @@
     let currentTicker = localStorage.getItem('LAST_SELECTED_TICKER') || "NVDA";
 
     // ============================================================
+    // 🗄️ 歷史交易紀錄改存 IndexedDB
+    // state.ledger 隨著使用時間會累積成非常龐大的陣列，若整包留在 localStorage 的
+    // JSON 字串裡，每次存檔（每筆交易、撤銷、補登…）都要把整個帳號資料重新序列化、
+    // 寫入一次同步、阻塞主執行緒的 localStorage，長期下來字串會越來越肥、越存越卡，
+    // 也更容易撞到 localStorage 每來源約 5-10MB 的容量上限。
+    // 因此改成：state.ledger 這個大陣列改寫進 IndexedDB（單一 object store，
+    // key 為帳號的 storageKey，value 為該帳號完整的 ledger 陣列）；
+    // localStorage 只留下其餘「輕量」欄位（現金、持股、設定…），存取快、體積小。
+    // 記憶體中的 state.ledger 用法完全不變（各交易流程仍同步操作陣列），
+    // 只有落地存檔／開機讀取這兩處會經過這裡非同步讀寫 IndexedDB。
+    // ============================================================
+    const LEDGER_IDB_NAME = 'AcornTradeDB', LEDGER_IDB_STORE = 'ledgers', LEDGER_IDB_VERSION = 1;
+    let ledgerDbPromise = null;
+    function openLedgerDB() {
+        if (!window.indexedDB) return Promise.reject(new Error('此瀏覽器不支援 IndexedDB'));
+        if (ledgerDbPromise) return ledgerDbPromise;
+        ledgerDbPromise = new Promise((resolve, reject) => {
+            const req = indexedDB.open(LEDGER_IDB_NAME, LEDGER_IDB_VERSION);
+            req.onupgradeneeded = () => { if (!req.result.objectStoreNames.contains(LEDGER_IDB_STORE)) req.result.createObjectStore(LEDGER_IDB_STORE); };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+        return ledgerDbPromise;
+    }
+    async function idbGetLedger(storageKey) {
+        try {
+            const db = await openLedgerDB();
+            return await new Promise((resolve, reject) => {
+                const tx = db.transaction(LEDGER_IDB_STORE, 'readonly'), req = tx.objectStore(LEDGER_IDB_STORE).get(storageKey);
+                req.onsuccess = () => resolve(req.result || []);
+                req.onerror = () => reject(req.error);
+            });
+        } catch (e) { console.error('讀取 IndexedDB 歷史交易紀錄失敗', e); return []; }
+    }
+    async function idbPutLedger(storageKey, ledger) {
+        try {
+            const db = await openLedgerDB();
+            await new Promise((resolve, reject) => {
+                const tx = db.transaction(LEDGER_IDB_STORE, 'readwrite'), req = tx.objectStore(LEDGER_IDB_STORE).put(ledger || [], storageKey);
+                req.onsuccess = () => resolve();
+                req.onerror = () => reject(req.error);
+            });
+        } catch (e) { console.error('寫入 IndexedDB 歷史交易紀錄失敗', e); }
+    }
+    async function idbDeleteLedger(storageKey) {
+        try {
+            const db = await openLedgerDB();
+            await new Promise((resolve, reject) => {
+                const tx = db.transaction(LEDGER_IDB_STORE, 'readwrite'), req = tx.objectStore(LEDGER_IDB_STORE).delete(storageKey);
+                req.onsuccess = () => resolve();
+                req.onerror = () => reject(req.error);
+            });
+        } catch (e) { console.error('刪除 IndexedDB 歷史交易紀錄失敗', e); }
+    }
+    // 存檔：ledger 拆出去寫 IndexedDB（非同步、不卡畫面），其餘欄位維持寫入 localStorage
+    function persistAccountState(storageKey, stateObj) {
+        const { ledger, ...lightState } = stateObj;
+        localStorage.setItem(storageKey, JSON.stringify(lightState));
+        idbPutLedger(storageKey, ledger || []);
+    }
+    // 讀取：localStorage 讀輕量欄位、IndexedDB 讀 ledger，合併回傳完整 state；無資料回傳 null
+    async function loadAccountStateFull(storageKey) {
+        const raw = localStorage.getItem(storageKey);
+        if (!raw) return null;
+        let lightState;
+        try { lightState = JSON.parse(raw); } catch (e) { return null; }
+        lightState.ledger = await idbGetLedger(storageKey);
+        return lightState;
+    }
+    // 取得指定帳號「完整」state 的 JSON 字串（含歷史交易紀錄），供雲端同步／變更登入碼等需要完整資料的情境使用：
+    // 若是目前使用中的帳號，直接讀記憶體中的 state（ledger 本來就在裡面）；否則合併 localStorage ＋ IndexedDB
+    async function getAccountRawStateJSON(acc) {
+        if (acc.id === activeAccountId) return JSON.stringify(state);
+        const full = await loadAccountStateFull(acc.storageKey);
+        return JSON.stringify(full || {});
+    }
+
+    // ============================================================
     // 👤 多帳號管理系統
     // 每個帳號各自擁有獨立的 localStorage 資料鍵（storageKey），
     // 預設帳號沿用原本的 DATA_KEY，確保舊資料無痛升級、不遺失。
@@ -2293,7 +2380,8 @@
     async function cloudSyncAccount(accountId, { silent = false } = {}) {
         const acc = ACCOUNTS.find(a => a.id === accountId);
         if (!acc || !acc.syncEnabled || !acc.hasPassword) return { success: false, msg: '此帳號尚未啟用遠端同步' };
-        const raw = (accountId === activeAccountId) ? JSON.stringify(state) : (localStorage.getItem(acc.storageKey) || '{}');
+        // 🩹 龐大的歷史交易紀錄已改存 IndexedDB，非目前使用中的帳號需合併 localStorage 輕量欄位＋IndexedDB 的 ledger 才是完整資料
+        const raw = await getAccountRawStateJSON(acc);
         const result = await callCloudApi({ action: 'sync', accountId: acc.id, accountName: acc.name, passwordHash: acc.passwordHash, stateJSON: raw });
 
         // 🔒 樂觀鎖：雲端偵測到本機資料是舊版本（例如另一台裝置已上傳過更新版本），中止本次上傳避免覆蓋或造成重複交易
@@ -2400,7 +2488,8 @@
 
         const storageKey = `ALPHATRADE_DATA_${id}`;
         const finalName = result.accountName || '雲端下載帳戶';
-        localStorage.setItem(storageKey, JSON.stringify(importedState));
+        // 🩹 從雲端下載的完整資料（含歷史交易紀錄）落地時，ledger 拆存進 IndexedDB，localStorage 只留輕量欄位
+        persistAccountState(storageKey, importedState);
         ACCOUNTS.push({ id, name: finalName, storageKey, hasPassword: true, passwordHash, syncEnabled: true, requirePasswordOnBoot: true, createdAt: Date.now() });
         saveAccountsMeta();
         renderAccountManagerList();
@@ -2425,7 +2514,8 @@
         if (check.exists) { triggerDynamicFeedback('此登入碼已被使用，請換一個', 'sell', null, null); return; }
 
         const oldId = acc.id;
-        const raw = (oldId === activeAccountId) ? JSON.stringify(state) : (localStorage.getItem(acc.storageKey) || '{}');
+        // 🩹 龐大的歷史交易紀錄已改存 IndexedDB，非目前使用中的帳號需合併 localStorage 輕量欄位＋IndexedDB 的 ledger 才是完整資料
+        const raw = await getAccountRawStateJSON(acc);
         triggerDynamicFeedback('查詢確認唯一，正在更新登入碼...', 'gray', null, null);
         const createResult = await callCloudApi({ action: 'sync', accountId: newId, accountName: acc.name, passwordHash: acc.passwordHash, stateJSON: raw });
         if (!createResult || !createResult.success) { triggerDynamicFeedback((createResult && createResult.msg) || '更新登入碼失敗', 'sell', null, null); return; }
@@ -2602,8 +2692,8 @@
 
         const existing = ACCOUNTS.find(a => a.id === id);
         if (existing) {
-            // 本機已存在此帳號：更新資料並切換過去
-            localStorage.setItem(existing.storageKey, JSON.stringify(importedState));
+            // 本機已存在此帳號：更新資料並切換過去（ledger 拆存 IndexedDB，localStorage 只留輕量欄位）
+            persistAccountState(existing.storageKey, importedState);
             existing.name = finalName;
             if (result.passwordHash) existing.passwordHash = result.passwordHash; // 🩹 確保密碼雜湊同步寫入，避免本機密碼與雲端不一致導致後續驗證失敗
             saveAccountsMeta();
@@ -2614,7 +2704,7 @@
         }
 
         const storageKey = `ALPHATRADE_DATA_${id}`;
-        localStorage.setItem(storageKey, JSON.stringify(importedState));
+        persistAccountState(storageKey, importedState);
         ACCOUNTS.push({ id, name: finalName, storageKey, hasPassword: true, passwordHash: result.passwordHash || null, syncEnabled: true, requirePasswordOnBoot: true, createdAt: Date.now() });
         saveAccountsMeta();
         renderAccountManagerList();
@@ -2975,7 +3065,7 @@
         saveAccountsMeta();
 
         const freshState = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 } };
-        localStorage.setItem(storageKey, JSON.stringify(freshState));
+        persistAccountState(storageKey, freshState);
 
         nameInput.value = '';
         renderAccountManagerList();
@@ -3051,6 +3141,7 @@
         }
 
         localStorage.removeItem(acc.storageKey);
+        await idbDeleteLedger(acc.storageKey); // 🩹 一併清除該帳號存在 IndexedDB 的歷史交易紀錄，避免殘留佔用空間
         ACCOUNTS = ACCOUNTS.filter(a => a.id !== accountId);
         saveAccountsMeta();
 
@@ -3082,7 +3173,7 @@
         activeAccountId = target.id;
         localStorage.setItem(ACTIVE_ACCOUNT_KEY, activeAccountId);
 
-        loadAccountState();
+        await loadAccountState();
         updateLiveNavNode();
         rebuildNavHistoryFromLedger();
         updateAllViews(true);
@@ -3358,12 +3449,15 @@
         state.navHistory = { timestamps: newTimestamps, labels: newLabels, data: newData };
     }
 
-    function loadAccountState() {
+    async function loadAccountState() {
         const storageKey = getActiveAccount().storageKey;
         const saved = localStorage.getItem(storageKey);
         if (saved) { 
             try { 
                 state = JSON.parse(saved); 
+                // 🩹 龐大的歷史交易紀錄已改存 IndexedDB，localStorage 這裡讀到的是不含 ledger 的輕量欄位，
+                // 需再從 IndexedDB 非同步讀回 ledger 陣列合併回 state
+                state.ledger = await idbGetLedger(storageKey);
                 state.cardTickers = [...new Set(state.cardTickers || ["NVDA", "2330.TW"])]; 
                 state.recentTickers = state.recentTickers || ["NVDA", "2330.TW"];
                 state.holdings = state.holdings || {};
@@ -3395,8 +3489,8 @@
         updateLastDividendCheckLabel();
     }
 
-    function initData() {
-        loadAccountState();
+    async function initData() {
+        await loadAccountState();
         
         const savedChartType = localStorage.getItem('SETTING_CHART_TYPE'); 
         document.getElementById("cfg-chart-type").value = savedChartType ? savedChartType : 'KLINE';
@@ -3465,8 +3559,8 @@
         if (el) el.checked = !!state.dripEnabled;
     }
     
-    function saveData() { localStorage.setItem(getActiveAccount().storageKey, JSON.stringify(state)); updateAllViews(true); renderCards(); scheduleCloudSync(); checkAchievements(); }
-    function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { localStorage.removeItem(getActiveAccount().storageKey); state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, lastModified: Date.now(), recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] }; initData(); fetchStockHistoryData(currentTicker, true); } }
+    function saveData() { persistAccountState(getActiveAccount().storageKey, state); updateAllViews(true); renderCards(); scheduleCloudSync(); checkAchievements(); }
+    async function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { const storageKey = getActiveAccount().storageKey; localStorage.removeItem(storageKey); await idbDeleteLedger(storageKey); state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, lastModified: Date.now(), recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] }; await initData(); fetchStockHistoryData(currentTicker, true); } }
 
     function exportData() {
         const dataStr = JSON.stringify(state, null, 2), blob = new Blob([dataStr], { type: "application/json" }), url = URL.createObjectURL(blob), a = document.createElement("a");
@@ -3505,16 +3599,19 @@
         const genTime = getFullFormattedTimeFromDate(now.getTime());
 
         // 計算帳戶總覽（邏輯與 updateAllViews 一致）
-        let holdingsVal = 0, totalCost = 0;
+        let holdingsVal = 0, totalCost = 0, unrealizedPnlNet = 0;
         const holdingTickers = Object.keys(state.holdings);
         holdingTickers.forEach(t => {
             const rate = getCurrencyMultiplier(t);
             const price = globalPriceCache[t] || (t === currentTicker && currentRealPrice !== null ? currentRealPrice : state.holdings[t].avgPrice);
-            holdingsVal += state.holdings[t].shares * price * rate;
-            totalCost += state.holdings[t].shares * state.holdings[t].avgPrice * rate;
+            const val = state.holdings[t].shares * price * rate, costBasis = state.holdings[t].shares * state.holdings[t].avgPrice * rate;
+            const { feeRate, taxRate } = getMarketFeeConfig(t);
+            unrealizedPnlNet += (val - val * feeRate - val * taxRate) - costBasis;
+            holdingsVal += val;
+            totalCost += costBasis;
         });
         const nav = state.cash + holdingsVal;
-        const pnl = holdingsVal - totalCost;
+        const pnl = unrealizedPnlNet;
         const pnlPct = totalCost > 0 ? ((pnl / totalCost) * 100).toFixed(2) : "0.00";
 
         const DIV = "----------------------------------------";
@@ -3537,8 +3634,8 @@
                 const h = state.holdings[t];
                 const curP = globalPriceCache[t] || (t === currentTicker && currentRealPrice !== null ? currentRealPrice : h.avgPrice);
                 const val = h.shares * curP * rate;
-                const itemPnl = val - (h.shares * h.avgPrice * rate);
                 const { feeRate: itemFeeRate, taxRate: itemTaxRate } = getMarketFeeConfig(t);
+                const itemPnl = (val - val * itemFeeRate - val * itemTaxRate) - (h.shares * h.avgPrice * rate);
                 const breakEvenPrice = h.avgPrice / (1 - itemFeeRate - itemTaxRate);
                 lines.push(`代號: ${t}`);
                 lines.push(`  持有股數:    ${h.shares}`);
@@ -4406,15 +4503,19 @@
     }
 
     function updateAllViews(animate = true) {
-        let holdingsVal = 0, totalCost = 0;
+        let holdingsVal = 0, totalCost = 0, unrealizedPnlNet = 0;
         for(let t in state.holdings) { 
             const rate = getCurrencyMultiplier(t);
             let price = globalPriceCache[t] || (t === currentTicker && currentRealPrice !== null ? currentRealPrice : state.holdings[t].avgPrice); 
-            
-            holdingsVal += state.holdings[t].shares * price * rate; 
-            totalCost += state.holdings[t].shares * state.holdings[t].avgPrice * rate; 
+            const val = state.holdings[t].shares * price * rate, costBasis = state.holdings[t].shares * state.holdings[t].avgPrice * rate;
+            // 🩹 未實現損益改以「若現在賣出」計算淨損益：市值先扣掉賣出時會產生的手續費與證交稅，再減去持股成本
+            const { feeRate, taxRate } = getMarketFeeConfig(t);
+            unrealizedPnlNet += (val - val * feeRate - val * taxRate) - costBasis;
+
+            holdingsVal += val; 
+            totalCost += costBasis; 
         }
-        const nav = state.cash + holdingsVal, pnl = holdingsVal - totalCost;
+        const nav = state.cash + holdingsVal, pnl = unrealizedPnlNet;
         // 🩹 修復「好友資產估值只顯示現金餘額」：把主頁計算出的 NAV（含即時股價與匯率換算的庫存市值）
         // 快取進 state.totalAssetsTWD，隨帳號資料一起存本機並同步雲端，讓後端 get_public_profile /
         // add_friend_mutual 可以直接讀這個已經算好的正確總資產，而不必自己在後端重算（後端沒有即時報價與匯率）
@@ -4429,8 +4530,10 @@
         document.getElementById("holdings-table-body").innerHTML = Object.keys(state.holdings).length ? Object.keys(state.holdings).map(t => {
             const rate = getCurrencyMultiplier(t), h = state.holdings[t];
             const curP = globalPriceCache[t] || (t === currentTicker && currentRealPrice !== null ? currentRealPrice : h.avgPrice);
-            const val = h.shares * curP * rate, itemPnl = val - (h.shares * h.avgPrice * rate);
+            const val = h.shares * curP * rate;
             const feeRate = getMarketFeeConfig(t).feeRate, taxRate = getMarketFeeConfig(t).taxRate;
+            // 🩹 與主頁「未實現總損益」邏輯一致：扣掉若現在賣出會產生的手續費及證交稅
+            const itemPnl = (val - val * feeRate - val * taxRate) - (h.shares * h.avgPrice * rate);
             const breakEvenPrice = h.avgPrice / (1 - feeRate - taxRate);
 
             return `<tr>
@@ -5372,7 +5475,7 @@
             cloudState.achvShowcase = cloudState.achvShowcase || [];
 
             state = cloudState;
-            localStorage.setItem(active.storageKey, JSON.stringify(state));
+            persistAccountState(active.storageKey, state);
             updateAllViews(true);
             triggerDynamicFeedback('已自動同步雲端最新進度', 'buy', null, null);
         } catch (e) {
@@ -5385,7 +5488,7 @@
     }
 
     async function bootSystem() {
-        initData(); 
+        await initData(); 
         setTradeMode('BUY');
         renderAccountManagerList();
 
