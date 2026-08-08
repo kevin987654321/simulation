@@ -803,9 +803,11 @@
                     <div class="ledger-tab-toggle">
                         <button class="ledger-tab-btn active" id="ledger-tab-btn-ledger" onclick="switchLedgerTab('ledger')">交易帳本</button>
                         <button class="ledger-tab-btn" id="ledger-tab-btn-dividends" onclick="switchLedgerTab('dividends')">股息紀錄</button>
+                        <button class="ledger-tab-btn" id="ledger-tab-btn-splits" onclick="switchLedgerTab('splits')">股票分割</button>
                     </div>
                 </div>
                 <button id="ledger-dividend-check-btn" onclick="checkDividends(true)" style="display:none; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:#fff; padding:6px 12px; border-radius:6px; font-size:11px; cursor:pointer; font-weight:bold; transition:all 0.2s;"><i class="fa-solid fa-arrows-rotate"></i> 立即查詢股息</button>
+                <button id="ledger-split-check-btn" onclick="checkSplits(true)" style="display:none; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:#fff; padding:6px 12px; border-radius:6px; font-size:11px; cursor:pointer; font-weight:bold; transition:all 0.2s;"><i class="fa-solid fa-arrows-rotate"></i> 立即查詢分割</button>
             </div>
             <div class="table-responsive" id="ledger-tab-view-ledger">
                 <table>
@@ -817,6 +819,12 @@
                 <table>
                     <thead><tr><th>發放日期</th><th>代號</th><th>每股股息</th><th>持有股數</th><th>入帳金額(TWD)</th></tr></thead>
                     <tbody id="dividends-table-body"></tbody>
+                </table>
+            </div>
+            <div class="table-responsive" id="ledger-tab-view-splits" style="display:none;">
+                <table>
+                    <thead><tr><th>生效日期</th><th>代號</th><th>分割比例</th><th>影響交易筆數</th></tr></thead>
+                    <tbody id="splits-table-body"></tbody>
                 </table>
             </div>
         </div>
@@ -890,6 +898,16 @@
 
             <div class="glow-divide-top setting-item">
                 <div>
+                    <div style="font-weight:bold;">股票分割自動偵測</div>
+                    <div style="font-size:11px; color:#777; margin-top:2px;">每天自動查詢一次持股的股票分割（拆股/合股），偵測到時會自動回溯調整歷史股數與均價　<span id="last-split-check-label" style="color:#555;">尚未查詢過</span></div>
+                </div>
+                <button onclick="checkSplits(true)" id="manual-split-check-btn" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:8px 14px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s; white-space:nowrap;">
+                    <i class="fa-solid fa-arrows-rotate"></i> 立即查詢
+                </button>
+            </div>
+
+            <div class="glow-divide-top setting-item">
+                <div>
                     <div style="font-weight:bold;">帳本資料備份與還原</div>
                     <div style="font-size:11px; color:#777; margin-top:2px;">將所有交易紀錄匯出為本機檔案，或從檔案還原</div>
                 </div>
@@ -907,7 +925,7 @@
                     <div style="font-size:11px; color:#777; margin-top:2px;">將目前帳戶狀態與完整交易紀錄匯出成純文字檔</div>
                 </div>
                 <div style="display:flex; gap:8px;">
-                    <button onclick="exportReport()" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s;">匯出報告</button>
+                    <button onclick="exportReportWithFormatChoice()" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s;">匯出報告</button>
                 </div>
             </div>
             
@@ -1202,6 +1220,18 @@
     </div>
 </div>
 
+<!-- 📤 匯出對帳報告：檔案格式選擇彈窗 -->
+<div id="export-format-overlay" class="modal-overlay">
+    <div class="glass-panel modal-box" style="align-items:center; text-align:center;">
+        <i class="fa-solid fa-file-export" style="color:var(--color-acc); font-size:26px; margin:4px 0;"></i>
+        <div style="font-weight:bold; font-size:14px;">選擇匯出檔案格式</div>
+        <div style="color:#999; font-size:11.5px; line-height:1.6;">純文字 TXT 適合直接閱讀；CSV 可用 Excel／Google Sheets 等試算表軟體開啟整理。</div>
+        <button id="export-format-txt" style="width:100%; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:10px; border-radius:8px; font-weight:bold; cursor:pointer;"><i class="fa-solid fa-file-lines"></i> 純文字檔 (.txt)</button>
+        <button id="export-format-csv" style="width:100%; background:rgba(0,212,255,0.15); border:1px solid var(--color-acc); color:var(--color-acc); padding:10px; border-radius:8px; font-weight:bold; cursor:pointer;"><i class="fa-solid fa-file-csv"></i> 試算表檔 (.csv)</button>
+        <button id="export-format-cancel" style="width:100%; background:transparent; border:none; color:#888; padding:6px; cursor:pointer; font-size:12px;">取消</button>
+    </div>
+</div>
+
 <!-- 📱 QR Code 掃碼登入彈窗（可切換：顯示 QR Code / 開啟相機掃描） -->
 <div id="qr-login-overlay" class="modal-overlay">
     <div class="glass-panel modal-box" style="align-items:center; text-align:center;">
@@ -1373,9 +1403,9 @@
         { suffixes: ['.L'],         currency: 'GBP' },  // 英股
     ];
 
-    // 各幣別兌台幣匯率快取。USD 由 fetchExchangeRate() 即時更新；
-    // 其餘幣別為預留擴充欄位的參考匯率，尚未串接即時匯率 API，
-    // 待日後擴充對應市場時可在此替換為真實 API 來源。
+    // 各幣別兌台幣匯率快取。所有非台幣幣別皆由 fetchExchangeRate() 即時向 Yahoo Finance 查詢更新
+    // （每 8 秒隨報價一起刷新，見 bootSystem 的 setInterval），這裡的初始值僅為「頁面剛載入、
+    // 尚未完成第一次即時匯率查詢」前的暫時預設值，避免計算 NAV 時因匯率未就緒而出現 undefined。
     let currencyRatesToTWD = {
         TWD: 1,
         USD: currentUSDTWD,
@@ -1398,17 +1428,26 @@
 
     function isTaiwanTicker(ticker) { return getCurrencyForTicker(ticker) === 'TWD'; }
 
+    // 🩹 修復：過去只有 USD 會即時查詢匯率，JPY / HKD / CNY / KRW / GBP 皆為寫死的常數，
+    // 長期記帳下會因真實匯率波動而造成資產估值誤差。改為依 CURRENCY_FX_SYMBOL 對照表，
+    // 逐一即時查詢「每一種」有支援的幣別匯率（與 USD 相同頻率，每 8 秒隨報價一起更新），
+    // 查詢失敗（例如離線、該幣別代碼查無資料）時保留當下快取值，不會讓匯率被清空或歸零。
     async function fetchExchangeRate() {
-        try {
-            const res = await fetch(`${myProxy}${encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/TWD=X')}`, { cache: "no-store" });
-            if (res.ok) {
-                const json = await res.json();
-                if (json.chart.result[0].meta.regularMarketPrice) {
-                    currentUSDTWD = json.chart.result[0].meta.regularMarketPrice;
-                    currencyRatesToTWD.USD = currentUSDTWD;
+        const currencies = Object.keys(CURRENCY_FX_SYMBOL);
+        await Promise.all(currencies.map(async (currency) => {
+            const symbol = CURRENCY_FX_SYMBOL[currency];
+            try {
+                const res = await fetch(`${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`)}`, { cache: "no-store" });
+                if (res.ok) {
+                    const json = await res.json();
+                    const price = json && json.chart && json.chart.result && json.chart.result[0] && json.chart.result[0].meta.regularMarketPrice;
+                    if (price) {
+                        currencyRatesToTWD[currency] = price;
+                        if (currency === 'USD') currentUSDTWD = price;
+                    }
                 }
-            }
-        } catch (e) {}
+            } catch (e) {}
+        }));
     }
 
     async function fetchHoldingsPrices() {
@@ -2269,7 +2308,7 @@
     Chart.register(smoothCrosshairPlugin);
 
     const DATA_KEY = "ALPHATRADE_MANUAL_DATA";
-    let state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] };
+    let state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] };
     let stopLossAlertShown = false; // 避免同一次觸發反覆彈出警示，虧損回復到門檻之上才會重置
     let currentTicker = localStorage.getItem('LAST_SELECTED_TICKER') || "NVDA";
 
@@ -3064,7 +3103,7 @@
         ACCOUNTS.push({ id, name, storageKey, hasPassword: false, passwordHash: null, syncEnabled: false, requirePasswordOnBoot: true, createdAt: Date.now() });
         saveAccountsMeta();
 
-        const freshState = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 } };
+        const freshState = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 } };
         persistAccountState(storageKey, freshState);
 
         nameInput.value = '';
@@ -3185,6 +3224,7 @@
         fetchHoldingsPrices().then(() => { updateLiveNavNode(); updateAllViews(true); });
         fetchAllCardsData();
         checkDividendsIfDue();
+        checkSplitsIfDue();
 
         triggerDynamicFeedback(`已切換至帳號：${target.name}`, 'buy', null, null);
 
@@ -3464,6 +3504,8 @@
                 state.ledger = state.ledger || [];
                 state.dividends = state.dividends || [];
                 state.lastDividendCheck = state.lastDividendCheck || 0;
+                state.splits = state.splits || [];
+                state.lastSplitCheck = state.lastSplitCheck || 0;
                 state.lastModified = state.lastModified || 0;
                 state.stopLoss = state.stopLoss || { enabled: false, percent: 10 };
                 state.dripEnabled = !!state.dripEnabled;
@@ -3482,11 +3524,12 @@
                 if (!state.navHistory || !state.navHistory.timestamps || state.navHistory.timestamps.length === 0) { rebuildNavHistoryFromLedger(); }
             } catch(e) {} 
         } else {
-            state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] };
+            state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] };
             rebuildNavHistoryFromLedger(); saveData();
         }
         stopLossAlertShown = false;
         updateLastDividendCheckLabel();
+        updateLastSplitCheckLabel();
     }
 
     async function initData() {
@@ -3560,7 +3603,7 @@
     }
     
     function saveData() { persistAccountState(getActiveAccount().storageKey, state); updateAllViews(true); renderCards(); scheduleCloudSync(); checkAchievements(); }
-    async function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { const storageKey = getActiveAccount().storageKey; localStorage.removeItem(storageKey); await idbDeleteLedger(storageKey); state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, lastModified: Date.now(), recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] }; await initData(); fetchStockHistoryData(currentTicker, true); } }
+    async function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { const storageKey = getActiveAccount().storageKey; localStorage.removeItem(storageKey); await idbDeleteLedger(storageKey); state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: Date.now(), recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] }; await initData(); fetchStockHistoryData(currentTicker, true); } }
 
     function exportData() {
         const dataStr = JSON.stringify(state, null, 2), blob = new Blob([dataStr], { type: "application/json" }), url = URL.createObjectURL(blob), a = document.createElement("a");
@@ -3575,7 +3618,7 @@
             try {
                 const importedState = JSON.parse(e.target.result);
                 if (importedState && typeof importedState.cash === 'number') {
-                    state = importedState; state.cardTickers = state.cardTickers || []; state.recentTickers = state.recentTickers || []; state.holdings = state.holdings || {}; state.ledger = state.ledger || []; state.dividends = state.dividends || []; state.lastDividendCheck = state.lastDividendCheck || 0; state.lastModified = Date.now(); state.stopLoss = state.stopLoss || { enabled: false, percent: 10 }; state.dripEnabled = !!state.dripEnabled; state.unlockedAchievements = state.unlockedAchievements || []; state.friends = state.friends || []; state.achvShowcase = state.achvShowcase || [];
+                    state = importedState; state.cardTickers = state.cardTickers || []; state.recentTickers = state.recentTickers || []; state.holdings = state.holdings || {}; state.ledger = state.ledger || []; state.dividends = state.dividends || []; state.lastDividendCheck = state.lastDividendCheck || 0; state.splits = state.splits || []; state.lastSplitCheck = state.lastSplitCheck || 0; state.lastModified = Date.now(); state.stopLoss = state.stopLoss || { enabled: false, percent: 10 }; state.dripEnabled = !!state.dripEnabled; state.unlockedAchievements = state.unlockedAchievements || []; state.friends = state.friends || []; state.achvShowcase = state.achvShowcase || [];
                     state.ledger.forEach(r => {
                         if (!r.timestamp) {
                             let d = new Date(), parts = r.time ? r.time.split(':') : [];
@@ -3594,72 +3637,80 @@
         reader.readAsText(file);
     }
 
-    function exportReport() {
+    // 計算對帳報告所需的所有資料（邏輯與 updateAllViews 一致），與輸出格式（TXT / CSV）無關，
+    // 供下方 formatReportAsText() / formatReportAsCSV() 共用，避免同一套計算邏輯重複維護兩份
+    function computeReportData() {
         const now = new Date();
-        const genTime = getFullFormattedTimeFromDate(now.getTime());
-
-        // 計算帳戶總覽（邏輯與 updateAllViews 一致）
         let holdingsVal = 0, totalCost = 0, unrealizedPnlNet = 0;
         const holdingTickers = Object.keys(state.holdings);
-        holdingTickers.forEach(t => {
+        const holdingsDetail = holdingTickers.map(t => {
             const rate = getCurrencyMultiplier(t);
-            const price = globalPriceCache[t] || (t === currentTicker && currentRealPrice !== null ? currentRealPrice : state.holdings[t].avgPrice);
-            const val = state.holdings[t].shares * price * rate, costBasis = state.holdings[t].shares * state.holdings[t].avgPrice * rate;
+            const h = state.holdings[t];
+            const curP = globalPriceCache[t] || (t === currentTicker && currentRealPrice !== null ? currentRealPrice : h.avgPrice);
+            const val = h.shares * curP * rate, costBasis = h.shares * h.avgPrice * rate;
             const { feeRate, taxRate } = getMarketFeeConfig(t);
-            unrealizedPnlNet += (val - val * feeRate - val * taxRate) - costBasis;
+            const itemPnl = (val - val * feeRate - val * taxRate) - costBasis;
+            const breakEvenPrice = h.avgPrice / (1 - feeRate - taxRate);
+            unrealizedPnlNet += itemPnl;
             holdingsVal += val;
             totalCost += costBasis;
+            return { ticker: t, shares: h.shares, avgPrice: h.avgPrice, breakEvenPrice: breakEvenPrice, curPrice: curP, val: val, pnl: itemPnl };
         });
         const nav = state.cash + holdingsVal;
         const pnl = unrealizedPnlNet;
         const pnlPct = totalCost > 0 ? ((pnl / totalCost) * 100).toFixed(2) : "0.00";
 
+        const ledgerDetail = state.ledger.map(r => ({
+            displayTime: r.timestamp ? getFullFormattedTimeFromDate(r.timestamp) : r.time,
+            action: r.action,
+            actionText: r.action === 'BUY' ? '買進' : '賣出',
+            ticker: r.ticker,
+            price: r.price,
+            shares: r.shares,
+            fee: r.fee,
+            total: r.total,
+            realizedPnL: (r.realizedPnL !== null && r.realizedPnL !== undefined) ? r.realizedPnL : null,
+        }));
+
+        return { now, nav, cash: state.cash, holdingsVal, pnl, pnlPct, holdingsDetail, ledgerDetail };
+    }
+
+    function formatReportAsText(data) {
         const DIV = "----------------------------------------";
         let lines = [];
         lines.push("【帳戶總覽】");
         lines.push(DIV);
-        lines.push(`總資產淨值 (NAV):   $ ${Math.floor(nav).toLocaleString()}`);
-        lines.push(`現金餘額:           $ ${Math.floor(state.cash).toLocaleString()}`);
-        lines.push(`持倉總市值:         $ ${Math.floor(holdingsVal).toLocaleString()}`);
-        lines.push(`未實現總損益:       ${pnl >= 0 ? '+' : ''}$ ${Math.floor(pnl).toLocaleString()} (${pnlPct}%)`);
+        lines.push(`總資產淨值 (NAV):   $ ${Math.floor(data.nav).toLocaleString()}`);
+        lines.push(`現金餘額:           $ ${Math.floor(data.cash).toLocaleString()}`);
+        lines.push(`持倉總市值:         $ ${Math.floor(data.holdingsVal).toLocaleString()}`);
+        lines.push(`未實現總損益:       ${data.pnl >= 0 ? '+' : ''}$ ${Math.floor(data.pnl).toLocaleString()} (${data.pnlPct}%)`);
         lines.push("");
         lines.push("【目前持倉明細】");
         lines.push(DIV);
-        if (holdingTickers.length === 0) {
+        if (data.holdingsDetail.length === 0) {
             lines.push("(尚未持有任何證券)");
             lines.push(DIV);
         } else {
-            holdingTickers.forEach(t => {
-                const rate = getCurrencyMultiplier(t);
-                const h = state.holdings[t];
-                const curP = globalPriceCache[t] || (t === currentTicker && currentRealPrice !== null ? currentRealPrice : h.avgPrice);
-                const val = h.shares * curP * rate;
-                const { feeRate: itemFeeRate, taxRate: itemTaxRate } = getMarketFeeConfig(t);
-                const itemPnl = (val - val * itemFeeRate - val * itemTaxRate) - (h.shares * h.avgPrice * rate);
-                const breakEvenPrice = h.avgPrice / (1 - itemFeeRate - itemTaxRate);
-                lines.push(`代號: ${t}`);
+            data.holdingsDetail.forEach(h => {
+                lines.push(`代號: ${h.ticker}`);
                 lines.push(`  持有股數:    ${h.shares}`);
-                lines.push(`  買入均價:    $${h.avgPrice.toFixed(2)}（損平賣價 $${breakEvenPrice.toFixed(2)}）`);
-                lines.push(`  當前現價:    $${curP.toFixed(2)}`);
-                lines.push(`  市值:        $ ${Math.floor(val).toLocaleString()}`);
-                lines.push(`  未實現損益:  ${itemPnl >= 0 ? '+' : ''}$ ${Math.floor(itemPnl).toLocaleString()}`);
+                lines.push(`  買入均價:    $${h.avgPrice.toFixed(2)}（損平賣價 $${h.breakEvenPrice.toFixed(2)}）`);
+                lines.push(`  當前現價:    $${h.curPrice.toFixed(2)}`);
+                lines.push(`  市值:        $ ${Math.floor(h.val).toLocaleString()}`);
+                lines.push(`  未實現損益:  ${h.pnl >= 0 ? '+' : ''}$ ${Math.floor(h.pnl).toLocaleString()}`);
                 lines.push(DIV);
             });
         }
         lines.push("");
-        lines.push(`【歷史交易紀錄】(共 ${state.ledger.length} 筆，依時間新到舊排序)`);
+        lines.push(`【歷史交易紀錄】(共 ${data.ledgerDetail.length} 筆，依時間新到舊排序)`);
         lines.push(DIV);
-        if (state.ledger.length === 0) {
+        if (data.ledgerDetail.length === 0) {
             lines.push("(尚無交易紀錄)");
             lines.push(DIV);
         } else {
-            state.ledger.forEach(r => {
-                const displayTime = r.timestamp ? getFullFormattedTimeFromDate(r.timestamp) : r.time;
-                const actionText = r.action === 'BUY' ? '買進' : '賣出';
-                const pnlText = (r.realizedPnL !== null && r.realizedPnL !== undefined)
-                    ? `${r.realizedPnL >= 0 ? '+' : ''}$${Math.floor(r.realizedPnL).toLocaleString()}`
-                    : "-";
-                lines.push(`[${displayTime}] ${actionText} ${r.ticker}`);
+            data.ledgerDetail.forEach(r => {
+                const pnlText = r.realizedPnL !== null ? `${r.realizedPnL >= 0 ? '+' : ''}$${Math.floor(r.realizedPnL).toLocaleString()}` : "-";
+                lines.push(`[${r.displayTime}] ${r.actionText} ${r.ticker}`);
                 lines.push(`  成交均價: $${r.price.toFixed(2)}　股數: ${r.shares}`);
                 lines.push(`  手續費/稅: $${r.fee.toFixed(1)}`);
                 lines.push(`  交割金額(TWD): $${Math.floor(r.total).toLocaleString()}`);
@@ -3667,16 +3718,101 @@
                 lines.push(DIV);
             });
         }
+        return lines.join("\n");
+    }
 
-        const reportStr = lines.join("\n");
-        const blob = new Blob([reportStr], { type: "text/plain;charset=utf-8" });
+    // CSV 欄位跳脫：含逗號、雙引號、換行者以雙引號包住，並將內部雙引號轉為兩個雙引號（標準 CSV escaping 規則）
+    function csvEscapeField(v) {
+        if (v === null || v === undefined) v = '';
+        v = String(v);
+        if (/[",\n]/.test(v)) v = '"' + v.replace(/"/g, '""') + '"';
+        return v;
+    }
+    function csvRow(cells) { return cells.map(csvEscapeField).join(","); }
+
+    function formatReportAsCSV(data) {
+        let rows = [];
+        rows.push(csvRow(["帳戶總覽"]));
+        rows.push(csvRow(["總資產淨值(NAV)", "現金餘額", "持倉總市值", "未實現總損益", "未實現損益率(%)"]));
+        rows.push(csvRow([Math.floor(data.nav), Math.floor(data.cash), Math.floor(data.holdingsVal), Math.floor(data.pnl), data.pnlPct]));
+        rows.push("");
+
+        rows.push(csvRow(["目前持倉明細"]));
+        rows.push(csvRow(["代號", "持有股數", "買入均價", "損平賣價", "當前現價", "市值", "未實現損益"]));
+        if (data.holdingsDetail.length === 0) {
+            rows.push(csvRow(["(尚未持有任何證券)"]));
+        } else {
+            data.holdingsDetail.forEach(h => {
+                rows.push(csvRow([h.ticker, h.shares, h.avgPrice.toFixed(2), h.breakEvenPrice.toFixed(2), h.curPrice.toFixed(2), Math.floor(h.val), Math.floor(h.pnl)]));
+            });
+        }
+        rows.push("");
+
+        rows.push(csvRow([`歷史交易紀錄（共 ${data.ledgerDetail.length} 筆，依時間新到舊排序）`]));
+        rows.push(csvRow(["時間", "動作", "代號", "成交均價", "股數", "手續費/稅", "交割金額(TWD)", "已實現損益(TWD)"]));
+        if (data.ledgerDetail.length === 0) {
+            rows.push(csvRow(["(尚無交易紀錄)"]));
+        } else {
+            data.ledgerDetail.forEach(r => {
+                rows.push(csvRow([r.displayTime, r.actionText, r.ticker, r.price.toFixed(2), r.shares, r.fee.toFixed(1), Math.floor(r.total), r.realizedPnL !== null ? Math.floor(r.realizedPnL) : ""]));
+            });
+        }
+        // 開頭加上 UTF-8 BOM，確保用 Excel 開啟 CSV 時中文欄位不會變成亂碼
+        return "\uFEFF" + rows.join("\n");
+    }
+
+    function downloadTextFile(content, mimeType, filenamePrefix, ext) {
+        const now = new Date();
+        const blob = new Blob([content], { type: mimeType });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
-        const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+        const dateStr = now.toISOString().slice(0, 10).replace(/-/g, "");
         const timeStr = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
-        a.href = url; a.download = `AcornTrade_Report_${dateStr}_${timeStr}.txt`;
+        a.href = url; a.download = `${filenamePrefix}_${dateStr}_${timeStr}.${ext}`;
         document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    }
+
+    // format: 'txt' | 'csv'
+    function exportReport(format) {
+        const data = computeReportData();
+        if (format === 'csv') {
+            downloadTextFile(formatReportAsCSV(data), "text/csv;charset=utf-8", "AcornTrade_Report", "csv");
+        } else {
+            downloadTextFile(formatReportAsText(data), "text/plain;charset=utf-8", "AcornTrade_Report", "txt");
+        }
         triggerDynamicFeedback("已成功匯出對帳報告", "buy", null, "REPORT EXPORTED");
+    }
+
+    // 匯出對帳報告前，讓使用者先選擇檔案格式（純文字 TXT / 試算表 CSV），沿用「註銷帳號」
+    // 選擇彈窗（delete-choice-overlay）相同的 Promise 型彈窗互動模式
+    function openExportFormatChoice() {
+        return new Promise((resolve) => {
+            const overlay = document.getElementById('export-format-overlay');
+            const txtBtn = document.getElementById('export-format-txt');
+            const csvBtn = document.getElementById('export-format-csv');
+            const cancelBtn = document.getElementById('export-format-cancel');
+            overlay.style.display = 'flex';
+
+            function cleanup(result) {
+                overlay.style.display = 'none';
+                txtBtn.removeEventListener('click', onTxt);
+                csvBtn.removeEventListener('click', onCsv);
+                cancelBtn.removeEventListener('click', onCancel);
+                resolve(result);
+            }
+            function onTxt() { cleanup('txt'); }
+            function onCsv() { cleanup('csv'); }
+            function onCancel() { cleanup(null); }
+            txtBtn.addEventListener('click', onTxt);
+            csvBtn.addEventListener('click', onCsv);
+            cancelBtn.addEventListener('click', onCancel);
+        });
+    }
+
+    async function exportReportWithFormatChoice() {
+        const format = await openExportFormatChoice();
+        if (!format) return;
+        exportReport(format);
     }
 
     function recalculateState(ledgerArray) {
@@ -3897,18 +4033,144 @@
         }).join("") : `<tr><td colspan="5" style="text-align:center; color:#555; padding:40px;">尚無股息入帳紀錄</td></tr>`;
     }
 
-    // --- 📒 歷史帳本 / 股息紀錄 面板切換鍵 ---
+    // ============================================================
+    // ✂️ 股票分割（拆股 / 合股）自動偵測系統
+    // 比照股息自動配發的作法：每天自動查詢一次持股的分割事件（Yahoo Finance events=split），
+    // 偵測到歷史上尚未套用過的分割時，自動將該檔位「分割生效日（含）以前」的所有歷史帳本交易
+    // 回溯調整：股數 × 分割比例、成交均價 ÷ 分割比例；手續費/交割金額/已實現損益等金額類欄位
+    // 維持不變（分割本身不影響實際現金流動，只是股數與每股價格的重新切分），
+    // 再依調整後的新帳本重新結算目前庫存與均價，避免長期記帳因分割未反映而造成股數/市值誤差。
+    // ============================================================
+
+    function checkSplitsIfDue() {
+        const last = state.lastSplitCheck || 0;
+        const lastDay = new Date(last).toDateString();
+        const today = new Date().toDateString();
+        if (lastDay !== today) checkSplits(false);
+    }
+
+    async function checkSplits(manual) {
+        const btns = [document.getElementById('manual-split-check-btn'), document.getElementById('ledger-split-check-btn')].filter(Boolean);
+        const originalHtml = btns.map(b => b.innerHTML);
+        if (manual) btns.forEach(b => { b.disabled = true; b.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 查詢中...`; });
+
+        try {
+            // 僅查詢目前持有中的標的：已全數賣出的檔位不會再影響目前庫存與現金，範圍與股息查詢一致
+            const tickers = Object.keys(state.holdings).filter(t => state.holdings[t] && state.holdings[t].shares > 0);
+            state.splits = state.splits || [];
+            const appliedKeys = new Set(state.splits.map(s => s.key));
+            let newCount = 0, ledgerChanged = false, appliedTickers = [];
+
+            for (const ticker of tickers) {
+                try {
+                    const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=10y&interval=1d&events=split`)}`;
+                    const res = await fetch(proxyUrl, { cache: "no-store" });
+                    if (!res.ok) continue;
+                    const json = await res.json();
+                    const result = json && json.chart && json.chart.result && json.chart.result[0];
+                    const splitEvents = result && result.events && result.events.splits;
+                    if (!splitEvents) continue;
+
+                    // 依生效日由舊到新排序，確保同一檔位若有多次分割時，回溯調整順序正確
+                    const events = Object.values(splitEvents).sort((a, b) => a.date - b.date);
+
+                    for (const ev of events) {
+                        const exTimestamp = ev.date * 1000;
+                        if (exTimestamp > Date.now()) continue;
+                        const exDateStr = new Date(exTimestamp).toISOString().slice(0, 10);
+                        const splitKey = `${ticker}_${exDateStr}`;
+                        if (appliedKeys.has(splitKey)) continue;
+
+                        const numerator = ev.numerator, denominator = ev.denominator;
+                        if (!numerator || !denominator) continue;
+                        const ratio = numerator / denominator;
+                        if (!isFinite(ratio) || ratio <= 0 || ratio === 1) continue;
+
+                        let affectedCount = 0;
+                        state.ledger.forEach(r => {
+                            if (r.ticker === ticker && r.timestamp <= exTimestamp) {
+                                r.shares = r.shares * ratio;
+                                r.price = r.price / ratio;
+                                affectedCount++;
+                            }
+                        });
+                        if (affectedCount === 0) continue; // 生效日以前並無此檔位的任何交易紀錄，略過
+
+                        state.splits.unshift({ key: splitKey, date: exTimestamp, ticker: ticker, numerator: numerator, denominator: denominator, ratio: ratio, affectedTrades: affectedCount, appliedAt: Date.now() });
+                        appliedKeys.add(splitKey);
+                        newCount++;
+                        ledgerChanged = true;
+                        if (!appliedTickers.includes(ticker)) appliedTickers.push(ticker);
+                    }
+                } catch (e) { console.error(`股票分割查詢失敗: ${ticker}`, e); }
+            }
+
+            if (ledgerChanged) {
+                // 帳本已被回溯調整，依新帳本重新結算庫存與現金（邏輯與補登/撤銷交易一致）
+                state.ledger.sort((a, b) => b.timestamp - a.timestamp);
+                const result = recalculateState(state.ledger);
+                state.cash = result.cash + getDividendsTotalTWD();
+                state.holdings = result.holdings;
+                rebuildNavHistoryFromLedger();
+            }
+
+            state.splits.sort((a, b) => b.date - a.date);
+            state.lastSplitCheck = Date.now();
+            state.lastModified = Date.now();
+            saveData();
+            renderSplitsTable();
+            updateLastSplitCheckLabel();
+
+            if (newCount > 0) {
+                triggerDynamicFeedback(`偵測到 ${newCount} 筆股票分割（${appliedTickers.join('、')}），已自動調整歷史股數與均價`, 'buy', null, null);
+                updateAllViews(false);
+            } else if (manual) {
+                triggerDynamicFeedback("查詢完成，目前無新股票分割", 'gray', null, null);
+            }
+        } finally {
+            if (manual) btns.forEach((b, i) => { b.disabled = false; b.innerHTML = originalHtml[i]; });
+        }
+    }
+
+    function updateLastSplitCheckLabel() {
+        const el = document.getElementById('last-split-check-label');
+        if (!el) return;
+        if (!state.lastSplitCheck) { el.innerText = '尚未查詢過'; return; }
+        el.innerText = `上次查詢：${getFullFormattedTimeFromDate(state.lastSplitCheck)}`;
+    }
+
+    function renderSplitsTable() {
+        const body = document.getElementById('splits-table-body');
+        if (!body) return;
+        const splits = state.splits || [];
+        body.innerHTML = splits.length ? splits.map(s => {
+            const ratioText = s.numerator >= s.denominator
+                ? `${(s.numerator / s.denominator).toFixed(s.numerator % s.denominator === 0 ? 0 : 2)} : 1（拆股）`
+                : `1 : ${(s.denominator / s.numerator).toFixed(s.denominator % s.numerator === 0 ? 0 : 2)}（合股）`;
+            return `<tr>
+                <td>${new Date(s.date).toLocaleDateString()}</td>
+                <td style="font-weight:bold; color:var(--color-acc)">${s.ticker}</td>
+                <td>${ratioText}</td>
+                <td>${s.affectedTrades} 筆</td>
+            </tr>`;
+        }).join("") : `<tr><td colspan="4" style="text-align:center; color:#555; padding:40px;">尚無股票分割紀錄</td></tr>`;
+    }
+
+    // --- 📒 歷史帳本 / 股息紀錄 / 股票分割紀錄 面板切換鍵 ---
     function switchLedgerTab(tab) {
-        const isLedger = tab === 'ledger';
-        document.getElementById('ledger-tab-btn-ledger').classList.toggle('active', isLedger);
-        document.getElementById('ledger-tab-btn-dividends').classList.toggle('active', !isLedger);
-        document.getElementById('ledger-tab-view-ledger').style.display = isLedger ? '' : 'none';
-        document.getElementById('ledger-tab-view-dividends').style.display = isLedger ? 'none' : '';
-        document.getElementById('ledger-tab-icon').className = isLedger ? 'fa-solid fa-list-ul' : 'fa-solid fa-sack-dollar';
-        document.getElementById('ledger-tab-icon').style.color = isLedger ? '' : 'var(--color-acc)';
-        document.getElementById('ledger-tab-title').innerText = isLedger ? '歷史帳本與撤銷管理' : '股息發放紀錄';
-        document.getElementById('ledger-dividend-check-btn').style.display = isLedger ? 'none' : '';
-        if (!isLedger) renderDividendsTable();
+        document.getElementById('ledger-tab-btn-ledger').classList.toggle('active', tab === 'ledger');
+        document.getElementById('ledger-tab-btn-dividends').classList.toggle('active', tab === 'dividends');
+        document.getElementById('ledger-tab-btn-splits').classList.toggle('active', tab === 'splits');
+        document.getElementById('ledger-tab-view-ledger').style.display = tab === 'ledger' ? '' : 'none';
+        document.getElementById('ledger-tab-view-dividends').style.display = tab === 'dividends' ? '' : 'none';
+        document.getElementById('ledger-tab-view-splits').style.display = tab === 'splits' ? '' : 'none';
+        document.getElementById('ledger-tab-icon').className = tab === 'ledger' ? 'fa-solid fa-list-ul' : (tab === 'dividends' ? 'fa-solid fa-sack-dollar' : 'fa-solid fa-code-compare');
+        document.getElementById('ledger-tab-icon').style.color = tab === 'ledger' ? '' : 'var(--color-acc)';
+        document.getElementById('ledger-tab-title').innerText = tab === 'ledger' ? '歷史帳本與撤銷管理' : (tab === 'dividends' ? '股息發放紀錄' : '股票分割紀錄');
+        document.getElementById('ledger-dividend-check-btn').style.display = tab === 'dividends' ? '' : 'none';
+        document.getElementById('ledger-split-check-btn').style.display = tab === 'splits' ? '' : 'none';
+        if (tab === 'dividends') renderDividendsTable();
+        if (tab === 'splits') renderSplitsTable();
     }
 
     let cIsDragging = false, cDragCardClone = null, cRealCard = null;
@@ -5203,8 +5465,16 @@
 
     document.querySelectorAll('.mobile-num').forEach(input => {
         if(window.innerWidth <= 768) {
-            input.setAttribute('inputmode', 'none'); 
-            
+            input.setAttribute('inputmode', 'none');
+            // 🩹 修復：單靠 inputmode="none" 並不可靠 —— 使用者若在「已聚焦」的輸入框內點擊
+            // 想移動游標位置時，部分手機系統（尤其部分 Android 鍵盤）仍會無視 inputmode，
+            // 強制彈出原生鍵盤，並可能連帶讓玻璃小鍵盤的視覺焦點被打斷。
+            // 改為額外加上 readonly：readonly 只會封鎖「原生鍵盤輸入」，並不影響 focus()、
+            // .select()、setSelectionRange() 等 JS 操作，也不影響使用者用手指點擊來移動游標
+            // 或拖曳選取範圍（這些屬於 OS 原生的游標/選取行為，readonly 不會擋掉），
+            // 因此仍可保留「點擊輸入框內文字以移動游標」的操作體驗，但能穩定杜絕原生鍵盤彈出。
+            input.setAttribute('readonly', 'readonly');
+
             input.addEventListener('focus', (e) => {
                 activeNumInput = e.target;
                 const allowDec = activeNumInput.dataset.decimal === 'true';
@@ -5222,6 +5492,16 @@
                 
                 numpad.style.top = top + 'px';
                 numpad.style.left = left + 'px';
+            });
+
+            // 🩹 保險：若使用者點擊的是「已經聚焦中」的同一個輸入框（純粹想移動游標），
+            // 不會觸發上面的 focus 事件（因為本來就已經是 focus 狀態），這種情況下瀏覽器
+            // 只會處理原生的游標移動，不會重新呼叫我們的邏輯 —— 這正是預期行為，
+            // 小鍵盤面板本來就不需要因此重新渲染或位移，維持顯示原地即可。
+            input.addEventListener('touchend', (e) => {
+                if (document.activeElement !== activeNumInput) return;
+                const numpad = document.getElementById('glass-numpad');
+                if (numpad && numpad.style.display !== 'grid') numpad.style.display = 'grid';
             });
         }
     });
@@ -5510,6 +5790,7 @@
         selectTicker(currentTicker);
         fetchAllCardsData();
         checkDividendsIfDue();
+        checkSplitsIfDue();
 
         setInterval(async () => {
             await Promise.all([
@@ -5525,8 +5806,8 @@
             fetchAllCardsData();
         }, 8000);
 
-        // 每 30 分鐘檢查一次是否已跨過一天，達成「每天自動查詢一次」股息
-        setInterval(() => { checkDividendsIfDue(); }, 30 * 60 * 1000);
+        // 每 30 分鐘檢查一次是否已跨過一天，達成「每天自動查詢一次」股息 / 股票分割
+        setInterval(() => { checkDividendsIfDue(); checkSplitsIfDue(); }, 30 * 60 * 1000);
     }
 
     // --- 📱 QR Code 掃碼登入：手機端 (Receiver) 掃描網址並授權 ---
