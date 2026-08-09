@@ -50,6 +50,20 @@
            本站為深色主題但未宣告 color-scheme，行動瀏覽器預設以淺色配色渲染，導致深色底、淺色字近乎「看不見」
            （桌機版 Chrome 對此較不敏感故未察覺此問題）。這裡明確宣告深色配色，讓日期輸入框的文字在深色底上正常可見。 */
         input[type="date"] { color-scheme: dark; }
+        /* 🩹 修復：手機瀏覽器（依裝置系統地區設定）與桌機瀏覽器對「未選擇日期」的預留文字／已選日期的顯示順序
+           不一致（例如手機可能顯示 mm/dd/yyyy，桌機顯示 年/月/日），造成兩邊看起來不一樣。
+           這裡讓原生 input[type="date"] 的文字本身透明，改由自訂的 .dp-fake 覆蓋層統一顯示固定格式
+           （未選擇時顯示「年/月/日」，已選擇時顯示「YYYY/MM/DD」），確保手機與桌機顯示完全一致；
+           .dp-fake 使用 pointer-events:none，點擊仍會穿透到底下的原生 input 開啟日期選擇器。 */
+        .dp-wrap { position: relative; display: inline-block; }
+        .dp-wrap input[type="date"] { color: transparent !important; -webkit-text-fill-color: transparent !important; }
+        .dp-wrap input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+        .dp-wrap input[type="date"]::-webkit-datetime-edit-text,
+        .dp-wrap input[type="date"]::-webkit-datetime-edit-month-field,
+        .dp-wrap input[type="date"]::-webkit-datetime-edit-day-field,
+        .dp-wrap input[type="date"]::-webkit-datetime-edit-year-field { color: transparent !important; -webkit-text-fill-color: transparent !important; }
+        .dp-fake { position: absolute; inset: 0; display: flex; align-items: center; pointer-events: none; font-family: monospace; white-space: nowrap; overflow: hidden; }
+        #tm-date-fake { padding-left: 6px; color: #fff; }
         /* 🩹 修復：輸入框文字選取（讓 onfocus="this.select()" 與手動選取範圍對玻璃數字鍵盤生效） */
         input, textarea { user-select: text; -webkit-user-select: text; -webkit-touch-callout: default; }
 
@@ -313,6 +327,7 @@
         .lr-date-box label { display: block; font-size: 10px; color: #888; margin-bottom: 4px; }
         .lr-date-box input[type="date"] { width: 100%; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 7px 6px; border-radius: 6px; font-family: monospace; font-size: 12px; }
         .lr-date-box input[type="date"]:focus { outline: none; border-color: var(--color-acc); }
+        .lr-date-box .dp-fake { padding-left: 6px; font-size: 12px; color: #fff; }
         .lr-arrow { color: #555; padding-bottom: 8px; font-size: 12px; }
         .lr-match-count { font-size: 11px; color: var(--color-acc); font-family: monospace; flex-shrink: 0; }
         .lr-hint { margin-top: auto; font-size: 10.5px; color: #666; text-align: center; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.05); flex-shrink: 0; }
@@ -475,6 +490,7 @@
         .ledger-jump-date-wrap input[type="date"]::-webkit-datetime-edit-day-field,
         .ledger-jump-date-wrap input[type="date"]::-webkit-datetime-edit-year-field { color: #ccc; -webkit-text-fill-color: #ccc; opacity: 1; }
         .ledger-jump-date-wrap input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.8); opacity: 0.8; }
+        .ledger-jump-date-wrap .dp-fake { padding-left: 7px; font-size: 11.5px; color: #ccc; }
 
         /* 📄 歷史帳本：分頁控制列 */
         .ledger-pagination { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 14px 0 2px 0; }
@@ -582,6 +598,7 @@
             .ledger-range-picker { padding: 10px 12px; gap: 6px; }
             .lr-preset-btn { padding: 5px 0; font-size: 10.5px; }
             .lr-date-box input[type="date"] { padding: 6px 4px; font-size: 11px; }
+            .lr-date-box .dp-fake { padding-left: 4px; font-size: 11px; }
             .lr-hint { font-size: 9.5px; padding-top: 6px; }
 
             /* 🩹 手機版「補登歷史交易」日期輸入框：iOS Safari 等行動瀏覽器的 input[type=date]
@@ -592,6 +609,7 @@
             #tm-date::-webkit-datetime-edit { padding: 0; line-height: 28px; }
             #tm-date::-webkit-datetime-edit-fields-wrapper { padding: 0; }
             #tm-date::-webkit-date-and-time-value { padding: 0; margin: 0; text-align: left; }
+            #tm-date-wrap { width: 100%; }
 
             /* 📱 手機版：「日期」欄位獨立成一行，放在「補登歷史交易」文字右側並拉長整體寬度 */
             #tm-form-wrap { display: flex; flex-wrap: wrap; align-items: center; column-gap: 10px; row-gap: 10px; }
@@ -721,12 +739,18 @@
                             <div class="lr-date-row">
                                 <div class="lr-date-box">
                                     <label>起始日期</label>
-                                    <input type="date" id="lr-start-date" onchange="onLedgerRangeDateChange()" onkeypress="if(event.key==='Enter') askAI()">
+                                    <span class="dp-wrap" id="lr-start-date-wrap" style="width:100%;">
+                                        <input type="date" id="lr-start-date" onchange="onLedgerRangeDateChange()" onkeypress="if(event.key==='Enter') askAI()">
+                                        <span class="dp-fake" id="lr-start-date-fake"></span>
+                                    </span>
                                 </div>
                                 <div class="lr-arrow">→</div>
                                 <div class="lr-date-box">
                                     <label>結束日期</label>
-                                    <input type="date" id="lr-end-date" onchange="onLedgerRangeDateChange()" onkeypress="if(event.key==='Enter') askAI()">
+                                    <span class="dp-wrap" id="lr-end-date-wrap" style="width:100%;">
+                                        <input type="date" id="lr-end-date" onchange="onLedgerRangeDateChange()" onkeypress="if(event.key==='Enter') askAI()">
+                                        <span class="dp-fake" id="lr-end-date-fake"></span>
+                                    </span>
                                 </div>
                             </div>
                             <div class="lr-match-count" id="lr-match-count"></div>
@@ -790,7 +814,10 @@
             <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;" id="tm-fields-row">
                 <div id="tm-date-field">
                     <div style="font-size:11px; color:#888; margin-bottom:4px;" id="tm-date-label">日期</div>
-                    <input type="date" id="tm-date" onfocus="this.select()" onchange="autoFetchHistoricalPrice()" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-family:monospace; height:30px; box-sizing:border-box;">
+                    <span class="dp-wrap" id="tm-date-wrap">
+                        <input type="date" id="tm-date" onfocus="this.select()" onchange="autoFetchHistoricalPrice()" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-family:monospace; height:30px; box-sizing:border-box;">
+                        <span class="dp-fake" id="tm-date-fake"></span>
+                    </span>
                 </div>
                 <div id="tm-row-break" aria-hidden="true"></div>
                 <div>
@@ -843,7 +870,10 @@
                 <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
                     <div style="font-weight:bold; font-size:15px; white-space:nowrap;"><i class="fa-solid fa-list-ul" id="ledger-tab-icon"></i> <span id="ledger-tab-title">歷史帳本與撤銷管理</span>
                         <span class="ledger-jump-date-wrap" id="ledger-jump-date-wrap" style="margin-left:10px;">
-                            <input type="date" id="ledger-jump-date" onchange="jumpLedgerToDate(this.value)" title="跳轉至指定日期的交易紀錄">
+                            <span class="dp-wrap" id="ledger-jump-date-inner-wrap">
+                                <input type="date" id="ledger-jump-date" onchange="jumpLedgerToDate(this.value)" title="跳轉至指定日期的交易紀錄">
+                                <span class="dp-fake" id="ledger-jump-date-fake"></span>
+                            </span>
                         </span>
                         　<span id="dividend-total-label" style="font-size:12px; color:var(--color-buy); font-weight:normal;"></span></div>
                     <div class="ledger-tab-toggle">
@@ -1624,6 +1654,30 @@
         document.getElementById('tm-date').value = `${year}-${month}-${day}`; document.getElementById('tm-hour').value = hours; document.getElementById('tm-minute').value = minutes;
         const jumpDateEl = document.getElementById('ledger-jump-date');
         if (jumpDateEl) jumpDateEl.value = `${year}-${month}-${day}`;
+        syncDatePickerDisplay(document.getElementById('tm-date'));
+        syncDatePickerDisplay(jumpDateEl);
+    }
+
+    // 🩹 統一手機／桌機的 input[type="date"] 顯示格式：原生日期輸入框在「未選擇」或「已選擇」狀態下的文字，
+    // 會依裝置系統地區設定顯示（手機與桌機可能不同），這裡改用固定格式的自訂覆蓋層文字取代原生顯示，
+    // 讓兩邊看起來完全一致（未選擇顯示「年/月/日」，已選擇顯示「YYYY/MM/DD」）。
+    function formatDatePickerDisplay(value) {
+        if (!value) return '年/月/日';
+        const parts = value.split('-');
+        if (parts.length !== 3) return '年/月/日';
+        return `${parts[0]}/${parts[1]}/${parts[2]}`;
+    }
+    function syncDatePickerDisplay(input) {
+        if (!input) return;
+        const fake = document.getElementById(input.id + '-fake');
+        if (fake) fake.textContent = formatDatePickerDisplay(input.value);
+    }
+    function initDatePickerDisplays() {
+        document.querySelectorAll('.dp-wrap input[type="date"]').forEach(input => {
+            syncDatePickerDisplay(input);
+            input.addEventListener('input', () => syncDatePickerDisplay(input));
+            input.addEventListener('change', () => syncDatePickerDisplay(input));
+        });
     }
 
     let fetchPriceTimer = null;
@@ -2402,7 +2456,7 @@
     Chart.register(smoothCrosshairPlugin);
 
     const DATA_KEY = "ALPHATRADE_MANUAL_DATA";
-    let state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, nextExDividend: {}, splits: [], lastSplitCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] };
+    let state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] };
     let stopLossAlertShown = false; // 避免同一次觸發反覆彈出警示，虧損回復到門檻之上才會重置
     let currentTicker = localStorage.getItem('LAST_SELECTED_TICKER') || "NVDA";
 
@@ -3197,7 +3251,7 @@
         ACCOUNTS.push({ id, name, storageKey, hasPassword: false, passwordHash: null, syncEnabled: false, requirePasswordOnBoot: true, createdAt: Date.now() });
         saveAccountsMeta();
 
-        const freshState = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, nextExDividend: {}, splits: [], lastSplitCheck: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 } };
+        const freshState = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 } };
         persistAccountState(storageKey, freshState);
 
         nameInput.value = '';
@@ -3598,7 +3652,6 @@
                 state.ledger = state.ledger || [];
                 state.dividends = state.dividends || [];
                 state.lastDividendCheck = state.lastDividendCheck || 0;
-                state.nextExDividend = state.nextExDividend || {};
                 state.splits = state.splits || [];
                 state.lastSplitCheck = state.lastSplitCheck || 0;
                 state.lastModified = state.lastModified || 0;
@@ -3619,7 +3672,7 @@
                 if (!state.navHistory || !state.navHistory.timestamps || state.navHistory.timestamps.length === 0) { rebuildNavHistoryFromLedger(); }
             } catch(e) {} 
         } else {
-            state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, nextExDividend: {}, splits: [], lastSplitCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] };
+            state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] };
             rebuildNavHistoryFromLedger(); saveData();
         }
         stopLossAlertShown = false;
@@ -3698,7 +3751,7 @@
     }
     
     function saveData() { persistAccountState(getActiveAccount().storageKey, state); updateAllViews(true); renderCards(); scheduleCloudSync(); checkAchievements(); }
-    async function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { const storageKey = getActiveAccount().storageKey; localStorage.removeItem(storageKey); await idbDeleteLedger(storageKey); state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, nextExDividend: {}, splits: [], lastSplitCheck: 0, lastModified: Date.now(), recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] }; await initData(); fetchStockHistoryData(currentTicker, true); } }
+    async function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { const storageKey = getActiveAccount().storageKey; localStorage.removeItem(storageKey); await idbDeleteLedger(storageKey); state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: Date.now(), recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] }; await initData(); fetchStockHistoryData(currentTicker, true); } }
 
     function exportData() {
         const dataStr = JSON.stringify(state, null, 2), blob = new Blob([dataStr], { type: "application/json" }), url = URL.createObjectURL(blob), a = document.createElement("a");
@@ -3713,7 +3766,7 @@
             try {
                 const importedState = JSON.parse(e.target.result);
                 if (importedState && typeof importedState.cash === 'number') {
-                    state = importedState; state.cardTickers = state.cardTickers || []; state.recentTickers = state.recentTickers || []; state.holdings = state.holdings || {}; state.ledger = state.ledger || []; state.dividends = state.dividends || []; state.lastDividendCheck = state.lastDividendCheck || 0; state.nextExDividend = state.nextExDividend || {}; state.splits = state.splits || []; state.lastSplitCheck = state.lastSplitCheck || 0; state.lastModified = Date.now(); state.stopLoss = state.stopLoss || { enabled: false, percent: 10 }; state.dripEnabled = !!state.dripEnabled; state.unlockedAchievements = state.unlockedAchievements || []; state.friends = state.friends || []; state.achvShowcase = state.achvShowcase || [];
+                    state = importedState; state.cardTickers = state.cardTickers || []; state.recentTickers = state.recentTickers || []; state.holdings = state.holdings || {}; state.ledger = state.ledger || []; state.dividends = state.dividends || []; state.lastDividendCheck = state.lastDividendCheck || 0; state.splits = state.splits || []; state.lastSplitCheck = state.lastSplitCheck || 0; state.lastModified = Date.now(); state.stopLoss = state.stopLoss || { enabled: false, percent: 10 }; state.dripEnabled = !!state.dripEnabled; state.unlockedAchievements = state.unlockedAchievements || []; state.friends = state.friends || []; state.achvShowcase = state.achvShowcase || [];
                     state.ledger.forEach(r => {
                         if (!r.timestamp) {
                             let d = new Date(), parts = r.time ? r.time.split(':') : [];
@@ -4023,41 +4076,29 @@
 
         try {
             const heldTickers = Object.keys(state.holdings).filter(t => state.holdings[t] && state.holdings[t].shares > 0);
-            // 🩹 除了持股標的外，也一併查詢「自選資產卡片」的標的，讓卡片可顯示下次除息日（不額外新增查詢時機，僅擴充同一次自動查詢涵蓋的代號）
-            const tickers = [...new Set([...heldTickers, ...(state.cardTickers || [])])];
+            const tickers = heldTickers;
             state.dividends = state.dividends || [];
-            state.nextExDividend = state.nextExDividend || {};
             const paidKeys = new Set(state.dividends.map(d => d.key));
             let totalNewTWD = 0, newCount = 0;
 
             for (const ticker of tickers) {
-                // 📅 「下一次除息日」查詢方式修正：v10/finance/quoteSummary 透過一般 CORS 代理呼叫時，
-                // Yahoo 端會因缺少 crumb 驗證權杖而回應失敗（fetch 雖不噴錯但回傳空/無效資料），導致這裡永遠查不到結果。
-                // 改回與其他功能（報價、K線、股票分割）共用、已證實可透過本站代理穩定運作的 v8/finance/chart 端點，
-                // 並將查詢區間的 period2（結束時間）明確延伸至未來約 120 天，讓已公告但尚未除息的事件也能一併回傳，
-                // 與「歷史股息入帳」查詢合併為單一請求，不再額外多打一次 API。
                 try {
                     const nowSec = Math.floor(Date.now() / 1000);
                     const period1 = nowSec - 5 * 365 * 86400; // 回溯 5 年，涵蓋歷史股息入帳所需範圍
-                    const period2 = nowSec + 120 * 86400;     // 延伸至未來 120 天，涵蓋已公告的下次除息日
+                    const period2 = nowSec;
                     const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?period1=${period1}&period2=${period2}&interval=1d&events=div`)}`;
                     const res = await fetch(proxyUrl, { cache: "no-store" });
                     if (!res.ok) continue;
                     const json = await res.json();
                     const result = json && json.chart && json.chart.result && json.chart.result[0];
                     const divEvents = result && result.events && result.events.dividends;
-                    if (!divEvents) { delete state.nextExDividend[ticker]; continue; }
+                    if (!divEvents) continue;
 
                     const rate = getCurrencyMultiplier(ticker);
-                    let nearestFutureTs = null, nearestFuturePerShare = null;
                     for (const key in divEvents) {
                         const ev = divEvents[key];
                         const exTimestamp = ev.date * 1000;
-                        if (exTimestamp > Date.now()) {
-                            // 📅 尚未發生的除息事件：記錄下最接近現在的一筆，作為「下次除息日」顯示於自選資產卡片
-                            if (nearestFutureTs === null || exTimestamp < nearestFutureTs) { nearestFutureTs = exTimestamp; nearestFuturePerShare = ev.amount; }
-                            continue;
-                        }
+                        if (exTimestamp > Date.now()) continue;
                         const exDateStr = new Date(exTimestamp).toISOString().slice(0, 10);
                         const dividendKey = `${ticker}_${exDateStr}`;
                         if (paidKeys.has(dividendKey)) continue;
@@ -4094,13 +4135,6 @@
 
                         totalNewTWD += amountTWD;
                         newCount++;
-                    }
-
-                    // 📅 將本次查詢到「最接近的下一次除息日」寫入 state，供自選資產卡片顯示（跟隨本次自動查詢結果，不額外查詢）
-                    if (nearestFutureTs !== null) {
-                        state.nextExDividend[ticker] = { date: nearestFutureTs, perShare: nearestFuturePerShare };
-                    } else {
-                        delete state.nextExDividend[ticker];
                     }
                 } catch (e) { console.error(`股息查詢失敗: ${ticker}`, e); }
             }
@@ -4513,12 +4547,6 @@
             const pnlColor = pnl >= 0 ? 'var(--color-up)' : 'var(--color-down)';
             const deleteBtn = isCardEditMode ? `<div class="delete-btn" onclick="removeCard('${t}')" style="position:absolute; top:-8px; right:-8px; background:var(--color-sell); color:#fff; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:10; box-shadow:0 0 10px rgba(0,0,0,0.5);"><i class="fa-solid fa-minus"></i></div>` : '';
 
-            // 📅 下次除息日：跟隨上一次「股息自動配發」自動查詢的結果顯示，不另外觸發查詢
-            const nextDiv = (state.nextExDividend && state.nextExDividend[t]) || null;
-            const nextDivHtml = nextDiv
-                ? `<span style="font-family:monospace; font-weight:bold; font-size:13px; color:var(--color-warn);">${new Date(nextDiv.date).toISOString().slice(0,10)}${nextDiv.perShare ? ` <span style="color:#777; font-weight:normal; font-size:11px;">(${nextDiv.perShare}/股)</span>` : ''}</span>`
-                : `<span style="font-family:monospace; font-weight:bold; font-size:13px; color:#555;">--</span>`;
-
             html += `
             <div class="glass-panel draggable-card" data-ticker="${t}" style="padding: 18px; display:flex; flex-direction:column; gap:12px; cursor:${isCardEditMode ? 'grab' : 'default'};">
                 ${deleteBtn}
@@ -4531,7 +4559,6 @@
                     <div style="display:flex; flex-direction:column; gap:4px; text-align:right;"><span style="color:#777;">持有數量</span><span style="font-family:monospace; font-weight:bold; font-size:13px;">${h.shares} 股</span></div>
                     <div style="display:flex; flex-direction:column; gap:4px;"><span style="color:#777;">買入均價</span><span style="font-family:monospace; font-weight:bold; font-size:13px;">$${h.avgPrice.toFixed(2)}</span></div>
                     <div style="display:flex; flex-direction:column; gap:4px; text-align:right;"><span style="color:#777;">買入總成本(TWD)</span><span style="font-family:monospace; font-weight:bold; font-size:13px;">$${totalCost.toLocaleString(undefined, {minimumFractionDigits:2})}</span></div>
-                    <div style="display:flex; justify-content:space-between; align-items:center; grid-column: span 2;"><span style="color:#777;">下次除息日</span>${nextDivHtml}</div>
                     <div style="display:flex; flex-direction:column; gap:6px; grid-column: span 2; background:rgba(0,0,0,0.4); padding:10px 12px; border-radius:8px; margin-top:4px;">
                         <div style="display:flex; justify-content:space-between; align-items:center;"><span style="color:#888;">實收總價值 <span style="font-size:10px">(扣稅費)</span></span><span style="font-family:monospace; font-weight:bold; font-size:14px; color:${netValue > 0 ? '#fff' : '#888'};">$${netValue.toLocaleString(undefined, {minimumFractionDigits:2})}</span></div>
                         <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid rgba(255,255,255,0.05); padding-top:6px;"><span style="color:#888;">預估淨損益</span><span style="font-family:monospace; font-weight:bold; font-size:14px; color:${pnlColor};">${pnl >= 0 ? '+' : ''}$${pnl.toLocaleString(undefined, {minimumFractionDigits:2})}</span></div>
@@ -5636,6 +5663,8 @@
 
         document.getElementById("lr-start-date").value = formatDateForInput(start);
         document.getElementById("lr-end-date").value = formatDateForInput(now);
+        syncDatePickerDisplay(document.getElementById("lr-start-date"));
+        syncDatePickerDisplay(document.getElementById("lr-end-date"));
 
         document.querySelectorAll(".lr-preset-btn").forEach(b => b.classList.toggle("active", b.dataset.preset === preset));
         updateLedgerMatchCount();
@@ -6038,7 +6067,6 @@
             cloudState.ledger = cloudState.ledger || [];
             cloudState.dividends = cloudState.dividends || [];
             cloudState.lastDividendCheck = cloudState.lastDividendCheck || 0;
-            cloudState.nextExDividend = cloudState.nextExDividend || {};
             cloudState.lastModified = cloudState.lastModified || 0;
             cloudState.stopLoss = cloudState.stopLoss || { enabled: false, percent: 10 };
             cloudState.unlockedAchievements = cloudState.unlockedAchievements || [];
@@ -6375,6 +6403,7 @@
     initGlowIntensityControl();
     initGyroOnboarding();
     initIosAddToHomeScreenPrompt();
+    initDatePickerDisplays();
 
     startApp(); 
 
