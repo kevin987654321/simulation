@@ -254,6 +254,12 @@
         .standalone-mode-btn:hover { color: var(--color-acc); border-color: var(--color-acc); background: rgba(0,212,255,0.1); }
         .standalone-mode-btn i { transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
 
+        /* 👁️ 歷史買賣點標記開關（圖表左上角，股票代號旁） */
+        .chart-marker-eye-btn { width: 22px; height: 22px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: transparent; border: none; color: #666; border-radius: 5px; cursor: pointer; font-size: 12px; transition: all 0.2s ease; }
+        .chart-marker-eye-btn:hover { color: #ccc; background: rgba(255,255,255,0.08); }
+        .chart-marker-eye-btn.active { color: var(--color-acc); }
+        .chart-marker-eye-btn.active:hover { color: var(--color-acc); background: rgba(0,212,255,0.12); }
+
         .trade-panel { display: flex; flex-direction: column; padding: 16px; gap: 12px; height: 100%; overflow-y: auto; }
         .panel-header { font-size: 13px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
         
@@ -682,7 +688,13 @@
             <div class="dashboard-left-col">
                 <div class="glass-panel" id="chart-container">
                     <div class="chart-header">
-                        <span style="font-weight: bold; font-size: 13px;" id="main-chart-title"></span>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span style="font-weight: bold; font-size: 13px;" id="main-chart-title"></span>
+                            <!-- 👁️ 歷史買賣點標記開關：僅個股走勢模式顯示，點擊切換是否在圖表上標記歷史買入/賣出時間點 -->
+                            <button class="chart-marker-eye-btn" id="chart-trade-marker-toggle" onclick="toggleTradeMarkersOnChart()" title="標記歷史買賣點" style="display:none;">
+                                <i class="fa-regular fa-eye" id="chart-trade-marker-icon"></i>
+                            </button>
+                        </div>
                         <div class="header-controls">
                             <!-- 🚀 動態時間區段 -->
                             <div class="timeframe-selector" id="tf-group"></div>
@@ -3487,7 +3499,9 @@
     // 獨立管理主儀表板與下單櫃檯的範圍狀態，解決互相干擾問題
     let currentRange = '1M', mCurrentRange = '1M';
     let currentRealPrice = null, isPriceLoading = true, searchDebounceTimer = null, desktopChartMode = 'NAV', tradeMode = 'BUY';
-    let stockHistData = { labels: [], prices: [], ohlc: [] }, cardsDataCache = {}, isCardEditMode = false;
+    let stockHistData = { labels: [], prices: [], ohlc: [], timestamps: [] }, cardsDataCache = {}, isCardEditMode = false;
+    // 👁️ 個股走勢圖：是否在圖表上標記歷史買入/賣出時間點
+    let showTradeMarkersOnChart = false;
 
     const RANGE_MAP = {
         'LINE': [
@@ -4802,7 +4816,7 @@
             const timestamps = result.timestamp || [], quote = result.indicators.quote[0];
             const closes = quote.close || [], opens = quote.open || [], highs = quote.high || [], lows = quote.low || [];
             
-            let arrPrices = [], arrLabels = [], arrOHLC = [];
+            let arrPrices = [], arrLabels = [], arrOHLC = [], arrTimestamps = [];
             for(let i = 0; i < timestamps.length; i++) {
                 if (closes[i] !== null && closes[i] !== undefined) {
                     arrPrices.push(closes[i]); 
@@ -4811,6 +4825,7 @@
                     let h = highs[i] !== null ? highs[i] : closes[i];
                     let l = lows[i] !== null ? lows[i] : closes[i];
                     arrOHLC.push({ o, h, l, c: closes[i] });
+                    arrTimestamps.push(timestamps[i] * 1000); // 供比對歷史買賣紀錄時間點使用
 
                     const d = new Date(timestamps[i] * 1000);
                     // 改為1D只顯示時間不顯示日期，其餘顯示yy/mm/dd
@@ -4825,6 +4840,7 @@
                 stockHistData.prices = arrPrices; 
                 stockHistData.labels = arrLabels; 
                 stockHistData.ohlc = arrOHLC; 
+                stockHistData.timestamps = arrTimestamps;
                 updateRSIDisplay(arrPrices); 
                 renderAllCharts(animate); 
             }
@@ -5111,6 +5127,16 @@
             label: function(context) {
                 if (context.chart.canvas.id === 'navChart' && desktopChartMode === 'NAV') { return '淨: $' + Math.floor(context.parsed.y).toLocaleString(); }
                 if (context.dataset.label === 'Wick') return null; 
+
+                // 👁️ 歷史買賣點標記：顯示該筆/該時間點所有買進或賣出的明細
+                if (context.dataset.label === 'BuyMarker' || context.dataset.label === 'SellMarker') {
+                    if (context.parsed.y === null || context.parsed.y === undefined) return null;
+                    const info = chartTradeMarkerInfo[context.dataIndex];
+                    const recs = info ? (context.dataset.label === 'BuyMarker' ? info.buys : info.sells) : null;
+                    if (!recs || recs.length === 0) return null;
+                    const tag = context.dataset.label === 'BuyMarker' ? '🟢 買進' : '🔴 賣出';
+                    return recs.map(r => `${tag}: $${r.price.toFixed(2)} x ${r.shares}股`);
+                }
                 
                 const type = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
                 
@@ -5287,6 +5313,71 @@
         }
     }
 
+    // 👁️ 個股走勢圖：歷史買賣點標記
+    // chartTradeMarkerInfo[dataIndex] = { buys: [...ledger紀錄], sells: [...ledger紀錄] }，供 tooltip 顯示明細用
+    let chartTradeMarkerInfo = {};
+
+    function toggleTradeMarkersOnChart() {
+        showTradeMarkersOnChart = !showTradeMarkersOnChart;
+        const btn = document.getElementById('chart-trade-marker-toggle');
+        const icon = document.getElementById('chart-trade-marker-icon');
+        if (btn) btn.classList.toggle('active', showTradeMarkersOnChart);
+        if (icon) icon.className = showTradeMarkersOnChart ? 'fa-solid fa-eye' : 'fa-regular fa-eye';
+        renderAllCharts(false);
+    }
+
+    // 依目前圖表資料點的時間戳記，比對該股票的歷史買賣紀錄（state.ledger），
+    // 找出每筆交易最接近的資料點索引並標記；超出目前圖表涵蓋時間範圍的交易則略過不標記。
+    function buildTradeMarkerDatasets(data) {
+        chartTradeMarkerInfo = {};
+        if (!showTradeMarkersOnChart || !data.timestamps || data.timestamps.length === 0) return [];
+
+        const records = state.ledger.filter(r => r.ticker === currentTicker && r.timestamp);
+        if (records.length === 0) return [];
+
+        const ts = data.timestamps;
+        const avgGap = ts.length > 1 ? (ts[ts.length - 1] - ts[0]) / (ts.length - 1) : 86400000;
+        const tolerance = Math.max(avgGap * 1.5, 3600000); // 至少 1 小時容許誤差
+
+        const buyData = new Array(ts.length).fill(null);
+        const sellData = new Array(ts.length).fill(null);
+        let hasBuy = false, hasSell = false;
+
+        records.forEach(r => {
+            let bestIdx = -1, bestDiff = Infinity;
+            for (let i = 0; i < ts.length; i++) {
+                const diff = Math.abs(ts[i] - r.timestamp);
+                if (diff < bestDiff) { bestDiff = diff; bestIdx = i; }
+            }
+            if (bestIdx === -1 || bestDiff > tolerance) return; // 超出目前圖表涵蓋範圍，略過
+
+            const info = chartTradeMarkerInfo[bestIdx] || (chartTradeMarkerInfo[bestIdx] = { buys: [], sells: [] });
+            if (r.action === 'BUY') { info.buys.push(r); buyData[bestIdx] = data.prices[bestIdx]; hasBuy = true; }
+            else { info.sells.push(r); sellData[bestIdx] = data.prices[bestIdx]; hasSell = true; }
+        });
+
+        const rootStyle = getComputedStyle(document.documentElement);
+        const buyColor = rootStyle.getPropertyValue('--color-buy').trim() || '#00ffaa';
+        const sellColor = rootStyle.getPropertyValue('--color-sell').trim() || '#ff4560';
+
+        const markerDatasets = [];
+        if (hasBuy) {
+            markerDatasets.push({
+                label: 'BuyMarker', type: 'line', data: buyData, showLine: false, spanGaps: false,
+                pointStyle: 'triangle', rotation: 0, pointRadius: 7, pointHoverRadius: 9,
+                pointBackgroundColor: buyColor, pointBorderColor: '#fff', pointBorderWidth: 1.5, order: 0
+            });
+        }
+        if (hasSell) {
+            markerDatasets.push({
+                label: 'SellMarker', type: 'line', data: sellData, showLine: false, spanGaps: false,
+                pointStyle: 'triangle', rotation: 180, pointRadius: 7, pointHoverRadius: 9,
+                pointBackgroundColor: sellColor, pointBorderColor: '#fff', pointBorderWidth: 1.5, order: 0
+            });
+        }
+        return markerDatasets;
+    }
+
     function renderAllCharts(animate = true) {
         const showNodes = document.getElementById("cfg-node-show").checked, rawVal = document.getElementById("cfg-node-val").value, densityVal = (rawVal === 'All') ? 'All' : parseInt(rawVal) || 20;
         const chartType = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
@@ -5325,6 +5416,10 @@
         } else {
             navChart.options.scales.y.ticks.maxTicksLimit = parseInt(valueAxisRaw) || 7;
         }
+
+        // 👁️ 歷史買賣點標記開關：僅個股走勢模式下顯示（組合總淨值走勢無個股買賣點可標）
+        const tradeMarkerBtn = document.getElementById('chart-trade-marker-toggle');
+        if (tradeMarkerBtn) tradeMarkerBtn.style.display = showNav ? 'none' : 'flex';
 
         if (showNav) {
             document.getElementById("main-chart-title").innerHTML = `<img src="走勢圖.png" width="12" height="12"> <span class="hide-on-mobile" style="margin-left:4px;">總淨值走勢</span>`;
@@ -5368,7 +5463,8 @@
             }
             document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> <span style="margin-left:4px;">${currentTicker}</span> <span class="hide-on-mobile">${titlePrefix}</span>`;
             navChart.data.labels = stockHistData.labels;
-            applyChartDatasets(navChart, getStockDatasets(stockHistData, showNodes, densityVal));
+            const tradeMarkerDatasets = buildTradeMarkerDatasets(stockHistData);
+            applyChartDatasets(navChart, getStockDatasets(stockHistData, showNodes, densityVal).concat(tradeMarkerDatasets));
         }
         
         navChart.update(); 
@@ -5376,7 +5472,8 @@
         document.getElementById("m-main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> <span style="margin-left:4px;">${currentTicker}</span>`;
         mobileChart.data.labels = stockHistData.labels; 
         const mDensity = (densityVal === 'All') ? 'All' : Math.floor(densityVal / 2);
-        applyChartDatasets(mobileChart, getStockDatasets(stockHistData, showNodes, mDensity));
+        const mTradeMarkerDatasets = showNav ? [] : buildTradeMarkerDatasets(stockHistData);
+        applyChartDatasets(mobileChart, getStockDatasets(stockHistData, showNodes, mDensity).concat(mTradeMarkerDatasets));
         
         mobileChart.update();
     }
@@ -6194,6 +6291,16 @@
             const panels = document.querySelectorAll('.glass-panel, .glow-line, .glow-divide-top');
             for (let i = 0; i < panels.length; i++) {
                 const el = panels[i];
+                // 📱 手機陀螺儀模式：跳過「非目前顯示頁面」內的元件。
+                // .view-section 未啟用時是 opacity:0（非 display:none），仍佔滿版面，
+                // 不會被下方的可視範圍檢查排除掉，导致每一幀都要對所有分頁裡的大量卡片
+                // 做 getBoundingClientRect（觸發 layout）與樣式寫入，這正是手機卡頓、發熱的主因。
+                // 這裡只在陀螺儀路徑套用此優化；桌機滑鼠模式與不屬於任何分頁的元件（彈窗、
+                // 共用交易面板等）不受影響，維持原本行為。
+                if (markGyro) {
+                    const section = el.closest('.view-section');
+                    if (section && !section.classList.contains('active')) continue;
+                }
                 const rect = el.getBoundingClientRect();
                 if (rect.bottom < -80 || rect.top > window.innerHeight + 80 || rect.right < -80 || rect.left > window.innerWidth + 80) continue;
                 el.style.setProperty('--gx', (clientX - rect.left) + 'px');
