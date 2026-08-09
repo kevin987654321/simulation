@@ -1077,7 +1077,7 @@
                 </div>
             </div>
             <div class="glow-divide-top setting-item">
-                <div><div style="font-weight:bold;">圖表數值軸</div><div style="font-size:11px; color:#777; margin-top:2px;">開關主圖表左側的數值座標軸文字，關閉後灰色水平格線依然會顯示</div></div>
+                <div><div style="font-weight:bold;">圖表數值軸</div><div style="font-size:11px; color:#777; margin-top:2px;">開關主圖表左側的數值座標軸文字<br>關閉後灰色水平格線依然會顯示</div></div>
                 <label class="switch"><input type="checkbox" id="cfg-valueaxis-show" checked><span class="slider"></span></label>
             </div>
             <div class="glow-divide-top setting-item" id="valueaxis-settings-wrapper">
@@ -1110,10 +1110,10 @@
             <div class="glow-divide-top setting-item" id="gyro-permission-setting-item">
                 <div>
                     <div style="font-weight:bold;"><i class="fa-solid fa-mobile-screen-button" style="color:#aaa"></i> 陀螺儀權限</div>
-                    <div id="gyro-permission-desc" style="font-size:11px; color:#777; margin-top:2px;">授權後，流光特效可依裝置傾斜方向呈現</div>
+                    <div id="gyro-permission-desc" style="font-size:11px; color:#777; margin-top:2px;">授權後，流光特效可依裝置傾斜方向呈現<br>因iOS限制，每次重啟App需要重新授權(重新整理不需要)</div>
                 </div>
                 <button id="gyro-permission-btn" onclick="requestGyroPermission(true)" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:8px 14px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s; white-space:nowrap;">
-                    <i class="fa-solid fa-arrows-rotate"></i> 允許取用陀螺儀
+                    <i class="fa-solid fa-arrows-rotate"></i> 授權
                 </button>
             </div>
 
@@ -1272,7 +1272,7 @@
 <!-- 🔐 開機帳號密碼鎖定畫面 -->
 <div id="boot-lock-overlay" class="modal-overlay" style="background:#030303;">
     <div class="modal-box" style="align-items:center; text-align:center;">
-        <div class="glass-title-text" style="margin:0 0 4px 0;"><i class="fa-solid fa-cube" style="color:var(--color-acc)"></i> ALPHATRADE</div>
+        <div class="glass-title-text" style="margin:0 0 4px 0;"><i class="fa-solid fa-cube" style="color:var(--color-acc)"></i> ACORNTRADE</div>
         <i class="fa-solid fa-lock" style="color:var(--color-acc); font-size:26px; margin:6px 0;"></i>
         <div style="color:#aaa; font-size:12.5px;">帳號「<span id="boot-lock-account-name" style="color:#fff; font-weight:bold;"></span>」已設定密碼保護</div>
         <input type="text" id="boot-lock-input" class="modal-input pwd-mask" placeholder="請輸入密碼" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore style="margin-top:8px;">
@@ -1376,9 +1376,9 @@
     <div class="glass-panel modal-box" style="align-items:center; text-align:center; max-width:340px;">
         <i class="fa-solid fa-mobile-screen-button" style="color:var(--color-acc); font-size:28px; margin:4px 0;"></i>
         <div style="font-weight:bold; font-size:15px;">開啟陀螺儀流光特效？</div>
-        <div style="color:#999; font-size:12px; line-height:1.7;">授權後，手機版的卡片邊框流光特效可依裝置傾斜方向呈現（效果已自動減弱）。您也可以之後在「系統設定」中隨時開啟或重新授權，這不會影響其他功能的使用。</div>
+        <div style="color:#999; font-size:12px; line-height:1.7;">授權後，手機版的卡片邊框流光特效可依裝置傾斜方向呈現。您也可以之後在「系統設定」中隨時開啟或重新授權，這不會影響其他功能的使用。<br>因iOS限制，每次重啟App需要重新授權(重新整理不需要)</div>
         <button id="gyro-onboarding-allow-btn" style="width:100%; background:var(--color-acc); color:#000; border:none; padding:11px; border-radius:8px; font-weight:bold; cursor:pointer; margin-top:6px;">
-            <i class="fa-solid fa-arrows-rotate"></i> 允許取用陀螺儀
+            <i class="fa-solid fa-arrows-rotate"></i> 授權
         </button>
         <button id="gyro-onboarding-skip-btn" style="width:100%; background:transparent; border:1px solid rgba(255,255,255,0.2); color:#aaa; padding:9px 16px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:12px;">暫不開啟</button>
     </div>
@@ -2455,7 +2455,7 @@
     };
     Chart.register(smoothCrosshairPlugin);
 
-    const DATA_KEY = "ALPHATRADE_MANUAL_DATA";
+    const DATA_KEY = "ACORNTRADE_MANUAL_DATA";
     let state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] };
     let stopLossAlertShown = false; // 避免同一次觸發反覆彈出警示，虧損回復到門檻之上才會重置
     let currentTicker = localStorage.getItem('LAST_SELECTED_TICKER') || "NVDA";
@@ -2543,8 +2543,8 @@
     // 每個帳號各自擁有獨立的 localStorage 資料鍵（storageKey），
     // 預設帳號沿用原本的 DATA_KEY，確保舊資料無痛升級、不遺失。
     // ============================================================
-    const ACCOUNTS_META_KEY = "ALPHATRADE_ACCOUNTS";
-    const ACTIVE_ACCOUNT_KEY = "ALPHATRADE_ACTIVE_ACCOUNT_ID";
+    const ACCOUNTS_META_KEY = "ACORNTRADE_ACCOUNTS";
+    const ACTIVE_ACCOUNT_KEY = "ACORNTRADE_ACTIVE_ACCOUNT_ID";
     const CLOUD_SYNC_URL = "https://script.google.com/macros/s/AKfycbygqIVZYbWY-uepN-Oi8ieJxbYjQg1eeHhALg5JdleoXC3-zrge2RgivQaWxmwp2_BQ/exec";
 
     // --- ☁️ 遠端登入 / 雲端同步：與 Google Apps Script 溝通 ---
@@ -2673,7 +2673,7 @@
         const id = result.accountId || trimmedId || generateAccountId();
         if (ACCOUNTS.find(a => a.id === id)) { alert('本機已經存在此帳號，無法重複登入！'); return; }
 
-        const storageKey = `ALPHATRADE_DATA_${id}`;
+        const storageKey = `ACORNTRADE_DATA_${id}`;
         const finalName = result.accountName || '雲端下載帳戶';
         // 🩹 從雲端下載的完整資料（含歷史交易紀錄）落地時，ledger 拆存進 IndexedDB，localStorage 只留輕量欄位
         persistAccountState(storageKey, importedState);
@@ -2890,7 +2890,7 @@
             return;
         }
 
-        const storageKey = `ALPHATRADE_DATA_${id}`;
+        const storageKey = `ACORNTRADE_DATA_${id}`;
         persistAccountState(storageKey, importedState);
         ACCOUNTS.push({ id, name: finalName, storageKey, hasPassword: true, passwordHash: result.passwordHash || null, syncEnabled: true, requirePasswordOnBoot: true, createdAt: Date.now() });
         saveAccountsMeta();
@@ -3247,7 +3247,7 @@
         const nameInput = document.getElementById('new-account-name');
         let name = nameInput.value.trim();
         if (!name) name = `帳戶 ${ACCOUNTS.length + 1}`;
-        const id = generateAccountId(), storageKey = `ALPHATRADE_DATA_${id}`;
+        const id = generateAccountId(), storageKey = `ACORNTRADE_DATA_${id}`;
         ACCOUNTS.push({ id, name, storageKey, hasPassword: false, passwordHash: null, syncEnabled: false, requirePasswordOnBoot: true, createdAt: Date.now() });
         saveAccountsMeta();
 
@@ -6257,13 +6257,13 @@
         if (!btn) return;
         const status = localStorage.getItem(GYRO_STATUS_KEY);
         if (status === 'granted') {
-            btn.innerHTML = '<i class="fa-solid fa-check"></i> 已授權（點此重新綁定）';
-            if (desc) desc.textContent = '陀螺儀已授權，手機版流光特效會依裝置傾斜方向呈現';
+            btn.innerHTML = '<i class="fa-solid fa-check"></i>重新授權';
+            if (desc) desc.textContent = '陀螺儀已授權，手機版流光特效會依裝置傾斜方向呈現。因iOS限制，每次重啟App需要重新授權(重新整理不需要)';
         } else {
-            btn.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> 允許取用陀螺儀';
+            btn.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> 授權';
             if (desc) desc.textContent = status === 'denied'
                 ? '目前尚未授權陀螺儀，點擊按鈕可重新請求權限'
-                : '授權後，手機版流光特效可依裝置傾斜方向呈現（僅手機需要）';
+                : '授權後，流光特效可依裝置傾斜方向呈現。因iOS限制，每次重啟App需要重新授權(重新整理不需要)';
         }
     }
 
