@@ -726,8 +726,16 @@
                             <button class="chart-marker-eye-btn" id="chart-trade-marker-toggle" onclick="toggleTradeMarkersOnChart()" title="標記歷史買賣點" style="display:none;">
                                 <i class="fa-regular fa-eye" id="chart-trade-marker-icon"></i>
                             </button>
+                            <!-- 📊 基準指數對標開關：僅組合總淨值模式顯示，與上方 👁️ 買賣點標記開關互斥、共用同一個按鈕位置。
+                                 讓使用者選擇一個大盤指數疊圖比較，一眼看出投資組合是否擊敗大盤 -->
+                            <button class="chart-marker-eye-btn" id="benchmark-toggle-btn" onclick="toggleBenchmarkDropdown()" title="對標基準指數" style="display:none;">
+                                <i class="fa-solid fa-chart-line" id="benchmark-toggle-icon"></i>
+                            </button>
+                            <div class="opaque-dropdown-list" id="benchmark-dropdown" style="top: calc(100% + 34px); right:0; left:auto; width:150px;"></div>
                         </div>
                     </div>
+                    <!-- 📊 對標指數表現摘要列：僅在組合總淨值模式且已選擇對標基準時顯示 -->
+                    <div id="benchmark-summary-bar" style="display:none; align-items:center; gap:8px; padding:0 2px 8px 2px; font-size:11px; font-family:monospace; flex-wrap:wrap;"></div>
                     <div class="chart-wrapper"><canvas id="navChart"></canvas></div>
                 </div>
 
@@ -3535,6 +3543,21 @@
     const TRADE_MARKERS_KEY = 'SETTING_CHART_TRADE_MARKERS';
     let showTradeMarkersOnChart = localStorage.getItem(TRADE_MARKERS_KEY) === 'true';
 
+    // 📊 基準指數對標功能：讓使用者可選擇一個大盤指數疊圖比較，一眼看出投資組合是否擊敗大盤
+    // （僅在「組合總淨值」走勢模式下可用，位置與 👁️ 買賣點標記開關互斥、共用同一按鈕位置）
+    const BENCHMARK_LIST = [
+        { symbol: '',      name: '不比較' },
+        { symbol: '^TWII', name: '台灣加權指數' },
+        { symbol: '^GSPC', name: 'S&P 500' },
+        { symbol: '^IXIC', name: '那斯達克指數' },
+        { symbol: '^DJI',  name: '道瓊工業指數' },
+        { symbol: '^SOX',  name: '費城半導體指數' },
+    ];
+    const BENCHMARK_KEY = 'SETTING_BENCHMARK_SYMBOL';
+    let selectedBenchmark = localStorage.getItem(BENCHMARK_KEY) || '';
+    let benchmarkHistData = { timestamps: [], prices: [] };
+    let benchmarkFetchToken = 0;
+
     const RANGE_MAP = {
         'LINE': [
             { label: '1D', range: '1d', interval: '5m' }, { label: '1W', range: '5d', interval: '15m' }, { label: '1M', range: '1mo', interval: '1d' },
@@ -3599,6 +3622,8 @@
                 currentRange = btn.dataset.label;
                 
                 fetchStockHistoryData(currentTicker, true);
+                // 📊 時間區段變動時，若組合總淨值模式已選擇對標基準，同步重新抓取對應區間的指數資料
+                if (desktopChartMode === 'NAV' && selectedBenchmark) fetchBenchmarkHistoryData();
             });
         });
         
@@ -4752,6 +4777,8 @@
         if(!document.getElementById("ticker-select-wrapper").contains(e.target)) document.getElementById("ticker-dropdown").classList.remove("show"); 
         if(!document.getElementById("tm-ticker-wrapper").contains(e.target)) document.getElementById("tm-ticker-dropdown").classList.remove("show"); 
         if(!document.getElementById("ai-ticker-wrapper").contains(e.target) && !document.getElementById("ai-ticker-dropdown").contains(e.target)) document.getElementById("ai-ticker-dropdown").classList.remove("show"); 
+        // 📊 基準指數對標下拉選單：點擊按鈕與選單以外的地方時自動收合
+        if(!document.getElementById("benchmark-toggle-btn").contains(e.target) && !document.getElementById("benchmark-dropdown").contains(e.target)) document.getElementById("benchmark-dropdown").classList.remove("show"); 
     });
 
     function selectTicker(t) {
@@ -4795,7 +4822,8 @@
         finally {
             if (currentRealPrice !== null && !isPriceLoading) {
                 priceFetchFailCount = 0;
-                document.getElementById("trade-price-display").innerText = `$ ${currentRealPrice.toFixed(2)}`;
+                // 💱 在價格文字右側以灰色字體顯示原幣幣別（例如 313.33 USD），方便使用者辨識非台幣計價的報價
+                document.getElementById("trade-price-display").innerHTML = `$ ${currentRealPrice.toFixed(2)} <span style="font-size:12px; font-weight:400; color:#888;">${getCurrencyForTicker(ticker)}</span>`;
                 document.getElementById("ai-current-ticker").innerText = currentTicker; validateSharesInput();
             } else if (!fetchSucceeded && ticker === currentTicker) {
                 priceFetchFailCount++;
@@ -5187,6 +5215,9 @@
         callbacks: {
             title: function(context) { return context[0].label; },
             label: function(context) {
+                // 📊 基準指數對標模式：投組與指數皆以相對報酬率(%)顯示，方便直接比較
+                if (context.dataset.label === 'NAV_PCT') { const v = context.parsed.y; return '投組: ' + (v >= 0 ? '+' : '') + v.toFixed(2) + '%'; }
+                if (context.dataset.label === 'BENCH_PCT') { const v = context.parsed.y, meta = BENCHMARK_LIST.find(b => b.symbol === selectedBenchmark); return (meta ? meta.name : '大盤') + ': ' + (v >= 0 ? '+' : '') + v.toFixed(2) + '%'; }
                 if (context.chart.canvas.id === 'navChart' && desktopChartMode === 'NAV') { return '淨: $' + Math.floor(context.parsed.y).toLocaleString(); }
                 if (context.dataset.label === 'Wick') return null; 
 
@@ -5309,6 +5340,72 @@
         document.getElementById('mode-icon').style.transform = (desktopChartMode === 'STOCK') ? 'rotate(180deg)' : 'rotate(0deg)'; 
         updateTimeframeButtons(); 
         fetchStockHistoryData(currentTicker, true); 
+        // 📊 若使用者已選擇對標基準且切回組合總淨值模式時尚無資料，補抓一次
+        if (desktopChartMode === 'NAV' && selectedBenchmark && benchmarkHistData.prices.length === 0) fetchBenchmarkHistoryData();
+    }
+
+    // 📊 基準指數對標：下拉選單開關 + 選取邏輯
+    function toggleBenchmarkDropdown() {
+        const dd = document.getElementById('benchmark-dropdown');
+        if (!dd) return;
+        if (!dd.classList.contains('show')) renderBenchmarkDropdown();
+        dd.classList.toggle('show');
+    }
+
+    function renderBenchmarkDropdown() {
+        const dd = document.getElementById('benchmark-dropdown');
+        if (!dd) return;
+        dd.innerHTML = BENCHMARK_LIST.map(b => {
+            const active = b.symbol === selectedBenchmark;
+            return `<div class="dropdown-item" onclick="selectBenchmark('${b.symbol}')" style="${active ? 'color:var(--color-acc); font-weight:bold;' : ''}">
+                <span>${b.name}</span>${active ? '<i class="fa-solid fa-check" style="color:var(--color-acc);"></i>' : ''}
+            </div>`;
+        }).join('');
+    }
+
+    async function selectBenchmark(symbol) {
+        selectedBenchmark = symbol;
+        localStorage.setItem(BENCHMARK_KEY, symbol);
+        const dd = document.getElementById('benchmark-dropdown');
+        if (dd) dd.classList.remove('show');
+        const btn = document.getElementById('benchmark-toggle-btn');
+        if (btn) btn.classList.toggle('active', !!symbol);
+        renderBenchmarkDropdown();
+        if (symbol) {
+            await fetchBenchmarkHistoryData();
+        } else {
+            benchmarkHistData = { timestamps: [], prices: [] };
+            renderAllCharts(true);
+        }
+    }
+
+    // 📊 抓取基準指數歷史收盤價：沿用組合總淨值模式的時間區段設定（RANGE_MAP.LINE），確保與 NAV 走勢區間一致
+    async function fetchBenchmarkHistoryData() {
+        if (!selectedBenchmark) return;
+        const symbolAtStart = selectedBenchmark;
+        const myToken = ++benchmarkFetchToken;
+        const config = RANGE_MAP['LINE'].find(b => b.label === currentRange) || RANGE_MAP['LINE'][2];
+        try {
+            const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${symbolAtStart}?range=${config.range}&interval=${config.interval}`)}`;
+            const res = await fetch(proxyUrl, { cache: "no-store" });
+            // 🩹 若使用者在等待期間切換了對標標的或時間區段，此回應已過期，不覆寫
+            if (myToken !== benchmarkFetchToken || selectedBenchmark !== symbolAtStart) return;
+            const json = await res.json(), result = json.chart.result[0];
+            const timestamps = result.timestamp || [], closes = (result.indicators.quote[0] && result.indicators.quote[0].close) || [];
+            let arrTs = [], arrPrices = [];
+            for (let i = 0; i < timestamps.length; i++) {
+                if (closes[i] !== null && closes[i] !== undefined) {
+                    arrTs.push(timestamps[i] * 1000);
+                    arrPrices.push(closes[i]);
+                }
+            }
+            if (myToken !== benchmarkFetchToken || selectedBenchmark !== symbolAtStart) return;
+            if (arrPrices.length > 1) benchmarkHistData = { timestamps: arrTs, prices: arrPrices };
+        } catch (e) {
+            // 靜默失敗：保留既有快取資料（若有），避免圖表整個消失
+        } finally {
+            if (myToken === benchmarkFetchToken) renderAllCharts(true);
+        }
     }
 
     function computePointRadiusArray(dataLength, showNodes, densityVal) {
@@ -5494,6 +5591,13 @@
         const tradeMarkerBtn = document.getElementById('chart-trade-marker-toggle');
         if (tradeMarkerBtn) tradeMarkerBtn.style.display = showNav ? 'none' : 'flex';
 
+        // 📊 基準指數對標開關：僅組合總淨值模式下顯示（與上方買賣點標記開關互斥，共用同一個按鈕位置）
+        const benchmarkBtn = document.getElementById('benchmark-toggle-btn');
+        if (benchmarkBtn) benchmarkBtn.style.display = showNav ? 'flex' : 'none';
+        if (!showNav) { const bdd = document.getElementById('benchmark-dropdown'); if (bdd) bdd.classList.remove('show'); }
+        const benchmarkBar = document.getElementById('benchmark-summary-bar');
+        if (benchmarkBar) benchmarkBar.style.display = 'none'; // 預設隱藏，僅在組合總淨值模式且已選對標基準時顯示
+
         if (showNav) {
             document.getElementById("main-chart-title").innerHTML = `<img src="走勢圖.png" width="12" height="12"> <span class="hide-on-mobile" style="margin-left:4px;">總淨值走勢</span>`;
             let cutoff = 0; const now = Date.now();
@@ -5503,7 +5607,7 @@
             else if (currentRange === '3M') cutoff = now - 86400000 * 90; 
             else if (currentRange === '1Y') cutoff = now - 86400000 * 365;
 
-            let fLabels = [], fData = [];
+            let fLabels = [], fData = [], fTimestamps = [];
             if (state.navHistory && state.navHistory.timestamps) {
                 for (let i = 0; i < state.navHistory.timestamps.length; i++) {
                     if (state.navHistory.timestamps[i] >= cutoff) { 
@@ -5514,19 +5618,62 @@
                             : `${String(d.getFullYear()).slice(-2)}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
                         fLabels.push(label); 
                         fData.push(state.navHistory.data[i]); 
+                        fTimestamps.push(state.navHistory.timestamps[i]); // 📊 保留對應時間戳，供比對基準指數資料使用
                     }
                 }
             }
             if (fData.length === 0 && state.navHistory && state.navHistory.data && state.navHistory.data.length > 0) {
                 let lastVal = state.navHistory.data[state.navHistory.data.length - 1]; 
+                let lastTs = (state.navHistory.timestamps && state.navHistory.timestamps.length > 0) ? state.navHistory.timestamps[state.navHistory.timestamps.length - 1] : now;
                 fLabels = [currentRange === '1D' ? '00:00' : 'Start', 'Now']; 
                 fData = [lastVal, lastVal];
+                fTimestamps = [lastTs, now];
             } else if (fData.length === 1) { 
-                fLabels.push('Now'); fData.push(fData[0]); 
+                fLabels.push('Now'); fData.push(fData[0]); fTimestamps.push(now);
             }
 
             navChart.data.labels = fLabels; 
-            applyChartDatasets(navChart, [{ label: 'NAV', type: 'line', data: fData, borderColor: '#00d4ff', backgroundColor: 'rgba(0, 212, 255, 0.05)', borderWidth: 2, tension: 0.2, fill: true, pointRadius: computePointRadiusArray(fData.length, showNodes, densityVal) }]);
+
+            // 📊 基準指數對標：若使用者已選擇對標標的且已有資料，將投組與指數皆換算為「相對起點的報酬率(%)」疊圖比較，
+            // 讓使用者一眼看出投資組合是否擊敗大盤；未選擇對標標的時維持原本以美金淨值顯示的行為。
+            const benchmarkMeta = BENCHMARK_LIST.find(b => b.symbol === selectedBenchmark);
+            const benchmarkActive = !!selectedBenchmark && benchmarkHistData.prices.length > 1 && fData.length > 1;
+
+            if (benchmarkActive) {
+                const navBase = fData[0];
+                const navPctData = fData.map(v => navBase ? ((v / navBase - 1) * 100) : 0);
+
+                // 依每個 NAV 時間點，在基準指數資料中找出時間最接近的收盤價（最近鄰比對），確保兩條線能在同一 X 軸上對齊比較
+                const bTimestamps = benchmarkHistData.timestamps, bPrices = benchmarkHistData.prices;
+                const matchedBPrices = fTimestamps.map(ts => {
+                    let best = 0, bestDiff = Infinity;
+                    for (let i = 0; i < bTimestamps.length; i++) {
+                        const diff = Math.abs(bTimestamps[i] - ts);
+                        if (diff < bestDiff) { bestDiff = diff; best = i; }
+                    }
+                    return bPrices[best];
+                });
+                const bBase = matchedBPrices[0];
+                const benchPctData = matchedBPrices.map(v => bBase ? ((v / bBase - 1) * 100) : 0);
+
+                navChart.options.scales.y.ticks.callback = function(value) { return (value >= 0 ? '+' : '') + value.toFixed(1) + '%'; };
+                applyChartDatasets(navChart, [
+                    { label: 'NAV_PCT', type: 'line', data: navPctData, borderColor: '#00d4ff', backgroundColor: 'rgba(0, 212, 255, 0.05)', borderWidth: 2, tension: 0.2, fill: true, pointRadius: computePointRadiusArray(navPctData.length, showNodes, densityVal) },
+                    { label: 'BENCH_PCT', type: 'line', data: benchPctData, borderColor: '#feb019', backgroundColor: 'transparent', borderWidth: 2, borderDash: [4, 3], tension: 0.2, fill: false, pointRadius: 0 }
+                ]);
+
+                if (benchmarkBar) {
+                    const navFinal = navPctData[navPctData.length - 1], benchFinal = benchPctData[benchPctData.length - 1];
+                    const diffPct = navFinal - benchFinal, isAhead = diffPct >= 0;
+                    benchmarkBar.style.display = 'flex';
+                    benchmarkBar.innerHTML = `<span style="color:#888;">投組 <span style="color:${navFinal >= 0 ? 'var(--color-up)' : 'var(--color-down)'}">${navFinal >= 0 ? '+' : ''}${navFinal.toFixed(2)}%</span></span>
+                        <span style="color:#555;">vs</span>
+                        <span style="color:#888;">${benchmarkMeta ? benchmarkMeta.name : ''} <span style="color:${benchFinal >= 0 ? 'var(--color-up)' : 'var(--color-down)'}">${benchFinal >= 0 ? '+' : ''}${benchFinal.toFixed(2)}%</span></span>
+                        <span style="font-weight:bold; color:${isAhead ? 'var(--color-up)' : 'var(--color-down)'};">${isAhead ? '🏆 領先大盤 ' : '⚠️ 落後大盤 '}${isAhead ? '+' : ''}${diffPct.toFixed(2)}%</span>`;
+                }
+            } else {
+                applyChartDatasets(navChart, [{ label: 'NAV', type: 'line', data: fData, borderColor: '#00d4ff', backgroundColor: 'rgba(0, 212, 255, 0.05)', borderWidth: 2, tension: 0.2, fill: true, pointRadius: computePointRadiusArray(fData.length, showNodes, densityVal) }]);
+            }
         } else {
             let titlePrefix = '個股走勢';
             if (chartType === 'KLINE') {
@@ -6289,6 +6436,11 @@
         fetchAllCardsData();
         checkDividendsIfDue();
         checkSplitsIfDue();
+
+        // 📊 基準指數對標：還原使用者上次選擇的對標標的並抓取資料
+        const benchmarkBtnInit = document.getElementById('benchmark-toggle-btn');
+        if (benchmarkBtnInit) benchmarkBtnInit.classList.toggle('active', !!selectedBenchmark);
+        if (selectedBenchmark) fetchBenchmarkHistoryData();
 
         setInterval(async () => {
             await Promise.all([
