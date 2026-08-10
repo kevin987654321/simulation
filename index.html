@@ -3796,7 +3796,10 @@
         if (el) el.checked = !!state.dripEnabled;
     }
     
-    function saveData() { persistAccountState(getActiveAccount().storageKey, state); updateAllViews(true); renderCards(); scheduleCloudSync(); checkAchievements(); }
+    // 🩹 修復：state.cash 長期經過多次浮點數加減（交易、股息、DRIP 再投資等）後，
+    // 可能因 IEEE754 浮點誤差累積出如 999999.9999999998 這類極小殘值。
+    // 在集中的存檔入口統一四捨五入到小數點後 2 位，修正內部數值、不影響任何顯示或操作行為。
+    function saveData() { if (typeof state.cash === 'number') state.cash = Math.round(state.cash * 100) / 100; persistAccountState(getActiveAccount().storageKey, state); updateAllViews(true); renderCards(); scheduleCloudSync(); checkAchievements(); }
     async function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { const storageKey = getActiveAccount().storageKey; localStorage.removeItem(storageKey); await idbDeleteLedger(storageKey); state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: Date.now(), recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] }; await initData(); fetchStockHistoryData(currentTicker, true); } }
 
     function exportData() {
@@ -4780,8 +4783,12 @@
         try {
             const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}`)}`;
             const res = await fetch(proxyUrl, { cache: "no-store" });
+            // 🩹 修復：若使用者在這次 fetch 等待期間已經切換到其他代號，此回應已經過期，
+            // 不應再寫入 currentRealPrice / globalPriceCache 蓋掉新代號的畫面（競速/race condition）。
+            if (ticker !== currentTicker) return;
             if(res.ok) { 
                 const json = await res.json(), price = json.chart.result[0].meta.regularMarketPrice; 
+                if (ticker !== currentTicker) return;
                 if(price) { currentRealPrice = price; globalPriceCache[ticker] = price; isPriceLoading = false; fetchSucceeded = true; }
             }
         } catch(e) {}
@@ -4845,6 +4852,9 @@
             const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=${range}&interval=${intervalStr}`)}`;
             const res = await fetch(proxyUrl, { cache: "no-store" }); 
             const json = await res.json(), result = json.chart.result[0];
+            // 🩹 修復：若使用者在這次歷史資料 fetch 等待期間已切換到其他代號，此回應已經過期，
+            // 不應再覆寫 stockHistData 蓋掉新代號的圖表（競速/race condition）。
+            if (ticker !== currentTicker) return;
             const timestamps = result.timestamp || [], quote = result.indicators.quote[0];
             const closes = quote.close || [], opens = quote.open || [], highs = quote.high || [], lows = quote.low || [];
             
