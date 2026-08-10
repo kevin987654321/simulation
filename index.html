@@ -254,11 +254,15 @@
         .standalone-mode-btn:hover { color: var(--color-acc); border-color: var(--color-acc); background: rgba(0,212,255,0.1); }
         .standalone-mode-btn i { transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
 
-        /* 👁️ 歷史買賣點標記開關（圖表左上角，股票代號旁） */
-        .chart-marker-eye-btn { width: 22px; height: 22px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: transparent; border: none; color: #666; border-radius: 5px; cursor: pointer; font-size: 12px; transition: all 0.2s ease; }
-        .chart-marker-eye-btn:hover { color: #ccc; background: rgba(255,255,255,0.08); }
-        .chart-marker-eye-btn.active { color: var(--color-acc); }
-        .chart-marker-eye-btn.active:hover { color: var(--color-acc); background: rgba(0,212,255,0.12); }
+        /* 👁️ 歷史買賣點標記開關：浮動於切換按鈕（standalone-mode-btn）正下方，置頂於圖表之上，
+           不佔用 chart-header 的排版空間，避免手機版窄螢幕擠壓代號/時間區段 */
+        .chart-marker-eye-btn { position: absolute; top: calc(100% + 6px); right: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.12); color: #aaa; border-radius: 6px; cursor: pointer; font-size: 13px; z-index: 8; transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+        .chart-marker-eye-btn:hover { color: #ccc; border-color: rgba(255,255,255,0.25); }
+        .chart-marker-eye-btn.active { color: var(--color-acc); border-color: var(--color-acc); background: rgba(0,212,255,0.15); }
+        /* 手機下單櫃檯的迷你走勢圖標題列空間較小，改為行內小尺寸圖示，不使用置頂浮動樣式 */
+        .chart-marker-eye-btn-mobile { position: static; width: 16px; height: 16px; font-size: 10px; background: transparent; border: none; flex-shrink: 0; }
+        .chart-marker-eye-btn-mobile:hover { background: rgba(255,255,255,0.1); }
+        .chart-marker-eye-btn-mobile.active { background: transparent; border: none; }
 
         .trade-panel { display: flex; flex-direction: column; padding: 16px; gap: 12px; height: 100%; overflow-y: auto; }
         .panel-header { font-size: 13px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
@@ -289,6 +293,14 @@
         .stepper-row { display: flex; gap: 8px; align-items: center; }
         .stepper-btn { width: 38px; height: 38px; border-radius: 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 16px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         .stepper-input { flex: 1; height: 38px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; text-align: center; color: #fff; font-size: 15px; font-weight: bold; font-family: monospace; outline: none; }
+
+        /* ✨ 下單股數輸入框：輸入自訂百分比（如「15%」）換算為股數時的轉場動畫 */
+        @keyframes pctConvertPop {
+            0% { transform: scale(1); color: #fff; text-shadow: 0 0 0 rgba(0,212,255,0); }
+            35% { transform: scale(1.14); color: var(--color-acc); text-shadow: 0 0 10px rgba(0,212,255,0.65); }
+            100% { transform: scale(1); color: #fff; text-shadow: 0 0 0 rgba(0,212,255,0); }
+        }
+        .shares-pct-convert { animation: pctConvertPop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1); }
         
         .quick-percent-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
         .qp-btn { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); color: #888; border-radius: 6px; padding: 5px 0; font-size: 11px; font-weight: bold; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
@@ -593,6 +605,7 @@
             
             /* 手機版同樣顯示圖表切換按鈕並進行尺寸調整 */
             .standalone-mode-btn { display: flex; width: 28px; height: 28px; font-size: 12px; }
+            .chart-marker-eye-btn { width: 28px; height: 28px; font-size: 12px; top: calc(100% + 5px); }
             
             #shared-trade-panel { height: auto !important; overflow-y: visible !important; padding: 12px !important; gap: 10px !important; }
             
@@ -688,18 +701,17 @@
             <div class="dashboard-left-col">
                 <div class="glass-panel" id="chart-container">
                     <div class="chart-header">
-                        <div style="display:flex; align-items:center; gap:8px;">
-                            <span style="font-weight: bold; font-size: 13px;" id="main-chart-title"></span>
-                            <!-- 👁️ 歷史買賣點標記開關：僅個股走勢模式顯示，點擊切換是否在圖表上標記歷史買入/賣出時間點 -->
-                            <button class="chart-marker-eye-btn" id="chart-trade-marker-toggle" onclick="toggleTradeMarkersOnChart()" title="標記歷史買賣點" style="display:none;">
-                                <i class="fa-regular fa-eye" id="chart-trade-marker-icon"></i>
-                            </button>
-                        </div>
-                        <div class="header-controls">
+                        <span style="font-weight: bold; font-size: 13px;" id="main-chart-title"></span>
+                        <div class="header-controls" style="position:relative;">
                             <!-- 🚀 動態時間區段 -->
                             <div class="timeframe-selector" id="tf-group"></div>
                             <button class="standalone-mode-btn" onclick="toggleDesktopChartMode()" title="切換顯示：組合總淨值 / 個股走勢">
                                 <i class="fa-solid fa-repeat" id="mode-icon"></i>
+                            </button>
+                            <!-- 👁️ 歷史買賣點標記開關：僅個股走勢模式顯示。改為浮動置頂於切換按鈕下方，
+                                 避免手機版寬度不足時擠壓到代號/時間區段的排版 -->
+                            <button class="chart-marker-eye-btn" id="chart-trade-marker-toggle" onclick="toggleTradeMarkersOnChart()" title="標記歷史買賣點" style="display:none;">
+                                <i class="fa-regular fa-eye" id="chart-trade-marker-icon"></i>
                             </button>
                         </div>
                     </div>
@@ -1469,7 +1481,13 @@
 
     <div class="mobile-stock-chart-box">
         <div class="mobile-chart-header">
-            <span style="font-size:11px; color:#aaa; font-weight:bold;" id="m-main-chart-title"></span>
+            <span style="font-size:11px; color:#aaa; font-weight:bold; display:flex; align-items:center; gap:6px;">
+                <span id="m-main-chart-title"></span>
+                <!-- 👁️ 歷史買賣點標記開關（手機版下單櫃檯走勢圖），與主頁圖表共用同一份開關狀態 -->
+                <button class="chart-marker-eye-btn chart-marker-eye-btn-mobile" id="chart-trade-marker-toggle-mobile" onclick="toggleTradeMarkersOnChart()" title="標記歷史買賣點">
+                    <i class="fa-regular fa-eye" id="chart-trade-marker-icon-mobile"></i>
+                </button>
+            </span>
             <div class="timeframe-selector" id="m-tf-group" style="padding:2px;"></div>
         </div>
         <div style="height: 110px; position:relative; width:100%;"><canvas id="mobileStockChart"></canvas></div>
@@ -1478,7 +1496,7 @@
     <div>
         <div class="stepper-row">
             <button class="stepper-btn" onclick="stepShares(-1)">-</button>
-            <input type="text" id="trade-shares" class="stepper-input mobile-num" value="1" oninput="validateSharesInput()">
+            <input type="text" id="trade-shares" class="stepper-input mobile-num" value="1" oninput="validateSharesInput()" data-percent="true" placeholder="股數 或 15%">
             <button class="stepper-btn" onclick="stepShares(1)">+</button>
         </div>
         <div class="quick-percent-grid" style="margin-top:6px;">
@@ -3500,8 +3518,9 @@
     let currentRange = '1M', mCurrentRange = '1M';
     let currentRealPrice = null, isPriceLoading = true, searchDebounceTimer = null, desktopChartMode = 'NAV', tradeMode = 'BUY';
     let stockHistData = { labels: [], prices: [], ohlc: [], timestamps: [] }, cardsDataCache = {}, isCardEditMode = false;
-    // 👁️ 個股走勢圖：是否在圖表上標記歷史買入/賣出時間點
-    let showTradeMarkersOnChart = false;
+    // 👁️ 個股走勢圖：是否在圖表上標記歷史買入/賣出時間點（記住使用者選擇，重新整理後維持）
+    const TRADE_MARKERS_KEY = 'SETTING_CHART_TRADE_MARKERS';
+    let showTradeMarkersOnChart = localStorage.getItem(TRADE_MARKERS_KEY) === 'true';
 
     const RANGE_MAP = {
         'LINE': [
@@ -4857,7 +4876,7 @@
     const sharesInput = document.getElementById("trade-shares");
     function stepShares(delta) { sharesInput.value = Math.max(1, (parseInt(sharesInput.value) || 0) + delta); validateSharesInput(); }
     
-    function applyPercentShares(pct) {
+    function applyPercentShares(pct, animateConvert) {
         if (isPriceLoading || currentRealPrice === null) return;
         const rate = getCurrencyMultiplier(currentTicker);
         if (tradeMode === 'BUY') { 
@@ -4865,6 +4884,16 @@
             sharesInput.value = Math.max(1, Math.floor(Math.floor(state.cash / (currentRealPrice * rate * (1 + feeRate))) * pct)); 
         } else { 
             const holding = state.holdings[currentTicker]?.shares || 0; sharesInput.value = Math.max(1, Math.floor(holding * pct)); 
+        }
+        // ✨ 由使用者手動輸入自訂百分比（如「15%」）換算而來時，播放「X% → 股數」的轉換動畫
+        if (animateConvert) {
+            sharesInput.classList.remove('shares-pct-convert');
+            void sharesInput.offsetWidth; // 強制 reflow，讓動畫可以重新觸發
+            sharesInput.classList.add('shares-pct-convert');
+            sharesInput.addEventListener('animationend', function handler() {
+                sharesInput.classList.remove('shares-pct-convert');
+                sharesInput.removeEventListener('animationend', handler);
+            });
         }
         validateSharesInput();
     }
@@ -4886,6 +4915,16 @@
     }
 
     function validateSharesInput() {
+        // 👁️ 支援直接輸入自訂百分比（例如「15%」），自動換算為對應股數，效果等同點擊快速百分比按鈕
+        const rawVal = sharesInput.value.trim();
+        if (rawVal.length > 1 && rawVal.endsWith('%')) {
+            const pctNum = parseFloat(rawVal.slice(0, -1));
+            if (!isNaN(pctNum) && pctNum > 0 && !isPriceLoading && currentRealPrice !== null) {
+                applyPercentShares(pctNum / 100, true); // 第二參數：觸發「X% → 股數」轉換動畫；內部會重新呼叫 validateSharesInput()，換算完成後直接結束
+                return;
+            }
+        }
+
         if (isPriceLoading || currentRealPrice === null) { document.getElementById("exec-trade-btn").disabled = true; return; }
         let s = parseInt(sharesInput.value) || 0; const rate = getCurrencyMultiplier(currentTicker), feeRate = getMarketFeeConfig(currentTicker).feeRate;
         const maxBuy = Math.max(0, Math.floor(state.cash / (currentRealPrice * rate * (1 + feeRate)))); const holding = state.holdings[currentTicker]?.shares || 0;
@@ -5317,14 +5356,25 @@
     // chartTradeMarkerInfo[dataIndex] = { buys: [...ledger紀錄], sells: [...ledger紀錄] }，供 tooltip 顯示明細用
     let chartTradeMarkerInfo = {};
 
-    function toggleTradeMarkersOnChart() {
-        showTradeMarkersOnChart = !showTradeMarkersOnChart;
+    function updateTradeMarkerToggleUI() {
         const btn = document.getElementById('chart-trade-marker-toggle');
         const icon = document.getElementById('chart-trade-marker-icon');
+        const btnM = document.getElementById('chart-trade-marker-toggle-mobile');
+        const iconM = document.getElementById('chart-trade-marker-icon-mobile');
+        const iconClass = showTradeMarkersOnChart ? 'fa-solid fa-eye' : 'fa-regular fa-eye';
         if (btn) btn.classList.toggle('active', showTradeMarkersOnChart);
-        if (icon) icon.className = showTradeMarkersOnChart ? 'fa-solid fa-eye' : 'fa-regular fa-eye';
+        if (icon) icon.className = iconClass;
+        if (btnM) btnM.classList.toggle('active', showTradeMarkersOnChart);
+        if (iconM) iconM.className = iconClass;
+    }
+
+    function toggleTradeMarkersOnChart() {
+        showTradeMarkersOnChart = !showTradeMarkersOnChart;
+        localStorage.setItem(TRADE_MARKERS_KEY, showTradeMarkersOnChart); // 記住選擇，重新整理後維持
+        updateTradeMarkerToggleUI();
         renderAllCharts(false);
     }
+    updateTradeMarkerToggleUI(); // 頁面載入時依已記住的設定同步兩個開關按鈕的初始外觀
 
     // 依目前圖表資料點的時間戳記，比對該股票的歷史買賣紀錄（state.ledger），
     // 找出每筆交易最接近的資料點索引並標記；超出目前圖表涵蓋時間範圍的交易則略過不標記。
@@ -5861,8 +5911,10 @@
     // 🚀 手機端極簡玻璃數字鍵盤核心邏輯
     let activeNumInput = null;
     
-    function renderNumpad(allowDecimal) {
+    function renderNumpad(allowDecimal, allowPercent) {
         const numpad = document.getElementById('glass-numpad');
+        // 左下角符號鍵：優先顯示「%」（支援輸入自訂百分比，如 15%），否則沿用原本的小數點邏輯
+        const bottomLeftKey = allowPercent ? '%' : (allowDecimal ? '.' : '');
         numpad.innerHTML = `
             <div class="numpad-btn" onmousedown="numpadPress(event, '1')" ontouchstart="numpadPress(event, '1')">1</div>
             <div class="numpad-btn" onmousedown="numpadPress(event, '2')" ontouchstart="numpadPress(event, '2')">2</div>
@@ -5873,7 +5925,7 @@
             <div class="numpad-btn" onmousedown="numpadPress(event, '7')" ontouchstart="numpadPress(event, '7')">7</div>
             <div class="numpad-btn" onmousedown="numpadPress(event, '8')" ontouchstart="numpadPress(event, '8')">8</div>
             <div class="numpad-btn" onmousedown="numpadPress(event, '9')" ontouchstart="numpadPress(event, '9')">9</div>
-            <div class="numpad-btn ${allowDecimal ? '' : 'empty'}" onmousedown="numpadPress(event, '${allowDecimal ? '.' : ''}')" ontouchstart="numpadPress(event, '${allowDecimal ? '.' : ''}')">${allowDecimal ? '.' : ''}</div>
+            <div class="numpad-btn ${bottomLeftKey ? '' : 'empty'}" onmousedown="numpadPress(event, '${bottomLeftKey}')" ontouchstart="numpadPress(event, '${bottomLeftKey}')">${bottomLeftKey}</div>
             <div class="numpad-btn" onmousedown="numpadPress(event, '0')" ontouchstart="numpadPress(event, '0')">0</div>
             <div class="numpad-btn" onmousedown="numpadPress(event, 'backspace')" ontouchstart="numpadPress(event, 'backspace')"><i class="fa-solid fa-angle-left"></i></div>
         `;
@@ -5894,7 +5946,8 @@
             input.addEventListener('focus', (e) => {
                 activeNumInput = e.target;
                 const allowDec = activeNumInput.dataset.decimal === 'true';
-                renderNumpad(allowDec);
+                const allowPct = activeNumInput.dataset.percent === 'true';
+                renderNumpad(allowDec, allowPct);
                 
                 const numpad = document.getElementById('glass-numpad');
                 numpad.style.display = 'grid';
@@ -5952,6 +6005,12 @@
             } else {
                 return;
             }
+        } else if (key === '%') {
+            // 👁️ 自訂百分比輸入（例如「15%」）：% 一律補在數字最後方，不重複插入
+            if (val.includes('%')) return;
+            val = val + '%';
+            activeNumInput.value = val;
+            activeNumInput.setSelectionRange(val.length - 1, val.length - 1);
         } else {
             const selectedText = val.slice(start, end);
             // 若已有小數點且新輸入的「.」不是取代掉那個小數點本身，則忽略
