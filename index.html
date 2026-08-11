@@ -297,6 +297,10 @@
         .dropdown-item { padding: 9px 12px; font-size: 13px; font-family: monospace; color: #ccc; cursor: pointer; display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); }
         .dropdown-item:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
 
+        /* 📊 基準指數對標選單高度：主頁圖表(桌面)5個選項高度，超過可捲動；手機下單櫃檯圖表3個選項高度（每項約36px） */
+        #benchmark-dropdown { max-height: 180px; }
+        #benchmark-dropdown-mobile { max-height: 108px; }
+
         .price-rsi-container { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
         .rsi-badge { font-size: 11px; font-family: monospace; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
 
@@ -619,6 +623,8 @@
             /* 手機版同樣顯示圖表切換按鈕並進行尺寸調整 */
             .standalone-mode-btn { display: flex; width: 28px; height: 28px; font-size: 12px; }
             .chart-marker-eye-btn { top: calc(100% + 4px); }
+            /* 📊 手機版首頁圖表的基準指數對標選單改為4個選項高度 */
+            #benchmark-dropdown { max-height: 144px; }
             
             #shared-trade-panel { height: auto !important; overflow-y: visible !important; padding: 12px !important; gap: 10px !important; }
             
@@ -731,7 +737,7 @@
                                 <i class="fa-regular fa-eye" id="chart-trade-marker-icon"></i>
                             </button>
                             <!-- 下拉選單高度限制為5個選項，超過則可滾動 -->
-                            <div class="opaque-dropdown-list" id="benchmark-dropdown" style="top: calc(100% + 62px); right:0; left:auto; width:150px; max-height:180px; overflow-y:auto;"></div>
+                            <div class="opaque-dropdown-list" id="benchmark-dropdown" style="top: calc(100% + 62px); right:0; left:auto; width:150px;"></div>
                         </div>
                     </div>
                     <!-- 📊 對標指數表現摘要列：僅在已選擇對標基準且資料就緒時顯示 -->
@@ -1508,6 +1514,13 @@
                 <button class="chart-marker-eye-btn chart-marker-eye-btn-mobile" id="chart-trade-marker-toggle-mobile" onclick="toggleTradeMarkersOnChart()" title="標記歷史買賣點">
                     <i class="fa-regular fa-eye" id="chart-trade-marker-icon-mobile"></i>
                 </button>
+                <!-- 📊 基準指數對標開關（手機版下單櫃檯走勢圖），放在小眼睛右邊，與主頁圖表共用同一份對標設定與資料 -->
+                <div style="position:relative;" id="benchmark-mobile-wrapper">
+                    <button class="chart-marker-eye-btn chart-marker-eye-btn-mobile" id="benchmark-toggle-btn-mobile" onclick="toggleBenchmarkDropdown('benchmark-dropdown-mobile')" title="對標基準指數">
+                        <i class="fa-solid fa-chart-line" id="benchmark-toggle-icon-mobile"></i>
+                    </button>
+                    <div class="opaque-dropdown-list" id="benchmark-dropdown-mobile" style="top: calc(100% + 6px); left:0; right:auto; width:140px;"></div>
+                </div>
             </span>
             <div class="timeframe-selector" id="m-tf-group" style="padding:2px;"></div>
         </div>
@@ -4777,8 +4790,9 @@
         if(!document.getElementById("ticker-select-wrapper").contains(e.target)) document.getElementById("ticker-dropdown").classList.remove("show"); 
         if(!document.getElementById("tm-ticker-wrapper").contains(e.target)) document.getElementById("tm-ticker-dropdown").classList.remove("show"); 
         if(!document.getElementById("ai-ticker-wrapper").contains(e.target) && !document.getElementById("ai-ticker-dropdown").contains(e.target)) document.getElementById("ai-ticker-dropdown").classList.remove("show"); 
-        // 📊 基準指數對標下拉選單：點擊按鈕與選單以外的地方時自動收合
+        // 📊 基準指數對標下拉選單：點擊按鈕與選單以外的地方時自動收合（主頁圖表 / 手機下單櫃檯圖表分開判斷）
         if(!document.getElementById("benchmark-toggle-btn").contains(e.target) && !document.getElementById("benchmark-dropdown").contains(e.target)) document.getElementById("benchmark-dropdown").classList.remove("show"); 
+        if(!document.getElementById("benchmark-mobile-wrapper").contains(e.target)) document.getElementById("benchmark-dropdown-mobile").classList.remove("show"); 
     });
 
     function selectTicker(t) {
@@ -5344,16 +5358,16 @@
         if (selectedBenchmark) fetchBenchmarkHistoryData();
     }
 
-    // 📊 基準指數對標：下拉選單開關 + 選取邏輯
-    function toggleBenchmarkDropdown() {
-        const dd = document.getElementById('benchmark-dropdown');
+    // 📊 基準指數對標：下拉選單開關 + 選取邏輯（dropdownId 可指定要開關哪一個選單，預設為桌面版主圖表的選單）
+    function toggleBenchmarkDropdown(dropdownId = 'benchmark-dropdown') {
+        const dd = document.getElementById(dropdownId);
         if (!dd) return;
-        if (!dd.classList.contains('show')) renderBenchmarkDropdown();
+        if (!dd.classList.contains('show')) renderBenchmarkDropdown(dropdownId);
         dd.classList.toggle('show');
     }
 
-    function renderBenchmarkDropdown() {
-        const dd = document.getElementById('benchmark-dropdown');
+    function renderBenchmarkDropdown(dropdownId = 'benchmark-dropdown') {
+        const dd = document.getElementById(dropdownId);
         if (!dd) return;
         dd.innerHTML = BENCHMARK_LIST.map(b => {
             const active = b.symbol === selectedBenchmark;
@@ -5366,11 +5380,11 @@
     async function selectBenchmark(symbol) {
         selectedBenchmark = symbol;
         localStorage.setItem(BENCHMARK_KEY, symbol);
-        const dd = document.getElementById('benchmark-dropdown');
-        if (dd) dd.classList.remove('show');
-        const btn = document.getElementById('benchmark-toggle-btn');
-        if (btn) btn.classList.toggle('active', !!symbol);
-        renderBenchmarkDropdown();
+        // 主頁圖表與手機版下單櫃檯圖表共用同一份對標設定，選取後同步關閉/更新兩邊的選單與按鈕外觀
+        ['benchmark-dropdown', 'benchmark-dropdown-mobile'].forEach(id => { const dd = document.getElementById(id); if (dd) dd.classList.remove('show'); });
+        ['benchmark-toggle-btn', 'benchmark-toggle-btn-mobile'].forEach(id => { const btn = document.getElementById(id); if (btn) btn.classList.toggle('active', !!symbol); });
+        renderBenchmarkDropdown('benchmark-dropdown');
+        renderBenchmarkDropdown('benchmark-dropdown-mobile');
         if (symbol) {
             await fetchBenchmarkHistoryData();
         } else {
@@ -5555,6 +5569,32 @@
         return markerDatasets;
     }
 
+    // 📊 基準指數對標：將任一組價格序列換算成「相對起點的報酬率(%)」，並依時間戳與基準指數資料做最近鄰比對，
+    // 供組合總淨值走勢／個股走勢（含手機版下單櫃檯走勢圖）共用同一套疊圖比較邏輯
+    function computeBenchmarkOverlay(prices, timestamps) {
+        if (!prices || prices.length < 2 || !benchmarkHistData.prices || benchmarkHistData.prices.length < 2) return null;
+        const navBase = prices[0];
+        const navPctData = prices.map(v => navBase ? ((v / navBase - 1) * 100) : 0);
+        const bTimestamps = benchmarkHistData.timestamps, bPrices = benchmarkHistData.prices;
+        const matchedBPrices = (timestamps || []).map(ts => {
+            let best = 0, bestDiff = Infinity;
+            for (let i = 0; i < bTimestamps.length; i++) {
+                const diff = Math.abs(bTimestamps[i] - ts);
+                if (diff < bestDiff) { bestDiff = diff; best = i; }
+            }
+            return bPrices[best];
+        });
+        const bBase = matchedBPrices[0];
+        const benchPctData = matchedBPrices.map(v => bBase ? ((v / bBase - 1) * 100) : 0);
+        return { navBase, navPctData, benchPctData };
+    }
+
+    // 🩹 修復：對標模式開啟後 👁️ 買賣點標記開關失效的問題——原本對標模式下圖表只畫 NAV_PCT/BENCH_PCT 兩條線，
+    // 完全略過了買賣點標記資料集。這裡把標記價格也換算成同一套報酬率(%)座標，疊加在對標圖上，讓開關恢復作用。
+    function pctifyMarkerDatasets(markerDatasets, base) {
+        return markerDatasets.map(ds => Object.assign({}, ds, { data: ds.data.map(v => v === null ? null : (base ? ((v / base - 1) * 100) : 0)) }));
+    }
+
     function renderAllCharts(animate = true) {
         const showNodes = document.getElementById("cfg-node-show").checked, rawVal = document.getElementById("cfg-node-val").value, densityVal = (rawVal === 'All') ? 'All' : parseInt(rawVal) || 20;
         const chartType = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
@@ -5604,6 +5644,9 @@
         const benchmarkBar = document.getElementById('benchmark-summary-bar');
         if (benchmarkBar) benchmarkBar.style.display = 'none'; // 預設隱藏，僅在已選對標基準且資料就緒時顯示
         const benchmarkMeta = BENCHMARK_LIST.find(b => b.symbol === selectedBenchmark);
+        // 📊 個股走勢對標是否可用（組合總淨值圖表、桌面個股圖表、手機下單櫃檯圖表共用同一個判斷條件）
+        const stockBenchmarkActive = !!selectedBenchmark && benchmarkHistData.prices.length > 1 && stockHistData.prices && stockHistData.prices.length > 1;
+        let stockOverlay = null; // 個股走勢對標疊圖資料（在 STOCK 分支計算，於下方手機版走勢圖共用）
 
         if (showNav) {
             document.getElementById("main-chart-title").innerHTML = `<img src="走勢圖.png" width="12" height="12"> <span class="hide-on-mobile" style="margin-left:4px;">總淨值走勢</span>`;
@@ -5643,24 +5686,11 @@
 
             // 📊 基準指數對標：若使用者已選擇對標標的且已有資料，將投組與指數皆換算為「相對起點的報酬率(%)」疊圖比較，
             // 讓使用者一眼看出投資組合是否擊敗大盤；未選擇對標標的時維持原本以美金淨值顯示的行為。
-            const benchmarkActive = !!selectedBenchmark && benchmarkHistData.prices.length > 1 && fData.length > 1;
+            const navOverlay = (!!selectedBenchmark && fData.length > 1) ? computeBenchmarkOverlay(fData, fTimestamps) : null;
+            const benchmarkActive = !!navOverlay;
 
             if (benchmarkActive) {
-                const navBase = fData[0];
-                const navPctData = fData.map(v => navBase ? ((v / navBase - 1) * 100) : 0);
-
-                // 依每個 NAV 時間點，在基準指數資料中找出時間最接近的收盤價（最近鄰比對），確保兩條線能在同一 X 軸上對齊比較
-                const bTimestamps = benchmarkHistData.timestamps, bPrices = benchmarkHistData.prices;
-                const matchedBPrices = fTimestamps.map(ts => {
-                    let best = 0, bestDiff = Infinity;
-                    for (let i = 0; i < bTimestamps.length; i++) {
-                        const diff = Math.abs(bTimestamps[i] - ts);
-                        if (diff < bestDiff) { bestDiff = diff; best = i; }
-                    }
-                    return bPrices[best];
-                });
-                const bBase = matchedBPrices[0];
-                const benchPctData = matchedBPrices.map(v => bBase ? ((v / bBase - 1) * 100) : 0);
+                const navPctData = navOverlay.navPctData, benchPctData = navOverlay.benchPctData;
 
                 navChart.options.scales.y.ticks.callback = function(value) { return (value >= 0 ? '+' : '') + value.toFixed(1) + '%'; };
                 applyChartDatasets(navChart, [
@@ -5673,9 +5703,8 @@
                     const diffPct = navFinal - benchFinal, isAhead = diffPct >= 0;
                     benchmarkBar.style.display = 'flex';
                     benchmarkBar.innerHTML = `<span style="color:#888;">投組 <span style="color:${navFinal >= 0 ? 'var(--color-up)' : 'var(--color-down)'}">${navFinal >= 0 ? '+' : ''}${navFinal.toFixed(2)}%</span></span>
-                        <span style="color:#555;">vs</span>
                         <span style="color:#888;">${benchmarkMeta ? benchmarkMeta.name : ''} <span style="color:${benchFinal >= 0 ? 'var(--color-up)' : 'var(--color-down)'}">${benchFinal >= 0 ? '+' : ''}${benchFinal.toFixed(2)}%</span></span>
-                        <span style="font-weight:bold; color:${isAhead ? 'var(--color-up)' : 'var(--color-down)'};">${isAhead ? '🏆 領先大盤 ' : '⚠️ 落後大盤 '}${isAhead ? '+' : ''}${diffPct.toFixed(2)}%</span>`;
+                        <span style="font-weight:bold; color:${isAhead ? 'var(--color-up)' : 'var(--color-down)'};">${isAhead ? '領先大盤 ' : '落後大盤 '}${isAhead ? '+' : ''}${diffPct.toFixed(2)}%</span>`;
                 }
             } else {
                 applyChartDatasets(navChart, [{ label: 'NAV', type: 'line', data: fData, borderColor: '#00d4ff', backgroundColor: 'rgba(0, 212, 255, 0.05)', borderWidth: 2, tension: 0.2, fill: true, pointRadius: computePointRadiusArray(fData.length, showNodes, densityVal) }]);
@@ -5691,41 +5720,29 @@
             // 📊 個股走勢模式下的基準指數對標：與組合總淨值模式共用同一套邏輯，
             // 選擇對標標的後會「暫時強制」改用一般折線圖疊圖比較（K線/OHLC無法直接疊加百分比報酬率線），
             // 取消對標後會自動還原成使用者原本設定的圖表類型（K線或折線）。
-            const stockBenchmarkActive = !!selectedBenchmark && benchmarkHistData.prices.length > 1 && stockHistData.prices && stockHistData.prices.length > 1;
+            stockOverlay = stockBenchmarkActive ? computeBenchmarkOverlay(stockHistData.prices, stockHistData.timestamps) : null;
 
-            if (stockBenchmarkActive) {
+            if (stockOverlay) {
                 document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> <span style="margin-left:4px;">${currentTicker}</span> <span class="hide-on-mobile">對標比較中</span>`;
                 navChart.data.labels = stockHistData.labels;
 
-                const navBase = stockHistData.prices[0];
-                const navPctData = stockHistData.prices.map(v => navBase ? ((v / navBase - 1) * 100) : 0);
-
-                const bTimestamps = benchmarkHistData.timestamps, bPrices = benchmarkHistData.prices;
-                const matchedBPrices = (stockHistData.timestamps || []).map(ts => {
-                    let best = 0, bestDiff = Infinity;
-                    for (let i = 0; i < bTimestamps.length; i++) {
-                        const diff = Math.abs(bTimestamps[i] - ts);
-                        if (diff < bestDiff) { bestDiff = diff; best = i; }
-                    }
-                    return bPrices[best];
-                });
-                const bBase = matchedBPrices[0];
-                const benchPctData = matchedBPrices.map(v => bBase ? ((v / bBase - 1) * 100) : 0);
+                const navPctData = stockOverlay.navPctData, benchPctData = stockOverlay.benchPctData;
+                // 🩹 修復：對標模式下把買賣點標記換算成同一套報酬率(%)座標疊上去，讓 👁️ 開關恢復作用
+                const tradeMarkerDatasets = pctifyMarkerDatasets(buildTradeMarkerDatasets(stockHistData), stockOverlay.navBase);
 
                 navChart.options.scales.y.ticks.callback = function(value) { return (value >= 0 ? '+' : '') + value.toFixed(1) + '%'; };
                 applyChartDatasets(navChart, [
                     { label: 'NAV_PCT', type: 'line', data: navPctData, borderColor: '#00ffaa', backgroundColor: 'rgba(0, 255, 170, 0.05)', borderWidth: 1.5, tension: 0.2, fill: true, pointRadius: computePointRadiusArray(navPctData.length, showNodes, densityVal) },
                     { label: 'BENCH_PCT', type: 'line', data: benchPctData, borderColor: '#feb019', backgroundColor: 'transparent', borderWidth: 2, borderDash: [4, 3], tension: 0.2, fill: false, pointRadius: 0 }
-                ]);
+                ].concat(tradeMarkerDatasets));
 
                 if (benchmarkBar) {
                     const navFinal = navPctData[navPctData.length - 1], benchFinal = benchPctData[benchPctData.length - 1];
                     const diffPct = navFinal - benchFinal, isAhead = diffPct >= 0;
                     benchmarkBar.style.display = 'flex';
                     benchmarkBar.innerHTML = `<span style="color:#888;">${currentTicker} <span style="color:${navFinal >= 0 ? 'var(--color-up)' : 'var(--color-down)'}">${navFinal >= 0 ? '+' : ''}${navFinal.toFixed(2)}%</span></span>
-                        <span style="color:#555;">vs</span>
                         <span style="color:#888;">${benchmarkMeta ? benchmarkMeta.name : ''} <span style="color:${benchFinal >= 0 ? 'var(--color-up)' : 'var(--color-down)'}">${benchFinal >= 0 ? '+' : ''}${benchFinal.toFixed(2)}%</span></span>
-                        <span style="font-weight:bold; color:${isAhead ? 'var(--color-up)' : 'var(--color-down)'};">${isAhead ? '🏆 領先大盤 ' : '⚠️ 落後大盤 '}${isAhead ? '+' : ''}${diffPct.toFixed(2)}%</span>`;
+                        <span style="font-weight:bold; color:${isAhead ? 'var(--color-up)' : 'var(--color-down)'};">${isAhead ? '領先大盤 ' : '落後大盤 '}${isAhead ? '+' : ''}${diffPct.toFixed(2)}%</span>`;
                 }
             } else {
                 document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> <span style="margin-left:4px;">${currentTicker}</span> <span class="hide-on-mobile">${titlePrefix}</span>`;
@@ -5740,9 +5757,27 @@
         document.getElementById("m-main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> <span style="margin-left:4px;">${currentTicker}</span>`;
         mobileChart.data.labels = stockHistData.labels; 
         const mDensity = (densityVal === 'All') ? 'All' : Math.floor(densityVal / 2);
-        const mTradeMarkerDatasets = showNav ? [] : buildTradeMarkerDatasets(stockHistData);
-        applyChartDatasets(mobileChart, getStockDatasets(stockHistData, showNodes, mDensity).concat(mTradeMarkerDatasets));
+
+        // 📊 手機版下單櫃檯走勢圖：與桌面版共用同一套對標判斷與資料（stockOverlay 可能因 showNav 為 true 而尚未計算，這裡獨立算一次）
+        const mOverlay = (showNav || !stockOverlay) ? (stockBenchmarkActive ? computeBenchmarkOverlay(stockHistData.prices, stockHistData.timestamps) : null) : stockOverlay;
+        if (mOverlay) {
+            const mNavPctData = mOverlay.navPctData, mBenchPctData = mOverlay.benchPctData;
+            const mTradeMarkerDatasets = showNav ? [] : pctifyMarkerDatasets(buildTradeMarkerDatasets(stockHistData), mOverlay.navBase);
+            mobileChart.options.scales.y.ticks.callback = function(value) { return (value >= 0 ? '+' : '') + value.toFixed(1) + '%'; };
+            applyChartDatasets(mobileChart, [
+                { label: 'NAV_PCT', type: 'line', data: mNavPctData, borderColor: '#00ffaa', backgroundColor: 'rgba(0, 255, 170, 0.05)', borderWidth: 1.5, tension: 0.2, fill: true, pointRadius: computePointRadiusArray(mNavPctData.length, showNodes, mDensity) },
+                { label: 'BENCH_PCT', type: 'line', data: mBenchPctData, borderColor: '#feb019', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [4, 3], tension: 0.2, fill: false, pointRadius: 0 }
+            ].concat(mTradeMarkerDatasets));
+        } else {
+            mobileChart.options.scales.y.ticks.callback = function(value) {
+                if (Math.abs(value) >= 1000) return Math.round(value / 1000) + 'k';
+                return Math.round(value);
+            };
+            const mTradeMarkerDatasets = showNav ? [] : buildTradeMarkerDatasets(stockHistData);
+            applyChartDatasets(mobileChart, getStockDatasets(stockHistData, showNodes, mDensity).concat(mTradeMarkerDatasets));
+        }
         
+
         mobileChart.update();
     }
 
@@ -6487,9 +6522,8 @@
         checkDividendsIfDue();
         checkSplitsIfDue();
 
-        // 📊 基準指數對標：還原使用者上次選擇的對標標的並抓取資料
-        const benchmarkBtnInit = document.getElementById('benchmark-toggle-btn');
-        if (benchmarkBtnInit) benchmarkBtnInit.classList.toggle('active', !!selectedBenchmark);
+        // 📊 基準指數對標：還原使用者上次選擇的對標標的並抓取資料（主頁圖表與手機下單櫃檯圖表共用同一份設定）
+        ['benchmark-toggle-btn', 'benchmark-toggle-btn-mobile'].forEach(id => { const btn = document.getElementById(id); if (btn) btn.classList.toggle('active', !!selectedBenchmark); });
         if (selectedBenchmark) fetchBenchmarkHistoryData();
 
         setInterval(async () => {
