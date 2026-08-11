@@ -721,20 +721,20 @@
                             <button class="standalone-mode-btn" onclick="toggleDesktopChartMode()" title="切換顯示：組合總淨值 / 個股走勢">
                                 <i class="fa-solid fa-repeat" id="mode-icon"></i>
                             </button>
-                            <!-- 👁️ 歷史買賣點標記開關：僅個股走勢模式顯示。改為浮動置頂於切換按鈕下方，
-                                 避免手機版寬度不足時擠壓到代號/時間區段的排版 -->
-                            <button class="chart-marker-eye-btn" id="chart-trade-marker-toggle" onclick="toggleTradeMarkersOnChart()" title="標記歷史買賣點" style="display:none;">
-                                <i class="fa-regular fa-eye" id="chart-trade-marker-icon"></i>
-                            </button>
-                            <!-- 📊 基準指數對標開關：僅組合總淨值模式顯示，與上方 👁️ 買賣點標記開關互斥、共用同一個按鈕位置。
-                                 讓使用者選擇一個大盤指數疊圖比較，一眼看出投資組合是否擊敗大盤 -->
+                            <!-- 📊 基準指數對標開關：組合總淨值／個股走勢模式皆可使用，固定在小眼睛上方（小眼睛下移一格）。
+                                 讓使用者選擇一個大盤指數疊圖比較，一眼看出投資組合（或個股）是否擊敗大盤 -->
                             <button class="chart-marker-eye-btn" id="benchmark-toggle-btn" onclick="toggleBenchmarkDropdown()" title="對標基準指數" style="display:none;">
                                 <i class="fa-solid fa-chart-line" id="benchmark-toggle-icon"></i>
                             </button>
-                            <div class="opaque-dropdown-list" id="benchmark-dropdown" style="top: calc(100% + 34px); right:0; left:auto; width:150px;"></div>
+                            <!-- 👁️ 歷史買賣點標記開關：僅個股走勢模式顯示，位置下移至對標開關下方 -->
+                            <button class="chart-marker-eye-btn" id="chart-trade-marker-toggle" onclick="toggleTradeMarkersOnChart()" title="標記歷史買賣點" style="display:none; top: calc(100% + 34px);">
+                                <i class="fa-regular fa-eye" id="chart-trade-marker-icon"></i>
+                            </button>
+                            <!-- 下拉選單高度限制為5個選項，超過則可滾動 -->
+                            <div class="opaque-dropdown-list" id="benchmark-dropdown" style="top: calc(100% + 62px); right:0; left:auto; width:150px; max-height:180px; overflow-y:auto;"></div>
                         </div>
                     </div>
-                    <!-- 📊 對標指數表現摘要列：僅在組合總淨值模式且已選擇對標基準時顯示 -->
+                    <!-- 📊 對標指數表現摘要列：僅在已選擇對標基準且資料就緒時顯示 -->
                     <div id="benchmark-summary-bar" style="display:none; align-items:center; gap:8px; padding:0 2px 8px 2px; font-size:11px; font-family:monospace; flex-wrap:wrap;"></div>
                     <div class="chart-wrapper"><canvas id="navChart"></canvas></div>
                 </div>
@@ -3543,8 +3543,8 @@
     const TRADE_MARKERS_KEY = 'SETTING_CHART_TRADE_MARKERS';
     let showTradeMarkersOnChart = localStorage.getItem(TRADE_MARKERS_KEY) === 'true';
 
-    // 📊 基準指數對標功能：讓使用者可選擇一個大盤指數疊圖比較，一眼看出投資組合是否擊敗大盤
-    // （僅在「組合總淨值」走勢模式下可用，位置與 👁️ 買賣點標記開關互斥、共用同一按鈕位置）
+    // 📊 基準指數對標功能：讓使用者可選擇一個大盤指數疊圖比較，一眼看出投資組合（或個股走勢）是否擊敗大盤
+    // （組合總淨值、個股走勢兩種模式皆可使用；按鈕固定在小眼睛買賣點標記開關的上方）
     const BENCHMARK_LIST = [
         { symbol: '',      name: '不比較' },
         { symbol: '^TWII', name: '台灣加權指數' },
@@ -3622,8 +3622,8 @@
                 currentRange = btn.dataset.label;
                 
                 fetchStockHistoryData(currentTicker, true);
-                // 📊 時間區段變動時，若組合總淨值模式已選擇對標基準，同步重新抓取對應區間的指數資料
-                if (desktopChartMode === 'NAV' && selectedBenchmark) fetchBenchmarkHistoryData();
+                // 📊 時間區段變動時，若已選擇對標基準，同步重新抓取對應區間的指數資料（NAV／個股走勢模式皆適用）
+                if (selectedBenchmark) fetchBenchmarkHistoryData();
             });
         });
         
@@ -5216,7 +5216,7 @@
             title: function(context) { return context[0].label; },
             label: function(context) {
                 // 📊 基準指數對標模式：投組與指數皆以相對報酬率(%)顯示，方便直接比較
-                if (context.dataset.label === 'NAV_PCT') { const v = context.parsed.y; return '投組: ' + (v >= 0 ? '+' : '') + v.toFixed(2) + '%'; }
+                if (context.dataset.label === 'NAV_PCT') { const v = context.parsed.y, nm = (desktopChartMode === 'NAV') ? '投組' : currentTicker; return nm + ': ' + (v >= 0 ? '+' : '') + v.toFixed(2) + '%'; }
                 if (context.dataset.label === 'BENCH_PCT') { const v = context.parsed.y, meta = BENCHMARK_LIST.find(b => b.symbol === selectedBenchmark); return (meta ? meta.name : '大盤') + ': ' + (v >= 0 ? '+' : '') + v.toFixed(2) + '%'; }
                 if (context.chart.canvas.id === 'navChart' && desktopChartMode === 'NAV') { return '淨: $' + Math.floor(context.parsed.y).toLocaleString(); }
                 if (context.dataset.label === 'Wick') return null; 
@@ -5340,8 +5340,8 @@
         document.getElementById('mode-icon').style.transform = (desktopChartMode === 'STOCK') ? 'rotate(180deg)' : 'rotate(0deg)'; 
         updateTimeframeButtons(); 
         fetchStockHistoryData(currentTicker, true); 
-        // 📊 若使用者已選擇對標基準且切回組合總淨值模式時尚無資料，補抓一次
-        if (desktopChartMode === 'NAV' && selectedBenchmark && benchmarkHistData.prices.length === 0) fetchBenchmarkHistoryData();
+        // 📊 若使用者已選擇對標基準，切換模式後時間區段設定可能改變，重新抓取一次以確保與主圖表範圍一致
+        if (selectedBenchmark) fetchBenchmarkHistoryData();
     }
 
     // 📊 基準指數對標：下拉選單開關 + 選取邏輯
@@ -5379,14 +5379,21 @@
         }
     }
 
-    // 📊 抓取基準指數歷史收盤價：沿用組合總淨值模式的時間區段設定（RANGE_MAP.LINE），確保與 NAV 走勢區間一致
+    // 📊 抓取基準指數歷史收盤價：跟隨主圖表目前實際使用的時間區段設定
+    // （組合總淨值走勢固定使用 LINE 區間；個股走勢則依使用者的K線／折線設定），確保兩者涵蓋相同時間範圍才能正確疊圖比較
     async function fetchBenchmarkHistoryData() {
         if (!selectedBenchmark) return;
         const symbolAtStart = selectedBenchmark;
         const myToken = ++benchmarkFetchToken;
-        const config = RANGE_MAP['LINE'].find(b => b.label === currentRange) || RANGE_MAP['LINE'][2];
+        const type = document.getElementById("cfg-chart-type").value;
+        const klineInterval = document.getElementById("cfg-kline-interval").value;
+        const isNav = desktopChartMode === 'NAV';
+        const activeBtns = (isNav || type === 'LINE') ? RANGE_MAP['LINE'] : RANGE_MAP['KLINE'][klineInterval];
+        const config = activeBtns.find(b => b.label === currentRange) || activeBtns[0];
+        const range = config.range;
+        const intervalStr = (activeBtns === RANGE_MAP['LINE']) ? config.interval : klineInterval;
         try {
-            const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${symbolAtStart}?range=${config.range}&interval=${config.interval}`)}`;
+            const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${symbolAtStart}?range=${range}&interval=${intervalStr}`)}`;
             const res = await fetch(proxyUrl, { cache: "no-store" });
             // 🩹 若使用者在等待期間切換了對標標的或時間區段，此回應已過期，不覆寫
             if (myToken !== benchmarkFetchToken || selectedBenchmark !== symbolAtStart) return;
@@ -5587,16 +5594,16 @@
             navChart.options.scales.y.ticks.maxTicksLimit = parseInt(valueAxisRaw) || 7;
         }
 
-        // 👁️ 歷史買賣點標記開關：僅個股走勢模式下顯示（組合總淨值走勢無個股買賣點可標）
+        // 👁️ 歷史買賣點標記開關：僅個股走勢模式下顯示（組合總淨值走勢無個股買賣點可標），位置在對標按鈕下方
         const tradeMarkerBtn = document.getElementById('chart-trade-marker-toggle');
         if (tradeMarkerBtn) tradeMarkerBtn.style.display = showNav ? 'none' : 'flex';
 
-        // 📊 基準指數對標開關：僅組合總淨值模式下顯示（與上方買賣點標記開關互斥，共用同一個按鈕位置）
+        // 📊 基準指數對標開關：組合總淨值 / 個股走勢模式皆可使用，按鈕固定在小眼睛上方
         const benchmarkBtn = document.getElementById('benchmark-toggle-btn');
-        if (benchmarkBtn) benchmarkBtn.style.display = showNav ? 'flex' : 'none';
-        if (!showNav) { const bdd = document.getElementById('benchmark-dropdown'); if (bdd) bdd.classList.remove('show'); }
+        if (benchmarkBtn) benchmarkBtn.style.display = 'flex';
         const benchmarkBar = document.getElementById('benchmark-summary-bar');
-        if (benchmarkBar) benchmarkBar.style.display = 'none'; // 預設隱藏，僅在組合總淨值模式且已選對標基準時顯示
+        if (benchmarkBar) benchmarkBar.style.display = 'none'; // 預設隱藏，僅在已選對標基準且資料就緒時顯示
+        const benchmarkMeta = BENCHMARK_LIST.find(b => b.symbol === selectedBenchmark);
 
         if (showNav) {
             document.getElementById("main-chart-title").innerHTML = `<img src="走勢圖.png" width="12" height="12"> <span class="hide-on-mobile" style="margin-left:4px;">總淨值走勢</span>`;
@@ -5636,7 +5643,6 @@
 
             // 📊 基準指數對標：若使用者已選擇對標標的且已有資料，將投組與指數皆換算為「相對起點的報酬率(%)」疊圖比較，
             // 讓使用者一眼看出投資組合是否擊敗大盤；未選擇對標標的時維持原本以美金淨值顯示的行為。
-            const benchmarkMeta = BENCHMARK_LIST.find(b => b.symbol === selectedBenchmark);
             const benchmarkActive = !!selectedBenchmark && benchmarkHistData.prices.length > 1 && fData.length > 1;
 
             if (benchmarkActive) {
@@ -5681,10 +5687,52 @@
                 const intvName = document.querySelector(`#cfg-kline-interval option[value="${intv}"]`).innerText;
                 titlePrefix = `${intvName} 走勢`;
             }
-            document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> <span style="margin-left:4px;">${currentTicker}</span> <span class="hide-on-mobile">${titlePrefix}</span>`;
-            navChart.data.labels = stockHistData.labels;
-            const tradeMarkerDatasets = buildTradeMarkerDatasets(stockHistData);
-            applyChartDatasets(navChart, getStockDatasets(stockHistData, showNodes, densityVal).concat(tradeMarkerDatasets));
+
+            // 📊 個股走勢模式下的基準指數對標：與組合總淨值模式共用同一套邏輯，
+            // 選擇對標標的後會「暫時強制」改用一般折線圖疊圖比較（K線/OHLC無法直接疊加百分比報酬率線），
+            // 取消對標後會自動還原成使用者原本設定的圖表類型（K線或折線）。
+            const stockBenchmarkActive = !!selectedBenchmark && benchmarkHistData.prices.length > 1 && stockHistData.prices && stockHistData.prices.length > 1;
+
+            if (stockBenchmarkActive) {
+                document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> <span style="margin-left:4px;">${currentTicker}</span> <span class="hide-on-mobile">對標比較中</span>`;
+                navChart.data.labels = stockHistData.labels;
+
+                const navBase = stockHistData.prices[0];
+                const navPctData = stockHistData.prices.map(v => navBase ? ((v / navBase - 1) * 100) : 0);
+
+                const bTimestamps = benchmarkHistData.timestamps, bPrices = benchmarkHistData.prices;
+                const matchedBPrices = (stockHistData.timestamps || []).map(ts => {
+                    let best = 0, bestDiff = Infinity;
+                    for (let i = 0; i < bTimestamps.length; i++) {
+                        const diff = Math.abs(bTimestamps[i] - ts);
+                        if (diff < bestDiff) { bestDiff = diff; best = i; }
+                    }
+                    return bPrices[best];
+                });
+                const bBase = matchedBPrices[0];
+                const benchPctData = matchedBPrices.map(v => bBase ? ((v / bBase - 1) * 100) : 0);
+
+                navChart.options.scales.y.ticks.callback = function(value) { return (value >= 0 ? '+' : '') + value.toFixed(1) + '%'; };
+                applyChartDatasets(navChart, [
+                    { label: 'NAV_PCT', type: 'line', data: navPctData, borderColor: '#00ffaa', backgroundColor: 'rgba(0, 255, 170, 0.05)', borderWidth: 1.5, tension: 0.2, fill: true, pointRadius: computePointRadiusArray(navPctData.length, showNodes, densityVal) },
+                    { label: 'BENCH_PCT', type: 'line', data: benchPctData, borderColor: '#feb019', backgroundColor: 'transparent', borderWidth: 2, borderDash: [4, 3], tension: 0.2, fill: false, pointRadius: 0 }
+                ]);
+
+                if (benchmarkBar) {
+                    const navFinal = navPctData[navPctData.length - 1], benchFinal = benchPctData[benchPctData.length - 1];
+                    const diffPct = navFinal - benchFinal, isAhead = diffPct >= 0;
+                    benchmarkBar.style.display = 'flex';
+                    benchmarkBar.innerHTML = `<span style="color:#888;">${currentTicker} <span style="color:${navFinal >= 0 ? 'var(--color-up)' : 'var(--color-down)'}">${navFinal >= 0 ? '+' : ''}${navFinal.toFixed(2)}%</span></span>
+                        <span style="color:#555;">vs</span>
+                        <span style="color:#888;">${benchmarkMeta ? benchmarkMeta.name : ''} <span style="color:${benchFinal >= 0 ? 'var(--color-up)' : 'var(--color-down)'}">${benchFinal >= 0 ? '+' : ''}${benchFinal.toFixed(2)}%</span></span>
+                        <span style="font-weight:bold; color:${isAhead ? 'var(--color-up)' : 'var(--color-down)'};">${isAhead ? '🏆 領先大盤 ' : '⚠️ 落後大盤 '}${isAhead ? '+' : ''}${diffPct.toFixed(2)}%</span>`;
+                }
+            } else {
+                document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> <span style="margin-left:4px;">${currentTicker}</span> <span class="hide-on-mobile">${titlePrefix}</span>`;
+                navChart.data.labels = stockHistData.labels;
+                const tradeMarkerDatasets = buildTradeMarkerDatasets(stockHistData);
+                applyChartDatasets(navChart, getStockDatasets(stockHistData, showNodes, densityVal).concat(tradeMarkerDatasets));
+            }
         }
         
         navChart.update(); 
@@ -5703,12 +5751,14 @@
         updateChartSettingsUI();
         updateTimeframeButtons();
         fetchStockHistoryData(currentTicker, true);
+        if (selectedBenchmark) fetchBenchmarkHistoryData(); // 📊 圖表類型/區段變動時同步更新對標指數資料範圍
     });
 
     document.getElementById("cfg-kline-interval").addEventListener("change", (e) => { 
         localStorage.setItem('SETTING_KLINE_INTERVAL', e.target.value); 
         updateTimeframeButtons();
         fetchStockHistoryData(currentTicker, true);
+        if (selectedBenchmark) fetchBenchmarkHistoryData(); // 📊 K線週期變動時同步更新對標指數資料範圍
     });
 
     document.getElementById("cfg-node-show").addEventListener("change", (e) => { localStorage.setItem('SETTING_NODE_SHOW', e.target.checked); document.getElementById("node-settings-wrapper").classList.toggle("disabled", !e.target.checked); renderAllCharts(); });
