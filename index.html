@@ -835,26 +835,84 @@
     </main>
 
     <main id="view-holdings" class="view-section">
-        <div class="glass-panel" style="padding:16px;" id="holdings-allocation-panel">
-            <div style="font-weight:bold; font-size:15px; margin-bottom:12px; white-space:nowrap;">資產配置佔比</div>
-            <div style="display:flex; align-items:center; gap:24px; flex-wrap:wrap;">
-                <div style="position:relative; width:150px; height:150px; flex-shrink:0;">
-                    <canvas id="holdingsAllocationChart"></canvas>
-                    <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:none; text-align:center;">
-                        <div style="font-size:10px; color:#888;">總市值</div>
-                        <div id="holdings-allocation-total" style="font-size:12px; font-weight:bold; font-family:monospace; margin-top:2px;">$0</div>
-                    </div>
-                </div>
-                <div id="holdings-allocation-legend" style="flex:1; min-width:180px; display:flex; flex-direction:column; gap:10px;"></div>
+        <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
+            <div class="ledger-tab-toggle">
+                <button class="ledger-tab-btn active" id="holdings-subtab-btn-stock" onclick="switchHoldingsSubview('stock')"><i class="fa-solid fa-chart-simple"></i> 股票庫存</button>
+                <button class="ledger-tab-btn" id="holdings-subtab-btn-currency" onclick="switchHoldingsSubview('currency')"><i class="fa-solid fa-money-bill-transfer"></i> 貨幣庫存</button>
             </div>
         </div>
 
-        <div class="glow-divide-top" style="padding:16px;">
-            <div class="table-responsive">
-                <table>
-                    <thead><tr><th>代號</th><th>持有股數</th><th>買入均價<br><span style="font-size:10px; font-weight:normal; color:#888;">(損平賣價)</span></th><th>當前現價</th><th>市值</th><th>未實現損益</th><th>操作</th></tr></thead>
-                    <tbody id="holdings-table-body"></tbody>
-                </table>
+        <div id="holdings-subview-stock">
+            <div class="glass-panel" style="padding:16px;" id="holdings-allocation-panel">
+                <div style="font-weight:bold; font-size:15px; margin-bottom:12px; white-space:nowrap;">資產配置佔比</div>
+                <div style="display:flex; align-items:center; gap:24px; flex-wrap:wrap;">
+                    <div style="position:relative; width:150px; height:150px; flex-shrink:0;">
+                        <canvas id="holdingsAllocationChart"></canvas>
+                        <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:none; text-align:center;">
+                            <div style="font-size:10px; color:#888;">總市值</div>
+                            <div id="holdings-allocation-total" style="font-size:12px; font-weight:bold; font-family:monospace; margin-top:2px;">$0</div>
+                        </div>
+                    </div>
+                    <div id="holdings-allocation-legend" style="flex:1; min-width:180px; display:flex; flex-direction:column; gap:10px;"></div>
+                </div>
+            </div>
+
+            <div class="glow-divide-top" style="padding:16px;">
+                <div class="table-responsive">
+                    <table>
+                        <thead><tr><th>代號</th><th>持有股數</th><th>買入均價<br><span style="font-size:10px; font-weight:normal; color:#888;">(損平賣價)</span></th><th>當前現價</th><th>市值</th><th>未實現損益</th><th>操作</th></tr></thead>
+                        <tbody id="holdings-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="holdings-subview-currency" style="display:none;">
+            <div class="glass-panel" style="padding:16px;">
+                <div style="font-weight:bold; font-size:15px; margin-bottom:12px;">貨幣庫存總覽</div>
+                <div class="table-responsive">
+                    <table>
+                        <thead><tr><th>幣別</th><th>持有金額</th><th>兌台幣匯率</th><th>台幣價值</th></tr></thead>
+                        <tbody id="currency-wallet-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="glow-divide-top" style="padding:16px;">
+                <div style="font-weight:bold; font-size:15px; margin-bottom:14px;"><i class="fa-solid fa-right-left"></i> 貨幣轉換（即時匯率）</div>
+                <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+                    <div>
+                        <div style="font-size:11px; color:#888; margin-bottom:4px;">從</div>
+                        <div class="custom-select-wrapper" id="fx-from-wrapper" style="width:150px; position:relative;">
+                            <div class="select-input-box">
+                                <input type="text" id="fx-from-input" value="TWD" autocomplete="off" placeholder="搜尋幣別">
+                                <button class="select-dropdown-btn" onclick="toggleCurrencyDropdown('from')"><i class="fa-solid fa-chevron-down"></i></button>
+                            </div>
+                            <div class="opaque-dropdown-list" id="fx-from-dropdown" style="width:220px;">
+                                <div id="fx-from-search-list"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <div style="font-size:11px; color:#888; margin-bottom:4px;">金額</div>
+                        <input type="text" id="fx-amount-input" class="mobile-num" data-decimal="true" onfocus="this.select()" placeholder="0" style="width:130px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-family:monospace; font-weight:bold; height:38px; box-sizing:border-box;">
+                    </div>
+                    <div style="padding-bottom:8px; color:var(--color-acc);"><i class="fa-solid fa-arrow-right-long"></i></div>
+                    <div>
+                        <div style="font-size:11px; color:#888; margin-bottom:4px;">到</div>
+                        <div class="custom-select-wrapper" id="fx-to-wrapper" style="width:150px; position:relative;">
+                            <div class="select-input-box">
+                                <input type="text" id="fx-to-input" value="USD" autocomplete="off" placeholder="搜尋幣別">
+                                <button class="select-dropdown-btn" onclick="toggleCurrencyDropdown('to')"><i class="fa-solid fa-chevron-down"></i></button>
+                            </div>
+                            <div class="opaque-dropdown-list" id="fx-to-dropdown" style="width:220px;">
+                                <div id="fx-to-search-list"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="executeCurrencyConversion()" style="background:var(--color-acc); color:#000; border:none; padding:0 20px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:13px; height:38px; box-sizing:border-box;">確認轉換</button>
+                </div>
+                <div id="fx-preview-line" style="margin-top:12px; font-size:12px; color:#888; font-family:monospace;"></div>
             </div>
         </div>
     </main>
@@ -1504,6 +1562,10 @@
                 <span id="rsi-status-badge" class="rsi-badge" style="background:rgba(255,255,255,0.1); color:#ccc;">計算中</span>
             </div>
         </div>
+        <div id="wallet-balance-indicator" style="display:none; border-top:1px solid rgba(255,255,255,0.05); padding-top:6px; justify-content:space-between; align-items:center; font-size:11px; color:#aaa;">
+            <span><i class="fa-solid fa-wallet"></i> 外幣錢包可用</span>
+            <span id="wallet-balance-indicator-val" style="font-family:monospace; color:var(--color-buy); font-weight:bold;">--</span>
+        </div>
     </div>
 
     <div class="mobile-stock-chart-box">
@@ -1614,26 +1676,51 @@
 
     function isTaiwanTicker(ticker) { return getCurrencyForTicker(ticker) === 'TWD'; }
 
-    // 🩹 修復：過去只有 USD 會即時查詢匯率，JPY / HKD / CNY / KRW / GBP 皆為寫死的常數，
-    // 長期記帳下會因真實匯率波動而造成資產估值誤差。改為依 CURRENCY_FX_SYMBOL 對照表，
-    // 逐一即時查詢「每一種」有支援的幣別匯率（與 USD 相同頻率，每 8 秒隨報價一起更新），
-    // 查詢失敗（例如離線、該幣別代碼查無資料）時保留當下快取值，不會讓匯率被清空或歸零。
-    async function fetchExchangeRate() {
-        const currencies = Object.keys(CURRENCY_FX_SYMBOL);
-        await Promise.all(currencies.map(async (currency) => {
-            const symbol = CURRENCY_FX_SYMBOL[currency];
-            try {
-                const res = await fetch(`${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`)}`, { cache: "no-store" });
-                if (res.ok) {
-                    const json = await res.json();
-                    const price = json && json.chart && json.chart.result && json.chart.result[0] && json.chart.result[0].meta.regularMarketPrice;
-                    if (price) {
-                        currencyRatesToTWD[currency] = price;
-                        if (currency === 'USD') currentUSDTWD = price;
-                    }
+    // 🌍 全幣別即時匯率查詢（不再限於預先寫死的幾種幣別）
+    // Yahoo Finance 的台幣交叉匯率代碼規則固定為「{幣別代碼}TWD=X」，唯獨美元例外簡寫為「TWD=X」，
+    // 依此規則即可泛用地查詢「任何」ISO 4217 幣別代碼兌台幣的即時匯率，不需要再維護一份固定清單。
+    function getCurrencyFxSymbol(code) { return code === 'USD' ? 'TWD=X' : `${code}TWD=X`; }
+
+    // 查詢單一幣別的即時匯率並寫入快取；查詢失敗時保留當下快取值，不會讓匯率被清空或歸零。
+    async function fetchSingleExchangeRate(code) {
+        if (code === 'TWD') return 1;
+        try {
+            const symbol = getCurrencyFxSymbol(code);
+            const res = await fetch(`${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`)}`, { cache: "no-store" });
+            if (res.ok) {
+                const json = await res.json();
+                const price = json && json.chart && json.chart.result && json.chart.result[0] && json.chart.result[0].meta.regularMarketPrice;
+                if (price) {
+                    currencyRatesToTWD[code] = price;
+                    if (code === 'USD') currentUSDTWD = price;
+                    return price;
                 }
-            } catch (e) {}
-        }));
+            }
+        } catch (e) {}
+        return currencyRatesToTWD[code] !== undefined ? currencyRatesToTWD[code] : null;
+    }
+
+    // 目前系統中「需要保持匯率新鮮」的幣別集合：既有快取幣別 ∪ 貨幣庫存持有幣別 ∪ 目前持股計價幣別 ∪ 美元（永遠保留）
+    function getActiveCurrencySet() {
+        const set = new Set(['USD']);
+        Object.keys(currencyRatesToTWD).forEach(c => set.add(c));
+        Object.keys(state.wallet || {}).forEach(c => set.add(c));
+        Object.keys(state.holdings || {}).forEach(t => set.add(getCurrencyForTicker(t)));
+        set.delete('TWD');
+        return Array.from(set);
+    }
+
+    // 每 8 秒隨報價一起刷新目前系統實際會用到的每一種幣別匯率
+    async function fetchExchangeRate() {
+        const currencies = getActiveCurrencySet();
+        await Promise.all(currencies.map(c => fetchSingleExchangeRate(c)));
+    }
+
+    // 使用者在貨幣庫存頁搜尋／選擇了尚未快取匯率的幣別時，立即查詢一次，不必等下一輪 8 秒刷新
+    async function ensureCurrencyRate(code) {
+        if (code === 'TWD') return 1;
+        if (currencyRatesToTWD[code] !== undefined) return currencyRatesToTWD[code];
+        return await fetchSingleExchangeRate(code);
     }
 
     async function fetchHoldingsPrices() {
@@ -1704,14 +1791,187 @@
     function padMinute(el) { if (el.value.length === 1) el.value = '0' + el.value; autoFetchHistoricalPrice(); }
 
     // 各幣別對應 Yahoo Finance 歷史匯率查詢代碼（用於「結匯匯率」自動查詢，凍結交易當下的實際匯率）
-    const CURRENCY_FX_SYMBOL = {
-        USD: 'TWD=X',
-        JPY: 'JPYTWD=X',
-        HKD: 'HKDTWD=X',
-        CNY: 'CNYTWD=X',
-        KRW: 'KRWTWD=X',
-        GBP: 'GBPTWD=X',
-    };
+    // ============================================================
+    // 💱 貨幣庫存系統 (Multi-Currency Wallet)
+    // state.wallet = { [ISO 4217 幣別代碼]: 持有金額 }，不含 TWD（TWD 沿用既有的 state.cash）。
+    // 支援「全世界所有主要 ISO 4217 幣別」的搜尋、即時匯率換算與購買股票時優先扣款。
+    // ============================================================
+    const ALL_CURRENCIES = [
+        {code:'TWD',name:'新台幣 Taiwan Dollar'},{code:'USD',name:'美元 US Dollar'},{code:'JPY',name:'日圓 Japanese Yen'},
+        {code:'HKD',name:'港幣 Hong Kong Dollar'},{code:'CNY',name:'人民幣 Chinese Yuan'},{code:'KRW',name:'韓元 South Korean Won'},
+        {code:'GBP',name:'英鎊 British Pound'},{code:'EUR',name:'歐元 Euro'},{code:'AUD',name:'澳幣 Australian Dollar'},
+        {code:'CAD',name:'加拿大幣 Canadian Dollar'},{code:'SGD',name:'新加坡幣 Singapore Dollar'},{code:'CHF',name:'瑞士法郎 Swiss Franc'},
+        {code:'NZD',name:'紐西蘭幣 New Zealand Dollar'},{code:'THB',name:'泰銖 Thai Baht'},{code:'MYR',name:'馬來西亞令吉 Malaysian Ringgit'},
+        {code:'PHP',name:'菲律賓披索 Philippine Peso'},{code:'IDR',name:'印尼盾 Indonesian Rupiah'},{code:'VND',name:'越南盾 Vietnamese Dong'},
+        {code:'INR',name:'印度盧比 Indian Rupee'},{code:'MOP',name:'澳門幣 Macanese Pataca'},{code:'ZAR',name:'南非蘭特 South African Rand'},
+        {code:'SEK',name:'瑞典克朗 Swedish Krona'},{code:'NOK',name:'挪威克朗 Norwegian Krone'},{code:'DKK',name:'丹麥克朗 Danish Krone'},
+        {code:'PLN',name:'波蘭茲羅提 Polish Zloty'},{code:'CZK',name:'捷克克朗 Czech Koruna'},{code:'HUF',name:'匈牙利福林 Hungarian Forint'},
+        {code:'RON',name:'羅馬尼亞列伊 Romanian Leu'},{code:'RUB',name:'俄羅斯盧布 Russian Ruble'},{code:'TRY',name:'土耳其里拉 Turkish Lira'},
+        {code:'ILS',name:'以色列新謝克爾 Israeli Shekel'},{code:'AED',name:'阿聯酋迪拉姆 UAE Dirham'},{code:'SAR',name:'沙烏地里亞爾 Saudi Riyal'},
+        {code:'QAR',name:'卡達里亞爾 Qatari Riyal'},{code:'KWD',name:'科威特第納爾 Kuwaiti Dinar'},{code:'BHD',name:'巴林第納爾 Bahraini Dinar'},
+        {code:'OMR',name:'阿曼里亞爾 Omani Rial'},{code:'EGP',name:'埃及鎊 Egyptian Pound'},{code:'MXN',name:'墨西哥披索 Mexican Peso'},
+        {code:'BRL',name:'巴西雷亞爾 Brazilian Real'},{code:'ARS',name:'阿根廷披索 Argentine Peso'},{code:'CLP',name:'智利披索 Chilean Peso'},
+        {code:'COP',name:'哥倫比亞披索 Colombian Peso'},{code:'PEN',name:'秘魯索爾 Peruvian Sol'},{code:'PKR',name:'巴基斯坦盧比 Pakistani Rupee'},
+        {code:'BDT',name:'孟加拉塔卡 Bangladeshi Taka'},{code:'LKR',name:'斯里蘭卡盧比 Sri Lankan Rupee'},{code:'NPR',name:'尼泊爾盧比 Nepalese Rupee'},
+        {code:'KHR',name:'柬埔寨瑞爾 Cambodian Riel'},{code:'LAK',name:'寮國基普 Lao Kip'},{code:'MMK',name:'緬甸元 Myanmar Kyat'},
+        {code:'MNT',name:'蒙古圖格里克 Mongolian Tugrik'},{code:'KZT',name:'哈薩克堅戈 Kazakhstani Tenge'},{code:'UAH',name:'烏克蘭赫里夫尼亞 Ukrainian Hryvnia'},
+        {code:'ISK',name:'冰島克朗 Icelandic Krona'},{code:'BGN',name:'保加利亞列弗 Bulgarian Lev'},{code:'HRK',name:'克羅埃西亞庫納 Croatian Kuna'},
+        {code:'RSD',name:'塞爾維亞第納爾 Serbian Dinar'},{code:'JOD',name:'約旦第納爾 Jordanian Dinar'},{code:'LBP',name:'黎巴嫩鎊 Lebanese Pound'},
+        {code:'MAD',name:'摩洛哥迪爾漢 Moroccan Dirham'},{code:'DZD',name:'阿爾及利亞第納爾 Algerian Dinar'},{code:'TND',name:'突尼西亞第納爾 Tunisian Dinar'},
+        {code:'NGN',name:'奈及利亞奈拉 Nigerian Naira'},{code:'KES',name:'肯亞先令 Kenyan Shilling'},{code:'GHS',name:'迦納塞地 Ghanaian Cedi'},
+        {code:'ETB',name:'衣索比亞比爾 Ethiopian Birr'},{code:'TZS',name:'坦尚尼亞先令 Tanzanian Shilling'},{code:'UGX',name:'烏干達先令 Ugandan Shilling'},
+        {code:'XAF',name:'中非法郎 Central African CFA Franc'},{code:'XOF',name:'西非法郎 West African CFA Franc'},{code:'FJD',name:'斐濟幣 Fijian Dollar'},
+        {code:'PGK',name:'巴布亞紐幾內亞基那 Papua New Guinean Kina'},{code:'BND',name:'汶萊元 Brunei Dollar'},{code:'MVR',name:'馬爾地夫拉菲亞 Maldivian Rufiyaa'},
+        {code:'AFN',name:'阿富汗尼 Afghan Afghani'},{code:'IQD',name:'伊拉克第納爾 Iraqi Dinar'},{code:'IRR',name:'伊朗里亞爾 Iranian Rial'},
+        {code:'AZN',name:'亞塞拜然馬納特 Azerbaijani Manat'},{code:'GEL',name:'喬治亞拉里 Georgian Lari'},{code:'AMD',name:'亞美尼亞德拉姆 Armenian Dram'},
+        {code:'BYN',name:'白俄羅斯盧布 Belarusian Ruble'},{code:'MDL',name:'摩爾多瓦列伊 Moldovan Leu'},{code:'ALL',name:'阿爾巴尼亞列克 Albanian Lek'},
+        {code:'MKD',name:'北馬其頓代納爾 Macedonian Denar'},{code:'BAM',name:'波士尼亞馬克 Bosnia-Herzegovina Mark'},{code:'UYU',name:'烏拉圭披索 Uruguayan Peso'},
+        {code:'BOB',name:'玻利維亞諾 Bolivian Boliviano'},{code:'PYG',name:'巴拉圭瓜拉尼 Paraguayan Guarani'},{code:'CRC',name:'哥斯大黎加科朗 Costa Rican Colon'},
+        {code:'GTQ',name:'瓜地馬拉格查爾 Guatemalan Quetzal'},{code:'HNL',name:'宏都拉斯倫皮拉 Honduran Lempira'},{code:'DOP',name:'多明尼加披索 Dominican Peso'},
+        {code:'JMD',name:'牙買加元 Jamaican Dollar'},{code:'TTD',name:'千里達及托巴哥元 Trinidad & Tobago Dollar'},{code:'BSD',name:'巴哈馬元 Bahamian Dollar'},
+        {code:'BBD',name:'巴貝多元 Barbadian Dollar'},{code:'XCD',name:'東加勒比元 East Caribbean Dollar'},{code:'BZD',name:'貝里斯元 Belize Dollar'},
+        {code:'BWP',name:'波札那普拉 Botswana Pula'},{code:'MUR',name:'模里西斯盧比 Mauritian Rupee'},{code:'ZMW',name:'尚比亞克瓦查 Zambian Kwacha'},
+        {code:'XPF',name:'太平洋法郎 CFP Franc'},{code:'WST',name:'薩摩亞塔拉 Samoan Tala'},{code:'TOP',name:'東加潘加 Tongan Paʻanga'},
+    ];
+
+    function searchCurrencies(query) {
+        const q = (query || '').trim().toUpperCase();
+        if (!q) return ALL_CURRENCIES.slice(0, 8);
+        return ALL_CURRENCIES.filter(c => c.code.includes(q) || c.name.toUpperCase().includes(q)).slice(0, 8);
+    }
+
+    // 貨幣庫存（TWD 以外）台幣總價值。TWD 現金本身已計入 state.cash，不重複計算。
+    function getWalletValueTWD(walletObj) {
+        walletObj = walletObj || state.wallet || {};
+        let total = 0;
+        for (const cur in walletObj) {
+            const amt = walletObj[cur];
+            if (!amt) continue;
+            const rate = cur === 'TWD' ? 1 : (currencyRatesToTWD[cur] !== undefined ? currencyRatesToTWD[cur] : currentUSDTWD);
+            total += amt * rate;
+        }
+        return total;
+    }
+
+    function switchHoldingsSubview(mode) {
+        document.getElementById('holdings-subview-stock').style.display = mode === 'stock' ? 'block' : 'none';
+        document.getElementById('holdings-subview-currency').style.display = mode === 'currency' ? 'block' : 'none';
+        document.getElementById('holdings-subtab-btn-stock').classList.toggle('active', mode === 'stock');
+        document.getElementById('holdings-subtab-btn-currency').classList.toggle('active', mode === 'currency');
+        if (mode === 'currency') renderCurrencyInventory();
+    }
+
+    async function renderCurrencyInventory() {
+        const wallet = state.wallet || {};
+        const codes = Object.keys(wallet).filter(c => wallet[c] && Math.abs(wallet[c]) > 0.0001);
+        // 補查目前尚未有快取匯率的持有幣別
+        await Promise.all(codes.filter(c => currencyRatesToTWD[c] === undefined).map(c => ensureCurrencyRate(c)));
+
+        let rows = `<tr><td><strong style="color:#fff;">TWD</strong> <span style="color:#888; font-size:11px;">新台幣</span></td><td style="font-family:monospace;">$ ${Math.floor(state.cash).toLocaleString()}</td><td style="font-family:monospace; color:#888;">1.0000</td><td style="font-family:monospace;">$ ${Math.floor(state.cash).toLocaleString()}</td></tr>`;
+        codes.sort().forEach(cur => {
+            const amt = wallet[cur];
+            const rate = currencyRatesToTWD[cur] !== undefined ? currencyRatesToTWD[cur] : currentUSDTWD;
+            const twdVal = amt * rate;
+            const info = ALL_CURRENCIES.find(c => c.code === cur);
+            rows += `<tr><td><strong style="color:#fff;">${cur}</strong> <span style="color:#888; font-size:11px;">${info ? info.name.split(' ')[0] : ''}</span></td><td style="font-family:monospace;">${amt.toLocaleString(undefined, {maximumFractionDigits:2})}</td><td style="font-family:monospace; color:#888;">${rate.toFixed(4)}</td><td style="font-family:monospace;">$ ${Math.floor(twdVal).toLocaleString()}</td></tr>`;
+        });
+        document.getElementById('currency-wallet-table-body').innerHTML = rows;
+        updateCurrencyConversionPreview();
+    }
+
+    let fxDropdownTarget = null;
+    function toggleCurrencyDropdown(target) {
+        fxDropdownTarget = target;
+        const dropdown = document.getElementById(`fx-${target}-dropdown`);
+        dropdown.classList.toggle('show');
+        renderCurrencySearchList(target, document.getElementById(`fx-${target}-input`).value);
+    }
+
+    function renderCurrencySearchList(target, query) {
+        const list = document.getElementById(`fx-${target}-search-list`);
+        const results = searchCurrencies(query);
+        list.innerHTML = results.length ? results.map(c => `<div class="dropdown-item" onclick="selectCurrency('${target}','${c.code}')"><strong style="color:#fff">${c.code}</strong> <span style="color:#888; font-size:11px;">${c.name}</span></div>`).join('') : `<div style="padding:10px 12px; font-size:11px; color:#ff4560;">查無符合幣別</div>`;
+    }
+
+    function selectCurrency(target, code) {
+        document.getElementById(`fx-${target}-input`).value = code;
+        document.getElementById(`fx-${target}-dropdown`).classList.remove('show');
+        updateCurrencyConversionPreview();
+    }
+
+    function initCurrencySearchInputs() {
+        ['from', 'to'].forEach(target => {
+            const input = document.getElementById(`fx-${target}-input`);
+            if (!input) return;
+            input.addEventListener('input', (e) => {
+                document.getElementById(`fx-${target}-dropdown`).classList.add('show');
+                renderCurrencySearchList(target, e.target.value);
+            });
+            input.addEventListener('focus', (e) => {
+                document.getElementById(`fx-${target}-dropdown`).classList.add('show');
+                renderCurrencySearchList(target, e.target.value);
+            });
+        });
+        const amountInput = document.getElementById('fx-amount-input');
+        if (amountInput) amountInput.addEventListener('input', updateCurrencyConversionPreview);
+    }
+
+    async function updateCurrencyConversionPreview() {
+        const previewEl = document.getElementById('fx-preview-line');
+        if (!previewEl) return;
+        const from = (document.getElementById('fx-from-input').value || '').trim().toUpperCase();
+        const to = (document.getElementById('fx-to-input').value || '').trim().toUpperCase();
+        const amt = parseFloat(document.getElementById('fx-amount-input').value);
+        if (!from || !to || !amt || amt <= 0) { previewEl.innerText = ''; return; }
+        previewEl.innerText = '查詢即時匯率中...';
+        const [rateFrom, rateTo] = await Promise.all([ensureCurrencyRate(from), ensureCurrencyRate(to)]);
+        if (!rateFrom || !rateTo) { previewEl.innerText = '查無此幣別的即時匯率，請確認代碼是否正確'; return; }
+        const converted = amt * rateFrom / rateTo;
+        previewEl.innerHTML = `${amt.toLocaleString()} ${from} ≈ <span style="color:var(--color-acc); font-weight:bold;">${converted.toLocaleString(undefined,{maximumFractionDigits:4})} ${to}</span> <span style="color:#555;">(匯率 1 ${from} ≈ ${(rateFrom/rateTo).toFixed(4)} ${to})</span>`;
+    }
+
+    function getCurrencyBalance(code) {
+        if (code === 'TWD') return state.cash;
+        return (state.wallet && state.wallet[code]) || 0;
+    }
+
+    function adjustCurrencyBalance(code, delta) {
+        if (code === 'TWD') { state.cash += delta; return; }
+        if (!state.wallet) state.wallet = {};
+        state.wallet[code] = (state.wallet[code] || 0) + delta;
+        if (Math.abs(state.wallet[code]) < 0.0001) delete state.wallet[code];
+    }
+
+    async function executeCurrencyConversion() {
+        const from = (document.getElementById('fx-from-input').value || '').trim().toUpperCase();
+        const to = (document.getElementById('fx-to-input').value || '').trim().toUpperCase();
+        const amt = parseFloat(document.getElementById('fx-amount-input').value);
+        if (!from || !to) { alert('請選擇來源與目標幣別'); return; }
+        if (from === to) { alert('來源與目標幣別不可相同'); return; }
+        if (!amt || amt <= 0) { alert('請輸入有效的轉換金額'); return; }
+        if (getCurrencyBalance(from) < amt) { alert(`「${from}」餘額不足！`); return; }
+
+        const [rateFrom, rateTo] = await Promise.all([ensureCurrencyRate(from), ensureCurrencyRate(to)]);
+        if (!rateFrom || !rateTo) { alert('查無此幣別的即時匯率，請確認幣別代碼是否正確'); return; }
+        const converted = amt * rateFrom / rateTo;
+
+        adjustCurrencyBalance(from, -amt);
+        adjustCurrencyBalance(to, converted);
+
+        document.getElementById('fx-amount-input').value = '';
+        state.lastModified = Date.now();
+        saveData();
+        renderCurrencyInventory();
+        triggerDynamicFeedback(`已將 ${amt.toLocaleString()} ${from} 轉換為 ${converted.toLocaleString(undefined,{maximumFractionDigits:2})} ${to}`, 'buy', null, null);
+    }
+
+    document.addEventListener('click', (e) => {
+        ['from', 'to'].forEach(target => {
+            const wrapper = document.getElementById(`fx-${target}-wrapper`);
+            const dropdown = document.getElementById(`fx-${target}-dropdown`);
+            if (wrapper && dropdown && !wrapper.contains(e.target)) dropdown.classList.remove('show');
+        });
+    });
 
     function initTimeMachineDefault() {
         const d = new Date(); const year = d.getFullYear(); const month = String(d.getMonth() + 1).padStart(2, '0'); const day = String(d.getDate()).padStart(2, '0'); const hours = String(d.getHours()).padStart(2, '0'); const minutes = String(d.getMinutes()).padStart(2, '0');
@@ -1812,8 +2072,7 @@
         if (isNaN(targetTime)) return;
         const targetSec = Math.floor(targetTime / 1000);
 
-        const symbol = CURRENCY_FX_SYMBOL[currency];
-        if (!symbol) { fxInput.value = (currencyRatesToTWD[currency] !== undefined ? currencyRatesToTWD[currency] : currentUSDTWD).toString(); fxInput.placeholder = ''; return; }
+        const symbol = getCurrencyFxSymbol(currency);
 
         fxInput.placeholder = "查詢歷史匯率中...";
         fetchFxTimer = setTimeout(async () => {
@@ -1953,7 +2212,7 @@
         }
         return val;
     }
-    function achv_totalAssets(state, priceCache) { return state.cash + achv_getHoldingsValue(state, priceCache); }
+    function achv_totalAssets(state, priceCache) { return state.cash + getWalletValueTWD(state.wallet) + achv_getHoldingsValue(state, priceCache); }
 
     const ACHV_TIERS = [
         { key: 'bronze',   label: '銅',  icon: '<i class="fa-solid fa-star achv-star-bronze"></i>' },
@@ -2520,7 +2779,7 @@
     Chart.register(smoothCrosshairPlugin);
 
     const DATA_KEY = "ACORNTRADE_MANUAL_DATA";
-    let state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] };
+    let state = { cash: 1000000, wallet: {}, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] };
     let stopLossAlertShown = false; // 避免同一次觸發反覆彈出警示，虧損回復到門檻之上才會重置
     let currentTicker = localStorage.getItem('LAST_SELECTED_TICKER') || "NVDA";
 
@@ -3315,7 +3574,7 @@
         ACCOUNTS.push({ id, name, storageKey, hasPassword: false, passwordHash: null, syncEnabled: false, requirePasswordOnBoot: true, createdAt: Date.now() });
         saveAccountsMeta();
 
-        const freshState = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 } };
+        const freshState = { cash: 1000000, wallet: {}, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 } };
         persistAccountState(storageKey, freshState);
 
         nameInput.value = '';
@@ -3733,6 +3992,7 @@
                 state.cardTickers = [...new Set(state.cardTickers || ["NVDA", "2330.TW"])]; 
                 state.recentTickers = state.recentTickers || ["NVDA", "2330.TW"];
                 state.holdings = state.holdings || {};
+                state.wallet = state.wallet || {};
                 state.ledger = state.ledger || [];
                 state.dividends = state.dividends || [];
                 state.lastDividendCheck = state.lastDividendCheck || 0;
@@ -3756,7 +4016,7 @@
                 if (!state.navHistory || !state.navHistory.timestamps || state.navHistory.timestamps.length === 0) { rebuildNavHistoryFromLedger(); }
             } catch(e) {} 
         } else {
-            state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] };
+            state = { cash: 1000000, wallet: {}, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] };
             rebuildNavHistoryFromLedger(); saveData();
         }
         stopLossAlertShown = false;
@@ -3838,7 +4098,7 @@
     // 可能因 IEEE754 浮點誤差累積出如 999999.9999999998 這類極小殘值。
     // 在集中的存檔入口統一四捨五入到小數點後 2 位，修正內部數值、不影響任何顯示或操作行為。
     function saveData() { if (typeof state.cash === 'number') state.cash = Math.round(state.cash * 100) / 100; persistAccountState(getActiveAccount().storageKey, state); updateAllViews(true); renderCards(); scheduleCloudSync(); checkAchievements(); }
-    async function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { const storageKey = getActiveAccount().storageKey; localStorage.removeItem(storageKey); await idbDeleteLedger(storageKey); state = { cash: 1000000, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: Date.now(), recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] }; await initData(); fetchStockHistoryData(currentTicker, true); } }
+    async function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { const storageKey = getActiveAccount().storageKey; localStorage.removeItem(storageKey); await idbDeleteLedger(storageKey); state = { cash: 1000000, wallet: {}, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: Date.now(), recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] }; await initData(); fetchStockHistoryData(currentTicker, true); } }
 
     function exportData() {
         const dataStr = JSON.stringify(state, null, 2), blob = new Blob([dataStr], { type: "application/json" }), url = URL.createObjectURL(blob), a = document.createElement("a");
@@ -3853,7 +4113,7 @@
             try {
                 const importedState = JSON.parse(e.target.result);
                 if (importedState && typeof importedState.cash === 'number') {
-                    state = importedState; state.cardTickers = state.cardTickers || []; state.recentTickers = state.recentTickers || []; state.holdings = state.holdings || {}; state.ledger = state.ledger || []; state.dividends = state.dividends || []; state.lastDividendCheck = state.lastDividendCheck || 0; state.splits = state.splits || []; state.lastSplitCheck = state.lastSplitCheck || 0; state.lastModified = Date.now(); state.stopLoss = state.stopLoss || { enabled: false, percent: 10 }; state.dripEnabled = !!state.dripEnabled; state.unlockedAchievements = state.unlockedAchievements || []; state.friends = state.friends || []; state.achvShowcase = state.achvShowcase || [];
+                    state = importedState; state.cardTickers = state.cardTickers || []; state.recentTickers = state.recentTickers || []; state.holdings = state.holdings || {}; state.wallet = state.wallet || {}; state.ledger = state.ledger || []; state.dividends = state.dividends || []; state.lastDividendCheck = state.lastDividendCheck || 0; state.splits = state.splits || []; state.lastSplitCheck = state.lastSplitCheck || 0; state.lastModified = Date.now(); state.stopLoss = state.stopLoss || { enabled: false, percent: 10 }; state.dripEnabled = !!state.dripEnabled; state.unlockedAchievements = state.unlockedAchievements || []; state.friends = state.friends || []; state.achvShowcase = state.achvShowcase || [];
                     state.ledger.forEach(r => {
                         if (!r.timestamp) {
                             let d = new Date(), parts = r.time ? r.time.split(':') : [];
@@ -3891,7 +4151,7 @@
             totalCost += costBasis;
             return { ticker: t, shares: h.shares, avgPrice: h.avgPrice, breakEvenPrice: breakEvenPrice, curPrice: curP, val: val, pnl: itemPnl };
         });
-        const nav = state.cash + holdingsVal;
+        const nav = state.cash + getWalletValueTWD() + holdingsVal;
         const pnl = unrealizedPnlNet;
         const pnlPct = totalCost > 0 ? ((pnl / totalCost) * 100).toFixed(2) : "0.00";
 
@@ -4051,21 +4311,35 @@
     }
 
     function recalculateState(ledgerArray) {
-        let tempCash = 1000000, tempHoldings = {}, invalidSellIndices = []; 
+        let tempCash = 1000000, tempWallet = {}, tempHoldings = {}, invalidSellIndices = []; 
         for (let i = ledgerArray.length - 1; i >= 0; i--) {
             let r = ledgerArray[i], rate = r.rate || getCurrencyMultiplier(r.ticker);
             if (r.action === 'BUY') {
-                tempCash -= r.total; if (!tempHoldings[r.ticker]) tempHoldings[r.ticker] = { shares: 0, avgPrice: 0 };
+                // 💱 若這筆交易當初有使用貨幣庫存扣款（walletCurrency），依當初的實際扣款來源重新扣回；
+                // 舊資料或未使用貨幣庫存的交易（無 walletCurrency 欄位）維持原本「全額從台幣現金扣除」的行為，向下相容。
+                if (r.walletCurrency) {
+                    tempWallet[r.walletCurrency] = (tempWallet[r.walletCurrency] || 0) - (r.walletSpendNative || 0);
+                    tempCash -= (r.cashSpendTWD || 0);
+                } else {
+                    tempCash -= r.total;
+                }
+                if (!tempHoldings[r.ticker]) tempHoldings[r.ticker] = { shares: 0, avgPrice: 0 };
                 let h = tempHoldings[r.ticker], origTotalSpend = r.origTotalSpend || (r.total / rate);
                 h.avgPrice = ((h.shares * h.avgPrice) + origTotalSpend) / (h.shares + r.shares); h.shares += r.shares;
             } else if (r.action === 'SELL') {
                 if (!tempHoldings[r.ticker] || tempHoldings[r.ticker].shares < r.shares) { invalidSellIndices.push(i); continue; }
-                tempCash += r.total; let h = tempHoldings[r.ticker], costBasisTWD = r.shares * h.avgPrice * rate;
+                if (r.walletCurrency) {
+                    tempWallet[r.walletCurrency] = (tempWallet[r.walletCurrency] || 0) + (r.walletCreditNative || 0);
+                } else {
+                    tempCash += r.total;
+                }
+                let h = tempHoldings[r.ticker], costBasisTWD = r.shares * h.avgPrice * rate;
                 r.realizedPnL = r.total - costBasisTWD; h.shares -= r.shares;
                 if (h.shares === 0) delete tempHoldings[r.ticker];
             }
         }
-        return { cash: tempCash, holdings: tempHoldings, invalidSellIndices };
+        Object.keys(tempWallet).forEach(c => { if (Math.abs(tempWallet[c]) < 0.0001) delete tempWallet[c]; });
+        return { cash: tempCash, wallet: tempWallet, holdings: tempHoldings, invalidSellIndices };
     }
 
     function insertHistoricalTrade() {
@@ -4096,7 +4370,7 @@
         
         state.ledger = testLedger;
         reconcileDividendsAfterLedgerChange();
-        state.cash = result.cash + getDividendsTotalTWD(); state.holdings = result.holdings;
+        state.cash = result.cash + getDividendsTotalTWD(); state.wallet = result.wallet; state.holdings = result.holdings;
         document.getElementById("tm-ticker").value = ''; document.getElementById("tm-price").value = ''; document.getElementById("tm-shares").value = ''; document.getElementById("tm-fxrate").value = ''; document.getElementById("tm-fxrate").disabled = false;
         rebuildNavHistoryFromLedger(); state.lastModified = Date.now(); saveData(); triggerDynamicFeedback("已成功補登時光機交易", "buy", null, "INSERTED");
     }
@@ -4111,7 +4385,7 @@
         }
         state.ledger = testLedger;
         reconcileDividendsAfterLedgerChange();
-        state.cash = result.cash + getDividendsTotalTWD(); state.holdings = result.holdings;
+        state.cash = result.cash + getDividendsTotalTWD(); state.wallet = result.wallet; state.holdings = result.holdings;
         rebuildNavHistoryFromLedger(); state.lastModified = Date.now(); saveData(); triggerDynamicFeedback("交易已成功撤銷", "buy", null, "UNDONE");
     }
 
@@ -4349,6 +4623,7 @@
                 state.ledger.sort((a, b) => b.timestamp - a.timestamp);
                 const result = recalculateState(state.ledger);
                 state.cash = result.cash + getDividendsTotalTWD();
+                state.wallet = result.wallet;
                 state.holdings = result.holdings;
                 rebuildNavHistoryFromLedger();
             }
@@ -4941,12 +5216,21 @@
     const sharesInput = document.getElementById("trade-shares");
     function stepShares(delta) { sharesInput.value = Math.max(1, (parseInt(sharesInput.value) || 0) + delta); validateSharesInput(); }
     
+    // 💱 買進某代號時的可用購買力（以「該標的原生計價幣別」為單位）：
+    // 優先使用貨幣庫存中同幣別的餘額，不足的部分視為可即時以台幣現金換匯補足。
+    function getAvailableBuyingPowerNative(ticker) {
+        const curr = getCurrencyForTicker(ticker), rate = getCurrencyMultiplier(ticker);
+        if (curr === 'TWD') return state.cash;
+        return getCurrencyBalance(curr) + (state.cash / rate);
+    }
+
     function applyPercentShares(pct, animateConvert) {
         if (isPriceLoading || currentRealPrice === null) return;
         const rate = getCurrencyMultiplier(currentTicker);
         if (tradeMode === 'BUY') { 
             const feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100 || 0.001425; 
-            sharesInput.value = Math.max(1, Math.floor(Math.floor(state.cash / (currentRealPrice * rate * (1 + feeRate))) * pct)); 
+            const buyingPower = getAvailableBuyingPowerNative(currentTicker);
+            sharesInput.value = Math.max(1, Math.floor(Math.floor(buyingPower / (currentRealPrice * (1 + feeRate))) * pct)); 
         } else { 
             const holding = state.holdings[currentTicker]?.shares || 0; sharesInput.value = Math.max(1, Math.floor(holding * pct)); 
         }
@@ -4992,8 +5276,17 @@
 
         if (isPriceLoading || currentRealPrice === null) { document.getElementById("exec-trade-btn").disabled = true; return; }
         let s = parseInt(sharesInput.value) || 0; const rate = getCurrencyMultiplier(currentTicker), feeRate = getMarketFeeConfig(currentTicker).feeRate;
-        const maxBuy = Math.max(0, Math.floor(state.cash / (currentRealPrice * rate * (1 + feeRate)))); const holding = state.holdings[currentTicker]?.shares || 0;
+        const buyingPower = getAvailableBuyingPowerNative(currentTicker);
+        const maxBuy = Math.max(0, Math.floor(buyingPower / (currentRealPrice * (1 + feeRate)))); const holding = state.holdings[currentTicker]?.shares || 0;
         document.getElementById("holding-shares-display").innerText = holding.toLocaleString();
+
+        // 💱 外幣錢包餘額提示：非台幣計價標的才顯示，讓使用者知道下單會優先扣哪個貨幣庫存
+        const walletIndicator = document.getElementById("wallet-balance-indicator"), walletIndicatorVal = document.getElementById("wallet-balance-indicator-val");
+        if (walletIndicator) {
+            const curr = getCurrencyForTicker(currentTicker);
+            if (curr === 'TWD') { walletIndicator.style.display = 'none'; }
+            else { walletIndicator.style.display = 'flex'; walletIndicatorVal.innerText = `${curr} ${getCurrencyBalance(curr).toLocaleString(undefined, {maximumFractionDigits:2})}`; }
+        }
         
         if (tradeMode === 'BUY') {
             document.getElementById('limit-label').innerText = '上限'; document.getElementById('max-buy-display').innerText = maxBuy.toLocaleString();
@@ -5038,20 +5331,37 @@
         const timestamp = Date.now(), tradeTime = getFullFormattedTimeFromDate(timestamp);
         
         if(tradeMode === 'BUY') {
-            if(twdTotalSpend > state.cash) { alert("現有現金不足！"); validateSharesInput(); return; }
-            state.cash -= twdTotalSpend; 
+            const curr = getCurrencyForTicker(currentTicker), nativeCost = origSubtotal + origFee;
+            let walletSpendNative = 0, cashSpendTWD = 0;
+            if (curr === 'TWD') {
+                if (nativeCost > state.cash + 1e-6) { alert("現有現金不足！"); validateSharesInput(); return; }
+                cashSpendTWD = nativeCost; state.cash -= cashSpendTWD;
+            } else {
+                const walletAvail = getCurrencyBalance(curr);
+                const buyingPowerNative = walletAvail + (state.cash / rate);
+                if (nativeCost > buyingPowerNative + 1e-6) { alert(`「${curr}」貨幣庫存與現有台幣現金合計不足！`); validateSharesInput(); return; }
+                // 💱 優先使用貨幣庫存中的同幣別餘額，不足的部分才即時以台幣現金換匯補足
+                walletSpendNative = Math.min(walletAvail, nativeCost);
+                const shortfallNative = nativeCost - walletSpendNative;
+                if (shortfallNative > 0) { cashSpendTWD = shortfallNative * rate; state.cash -= cashSpendTWD; }
+                adjustCurrencyBalance(curr, -walletSpendNative);
+            }
             if(!state.holdings[currentTicker]) state.holdings[currentTicker] = { shares: 0, avgPrice: 0 };
             const h = state.holdings[currentTicker], origTotalSpend = origSubtotal + origFee;
             h.avgPrice = ((h.shares * h.avgPrice) + origTotalSpend) / (h.shares + s); h.shares += s;
-            state.ledger.unshift({ time: tradeTime, timestamp: timestamp, action: "BUY", ticker: currentTicker, price: currentRealPrice, shares: s, fee: twdFee, total: twdTotalSpend, realizedPnL: null, rate: rate, origTotalSpend: origTotalSpend });
-            triggerDynamicFeedback(`成功買進 ${s} 股 ${currentTicker}`, 'buy', document.getElementById('exec-trade-btn'), `+${s} Shares`);
+            state.ledger.unshift({ time: tradeTime, timestamp: timestamp, action: "BUY", ticker: currentTicker, price: currentRealPrice, shares: s, fee: twdFee, total: twdTotalSpend, realizedPnL: null, rate: rate, origTotalSpend: origTotalSpend, walletCurrency: curr !== 'TWD' ? curr : undefined, walletSpendNative: curr !== 'TWD' ? walletSpendNative : undefined, cashSpendTWD: curr !== 'TWD' ? cashSpendTWD : undefined });
+            const walletNote = (curr !== 'TWD' && walletSpendNative > 0) ? `（含使用貨幣庫存 ${curr} ${walletSpendNative.toLocaleString(undefined,{maximumFractionDigits:2})}）` : '';
+            triggerDynamicFeedback(`成功買進 ${s} 股 ${currentTicker}${walletNote}`, 'buy', document.getElementById('exec-trade-btn'), `+${s} Shares`);
         } else {
             const h = state.holdings[currentTicker]; if(!h || h.shares < s) { validateSharesInput(); return; }
-            state.cash += twdTotalGet; 
+            const curr = getCurrencyForTicker(currentTicker), netNative = origSubtotal - origFee - origTax;
+            // 💱 賣出所得優先存入該標的計價幣別的貨幣庫存（TWD 計價標的則直接存入台幣現金，行為與過去一致）
+            if (curr === 'TWD') { state.cash += twdTotalGet; } else { adjustCurrencyBalance(curr, netNative); }
             const costBasisTWD = s * h.avgPrice * rate, realizedPnL = twdTotalGet - costBasisTWD;
             h.shares -= s; if(h.shares === 0) delete state.holdings[currentTicker];
-            state.ledger.unshift({ time: tradeTime, timestamp: timestamp, action: "SELL", ticker: currentTicker, price: currentRealPrice, shares: s, fee: twdFee + twdTax, total: twdTotalGet, realizedPnL: realizedPnL, rate: rate });
-            triggerDynamicFeedback(`成功賣出 ${s} 股 ${currentTicker}`, 'sell', document.getElementById('exec-trade-btn'), `+$${Math.floor(twdTotalGet).toLocaleString()}`);
+            state.ledger.unshift({ time: tradeTime, timestamp: timestamp, action: "SELL", ticker: currentTicker, price: currentRealPrice, shares: s, fee: twdFee + twdTax, total: twdTotalGet, realizedPnL: realizedPnL, rate: rate, walletCurrency: curr !== 'TWD' ? curr : undefined, walletCreditNative: curr !== 'TWD' ? netNative : undefined });
+            const walletNote = curr !== 'TWD' ? `（已存入貨幣庫存 ${curr} ${netNative.toLocaleString(undefined,{maximumFractionDigits:2})}）` : '';
+            triggerDynamicFeedback(`成功賣出 ${s} 股 ${currentTicker}${walletNote}`, 'sell', document.getElementById('exec-trade-btn'), `+$${Math.floor(twdTotalGet).toLocaleString()}`);
         }
         
         rebuildNavHistoryFromLedger(); 
@@ -5073,15 +5383,18 @@
             holdingsVal += val; 
             totalCost += costBasis; 
         }
-        const nav = state.cash + holdingsVal, pnl = unrealizedPnlNet;
-        // 🩹 修復「好友資產估值只顯示現金餘額」：把主頁計算出的 NAV（含即時股價與匯率換算的庫存市值）
-        // 快取進 state.totalAssetsTWD，隨帳號資料一起存本機並同步雲端，讓後端 get_public_profile /
+        const nav = state.cash + getWalletValueTWD() + holdingsVal, pnl = unrealizedPnlNet;
+        // 🩹 修復「好友資產估值只顯示現金餘額」：把主頁計算出的 NAV（含即時股價與匯率換算的庫存市值、
+        // 以及貨幣庫存台幣等值）快取進 state.totalAssetsTWD，隨帳號資料一起存本機並同步雲端，讓後端 get_public_profile /
         // add_friend_mutual 可以直接讀這個已經算好的正確總資產，而不必自己在後端重算（後端沒有即時報價與匯率）
         state.totalAssetsTWD = nav;
         document.getElementById("nav-total").innerText = `$ ${Math.floor(nav).toLocaleString()}`; document.getElementById("nav-cash").innerText = `$ ${Math.floor(state.cash).toLocaleString()}`;
         document.getElementById("nav-holdings").innerText = `$ ${Math.floor(holdingsVal).toLocaleString()}`;
         document.getElementById("nav-pnl").innerText = `${pnl >= 0 ? '+' : ''}$ ${Math.floor(pnl).toLocaleString()} (${totalCost > 0 ? ((pnl/totalCost)*100).toFixed(1) : 0}%)`;
         document.getElementById("nav-pnl").style.color = pnl >= 0 ? "var(--color-up)" : "var(--color-down)";
+
+        // 若目前正顯示「貨幣庫存」分頁，隨每輪報價/匯率刷新同步更新其內容
+        if (document.getElementById('holdings-subview-currency') && document.getElementById('holdings-subview-currency').style.display !== 'none') renderCurrencyInventory();
 
         checkStopLossTrigger(pnl, totalCost);
 
@@ -6475,6 +6788,7 @@
             cloudState.cardTickers = [...new Set(cloudState.cardTickers || ["NVDA", "2330.TW"])];
             cloudState.recentTickers = cloudState.recentTickers || ["NVDA", "2330.TW"];
             cloudState.holdings = cloudState.holdings || {};
+            cloudState.wallet = cloudState.wallet || {};
             cloudState.ledger = cloudState.ledger || [];
             cloudState.dividends = cloudState.dividends || [];
             cloudState.lastDividendCheck = cloudState.lastDividendCheck || 0;
@@ -6829,6 +7143,7 @@
     initGyroOnboarding();
     initIosAddToHomeScreenPrompt();
     initDatePickerDisplays();
+    initCurrencySearchInputs();
 
     startApp(); 
 
