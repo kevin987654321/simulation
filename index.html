@@ -4530,10 +4530,6 @@
         if (!body) return;
         const divs = state.dividends || [];
 
-        if (totalLabel) {
-            const total = getDividendsTotalTWD();
-            totalLabel.innerText = divs.length ? `累計已入帳 TWD $${Math.floor(total).toLocaleString()}` : '';
-        }
 
         body.innerHTML = divs.length ? divs.map(d => {
             return `<tr>
