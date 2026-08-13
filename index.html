@@ -884,9 +884,9 @@
                     <div>
                         <div style="font-size:11px; color:#888; margin-bottom:4px;">從</div>
                         <div class="custom-select-wrapper" id="fx-from-wrapper" style="width:150px; position:relative;">
-                            <div class="select-input-box">
-                                <input type="text" id="fx-from-input" value="TWD" autocomplete="off" placeholder="搜尋幣別">
-                                <button class="select-dropdown-btn" onclick="toggleCurrencyDropdown('from')"><i class="fa-solid fa-chevron-down"></i></button>
+                            <div class="select-input-box" style="width:100%; box-sizing:border-box;">
+                                <input type="text" id="fx-from-input" value="TWD" autocomplete="off" placeholder="搜尋幣別" style="min-width:0; width:100%;">
+                                <button class="select-dropdown-btn" onclick="toggleCurrencyDropdown('from')" style="flex-shrink:0;"><i class="fa-solid fa-chevron-down"></i></button>
                             </div>
                             <div class="opaque-dropdown-list" id="fx-from-dropdown" style="width:220px;">
                                 <div id="fx-from-search-list"></div>
@@ -901,9 +901,9 @@
                     <div>
                         <div style="font-size:11px; color:#888; margin-bottom:4px;">到</div>
                         <div class="custom-select-wrapper" id="fx-to-wrapper" style="width:150px; position:relative;">
-                            <div class="select-input-box">
-                                <input type="text" id="fx-to-input" value="USD" autocomplete="off" placeholder="搜尋幣別">
-                                <button class="select-dropdown-btn" onclick="toggleCurrencyDropdown('to')"><i class="fa-solid fa-chevron-down"></i></button>
+                            <div class="select-input-box" style="width:100%; box-sizing:border-box;">
+                                <input type="text" id="fx-to-input" value="USD" autocomplete="off" placeholder="搜尋幣別" style="min-width:0; width:100%;">
+                                <button class="select-dropdown-btn" onclick="toggleCurrencyDropdown('to')" style="flex-shrink:0;"><i class="fa-solid fa-chevron-down"></i></button>
                             </div>
                             <div class="opaque-dropdown-list" id="fx-to-dropdown" style="width:220px;">
                                 <div id="fx-to-search-list"></div>
