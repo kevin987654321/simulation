@@ -279,6 +279,22 @@
 
         .trade-panel { display: flex; flex-direction: column; padding: 16px; gap: 12px; height: 100%; overflow-y: auto; }
         .panel-header { font-size: 13px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+
+        /* ⏰ 模擬限價單：面板標題右上角的時鐘切換按鈕。點擊後現價顯示區會切換為限價輸入框。 */
+        .limit-order-toggle-btn { width: 24px; height: 24px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: transparent; border: 1px solid rgba(255,255,255,0.1); color: #888; border-radius: 6px; cursor: pointer; font-size: 12px; transition: all 0.2s ease; -webkit-tap-highlight-color: transparent; }
+        @media (hover: hover) and (pointer: fine) {
+            .limit-order-toggle-btn:hover { color: #ccc; background: rgba(255,255,255,0.08); }
+            .limit-order-toggle-btn.active:hover { color: var(--color-acc); background: rgba(0,212,255,0.18); }
+        }
+        .limit-order-toggle-btn.active { color: var(--color-acc); border-color: var(--color-acc); background: rgba(0,212,255,0.12); }
+
+        /* ⏰ 限價輸入框：外觀與現價顯示區一致（monospace、粗體），聚焦時邊框亮起提示可編輯 */
+        .limit-price-input { font-size: 20px; font-weight: 800; font-family: monospace; color: #fff; background: rgba(0,212,255,0.06); border: 1px solid rgba(0,212,255,0.35); border-radius: 6px; padding: 2px 8px; width: 130px; outline: none; transition: border-color 0.2s ease, background 0.2s ease; }
+        .limit-price-input:focus { border-color: var(--color-acc); background: rgba(0,212,255,0.1); }
+
+        /* ⏰ 待成交限價單清單 */
+        .limit-order-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; background: rgba(255,255,255,0.02); }
+        .limit-order-item + .limit-order-item { margin-top: 6px; }
         
         .mode-toggle-group { display: flex; gap: 8px; background: rgba(0,0,0,0.5); padding: 5px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 4px; }
         .mode-toggle-btn { flex: 1; padding: 8px; border-radius: 6px; border: none; background: transparent; color: #888; font-weight: bold; cursor: pointer; transition: all 0.2s; font-size: 12px; }
@@ -1518,6 +1534,9 @@
 <div id="shared-trade-panel" class="glass-panel trade-panel">
     <div class="panel-header">
         <span><img src="終端.png" width="14" height="14"> 即時報價與下單</span>
+        <button id="limit-order-toggle-btn" class="limit-order-toggle-btn" onclick="toggleLimitOrderMode()" title="模擬限價單">
+            <i class="fa-regular fa-clock"></i>
+        </button>
     </div>
 
     <div>
@@ -1549,6 +1568,11 @@
         <div style="display:flex; justify-content:space-between; align-items:center;">
             <div>
                 <div id="trade-price-display" style="font-size:20px; font-weight:800; font-family:monospace; color:#fff;">$ ----</div>
+                <!-- ⏰ 模擬限價單輸入框：點擊標題右上角時鐘圖示後顯示，取代現價顯示。
+                     type="number" 搭配 inputmode="decimal" 支援手機數字小鍵盤；step 讓瀏覽器原生上下鍵可調整數值；
+                     另外掛載 wheel 事件監聽，聚焦時可用滑鼠滾輪調整金額。 -->
+                <input type="number" id="limit-price-input" class="limit-price-input" style="display:none;"
+                    oninput="onLimitPriceInput()" onfocus="this.select()">
             </div>
             <div style="text-align:right;">
                 <div style="font-size:11px; color:#888;">持股 / <span id="limit-label">上限</span></div>
@@ -1566,6 +1590,14 @@
             <span><i class="fa-solid fa-wallet"></i> 外幣錢包可用</span>
             <span id="wallet-balance-indicator-val" style="font-family:monospace; color:var(--color-buy); font-weight:bold;">--</span>
         </div>
+    </div>
+
+    <!-- ⏰ 待成交限價單清單：有任何模擬限價單尚未成交時才顯示 -->
+    <div id="pending-limit-orders-box" style="display:none;">
+        <div style="font-size:11px; color:#888; display:flex; align-items:center; gap:5px; margin-bottom:6px;">
+            <i class="fa-regular fa-clock"></i> 待成交限價單
+        </div>
+        <div id="pending-limit-orders-list" style="display:flex; flex-direction:column; gap:6px;"></div>
     </div>
 
     <div class="mobile-stock-chart-box">
@@ -1724,7 +1756,9 @@
     }
 
     async function fetchHoldingsPrices() {
-        const tickers = Object.keys(state.holdings);
+        // ⏰ 除了現有持股，尚未持有但已掛有模擬限價單的代號也要一併抓報價，才能偵測是否已觸價
+        const orderTickers = (state.limitOrders || []).map(o => o.ticker);
+        const tickers = Array.from(new Set([...Object.keys(state.holdings), ...orderTickers]));
         if (tickers.length === 0) return;
         
         const promises = tickers.map(async (t) => {
@@ -2779,7 +2813,7 @@
     Chart.register(smoothCrosshairPlugin);
 
     const DATA_KEY = "ACORNTRADE_MANUAL_DATA";
-    let state = { cash: 1000000, wallet: {}, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] };
+    let state = { cash: 1000000, wallet: {}, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, limitOrders: [], dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] };
     let stopLossAlertShown = false; // 避免同一次觸發反覆彈出警示，虧損回復到門檻之上才會重置
     let currentTicker = localStorage.getItem('LAST_SELECTED_TICKER') || "NVDA";
 
@@ -2992,6 +3026,7 @@
         try { importedState = JSON.parse(result.stateJSON); } catch (e) { importedState = null; }
         if (!importedState) { triggerDynamicFeedback('雲端資料格式錯誤，無法還原', 'sell', null, null); return; }
         importedState.stopLoss = importedState.stopLoss || { enabled: false, percent: 10 };
+        importedState.limitOrders = importedState.limitOrders || [];
 
         const id = result.accountId || trimmedId || generateAccountId();
         if (ACCOUNTS.find(a => a.id === id)) { alert('本機已經存在此帳號，無法重複登入！'); return; }
@@ -3196,6 +3231,7 @@
         try { importedState = JSON.parse(result.stateJSON); } catch (e) { importedState = null; }
         if (!importedState) { triggerDynamicFeedback('雲端資料格式錯誤，無法還原', 'sell', null, null); return; }
         importedState.stopLoss = importedState.stopLoss || { enabled: false, percent: 10 };
+        importedState.limitOrders = importedState.limitOrders || [];
 
         const id = result.accountId || generateAccountId();
         const finalName = result.accountName || '雲端下載帳戶';
@@ -3574,7 +3610,7 @@
         ACCOUNTS.push({ id, name, storageKey, hasPassword: false, passwordHash: null, syncEnabled: false, requirePasswordOnBoot: true, createdAt: Date.now() });
         saveAccountsMeta();
 
-        const freshState = { cash: 1000000, wallet: {}, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 } };
+        const freshState = { cash: 1000000, wallet: {}, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, limitOrders: [] };
         persistAccountState(storageKey, freshState);
 
         nameInput.value = '';
@@ -3691,6 +3727,7 @@
         renderCards();
         renderRecentTickers();
         renderAccountManagerList();
+        renderPendingLimitOrders();
 
         fetchHoldingsPrices().then(() => { updateLiveNavNode(); updateAllViews(true); });
         fetchAllCardsData();
@@ -4000,6 +4037,7 @@
                 state.lastSplitCheck = state.lastSplitCheck || 0;
                 state.lastModified = state.lastModified || 0;
                 state.stopLoss = state.stopLoss || { enabled: false, percent: 10 };
+                state.limitOrders = state.limitOrders || [];
                 state.dripEnabled = !!state.dripEnabled;
                 state.unlockedAchievements = state.unlockedAchievements || [];
                 // 👥 好友清單 / 🏆 成就展示櫃改為綁定在「帳號自身的 state」裡，隨帳號資料一起存本機與雲端同步，
@@ -4016,7 +4054,7 @@
                 if (!state.navHistory || !state.navHistory.timestamps || state.navHistory.timestamps.length === 0) { rebuildNavHistoryFromLedger(); }
             } catch(e) {} 
         } else {
-            state = { cash: 1000000, wallet: {}, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] };
+            state = { cash: 1000000, wallet: {}, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, limitOrders: [], dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] };
             rebuildNavHistoryFromLedger(); saveData();
         }
         stopLossAlertShown = false;
@@ -4074,6 +4112,7 @@
         const autoSyncEl = document.getElementById("cfg-auto-sync-enable"); if (autoSyncEl) autoSyncEl.checked = AUTO_SYNC_ENABLED;
         updateTimeframeButtons();
         initTimeMachineDefault(); renderRecentTickers(); renderCards();
+        renderPendingLimitOrders();
         checkAchievements();
         renderAchievementsPage();
         renderFriendsList();
@@ -4098,7 +4137,7 @@
     // 可能因 IEEE754 浮點誤差累積出如 999999.9999999998 這類極小殘值。
     // 在集中的存檔入口統一四捨五入到小數點後 2 位，修正內部數值、不影響任何顯示或操作行為。
     function saveData() { if (typeof state.cash === 'number') state.cash = Math.round(state.cash * 100) / 100; persistAccountState(getActiveAccount().storageKey, state); updateAllViews(true); renderCards(); scheduleCloudSync(); checkAchievements(); }
-    async function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { const storageKey = getActiveAccount().storageKey; localStorage.removeItem(storageKey); await idbDeleteLedger(storageKey); state = { cash: 1000000, wallet: {}, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: Date.now(), recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] }; await initData(); fetchStockHistoryData(currentTicker, true); } }
+    async function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { const storageKey = getActiveAccount().storageKey; localStorage.removeItem(storageKey); await idbDeleteLedger(storageKey); state = { cash: 1000000, wallet: {}, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: Date.now(), recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, limitOrders: [], dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] }; await initData(); fetchStockHistoryData(currentTicker, true); } }
 
     function exportData() {
         const dataStr = JSON.stringify(state, null, 2), blob = new Blob([dataStr], { type: "application/json" }), url = URL.createObjectURL(blob), a = document.createElement("a");
@@ -4113,7 +4152,7 @@
             try {
                 const importedState = JSON.parse(e.target.result);
                 if (importedState && typeof importedState.cash === 'number') {
-                    state = importedState; state.cardTickers = state.cardTickers || []; state.recentTickers = state.recentTickers || []; state.holdings = state.holdings || {}; state.wallet = state.wallet || {}; state.ledger = state.ledger || []; state.dividends = state.dividends || []; state.lastDividendCheck = state.lastDividendCheck || 0; state.splits = state.splits || []; state.lastSplitCheck = state.lastSplitCheck || 0; state.lastModified = Date.now(); state.stopLoss = state.stopLoss || { enabled: false, percent: 10 }; state.dripEnabled = !!state.dripEnabled; state.unlockedAchievements = state.unlockedAchievements || []; state.friends = state.friends || []; state.achvShowcase = state.achvShowcase || [];
+                    state = importedState; state.cardTickers = state.cardTickers || []; state.recentTickers = state.recentTickers || []; state.holdings = state.holdings || {}; state.wallet = state.wallet || {}; state.ledger = state.ledger || []; state.dividends = state.dividends || []; state.lastDividendCheck = state.lastDividendCheck || 0; state.splits = state.splits || []; state.lastSplitCheck = state.lastSplitCheck || 0; state.lastModified = Date.now(); state.stopLoss = state.stopLoss || { enabled: false, percent: 10 }; state.limitOrders = state.limitOrders || []; state.dripEnabled = !!state.dripEnabled; state.unlockedAchievements = state.unlockedAchievements || []; state.friends = state.friends || []; state.achvShowcase = state.achvShowcase || [];
                     state.ledger.forEach(r => {
                         if (!r.timestamp) {
                             let d = new Date(), parts = r.time ? r.time.split(':') : [];
@@ -5078,6 +5117,8 @@
         isPriceLoading = true; currentRealPrice = null; priceFetchFailCount = 0;
         document.getElementById("trade-price-display").innerHTML = `<span style="font-size:14px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> 報價連線中...</span>`;
         document.getElementById("exec-trade-btn").disabled = true;
+        // ⏰ 切換代號時，若正處於限價輸入模式則退回市價顯示，避免沿用上一個代號的限價金額造成誤解
+        if (isLimitOrderMode) toggleLimitOrderMode();
         
         fetchRealPrice(t); 
         fetchStockHistoryData(t, true); 
@@ -5119,6 +5160,7 @@
                 }
             }
             updateAllViews(false); 
+            checkLimitOrders();
         }
     }
 
@@ -5205,7 +5247,8 @@
     function setTradeMode(mode) {
         tradeMode = mode; document.getElementById('mode-btn-buy').classList.toggle('active', mode === 'BUY'); document.getElementById('mode-btn-sell').classList.toggle('active', mode === 'SELL');
         const execBtn = document.getElementById('exec-trade-btn');
-        if (mode === 'BUY') { execBtn.className = 'exec-btn buy'; execBtn.innerText = '確認買進 BUY'; } else { execBtn.className = 'exec-btn sell'; execBtn.innerText = '確認賣出 SELL'; }
+        execBtn.className = mode === 'BUY' ? 'exec-btn buy' : 'exec-btn sell';
+        updateExecBtnLabel();
         validateSharesInput();
     }
 
@@ -5226,7 +5269,7 @@
         if (tradeMode === 'BUY') { 
             const feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100 || 0.001425; 
             const buyingPower = getAvailableBuyingPowerNative(currentTicker);
-            sharesInput.value = Math.max(1, Math.floor(Math.floor(buyingPower / (currentRealPrice * (1 + feeRate))) * pct)); 
+            sharesInput.value = Math.max(1, Math.floor(Math.floor(buyingPower / (getEffectivePrice() * (1 + feeRate))) * pct)); 
         } else { 
             const holding = state.holdings[currentTicker]?.shares || 0; sharesInput.value = Math.max(1, Math.floor(holding * pct)); 
         }
@@ -5273,7 +5316,7 @@
         if (isPriceLoading || currentRealPrice === null) { document.getElementById("exec-trade-btn").disabled = true; return; }
         let s = parseInt(sharesInput.value) || 0; const rate = getCurrencyMultiplier(currentTicker), feeRate = getMarketFeeConfig(currentTicker).feeRate;
         const buyingPower = getAvailableBuyingPowerNative(currentTicker);
-        const maxBuy = Math.max(0, Math.floor(buyingPower / (currentRealPrice * (1 + feeRate)))); const holding = state.holdings[currentTicker]?.shares || 0;
+        const maxBuy = Math.max(0, Math.floor(buyingPower / (getEffectivePrice() * (1 + feeRate)))); const holding = state.holdings[currentTicker]?.shares || 0;
         document.getElementById("holding-shares-display").innerText = holding.toLocaleString();
 
         // 💱 外幣錢包餘額提示：非台幣計價標的才顯示，讓使用者知道下單會優先扣哪個貨幣庫存
@@ -5284,12 +5327,13 @@
             else { walletIndicator.style.display = 'flex'; walletIndicatorVal.innerText = `${curr} ${getCurrencyBalance(curr).toLocaleString(undefined, {maximumFractionDigits:2})}`; }
         }
         
+        const limitPriceValid = !isLimitOrderMode || (getEffectivePrice() !== null && getEffectivePrice() > 0);
         if (tradeMode === 'BUY') {
             document.getElementById('limit-label').innerText = '上限'; document.getElementById('max-buy-display').innerText = maxBuy.toLocaleString();
-            document.getElementById("exec-trade-btn").disabled = (s <= 0 || s > maxBuy);
+            document.getElementById("exec-trade-btn").disabled = (s <= 0 || s > maxBuy || !limitPriceValid);
         } else {
             document.getElementById('limit-label').innerText = '上限'; document.getElementById('max-buy-display').innerText = holding.toLocaleString();
-            document.getElementById("exec-trade-btn").disabled = (s <= 0 || s > holding);
+            document.getElementById("exec-trade-btn").disabled = (s <= 0 || s > holding || !limitPriceValid);
         }
         recalculateOrder();
     }
@@ -5298,7 +5342,8 @@
         if (isPriceLoading || currentRealPrice === null) return;
         let s = parseInt(sharesInput.value) || 0; const rate = getCurrencyMultiplier(currentTicker);
         const { feeRate, taxRate } = getMarketFeeConfig(currentTicker);
-        const subtotal = s * currentRealPrice * rate, fee = subtotal * feeRate;
+        const effPrice = getEffectivePrice() || currentRealPrice;
+        const subtotal = s * effPrice * rate, fee = subtotal * feeRate;
         const tax = tradeMode === 'SELL' ? subtotal * taxRate : 0;
         document.getElementById("calc-subtotal").innerText = `$ ${subtotal.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
         document.getElementById("calc-fee").innerText = `$ ${fee.toFixed(2)}`; document.getElementById("calc-tax").innerText = `$ ${tax.toFixed(2)}`;
@@ -5306,11 +5351,117 @@
         document.getElementById("total-label").innerText = tradeMode === 'BUY' ? '預估總付出:' : '預估總收入:'; totalEl.innerText = `$ ${total.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
     }
 
+    // ============================================================
+    // ⏰ 模擬限價單自動下單（Simulated Limit Orders）
+    // 交易核心邏輯抽出為 executeTradeCore()，供「市價單」(executeTrade)
+    // 與「限價單自動成交」(checkLimitOrders) 共用同一套持股/現金/貨幣庫存/分類帳邏輯，
+    // 避免邏輯分裂導致兩種下單方式算出不一致的結果。
+    // ============================================================
+    function executeTradeCore(ticker, mode, s, price, opts) {
+        opts = opts || {};
+        const rate = getCurrencyMultiplier(ticker), origSubtotal = s * price;
+        const { feeRate, taxRate } = getMarketFeeConfig(ticker);
+        const origFee = origSubtotal * feeRate;
+        const origTax = mode === 'SELL' ? origSubtotal * taxRate : 0;
+        const twdTotalSpend = (origSubtotal + origFee) * rate, twdTotalGet = (origSubtotal - origFee - origTax) * rate, twdFee = origFee * rate, twdTax = origTax * rate;
+        const timestamp = Date.now(), tradeTime = getFullFormattedTimeFromDate(timestamp);
+
+        if (mode === 'BUY') {
+            const curr = getCurrencyForTicker(ticker), nativeCost = origSubtotal + origFee;
+            let walletSpendNative = 0, cashSpendTWD = 0;
+            if (curr === 'TWD') {
+                if (nativeCost > state.cash + 1e-6) return { success: false, reason: 'cash' };
+                cashSpendTWD = nativeCost; state.cash -= cashSpendTWD;
+            } else {
+                const walletAvail = getCurrencyBalance(curr);
+                const buyingPowerNative = walletAvail + (state.cash / rate);
+                if (nativeCost > buyingPowerNative + 1e-6) return { success: false, reason: 'cash' };
+                walletSpendNative = Math.min(walletAvail, nativeCost);
+                const shortfallNative = nativeCost - walletSpendNative;
+                if (shortfallNative > 0) { cashSpendTWD = shortfallNative * rate; state.cash -= cashSpendTWD; }
+                adjustCurrencyBalance(curr, -walletSpendNative);
+            }
+            if(!state.holdings[ticker]) state.holdings[ticker] = { shares: 0, avgPrice: 0 };
+            const h = state.holdings[ticker], origTotalSpend = origSubtotal + origFee;
+            h.avgPrice = ((h.shares * h.avgPrice) + origTotalSpend) / (h.shares + s); h.shares += s;
+            state.ledger.unshift({ time: tradeTime, timestamp: timestamp, action: "BUY", ticker: ticker, price: price, shares: s, fee: twdFee, total: twdTotalSpend, realizedPnL: null, rate: rate, origTotalSpend: origTotalSpend, walletCurrency: curr !== 'TWD' ? curr : undefined, walletSpendNative: curr !== 'TWD' ? walletSpendNative : undefined, cashSpendTWD: curr !== 'TWD' ? cashSpendTWD : undefined, orderType: opts.orderType });
+            return { success: true, curr, walletSpendNative, twdTotalSpend };
+        } else {
+            const h = state.holdings[ticker]; if(!h || h.shares < s) return { success: false, reason: 'shares' };
+            const curr = getCurrencyForTicker(ticker), netNative = origSubtotal - origFee - origTax;
+            if (curr === 'TWD') { state.cash += twdTotalGet; } else { adjustCurrencyBalance(curr, netNative); }
+            const costBasisTWD = s * h.avgPrice * rate, realizedPnL = twdTotalGet - costBasisTWD;
+            h.shares -= s; if(h.shares === 0) delete state.holdings[ticker];
+            state.ledger.unshift({ time: tradeTime, timestamp: timestamp, action: "SELL", ticker: ticker, price: price, shares: s, fee: twdFee + twdTax, total: twdTotalGet, realizedPnL: realizedPnL, rate: rate, walletCurrency: curr !== 'TWD' ? curr : undefined, walletCreditNative: curr !== 'TWD' ? netNative : undefined, orderType: opts.orderType });
+            return { success: true, curr, netNative, twdTotalGet };
+        }
+    }
+
+    let isLimitOrderMode = false;
+
+    function toggleLimitOrderMode() {
+        isLimitOrderMode = !isLimitOrderMode;
+        const btn = document.getElementById('limit-order-toggle-btn');
+        const priceDisplay = document.getElementById('trade-price-display');
+        const limitInput = document.getElementById('limit-price-input');
+        btn.classList.toggle('active', isLimitOrderMode);
+        btn.title = isLimitOrderMode ? '切換回市價下單' : '模擬限價單';
+
+        if (isLimitOrderMode) {
+            priceDisplay.style.display = 'none';
+            limitInput.style.display = 'inline-block';
+            // 預設帶入目前現價，使用者可再自行修改
+            if (currentRealPrice !== null) limitInput.value = currentRealPrice.toFixed(2);
+            limitInput.focus(); limitInput.select();
+        } else {
+            priceDisplay.style.display = 'block';
+            limitInput.style.display = 'none';
+        }
+        updateExecBtnLabel();
+        recalculateOrder();
+    }
+
+    // 滑鼠滾輪調整限價：僅在輸入框已聚焦時攔截捲動事件（避免影響一般頁面滾動）
+    document.getElementById('limit-price-input').addEventListener('wheel', function(e) {
+        if (document.activeElement !== this) return;
+        e.preventDefault();
+        const step = parseFloat(this.step) || 0.01;
+        let val = parseFloat(this.value);
+        if (isNaN(val)) val = currentRealPrice || 0;
+        val = Math.max(0.01, Math.round((val + (e.deltaY < 0 ? step : -step)) * 100) / 100);
+        this.value = val.toFixed(2);
+        onLimitPriceInput();
+    }, { passive: false });
+
+    function onLimitPriceInput() { recalculateOrder(); }
+
+    function getEffectivePrice() {
+        if (isLimitOrderMode) {
+            const lp = parseFloat(document.getElementById('limit-price-input').value);
+            if (!isNaN(lp) && lp > 0) return lp;
+        }
+        return currentRealPrice;
+    }
+
+    function updateExecBtnLabel() {
+        const execBtn = document.getElementById('exec-trade-btn');
+        if (!execBtn) return;
+        if (isLimitOrderMode) {
+            execBtn.innerText = tradeMode === 'BUY' ? '送出限價買單' : '送出限價賣單';
+        } else {
+            execBtn.innerText = tradeMode === 'BUY' ? '確認買進 BUY' : '確認賣出 SELL';
+        }
+    }
+
     function executeTrade() {
         // 🔒 防止按鈕連點：一進入函式立刻鎖住按鈕，所有出口（成功或提前 return）都會呼叫 validateSharesInput() 依實際狀態恢復
         document.getElementById("exec-trade-btn").disabled = true;
 
         if (isPriceLoading || currentRealPrice === null) { alert("報價連線中，請稍候！"); validateSharesInput(); return; }
+
+        // ⏰ 限價模式：不立即成交，改為送出待成交限價單
+        if (isLimitOrderMode) { placeLimitOrder(); return; }
+
         // 🛡️ 幣別未知風險攔截：代碼後綴不在系統已知的市場清單中，代表計價幣別是用美金 Fallback「猜測」出來的，
         // 若該代碼實際上是其他幣別計價（如 CAD/AUD/EUR/INR），直接執行會用錯誤匯率算出離譜的 NAV。
         // 交易前強制跳出警告並要求使用者明確確認，避免帳戶淨值被靜默污染。
@@ -5319,51 +5470,108 @@
             if (!proceed) { validateSharesInput(); return; }
         }
         let s = parseInt(sharesInput.value); if(!s || s <= 0) { validateSharesInput(); return; }
-        const rate = getCurrencyMultiplier(currentTicker), origSubtotal = s * currentRealPrice;
-        const { feeRate, taxRate } = getMarketFeeConfig(currentTicker);
-        const origFee = origSubtotal * feeRate;
-        const origTax = tradeMode === 'SELL' ? origSubtotal * taxRate : 0;
-        const twdTotalSpend = (origSubtotal + origFee) * rate, twdTotalGet = (origSubtotal - origFee - origTax) * rate, twdFee = origFee * rate, twdTax = origTax * rate;
-        const timestamp = Date.now(), tradeTime = getFullFormattedTimeFromDate(timestamp);
-        
-        if(tradeMode === 'BUY') {
-            const curr = getCurrencyForTicker(currentTicker), nativeCost = origSubtotal + origFee;
-            let walletSpendNative = 0, cashSpendTWD = 0;
-            if (curr === 'TWD') {
-                if (nativeCost > state.cash + 1e-6) { alert("現有現金不足！"); validateSharesInput(); return; }
-                cashSpendTWD = nativeCost; state.cash -= cashSpendTWD;
-            } else {
-                const walletAvail = getCurrencyBalance(curr);
-                const buyingPowerNative = walletAvail + (state.cash / rate);
-                if (nativeCost > buyingPowerNative + 1e-6) { alert(`「${curr}」貨幣庫存與現有台幣現金合計不足！`); validateSharesInput(); return; }
-                // 💱 優先使用貨幣庫存中的同幣別餘額，不足的部分才即時以台幣現金換匯補足
-                walletSpendNative = Math.min(walletAvail, nativeCost);
-                const shortfallNative = nativeCost - walletSpendNative;
-                if (shortfallNative > 0) { cashSpendTWD = shortfallNative * rate; state.cash -= cashSpendTWD; }
-                adjustCurrencyBalance(curr, -walletSpendNative);
-            }
-            if(!state.holdings[currentTicker]) state.holdings[currentTicker] = { shares: 0, avgPrice: 0 };
-            const h = state.holdings[currentTicker], origTotalSpend = origSubtotal + origFee;
-            h.avgPrice = ((h.shares * h.avgPrice) + origTotalSpend) / (h.shares + s); h.shares += s;
-            state.ledger.unshift({ time: tradeTime, timestamp: timestamp, action: "BUY", ticker: currentTicker, price: currentRealPrice, shares: s, fee: twdFee, total: twdTotalSpend, realizedPnL: null, rate: rate, origTotalSpend: origTotalSpend, walletCurrency: curr !== 'TWD' ? curr : undefined, walletSpendNative: curr !== 'TWD' ? walletSpendNative : undefined, cashSpendTWD: curr !== 'TWD' ? cashSpendTWD : undefined });
-            const walletNote = (curr !== 'TWD' && walletSpendNative > 0) ? `（含使用貨幣庫存 ${curr} ${walletSpendNative.toLocaleString(undefined,{maximumFractionDigits:2})}）` : '';
+
+        const result = executeTradeCore(currentTicker, tradeMode, s, currentRealPrice, {});
+        if (!result.success) {
+            alert(result.reason === 'cash' ? (getCurrencyForTicker(currentTicker) === 'TWD' ? "現有現金不足！" : `「${getCurrencyForTicker(currentTicker)}」貨幣庫存與現有台幣現金合計不足！`) : "持股數量不足！");
+            validateSharesInput(); return;
+        }
+
+        if (tradeMode === 'BUY') {
+            const walletNote = (result.curr !== 'TWD' && result.walletSpendNative > 0) ? `（含使用貨幣庫存 ${result.curr} ${result.walletSpendNative.toLocaleString(undefined,{maximumFractionDigits:2})}）` : '';
             triggerDynamicFeedback(`成功買進 ${s} 股 ${currentTicker}${walletNote}`, 'buy', document.getElementById('exec-trade-btn'), `+${s} Shares`);
         } else {
-            const h = state.holdings[currentTicker]; if(!h || h.shares < s) { validateSharesInput(); return; }
-            const curr = getCurrencyForTicker(currentTicker), netNative = origSubtotal - origFee - origTax;
-            // 💱 賣出所得優先存入該標的計價幣別的貨幣庫存（TWD 計價標的則直接存入台幣現金，行為與過去一致）
-            if (curr === 'TWD') { state.cash += twdTotalGet; } else { adjustCurrencyBalance(curr, netNative); }
-            const costBasisTWD = s * h.avgPrice * rate, realizedPnL = twdTotalGet - costBasisTWD;
-            h.shares -= s; if(h.shares === 0) delete state.holdings[currentTicker];
-            state.ledger.unshift({ time: tradeTime, timestamp: timestamp, action: "SELL", ticker: currentTicker, price: currentRealPrice, shares: s, fee: twdFee + twdTax, total: twdTotalGet, realizedPnL: realizedPnL, rate: rate, walletCurrency: curr !== 'TWD' ? curr : undefined, walletCreditNative: curr !== 'TWD' ? netNative : undefined });
-            const walletNote = curr !== 'TWD' ? `（已存入貨幣庫存 ${curr} ${netNative.toLocaleString(undefined,{maximumFractionDigits:2})}）` : '';
-            triggerDynamicFeedback(`成功賣出 ${s} 股 ${currentTicker}${walletNote}`, 'sell', document.getElementById('exec-trade-btn'), `+$${Math.floor(twdTotalGet).toLocaleString()}`);
+            const walletNote = result.curr !== 'TWD' ? `（已存入貨幣庫存 ${result.curr} ${result.netNative.toLocaleString(undefined,{maximumFractionDigits:2})}）` : '';
+            triggerDynamicFeedback(`成功賣出 ${s} 股 ${currentTicker}${walletNote}`, 'sell', document.getElementById('exec-trade-btn'), `+$${Math.floor(result.twdTotalGet).toLocaleString()}`);
         }
-        
+
         rebuildNavHistoryFromLedger(); 
         state.lastModified = Date.now();
         saveData(); 
         validateSharesInput();
+    }
+
+    // 送出模擬限價單：不立即扣款/扣股，僅記錄委託，待背景報價輪詢偵測到價格觸價時自動成交（見 checkLimitOrders）
+    function placeLimitOrder() {
+        if (isCurrencySuffixUnrecognized(currentTicker)) {
+            const proceed = confirm(`⚠️ 無法辨識「${currentTicker}」的交易所後綴，系統暫時無法判斷正確計價幣別，將暫以美金匯率（約 ${currentUSDTWD}）換算。\n\n若此代碼實際上並非美元計價，換算出的金額將會嚴重錯誤！\n\n仍要以美金匯率繼續送出此筆限價單嗎？`);
+            if (!proceed) { validateSharesInput(); return; }
+        }
+        let s = parseInt(sharesInput.value); if(!s || s <= 0) { validateSharesInput(); return; }
+        const lp = parseFloat(document.getElementById('limit-price-input').value);
+        if (isNaN(lp) || lp <= 0) { alert("請輸入有效的限價金額！"); validateSharesInput(); return; }
+
+        state.limitOrders.push({
+            id: 'LMT' + Date.now() + Math.floor(Math.random() * 1000),
+            ticker: currentTicker,
+            mode: tradeMode,
+            shares: s,
+            limitPrice: Math.round(lp * 100) / 100,
+            createdAt: Date.now()
+        });
+        state.lastModified = Date.now();
+        saveData();
+        renderPendingLimitOrders();
+        triggerDynamicFeedback(`已送出限價${tradeMode === 'BUY' ? '買' : '賣'}單：${currentTicker} @ $${lp.toFixed(2)} × ${s} 股`, tradeMode === 'BUY' ? 'buy' : 'sell', document.getElementById('exec-trade-btn'), null);
+        validateSharesInput();
+    }
+
+    function cancelLimitOrder(id) {
+        const idx = state.limitOrders.findIndex(o => o.id === id);
+        if (idx === -1) return;
+        if (!confirm('確定要取消這筆限價單嗎？')) return;
+        state.limitOrders.splice(idx, 1);
+        state.lastModified = Date.now();
+        saveData();
+        renderPendingLimitOrders();
+    }
+    window.cancelLimitOrder = cancelLimitOrder;
+
+    function renderPendingLimitOrders() {
+        const box = document.getElementById('pending-limit-orders-box');
+        const list = document.getElementById('pending-limit-orders-list');
+        if (!box || !list) return;
+        const orders = state.limitOrders || [];
+        if (!orders.length) { box.style.display = 'none'; list.innerHTML = ''; return; }
+        box.style.display = 'block';
+        list.innerHTML = orders.slice().reverse().map(o => `
+            <div class="limit-order-item">
+                <div style="display:flex; flex-direction:column; gap:2px;">
+                    <span style="font-weight:bold; font-size:12px;"><span style="color:${o.mode === 'BUY' ? 'var(--color-buy)' : 'var(--color-sell)'};">${o.mode === 'BUY' ? '買' : '賣'}</span> ${o.ticker}</span>
+                    <span style="font-size:11px; color:#888; font-family:monospace;">@ $${o.limitPrice.toFixed(2)} × ${o.shares} 股</span>
+                </div>
+                <button onclick="cancelLimitOrder('${o.id}')" title="取消限價單" style="background:rgba(255,69,96,0.15); color:var(--color-sell); border:1px solid rgba(255,69,96,0.3); padding:4px 8px; border-radius:4px; cursor:pointer; font-size:11px;"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+        `).join('');
+    }
+
+    // 每輪報價刷新後檢查所有待成交限價單：BUY 於現價 ≤ 限價時成交，SELL 於現價 ≥ 限價時成交，成交價採用委託時設定的限價
+    function checkLimitOrders() {
+        if (!state.limitOrders || !state.limitOrders.length) return;
+        let changed = false;
+        for (const order of state.limitOrders.slice()) {
+            const price = globalPriceCache[order.ticker] !== undefined ? globalPriceCache[order.ticker] : (order.ticker === currentTicker ? currentRealPrice : null);
+            if (price === null || price === undefined) continue;
+            const triggered = order.mode === 'BUY' ? price <= order.limitPrice : price >= order.limitPrice;
+            if (!triggered) continue;
+
+            const result = executeTradeCore(order.ticker, order.mode, order.shares, order.limitPrice, { orderType: 'LIMIT' });
+            const idx = state.limitOrders.findIndex(o => o.id === order.id);
+            if (idx !== -1) state.limitOrders.splice(idx, 1);
+            changed = true;
+
+            if (result.success) {
+                triggerDynamicFeedback(`限價單自動成交：${order.mode === 'BUY' ? '買進' : '賣出'} ${order.ticker} @ $${order.limitPrice.toFixed(2)} × ${order.shares} 股`, order.mode === 'BUY' ? 'buy' : 'sell', null, null);
+            } else {
+                triggerDynamicFeedback(`限價單已取消：${order.ticker} 觸價時${result.reason === 'cash' ? '資金' : '持股'}不足`, 'gray', null, null);
+            }
+        }
+        if (changed) {
+            rebuildNavHistoryFromLedger();
+            state.lastModified = Date.now();
+            saveData();
+            renderPendingLimitOrders();
+        }
     }
 
     function updateAllViews(animate = true) {
@@ -5440,7 +5648,7 @@
                 : `<td style="color:#666;">-</td>`;
             const displayTime = r.timestamp ? getFullFormattedTimeFromDate(r.timestamp) : r.time;
             return `<tr id="ledger-row-${index}">
-                <td>${displayTime}</td><td><span class="badge ${r.action==='BUY'?'badge-buy':'badge-sell'}">${r.action}</span></td>
+                <td>${displayTime}</td><td><span class="badge ${r.action==='BUY'?'badge-buy':'badge-sell'}">${r.action}</span>${r.orderType==='LIMIT' ? '<span title="限價單自動成交" style="font-size:9px; color:var(--color-acc); border:1px solid var(--color-acc); border-radius:3px; padding:0 3px; margin-left:4px; vertical-align:middle;">限</span>' : ''}</td>
                 <td style="font-weight:bold;">${r.ticker}</td><td>$${r.price.toFixed(2)}</td><td>${r.shares}</td><td>$${r.fee.toFixed(1)}</td>
                 <td style="font-weight:bold;">$${Math.floor(r.total).toLocaleString()}</td>${pnlHtml}
                 <td><button onclick="undoTrade(${index})" style="background:rgba(255,69,96,0.15); color:var(--color-sell); border:1px solid rgba(255,69,96,0.3); padding:4px 10px; border-radius:4px; cursor:pointer; font-weight:bold; font-size:11px; transition:all 0.2s;">撤銷</button></td>
@@ -6790,6 +6998,7 @@
             cloudState.lastDividendCheck = cloudState.lastDividendCheck || 0;
             cloudState.lastModified = cloudState.lastModified || 0;
             cloudState.stopLoss = cloudState.stopLoss || { enabled: false, percent: 10 };
+            cloudState.limitOrders = cloudState.limitOrders || [];
             cloudState.unlockedAchievements = cloudState.unlockedAchievements || [];
             cloudState.friends = cloudState.friends || [];
             cloudState.achvShowcase = cloudState.achvShowcase || [];
@@ -6811,6 +7020,7 @@
         await initData(); 
         setTradeMode('BUY');
         renderAccountManagerList();
+        renderPendingLimitOrders();
 
         // 🩹 先以本機暫存資料立即呈現畫面（此時報價尚未抓取，updateAllViews 會以持股均價暫時估值），
         // 避免使用者開機時等待雲端同步／報價才看到內容；待雲端資料拉回或報價抓到後會再次刷新畫面
@@ -6844,6 +7054,7 @@
             updateLiveNavNode();
             
             updateAllViews(false);
+            checkLimitOrders();
             
             fetchRealPrice(currentTicker);
             fetchStockHistoryData(currentTicker, false);
