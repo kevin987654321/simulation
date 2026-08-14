@@ -764,7 +764,7 @@
                 <div id="ai-commander" class="glass-panel">
                     <div class="ai-header">
                         <span><img src="gemini.png" width="10" height="10"> ASK GEMINI</span>
-                        <span style="color:#666; font-size:11px;">3.6 Flash</span>
+                        <span style="color:#666; font-size:11px;">3.7 Flash</span>
                     </div>
                     
                     <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 12px; background:rgba(0,0,0,0.2);">
@@ -6543,7 +6543,7 @@
     // 回應以打字機效果（約每秒 50 字）逐字顯示，模擬一般 AI 軟體的輸出體驗
     async function callGeminiAPI(fullPrompt, msgId, out, key) {
         try {
-            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${key}`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ contents: [{ parts: [{ text: fullPrompt }] }] }) });
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent?key=${key}`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ contents: [{ parts: [{ text: fullPrompt }] }] }) });
             const json = await res.json(), rawReply = json.candidates[0].content.parts[0].text;
             const msgEl = document.getElementById(msgId);
             msgEl.innerHTML = `<span style="color:var(--color-acc)">[GEMINI]</span> <span id="${msgId}-text" style="color:#ddd"></span>`;
