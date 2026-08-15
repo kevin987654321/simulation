@@ -228,8 +228,16 @@
         .menu-item.active .nav-line { width: 3px; transform: scaleY(1); background: #fff; box-shadow: 0 0 8px rgba(255, 255, 255, 0.6); }
 
         #content-area { flex: 1; position: relative; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
-        .view-section { position: absolute; inset: 0; padding: 16px; display: flex; flex-direction: column; gap: 14px; opacity: 0; pointer-events: none; transition: opacity 0.25s ease; overflow-y: auto; overflow-x: hidden; }
-        .view-section.active { opacity: 1; pointer-events: auto; }
+        /* 🩹 修復手機版載入時頂部霧化漸層殘影（真正根因）：
+           每個 .view-section 都是 position:absolute; inset:0（互相完全疊在同一位置），未啟用時只靠 opacity:0 隱藏。
+           但 opacity:0 並不會讓瀏覽器停止合成內部元素的 backdrop-filter 圖層——換句話說，所有「目前沒有顯示」的頁面
+           （例如帳戶總覽、庫存損益、交易紀錄...）裡頭每一個 .glass-panel 的模糊效果，其實都還在背景持續合成，
+           只是被透明度歸零而已。這些疊在一起的圖層在部分 WebKit 手機瀏覽器上，偶爾會在畫面頂部邊緣繪製出
+           一小條殘留的模糊色塊。修法：額外加上 visibility，讓「已經淡出」的頁面確實從合成／繪製中移除
+           （visibility:hidden 的子孫元素完全不會被繪製，不像 opacity:0 只是變透明但仍會合成），
+           並用 transition-delay 讓 visibility 在 opacity 淡出動畫播完後才真正切換，維持原本的淡入淡出視覺效果不變。 */
+        .view-section { position: absolute; inset: 0; padding: 16px; display: flex; flex-direction: column; gap: 14px; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.25s ease, visibility 0s linear 0.25s; overflow-y: auto; overflow-x: hidden; }
+        .view-section.active { opacity: 1; visibility: visible; pointer-events: auto; transition: opacity 0.25s ease; }
 
         .stat-grid { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr auto 1fr; grid-template-areas: "c1 l1 c2 l2 c3 l3 c4"; gap: 0; flex-shrink: 0; }
         .stat-grid .stat-grid-hline { display: none; }
@@ -270,7 +278,13 @@
         }
         .chart-marker-eye-btn.active { color: var(--color-acc); }
         /* 手機下單櫃檯的迷你走勢圖標題列空間較小，改為行內小尺寸圖示，不使用置頂浮動樣式 */
-        .chart-marker-eye-btn-mobile { position: static; width: 16px; height: 16px; font-size: 10px; background: transparent; border: none; flex-shrink: 0; }
+        .chart-marker-eye-btn-mobile { position: static; width: 16px; height: 16px; font-size: 10px; background: transparent; border: none; flex-shrink: 0;
+            /* 🩹 修復手機版下單櫃檯圖表小眼睛按鈕點擊沒反應的問題：
+               這顆按鈕的父層 .mobile-stock-chart-box 為了避免使用者拖曳走勢圖時誤觸頁面捲動／縮放／選取文字，
+               整區都設了 touch-action:none 與 user-select:none（!important）。這些屬性會被子元素繼承／套用範圍涵蓋整個區塊，
+               導致按鈕本身的點擊／輕觸手勢也一併被瀏覽器吃掉，變成「看起來能按但完全沒反應」。
+               這裡針對按鈕本身覆寫回正常的點擊手勢，讓小眼睛按鈕確實可以被點到，同時不影響圖表其餘區域原本的防誤觸行為。 */
+            touch-action: manipulation !important; -webkit-user-select: auto !important; user-select: auto !important; -webkit-touch-callout: default !important; position: relative; z-index: 2; }
         @media (hover: hover) and (pointer: fine) {
             .chart-marker-eye-btn-mobile:hover { background: rgba(255,255,255,0.1); }
         }
@@ -324,8 +338,6 @@
 
         .price-rsi-container { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
         .rsi-badge { font-size: 11px; font-family: monospace; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
-        /* 💱 外幣錢包可用列的隱藏狀態：桌面版固定保留版位（見上方 HTML 註解），手機版另有 media query 覆寫為完全收合 */
-        .wallet-hidden { visibility: hidden; }
 
         .mobile-stock-chart-box { display: none; flex-direction: column; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 10px 12px; -webkit-touch-callout: none !important; -webkit-user-select: none !important; user-select: none !important; touch-action: none !important; }
         .mobile-chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 4px; }
@@ -657,10 +669,6 @@
             
             #shared-trade-panel { height: auto !important; overflow-y: visible !important; padding: 12px !important; gap: 10px !important; }
 
-            /* 💱 外幣錢包可用列：桌面版為了避免切換標的時面板高度跳動，改用 visibility 保留版位（見 .wallet-hidden 基礎規則）。
-               但手機版空間寶貴，這裡改回「不顯示時直接收合、不佔版位」的做法，避免手機版下單面板整體偏高導致捲動軸。 */
-            #shared-trade-panel .wallet-hidden { display: none !important; visibility: visible; }
-            
             .mobile-stock-chart-box { display: flex; }
             #chart-container { flex: 1; min-height: 0; display: flex; flex-direction: column; }
             #ai-commander { height: 260px; flex-shrink: 0; }
@@ -954,12 +962,18 @@
              背景輪詢會於每次「股息／減資分割」的 30 分鐘檢查週期一併檢查是否有計畫到期，
              另外新增計畫時也會立即檢查一次，讓「立即執行第一筆」可以馬上成交。 -->
         <div id="holdings-subview-dca" style="display:none;">
-            <div class="glass-panel" style="padding:16px;">
+            <!-- 🩹 修復代號搜尋下拉選單被下方「執行中計畫」卡片蓋住的問題：
+                 這個 glass-panel 本身因為有 backdrop-filter 會建立自己的堆疊環境（stacking context），
+                 內部下拉選單即使設了很高的 z-index，也只在這個堆疊環境「內部」有效，
+                 並不會影響這個 glass-panel 整體跟下方「執行中計畫」卡片（同一層級的手足元素）誰疊在上面——
+                 兩者預設 z-index 皆為 auto，此時後面的手足元素（執行中計畫）會蓋住前面的（新增計畫，含下拉選單）。
+                 加上 position:relative + z-index，讓整個新增計畫卡片（連同下拉選單）確實蓋在下方卡片之上。 -->
+            <div class="glass-panel" style="padding:16px; position:relative; z-index:5;">
                 <div style="font-weight:bold; font-size:15px; margin-bottom:14px;"><i class="fa-solid fa-calendar-check"></i> 新增定期定額計畫</div>
                 <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
                     <div>
                         <div style="font-size:11px; color:#888; margin-bottom:4px;">標的代號</div>
-                        <div class="custom-select-wrapper" id="dca-ticker-wrapper" style="width:150px; position:relative;">
+                        <div class="custom-select-wrapper" id="dca-ticker-wrapper" style="width:150px; position:relative; z-index:10;">
                             <div class="select-input-box" style="width:100%; box-sizing:border-box; height:38px;">
                                 <input type="text" id="dca-ticker-input" autocomplete="off" placeholder="搜尋代號" style="min-width:0; width:100%; text-transform:uppercase;">
                             </div>
@@ -1650,11 +1664,9 @@
                 <span id="rsi-status-badge" class="rsi-badge" style="background:rgba(255,255,255,0.1); color:#ccc;">計算中</span>
             </div>
         </div>
-        <!-- 💱 外幣錢包餘額提示：預設用 CSS class「wallet-hidden」控制顯示／隱藏（見 JS validateSharesInput() 內切換邏輯）。
-             桌面版 .wallet-hidden 只套用 visibility:hidden，固定保留版位、避免切換標的時面板高度跳動；
-             手機版另有 media query 覆寫為 display:none，直接收合以節省寶貴的垂直空間、避免捲動軸。 -->
-        <div id="wallet-balance-indicator" class="wallet-hidden" style="display:flex; align-items:center; justify-content:space-between; font-size:10.5px; color:#aaa;">
-            <span><i class="fa-solid fa-wallet"></i> 外幣錢包可用</span>
+        <!-- 💰 現金／外幣錢包可用餘額：台幣標的顯示現金餘額，非台幣標的顯示對應外幣錢包餘額，兩種情況都會顯示 -->
+        <div id="wallet-balance-indicator" style="display:flex; align-items:center; justify-content:space-between; font-size:10.5px; color:#aaa;">
+            <span id="wallet-balance-indicator-label"><i class="fa-solid fa-wallet"></i> 外幣錢包可用</span>
             <span id="wallet-balance-indicator-val" style="font-family:monospace; color:var(--color-buy); font-weight:bold;">--</span>
         </div>
     </div>
@@ -5427,13 +5439,17 @@
         const maxBuy = Math.max(0, Math.floor(buyingPower / (getEffectivePrice() * (1 + feeRate)))); const holding = state.holdings[currentTicker]?.shares || 0;
         document.getElementById("holding-shares-display").innerText = holding.toLocaleString();
 
-        // 💱 外幣錢包餘額提示：非台幣計價標的才顯示，讓使用者知道下單會優先扣哪個貨幣庫存
-        // 用 class「wallet-hidden」切換：桌面版固定保留版位避免高度跳動，手機版另有 media query 覆寫為完全收合節省空間
-        const walletIndicator = document.getElementById("wallet-balance-indicator"), walletIndicatorVal = document.getElementById("wallet-balance-indicator-val");
+        // 💰 現金／外幣錢包可用餘額：改為兩種情況都顯示——台幣標的顯示現金餘額，非台幣標的顯示對應外幣錢包餘額
+        const walletIndicator = document.getElementById("wallet-balance-indicator"), walletIndicatorVal = document.getElementById("wallet-balance-indicator-val"), walletIndicatorLabel = document.getElementById("wallet-balance-indicator-label");
         if (walletIndicator) {
             const curr = getCurrencyForTicker(currentTicker);
-            if (curr === 'TWD') { walletIndicator.classList.add('wallet-hidden'); }
-            else { walletIndicator.classList.remove('wallet-hidden'); walletIndicatorVal.innerText = `${curr} ${getCurrencyBalance(curr).toLocaleString(undefined, {maximumFractionDigits:2})}`; }
+            if (curr === 'TWD') {
+                walletIndicatorLabel.innerHTML = `<i class="fa-solid fa-wallet"></i> 現金可用`;
+                walletIndicatorVal.innerText = `NT$ ${Math.floor(state.cash).toLocaleString()}`;
+            } else {
+                walletIndicatorLabel.innerHTML = `<i class="fa-solid fa-wallet"></i> 外幣錢包可用`;
+                walletIndicatorVal.innerText = `${curr} ${getCurrencyBalance(curr).toLocaleString(undefined, {maximumFractionDigits:2})}`;
+            }
         }
         
         const limitPriceValid = !isLimitOrderMode || (getEffectivePrice() !== null && getEffectivePrice() > 0);
@@ -5461,7 +5477,7 @@
     }
 
     // ============================================================
-    // 模擬限價單自動下單（Simulated Limit Orders）
+    // ⏰ 模擬限價單自動下單（Simulated Limit Orders）
     // 交易核心邏輯抽出為 executeTradeCore()，供「市價單」(executeTrade)
     // 與「限價單自動成交」(checkLimitOrders) 共用同一套持股/現金/貨幣庫存/分類帳邏輯，
     // 避免邏輯分裂導致兩種下單方式算出不一致的結果。
@@ -6299,19 +6315,24 @@
         const buyColor = rootStyle.getPropertyValue('--color-buy').trim() || '#00ffaa';
         const sellColor = rootStyle.getPropertyValue('--color-sell').trim() || '#ff4560';
 
+        // 🩹 修復 K 線模式下三角形買賣點標記完全不顯示的問題：
+        // getStockDatasets() 的 K 線 Body/Wick 分別是 order:2 / order:1（Chart.js 依 order 由小到大依序繪製，
+        // 越晚畫的會蓋在越上層、覆蓋掉先畫的內容）。這裡的標記原本是 order:0，等於「最先畫、被壓在最底層」——
+        // 剛好又跟交易發生當下的那根蠟燭同一個資料點，所以三角形其實有畫出來，只是完全被不透明的蠟燭實體蓋住看不到。
+        // 改成比 Body 的 order:2 更大的數字，確保無論目前是 K 線或折線模式，標記一律最後畫、蓋在最上層、不會被蓋住。
         const markerDatasets = [];
         if (hasBuy) {
             markerDatasets.push({
                 label: 'BuyMarker', type: 'line', data: buyData, showLine: false, spanGaps: false,
                 pointStyle: 'triangle', rotation: 0, pointRadius: 7, pointHoverRadius: 9,
-                pointBackgroundColor: buyColor, pointBorderColor: '#fff', pointBorderWidth: 1.5, order: 0
+                pointBackgroundColor: buyColor, pointBorderColor: '#fff', pointBorderWidth: 1.5, order: 3
             });
         }
         if (hasSell) {
             markerDatasets.push({
                 label: 'SellMarker', type: 'line', data: sellData, showLine: false, spanGaps: false,
                 pointStyle: 'triangle', rotation: 180, pointRadius: 7, pointHoverRadius: 9,
-                pointBackgroundColor: sellColor, pointBorderColor: '#fff', pointBorderWidth: 1.5, order: 0
+                pointBackgroundColor: sellColor, pointBorderColor: '#fff', pointBorderWidth: 1.5, order: 3
             });
         }
         return markerDatasets;
