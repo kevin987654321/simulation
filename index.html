@@ -324,6 +324,8 @@
 
         .price-rsi-container { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
         .rsi-badge { font-size: 11px; font-family: monospace; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+        /* 💱 外幣錢包可用列的隱藏狀態：桌面版固定保留版位（見上方 HTML 註解），手機版另有 media query 覆寫為完全收合 */
+        .wallet-hidden { visibility: hidden; }
 
         .mobile-stock-chart-box { display: none; flex-direction: column; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 10px 12px; -webkit-touch-callout: none !important; -webkit-user-select: none !important; user-select: none !important; touch-action: none !important; }
         .mobile-chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 4px; }
@@ -653,18 +655,11 @@
             /* 📊 手機版首頁圖表的基準指數對標選單改為4個選項高度 */
             #benchmark-dropdown { max-height: 144px; }
             
-            #shared-trade-panel { height: auto !important; overflow-y: visible !important; padding: 8px !important; gap: 6px !important; }
-            /* 🩹 手機版下單面板整體壓縮：BUY/SELL 切換、報價區、走勢圖、股數輸入、費用試算、下單按鈕
-               各自的內距/間距都偏寬鬆，逐一收緊以釋放垂直空間，避免整個面板需要額外捲動。 */
-            #shared-trade-panel .mode-toggle-group { padding: 3px !important; margin-bottom: 0 !important; }
-            #shared-trade-panel .mode-toggle-btn { padding: 6px !important; }
-            #shared-trade-panel .price-rsi-container { padding: 6px 10px !important; gap: 5px !important; }
-            #shared-trade-panel .mobile-stock-chart-box { padding: 6px 10px !important; }
-            #shared-trade-panel .mobile-chart-header { margin-bottom: 4px !important; }
-            #shared-trade-panel .quick-percent-grid { margin-top: 4px !important; }
-            #shared-trade-panel .stepper-btn, #shared-trade-panel .stepper-input { height: 34px !important; }
-            #shared-trade-panel .fee-breakdown { padding: 8px 10px !important; gap: 4px !important; }
-            #shared-trade-panel .exec-btn { padding: 11px !important; margin-top: 4px !important; }
+            #shared-trade-panel { height: auto !important; overflow-y: visible !important; padding: 12px !important; gap: 10px !important; }
+
+            /* 💱 外幣錢包可用列：桌面版為了避免切換標的時面板高度跳動，改用 visibility 保留版位（見 .wallet-hidden 基礎規則）。
+               但手機版空間寶貴，這裡改回「不顯示時直接收合、不佔版位」的做法，避免手機版下單面板整體偏高導致捲動軸。 */
+            #shared-trade-panel .wallet-hidden { display: none !important; visibility: visible; }
             
             .mobile-stock-chart-box { display: flex; }
             #chart-container { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -964,7 +959,14 @@
                 <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
                     <div>
                         <div style="font-size:11px; color:#888; margin-bottom:4px;">標的代號</div>
-                        <input type="text" id="dca-ticker-input" autocomplete="off" placeholder="例如 NVDA、2330.TW" style="width:150px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:0 10px; border-radius:6px; font-family:monospace; font-weight:bold; height:38px; box-sizing:border-box; text-transform:uppercase;">
+                        <div class="custom-select-wrapper" id="dca-ticker-wrapper" style="width:150px; position:relative;">
+                            <div class="select-input-box" style="width:100%; box-sizing:border-box; height:38px;">
+                                <input type="text" id="dca-ticker-input" autocomplete="off" placeholder="搜尋代號" style="min-width:0; width:100%; text-transform:uppercase;">
+                            </div>
+                            <div class="opaque-dropdown-list" id="dca-ticker-dropdown" style="width:220px;">
+                                <div id="dca-ticker-search-list"><div style="padding:10px 12px; font-size:11px; color:#666;">輸入代號以搜尋全球市場...</div></div>
+                            </div>
+                        </div>
                     </div>
                     <div>
                         <div style="font-size:11px; color:#888; margin-bottom:4px;">每期投入金額（TWD）</div>
@@ -1629,10 +1631,11 @@
             <div>
                 <div id="trade-price-display" style="font-size:20px; font-weight:800; font-family:monospace; color:#fff;">$ ----</div>
                 <!-- ⏰ 模擬限價單輸入框：點擊標題右上角時鐘圖示後顯示，取代現價顯示。
-                     type="number" 搭配 inputmode="decimal" 支援手機數字小鍵盤；step 讓瀏覽器原生上下鍵可調整數值；
-                     另外掛載 wheel 事件監聽，聚焦時可用滑鼠滾輪調整金額。 -->
-                <input type="number" id="limit-price-input" class="limit-price-input" style="display:none;"
-                    inputmode="decimal" step="0.01" min="0.01" placeholder="輸入限價"
+                     改用與 App 內其他數字輸入框一致的 class="mobile-num" data-decimal="true"（text 型別），
+                     手機上才能正確觸發自訂玻璃數字小鍵盤（原生 type="number" 在此 App 環境下小鍵盤不會正常彈出）；
+                     上下鍵／滑鼠滾輪調整已統一註冊於 NUM_ADJUST_CONFIG（見下方 script），與其他欄位共用同一套邏輯。 -->
+                <input type="text" id="limit-price-input" class="limit-price-input mobile-num" data-decimal="true" style="display:none;"
+                    placeholder="輸入限價"
                     oninput="onLimitPriceInput()" onfocus="this.select()">
             </div>
             <div style="text-align:right;">
@@ -1647,9 +1650,10 @@
                 <span id="rsi-status-badge" class="rsi-badge" style="background:rgba(255,255,255,0.1); color:#ccc;">計算中</span>
             </div>
         </div>
-        <!-- 💱 外幣錢包餘額提示：改用 visibility 而非 display 切換顯示／隱藏，
-             讓這一列無論是否顯示都固定佔用相同高度，避免切換標的時面板高度跳動 -->
-        <div id="wallet-balance-indicator" style="display:flex; visibility:hidden; align-items:center; justify-content:space-between; font-size:10.5px; color:#aaa;">
+        <!-- 💱 外幣錢包餘額提示：預設用 CSS class「wallet-hidden」控制顯示／隱藏（見 JS validateSharesInput() 內切換邏輯）。
+             桌面版 .wallet-hidden 只套用 visibility:hidden，固定保留版位、避免切換標的時面板高度跳動；
+             手機版另有 media query 覆寫為 display:none，直接收合以節省寶貴的垂直空間、避免捲動軸。 -->
+        <div id="wallet-balance-indicator" class="wallet-hidden" style="display:flex; align-items:center; justify-content:space-between; font-size:10.5px; color:#aaa;">
             <span><i class="fa-solid fa-wallet"></i> 外幣錢包可用</span>
             <span id="wallet-balance-indicator-val" style="font-family:monospace; color:var(--color-buy); font-weight:bold;">--</span>
         </div>
@@ -5100,6 +5104,36 @@
         autoFetchHistoricalPrice();
     }
 
+    // 📅 定期定額標的搜尋（與「即時報價與下單」櫃檯的代號搜尋系統相同做法：輸入即時查詢 Yahoo Finance，點選後帶入代號即可）
+    const dcaTickerInput = document.getElementById("dca-ticker-input");
+    let dcaSearchDebounceTimer = null;
+    dcaTickerInput.addEventListener("input", (e) => {
+        const query = e.target.value.trim().toUpperCase();
+        const dropdown = document.getElementById("dca-ticker-dropdown");
+        const list = document.getElementById("dca-ticker-search-list");
+
+        if (!query) { dropdown.classList.remove("show"); return; }
+        dropdown.classList.add("show");
+        list.innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> 搜尋 ${query}...</div>`;
+
+        clearTimeout(dcaSearchDebounceTimer);
+        dcaSearchDebounceTimer = setTimeout(async () => {
+            try {
+                const proxyUrl = `${myProxy}${encodeURIComponent(`https://query2.finance.yahoo.com/v1/finance/search?q=${query}&quotesCount=6`)}`;
+                const res = await fetch(proxyUrl, { cache: "no-store" }); const json = await res.json();
+                if (json.quotes && json.quotes.length > 0) {
+                    list.innerHTML = json.quotes.map(q => `<div class="dropdown-item" onclick="selectDcaTicker('${q.symbol}')"><div><strong style="color:#fff">${q.symbol}</strong> <span style="color:#888; font-size:11px">${q.shortname || ''}</span></div><span style="color:var(--color-acc); font-size:11px">${q.exchDisp || ''}</span></div>`).join("");
+                } else list.innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#ff4560;">查無符合標的</div>`;
+            } catch (err) { list.innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#ff4560;">連線異常</div>`; }
+        }, 300);
+    });
+
+    function selectDcaTicker(t) {
+        dcaTickerInput.value = t;
+        document.getElementById("dca-ticker-dropdown").classList.remove("show");
+    }
+    window.selectDcaTicker = selectDcaTicker;
+
     // AI 迷你搜尋器的邏輯
     function positionAiTickerDropdown() {
         const dropdown = document.getElementById("ai-ticker-dropdown");
@@ -5172,6 +5206,7 @@
         if(!document.getElementById("ticker-select-wrapper").contains(e.target)) document.getElementById("ticker-dropdown").classList.remove("show"); 
         if(!document.getElementById("tm-ticker-wrapper").contains(e.target)) document.getElementById("tm-ticker-dropdown").classList.remove("show"); 
         if(!document.getElementById("ai-ticker-wrapper").contains(e.target) && !document.getElementById("ai-ticker-dropdown").contains(e.target)) document.getElementById("ai-ticker-dropdown").classList.remove("show"); 
+        if(!document.getElementById("dca-ticker-wrapper").contains(e.target)) document.getElementById("dca-ticker-dropdown").classList.remove("show"); 
         // 📊 基準指數對標下拉選單：點擊按鈕與選單以外的地方時自動收合（主頁圖表 / 手機下單櫃檯圖表分開判斷）
         if(!document.getElementById("benchmark-toggle-btn").contains(e.target) && !document.getElementById("benchmark-dropdown").contains(e.target)) document.getElementById("benchmark-dropdown").classList.remove("show"); 
         if(!document.getElementById("benchmark-mobile-wrapper").contains(e.target)) document.getElementById("benchmark-dropdown-mobile").classList.remove("show"); 
@@ -5393,13 +5428,12 @@
         document.getElementById("holding-shares-display").innerText = holding.toLocaleString();
 
         // 💱 外幣錢包餘額提示：非台幣計價標的才顯示，讓使用者知道下單會優先扣哪個貨幣庫存
-        // 改用 visibility 切換（而非 display），讓這一列固定佔用版面空間，
-        // 避免切換台幣／外幣標的時面板高度跳動，提升瀏覽體驗
+        // 用 class「wallet-hidden」切換：桌面版固定保留版位避免高度跳動，手機版另有 media query 覆寫為完全收合節省空間
         const walletIndicator = document.getElementById("wallet-balance-indicator"), walletIndicatorVal = document.getElementById("wallet-balance-indicator-val");
         if (walletIndicator) {
             const curr = getCurrencyForTicker(currentTicker);
-            if (curr === 'TWD') { walletIndicator.style.visibility = 'hidden'; }
-            else { walletIndicator.style.visibility = 'visible'; walletIndicatorVal.innerText = `${curr} ${getCurrencyBalance(curr).toLocaleString(undefined, {maximumFractionDigits:2})}`; }
+            if (curr === 'TWD') { walletIndicator.classList.add('wallet-hidden'); }
+            else { walletIndicator.classList.remove('wallet-hidden'); walletIndicatorVal.innerText = `${curr} ${getCurrencyBalance(curr).toLocaleString(undefined, {maximumFractionDigits:2})}`; }
         }
         
         const limitPriceValid = !isLimitOrderMode || (getEffectivePrice() !== null && getEffectivePrice() > 0);
@@ -5496,17 +5530,7 @@
         recalculateOrder();
     }
 
-    // 滑鼠滾輪調整限價：僅在輸入框已聚焦時攔截捲動事件（避免影響一般頁面滾動）
-    document.getElementById('limit-price-input').addEventListener('wheel', function(e) {
-        if (document.activeElement !== this) return;
-        e.preventDefault();
-        const step = parseFloat(this.step) || 0.01;
-        let val = parseFloat(this.value);
-        if (isNaN(val)) val = currentRealPrice || 0;
-        val = Math.max(0.01, Math.round((val + (e.deltaY < 0 ? step : -step)) * 100) / 100);
-        this.value = val.toFixed(2);
-        onLimitPriceInput();
-    }, { passive: false });
+    // ⌨️🖱️ 限價輸入框的上下鍵／滑鼠滾輪調整已統一改為註冊在 NUM_ADJUST_CONFIG（與 App 其他數字輸入框共用同一套邏輯，見下方 script）
 
     function onLimitPriceInput() { recalculateOrder(); }
 
@@ -7036,7 +7060,8 @@
         'cfg-timeaxis-val':      { type: 'slider', sliderId: 'cfg-timeaxis-slider' },
         'cfg-valueaxis-val':     { type: 'slider', sliderId: 'cfg-valueaxis-slider' },
         'cfg-glow-intensity-val':{ type: 'slider', sliderId: 'cfg-glow-intensity' },
-        'trade-shares':          { type: 'stepShares' }
+        'trade-shares':          { type: 'stepShares' },
+        'limit-price-input':     { type: 'decimal', min: 0.01, step: 0.01, decimals: 2 }
     };
 
     function adjustNumInput(input, dir) {
