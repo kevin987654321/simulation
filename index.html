@@ -236,8 +236,8 @@
            一小條殘留的模糊色塊。修法：額外加上 visibility，讓「已經淡出」的頁面確實從合成／繪製中移除
            （visibility:hidden 的子孫元素完全不會被繪製，不像 opacity:0 只是變透明但仍會合成），
            並用 transition-delay 讓 visibility 在 opacity 淡出動畫播完後才真正切換，維持原本的淡入淡出視覺效果不變。 */
-        .view-section { position: absolute; inset: 0; padding: 16px; display: flex; flex-direction: column; gap: 14px; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.25s ease, visibility 0s linear 0.25s; overflow-y: auto; overflow-x: hidden; }
-        .view-section.active { opacity: 1; visibility: visible; pointer-events: auto; transition: opacity 0.25s ease; }
+        .view-section { position: absolute; inset: 0; padding: 16px; display: flex; flex-direction: column; gap: 14px; opacity: 0; pointer-events: none; transition: opacity 0.25s ease; overflow-y: auto; overflow-x: hidden; }
+        .view-section.active { opacity: 1; pointer-events: auto; }
 
         .stat-grid { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr auto 1fr; grid-template-areas: "c1 l1 c2 l2 c3 l3 c4"; gap: 0; flex-shrink: 0; }
         .stat-grid .stat-grid-hline { display: none; }
@@ -630,17 +630,11 @@
             .mobile-header-title { position: absolute; left: 50%; transform: translateX(-50%); font-weight: 900; letter-spacing: 3px; font-size: 16px; color: #fff; cursor: pointer; white-space: nowrap; z-index: 1; }
             .mobile-reload-btn { width: 50px; height: 100%; cursor: pointer; z-index: 2; margin-right: -10px; position: absolute; right: 0; top: 0; }
             
-            #sidebar-overlay { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 900; opacity: 0; pointer-events: none; transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-            /* 🩹 修復手機版載入時頂部出現小範圍霧化漸層的視覺 BUG：
-               #sidebar-overlay 與 #sidebar 平時（未展開選單）就已鋪滿整個畫面並套用 backdrop-filter，
-               部分行動瀏覽器（WebKit）在 opacity:0／transform:translateX(-100%) 這種「畫面外／隱形」狀態下，
-               仍會持續合成 backdrop-filter 圖層，初次繪製時偶爾在安全區域（safe-area-inset-top）邊緣
-               殘留一小條錯誤的模糊色塊；展開選單後因為觸發了 reflow／重新合成才會消失。
-               修法：只在選單「展開時」才套用 backdrop-filter，未展開時完全不套用，從源頭避免該圖層被合成。 */
-            #sidebar-overlay.active { opacity: 1; pointer-events: auto; backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
+            #sidebar-overlay { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 900; backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); opacity: 0; pointer-events: none; transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+            #sidebar-overlay.active { opacity: 1; pointer-events: auto; }
             #sidebar-overlay.dragging { transition: none; }
-            #sidebar { position: fixed; left: 0; top: 0; bottom: 0; height: 100dvh; transform: translateX(-100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 5px 0 20px rgba(0,0,0,0.5); background: rgba(10, 10, 10, 0.95); }
-            #sidebar.open { transform: translateX(0); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+            #sidebar { position: fixed; left: 0; top: 0; bottom: 0; height: 100dvh; transform: translateX(-100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 5px 0 20px rgba(0,0,0,0.5); background: rgba(10, 10, 10, 0.95); backdrop-filter: blur(20px); }
+            #sidebar.open { transform: translateX(0); }
             #sidebar.dragging { transition: none; }
             
             .view-section::-webkit-scrollbar, .trade-panel::-webkit-scrollbar { display: none !important; width: 0 !important; }
