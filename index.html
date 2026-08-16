@@ -703,9 +703,29 @@
                這裡插入一個寬度 100% 的隱形斷行元素，確保日期區塊之後一定會另起一行。 */
             #tm-row-break { display: block; flex: 1 1 100%; width: 100%; height: 0; margin: 0; padding: 0; }
         }
+        /* 🩹 頁面初次繪製階段（body.boot-no-blur）整批停用所有 backdrop-filter，避免手機版載入時頂部出現霧化殘影。
+           詳細原因見上方 <body> 標籤旁的註解。等 JS 開機流程跑完、畫面穩定後會移除 body 上的這個 class。 */
+        body.boot-no-blur .glass-panel,
+        body.boot-no-blur #sidebar,
+        body.boot-no-blur #sidebar-overlay,
+        body.boot-no-blur .glass-numpad,
+        body.boot-no-blur .modal-overlay,
+        body.boot-no-blur .toast,
+        body.boot-no-blur .ledger-range-picker {
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+        }
     </style>
 </head>
-<body>
+<!-- 🩹 修復手機版載入時頂部出現小範圍霧化漸層殘影的問題（第三次嘗試，改用更保險的做法）：
+     先前兩次分別針對 #sidebar／#sidebar-overlay 與 .view-section 個別修正 backdrop-filter 的套用時機，
+     但問題描述仍持續出現，代表真正的觸發點可能是「初次繪製當下」某個瞬間狀態、或多個 backdrop-filter 圖層
+     在頁面剛載入、字型／版面尚未完全穩定時同時合成所造成的相容性問題，難以只靠鎖定單一元素徹底根除。
+     改採更保險的策略：頁面一開始先用 body.boot-no-blur 這個 class，把「所有」backdrop-filter 效果整批關閉，
+     等到 JS 完成開機流程、畫面已經穩定繪製過一次之後，才移除這個 class、正常啟用玻璃霧化效果
+     （見下方 startApp() 呼叫完成後的 requestAnimationFrame 區塊）。這樣一來，不管殘影真正是哪個元素造成的，
+     只要它牽涉到 backdrop-filter，都會在「最容易出問題」的初次繪製階段被完全阻止合成。 -->
+<body class="boot-no-blur">
 
 <!-- 手機端極簡玻璃數字鍵盤 -->
 <div id="glass-numpad" class="glass-numpad"></div>
@@ -6529,9 +6549,16 @@
 
         // 📊 手機版下單櫃檯走勢圖：與桌面版共用同一套對標判斷與資料（stockOverlay 可能因 showNav 為 true 而尚未計算，這裡獨立算一次）
         const mOverlay = (showNav || !stockOverlay) ? (stockBenchmarkActive ? computeBenchmarkOverlay(stockHistData.prices, stockHistData.timestamps) : null) : stockOverlay;
+        // 🩹 修復手機版下單櫃檯圖表小眼睛按鈕點了沒作用（三角形買賣點標記完全不出現）的問題：
+        // m-main-chart-title 上面那行看得出來，手機版走勢圖「永遠」顯示的是個股走勢（${currentTicker}），不會有 NAV 模式。
+        // 但這裡原本卻用 showNav（桌面版主圖表另一顆「NAV／個股」切換鈕的狀態，跟手機版走勢圖完全無關）來決定
+        // 要不要計算標記資料，而 desktopChartMode 預設值就是 'NAV'，也就是說只要使用者從沒點過桌面版那顆切換鈕，
+        // showNav 就會一直是 true，導致手機版的買賣點標記永遠被強制清空——不管小眼睛按鈕本身按下去切成什麼狀態都一樣。
+        // 已移除這個誤用的 showNav 判斷，手機版標記現在只單純依照 showTradeMarkersOnChart（小眼睛開關本身的狀態，
+        // 已經內建在 buildTradeMarkerDatasets 開頭做判斷）決定要不要顯示。
         if (mOverlay) {
             const mNavPctData = mOverlay.navPctData, mBenchPctData = mOverlay.benchPctData;
-            const mTradeMarkerDatasets = showNav ? [] : pctifyMarkerDatasets(buildTradeMarkerDatasets(stockHistData), mOverlay.navBase);
+            const mTradeMarkerDatasets = pctifyMarkerDatasets(buildTradeMarkerDatasets(stockHistData), mOverlay.navBase);
             mobileChart.options.scales.y.ticks.callback = function(value) { return (value >= 0 ? '+' : '') + value.toFixed(1) + '%'; };
             applyChartDatasets(mobileChart, [
                 { label: 'NAV_PCT', type: 'line', data: mNavPctData, borderColor: '#00ffaa', backgroundColor: 'rgba(0, 255, 170, 0.05)', borderWidth: 1.5, tension: 0.2, fill: true, pointRadius: computePointRadiusArray(mNavPctData.length, showNodes, mDensity) },
@@ -6542,7 +6569,7 @@
                 if (Math.abs(value) >= 1000) return Math.round(value / 1000) + 'k';
                 return Math.round(value);
             };
-            const mTradeMarkerDatasets = showNav ? [] : buildTradeMarkerDatasets(stockHistData);
+            const mTradeMarkerDatasets = buildTradeMarkerDatasets(stockHistData);
             applyChartDatasets(mobileChart, getStockDatasets(stockHistData, showNodes, mDensity).concat(mTradeMarkerDatasets));
         }
         
@@ -7609,7 +7636,13 @@
     initDatePickerDisplays();
     initCurrencySearchInputs();
 
-    startApp(); 
+    // 🩹 開機流程（含密碼鎖定畫面、初次資料載入）全部跑完、畫面確定穩定繪製過至少兩個影格之後，
+    // 才移除 body 上的 boot-no-blur，讓玻璃霧化效果恢復正常——避開最容易觸發頂部殘影 BUG 的初次繪製階段。
+    startApp().then(() => {
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+            document.body.classList.remove('boot-no-blur');
+        }));
+    });
 
 </script>
 </body>
