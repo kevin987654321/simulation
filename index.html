@@ -807,10 +807,12 @@
                     </div>
                     
                     <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 12px; background:rgba(0,0,0,0.2);">
+                        <!-- 🖱️ 兩顆快速按鈕都加上 onmousedown="event.preventDefault()"：
+                             預設點擊按鈕會把輸入焦點從 #chat-input 搶走（連帶手機上可能收起虛擬鍵盤），
+                             攔截 mousedown 的預設行為可以避免搶走焦點，讓使用者點完還能接著在輸入框打字。 -->
                         <div id="ai-quick-buttons-row" style="display:flex; gap:6px; overflow-x:auto; scrollbar-width:none; flex: 1; transition: opacity 0.2s;">
-                            <button class="qp-btn" onclick="quickAskAI('diagnostic')" style="padding: 4px 10px; flex-shrink:0;"><span class="hide-on-mobile"><i class="fa-solid fa-list-check"></i> </span>綜合體檢</button>
-                            <button class="qp-btn" onclick="quickAskAI('risk')" style="padding: 4px 10px; flex-shrink:0;"><span class="hide-on-mobile"><i class="fa-regular fa-file"></i> </span>風險診斷</button>
-                            <button class="qp-btn" onclick="quickAskAI('strategy')" style="padding: 4px 10px; flex-shrink:0;"><span class="hide-on-mobile"><i class="fa-regular fa-lightbulb"></i> </span>加減碼策略</button>
+                            <button class="qp-btn" onmousedown="event.preventDefault()" onclick="quickAskAI('diagnostic')" style="padding: 4px 10px; flex-shrink:0;"><span class="hide-on-mobile"><i class="fa-solid fa-list-check"></i> </span>綜合體檢</button>
+                            <button class="qp-btn" onmousedown="event.preventDefault()" onclick="quickAskLedger()" style="padding: 4px 10px; flex-shrink:0;"><span class="hide-on-mobile"><i class="fa-solid fa-clock-rotate-left"></i> </span>歷史帳本</button>
                         </div>
                         
                         <div class="mobile-only custom-select-wrapper ai-mini-ticker" id="ai-ticker-wrapper" style="width: 75px; flex-shrink: 0; margin-left: 6px;">
@@ -6775,7 +6777,17 @@
 - 「重置初始帳戶資金」會完全還原帳戶為初始狀態，請謹慎使用。
 - 「開發者模式」需輸入開發者密碼方可進入。`;
 
-    function quickAskAI(type) { const prompts = { 'diagnostic': `請針對 ${currentTicker} 當前的現價與 RSI 技術指標進行短線綜合體檢。`, 'risk': `請結合我目前的帳戶現金、${currentTicker} 持倉成本與當前走勢，評估整體風控與止損點設定。`, 'strategy': `考量我目前對 ${currentTicker} 的持股情況，現在適合加碼、減碼還是觀望？` }; document.getElementById("chat-input").value = prompts[type] || ""; askAI(); }
+    function quickAskAI(type) { const prompts = { 'diagnostic': `請針對 ${currentTicker} 當前的現價、RSI 與實際走勢動能進行短線綜合體檢。` }; document.getElementById("chat-input").value = prompts[type] || ""; askAI(); }
+
+    // 📒 「歷史帳本」快速按鈕：直接把 "(歷史帳本) " 標記帶入輸入框，並馬上開啟時間範圍選擇器（含快速區間／自訂日期等「其他選項」），
+    // 不必像過去那樣得先按一次發送才看得到選單。
+    // 附註：openLedgerRangePicker() 開啟後，既有設計本來就會把輸入框鎖成唯讀（引導改用上方選單操作），
+    // 屬於這個功能原本就有的行為，並非本次「按鈕不搶走輸入焦點」要處理的問題（唯讀欄位本來就無法保留焦點）。
+    function quickAskLedger() {
+        const input = document.getElementById("chat-input");
+        input.value = "(歷史帳本) ";
+        openLedgerRangePicker(input.value);
+    }
 
     // 📒 歷史帳本功能：輸入含有 "(歷史帳本)" 標記的訊息並發送時，攔截並改為請使用者選擇時間範圍
     const LEDGER_MARKER_REGEX = /[\(（]\s*歷史帳本\s*[\)）]/;
@@ -6808,7 +6820,57 @@
 
         const rsiVal = document.getElementById("rsi-val-display").innerText || "--", holding = state.holdings[currentTicker] || { shares: 0, avgPrice: 0 }, rate = getCurrencyMultiplier(currentTicker);
         const holdingValueTWD = holding.shares * currentRealPrice * rate, totalCostTWD = holding.shares * holding.avgPrice * rate, pnlTWD = holdingValueTWD - totalCostTWD;
-        const fullPrompt = `你是一位講求數據與風險控制的資深華爾街操盤手。請根據以下即時數據，用簡潔專業的口吻回答用戶問題（字數約 150 字內，列出重點與建議）。\n\n【即時市場與帳戶數據】\n• 討論標的: ${currentTicker}\n• 當前現價: $${currentRealPrice}\n• 14日 RSI 指標: ${rsiVal}\n• 當前持股數量: ${holding.shares} 股\n• 持股買入均價: $${holding.avgPrice.toFixed(2)}\n• 該標的未實現損益: TWD $${Math.floor(pnlTWD).toLocaleString()}\n• 帳戶可用現金: TWD $${Math.floor(state.cash).toLocaleString()}\n\n用戶問題：${q}`;
+
+        // 📊 除了單一 RSI 數值之外，額外提供「實際走勢方向／短線動能」「RSI 近期變化方向」「帳戶淨值趨勢」與
+        // 「這筆部位在現金水位中的相對份量」，讓 Gemini 有真正的市況脈絡可以參考，
+        // 而不是只看到一個孤立的 RSI 數字，導致不管情況如何都套用同一套「先買20%試水」之類的制式化萬用建議。
+        const prices = (stockHistData && stockHistData.prices) || [];
+        let trendText = "尚無足夠走勢資料可供判斷";
+        if (prices.length >= 2) {
+            const first = prices[0], last = prices[prices.length - 1];
+            const totalChangePct = (last - first) / first * 100;
+            const rangeLabel = (stockHistData.labels && stockHistData.labels.length) ? `${stockHistData.labels[0]}~${stockHistData.labels[stockHistData.labels.length - 1]}` : "目前圖表區間";
+            trendText = `${rangeLabel} 區間${totalChangePct >= 0 ? '上漲' : '下跌'} ${Math.abs(totalChangePct).toFixed(1)}%`;
+            if (prices.length >= 6) {
+                const recentFirst = prices[prices.length - 6], recentLast = prices[prices.length - 1];
+                const recentChangePct = (recentLast - recentFirst) / recentFirst * 100;
+                trendText += `，其中最近${Math.abs(recentChangePct) >= 0.05 ? `${recentChangePct >= 0 ? '上漲' : '下跌'} ${Math.abs(recentChangePct).toFixed(1)}%` : '幾乎持平'}（短線動能${recentChangePct >= 0.3 ? '偏多' : (recentChangePct <= -0.3 ? '偏空' : '中性')}）`;
+            }
+        }
+        let rsiTrendText = "";
+        if (prices.length >= 25) {
+            const rsiNow = calculateRSI(prices, 14), rsiPrev = calculateRSI(prices.slice(0, -5), 14);
+            if (rsiNow !== null && rsiPrev !== null) rsiTrendText = `，且相較 5 個資料點前的 ${rsiPrev.toFixed(1)}，屬於${rsiNow >= rsiPrev ? '轉強上升中' : '轉弱下降中'}`;
+        }
+        const navArr = (state.navHistory && state.navHistory.data) ? state.navHistory.data.filter(v => v !== null && v !== undefined) : [];
+        let navTrendText = "尚無足夠帳戶淨值歷史";
+        if (navArr.length >= 2) {
+            const navChangePct = (navArr[navArr.length - 1] - navArr[0]) / navArr[0] * 100;
+            navTrendText = `近期${navChangePct >= 0 ? '成長' : '縮水'} ${Math.abs(navChangePct).toFixed(1)}%`;
+        }
+        const positionRatio = (holdingValueTWD + state.cash) > 0 ? (holdingValueTWD / (holdingValueTWD + state.cash) * 100) : 0;
+
+        const fullPrompt = `你是一位講求數據與風險控制的資深華爾街操盤手，個性直接、不說模稜兩可的場面話。
+
+請完全根據下方提供的「實際數據」進行分析與建議，特別注意：
+1. 不要只看 RSI 一個數字就下結論，RSI 只是眾多線索之一，要跟走勢方向、短線動能、帳戶淨值趨勢一起交叉判斷。
+2. 不要不管情況如何都套用「先買一部分部位試水」「分批進場」之類的制式化萬用建議——如果數據明確指向某個方向（例如強勢上升趨勢中的超賣、或下降趨勢中的反彈無力），就給出明確、有理有據的判斷與具體動作；如果數據彼此矛盾或不足以下定論，就誠實說明原因與你會觀察的下一個訊號，而不是含糊帶過。
+3. 回答要具體對應到下方數據中的實際數字與趨勢描述，不要講放諸四海皆準、跟這次數據無關的空話。
+
+【即時市場與帳戶數據】
+• 討論標的: ${currentTicker}
+• 當前現價: $${currentRealPrice}
+• 14日 RSI 指標: ${rsiVal}${rsiTrendText}
+• 價格走勢: ${trendText}
+• 帳戶淨值走勢: ${navTrendText}
+• 當前持股數量: ${holding.shares} 股（約占「此標的市值＋現金」的 ${positionRatio.toFixed(0)}%）
+• 持股買入均價: $${holding.avgPrice.toFixed(2)}
+• 該標的未實現損益: TWD $${Math.floor(pnlTWD).toLocaleString()}
+• 帳戶可用現金: TWD $${Math.floor(state.cash).toLocaleString()}
+
+用簡潔專業的口吻回答用戶問題（字數約 150-200 字內，直接切入重點，不需要重複敘述上面列出的數據）。
+
+用戶問題：${q}`;
 
         await callGeminiAPI(fullPrompt, msgId, out, key);
     }
