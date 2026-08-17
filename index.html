@@ -6,10 +6,31 @@
     <title>AcornTrade</title>
     <link rel="icon" type="image/png" href="logo.png">
     <link rel="apple-touch-icon" href="icon.png">
+
+    <!-- 📱 PWA：離線快取相關設定。manifest.json 讓瀏覽器可以「加到主畫面」並以獨立 App 樣式啟動；
+         下方 meta 標籤補強 iOS Safari 對 PWA 的支援（iOS 對 manifest.json 的支援較不完整，仍需額外標籤）。 -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#030303">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="AcornTrade">
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <!-- 📱 PWA：註冊 Service Worker 以支援離線快取（見 sw.js）。
+         只快取「App 本體殼層」（本頁面 + 固定版本的 CDN 函式庫 + 圖示），
+         即時報價／API 類請求完全不經過快取，一律直接走網路，避免離線時顯示過期報價造成誤導。
+         用 try/catch 包起來、且检查 'serviceWorker' in navigator：
+         在不支援 Service Worker 或以 file:// 協議開啟等情境下靜默失敗，不影響其餘功能。 -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').catch(() => {});
+            });
+        }
+    </script>
     
     <style>
         /* 桌機版：手機專用的斷行輔助元素預設隱藏，避免在桌機版 flex 列中多出空隙 */
@@ -356,6 +377,13 @@
         
         .quick-percent-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
         .qp-btn { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); color: #888; border-radius: 6px; padding: 5px 0; font-size: 11px; font-weight: bold; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+
+        /* 🏷️ 自選監控看板：分類標籤篩選 pill（頂部篩選列）與卡片上顯示的小標籤 */
+        .card-tag-filter-pill { flex-shrink: 0; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #aaa; border-radius: 999px; padding: 5px 12px; font-size: 11px; font-weight: bold; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+        .card-tag-filter-pill.active { background: rgba(0,212,255,0.18); border-color: var(--color-acc); color: var(--color-acc); }
+        .card-tag-badge { display: inline-flex; align-items: center; background: rgba(0,212,255,0.1); border: 1px solid rgba(0,212,255,0.25); color: var(--color-acc); border-radius: 999px; padding: 1px 8px; font-size: 10px; font-weight: bold; white-space: nowrap; }
+        .card-tag-edit-btn { position: absolute; top: -8px; left: -8px; background: rgba(255,255,255,0.15); color: #fff; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 10; box-shadow: 0 0 10px rgba(0,0,0,0.5); font-size: 11px; }
+        
         .qp-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
 
         .fee-breakdown { background: rgba(0,0,0,0.4); border-radius: 8px; padding: 10px 12px; font-size: 11px; display: flex; flex-direction: column; gap: 6px; }
@@ -887,6 +915,9 @@
                 編輯
             </button>
         </div>
+        <!-- 🏷️ 分類標籤篩選列：依目前所有卡片實際掛有的標籤動態產生，點選可篩選看板只顯示該標籤的卡片；
+             沒有任何卡片掛有標籤時，這一列不會出現（見 renderCardTagFilterBar 邏輯）。 -->
+        <div id="card-tag-filter-bar" style="display:none; gap:6px; overflow-x:auto; scrollbar-width:none; padding:0 4px 4px; margin-bottom:4px;"></div>
         <div id="cards-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:14px; position:relative;">
         </div>
     </main>
@@ -2912,7 +2943,7 @@
     Chart.register(smoothCrosshairPlugin);
 
     const DATA_KEY = "ACORNTRADE_MANUAL_DATA";
-    let state = { cash: 1000000, wallet: {}, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, limitOrders: [], dcaPlans: [], dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] };
+    let state = { cash: 1000000, wallet: {}, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, limitOrders: [], dcaPlans: [], lastActiveAt: 0, cardTags: {}, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] };
     let stopLossAlertShown = false; // 避免同一次觸發反覆彈出警示，虧損回復到門檻之上才會重置
     let currentTicker = localStorage.getItem('LAST_SELECTED_TICKER') || "NVDA";
 
@@ -3126,6 +3157,8 @@
         if (!importedState) { triggerDynamicFeedback('雲端資料格式錯誤，無法還原', 'sell', null, null); return; }
         importedState.stopLoss = importedState.stopLoss || { enabled: false, percent: 10 };
         importedState.limitOrders = importedState.limitOrders || [];
+        importedState.lastActiveAt = importedState.lastActiveAt || 0;
+        importedState.cardTags = importedState.cardTags || {};
         importedState.dcaPlans = importedState.dcaPlans || [];
 
         const id = result.accountId || trimmedId || generateAccountId();
@@ -3332,6 +3365,8 @@
         if (!importedState) { triggerDynamicFeedback('雲端資料格式錯誤，無法還原', 'sell', null, null); return; }
         importedState.stopLoss = importedState.stopLoss || { enabled: false, percent: 10 };
         importedState.limitOrders = importedState.limitOrders || [];
+        importedState.lastActiveAt = importedState.lastActiveAt || 0;
+        importedState.cardTags = importedState.cardTags || {};
         importedState.dcaPlans = importedState.dcaPlans || [];
 
         const id = result.accountId || generateAccountId();
@@ -3711,7 +3746,7 @@
         ACCOUNTS.push({ id, name, storageKey, hasPassword: false, passwordHash: null, syncEnabled: false, requirePasswordOnBoot: true, createdAt: Date.now() });
         saveAccountsMeta();
 
-        const freshState = { cash: 1000000, wallet: {}, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, limitOrders: [], dcaPlans: [] };
+        const freshState = { cash: 1000000, wallet: {}, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, limitOrders: [], dcaPlans: [], lastActiveAt: 0, cardTags: {} };
         persistAccountState(storageKey, freshState);
 
         nameInput.value = '';
@@ -4140,6 +4175,8 @@
                 state.lastModified = state.lastModified || 0;
                 state.stopLoss = state.stopLoss || { enabled: false, percent: 10 };
                 state.limitOrders = state.limitOrders || [];
+                state.lastActiveAt = state.lastActiveAt || 0;
+                state.cardTags = state.cardTags || {};
                 state.dcaPlans = state.dcaPlans || [];
                 state.dripEnabled = !!state.dripEnabled;
                 state.unlockedAchievements = state.unlockedAchievements || [];
@@ -4157,7 +4194,7 @@
                 if (!state.navHistory || !state.navHistory.timestamps || state.navHistory.timestamps.length === 0) { rebuildNavHistoryFromLedger(); }
             } catch(e) {} 
         } else {
-            state = { cash: 1000000, wallet: {}, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, limitOrders: [], dcaPlans: [], dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] };
+            state = { cash: 1000000, wallet: {}, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, limitOrders: [], dcaPlans: [], lastActiveAt: 0, cardTags: {}, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] };
             rebuildNavHistoryFromLedger(); saveData();
         }
         stopLossAlertShown = false;
@@ -4241,7 +4278,7 @@
     // 可能因 IEEE754 浮點誤差累積出如 999999.9999999998 這類極小殘值。
     // 在集中的存檔入口統一四捨五入到小數點後 2 位，修正內部數值、不影響任何顯示或操作行為。
     function saveData() { if (typeof state.cash === 'number') state.cash = Math.round(state.cash * 100) / 100; persistAccountState(getActiveAccount().storageKey, state); updateAllViews(true); renderCards(); scheduleCloudSync(); checkAchievements(); }
-    async function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { const storageKey = getActiveAccount().storageKey; localStorage.removeItem(storageKey); await idbDeleteLedger(storageKey); state = { cash: 1000000, wallet: {}, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: Date.now(), recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, limitOrders: [], dcaPlans: [], dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] }; await initData(); fetchStockHistoryData(currentTicker, true); } }
+    async function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { const storageKey = getActiveAccount().storageKey; localStorage.removeItem(storageKey); await idbDeleteLedger(storageKey); state = { cash: 1000000, wallet: {}, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: Date.now(), recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, limitOrders: [], dcaPlans: [], lastActiveAt: 0, cardTags: {}, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] }; await initData(); fetchStockHistoryData(currentTicker, true); } }
 
     function exportData() {
         const dataStr = JSON.stringify(state, null, 2), blob = new Blob([dataStr], { type: "application/json" }), url = URL.createObjectURL(blob), a = document.createElement("a");
@@ -4256,7 +4293,7 @@
             try {
                 const importedState = JSON.parse(e.target.result);
                 if (importedState && typeof importedState.cash === 'number') {
-                    state = importedState; state.cardTickers = state.cardTickers || []; state.recentTickers = state.recentTickers || []; state.holdings = state.holdings || {}; state.wallet = state.wallet || {}; state.ledger = state.ledger || []; state.dividends = state.dividends || []; state.lastDividendCheck = state.lastDividendCheck || 0; state.splits = state.splits || []; state.lastSplitCheck = state.lastSplitCheck || 0; state.lastModified = Date.now(); state.stopLoss = state.stopLoss || { enabled: false, percent: 10 }; state.limitOrders = state.limitOrders || []; state.dcaPlans = state.dcaPlans || []; state.dripEnabled = !!state.dripEnabled; state.unlockedAchievements = state.unlockedAchievements || []; state.friends = state.friends || []; state.achvShowcase = state.achvShowcase || [];
+                    state = importedState; state.cardTickers = state.cardTickers || []; state.recentTickers = state.recentTickers || []; state.holdings = state.holdings || {}; state.wallet = state.wallet || {}; state.ledger = state.ledger || []; state.dividends = state.dividends || []; state.lastDividendCheck = state.lastDividendCheck || 0; state.splits = state.splits || []; state.lastSplitCheck = state.lastSplitCheck || 0; state.lastModified = Date.now(); state.stopLoss = state.stopLoss || { enabled: false, percent: 10 }; state.limitOrders = state.limitOrders || []; state.dcaPlans = state.dcaPlans || []; state.lastActiveAt = state.lastActiveAt || 0; state.cardTags = state.cardTags || {}; state.dripEnabled = !!state.dripEnabled; state.unlockedAchievements = state.unlockedAchievements || []; state.friends = state.friends || []; state.achvShowcase = state.achvShowcase || [];
                     state.ledger.forEach(r => {
                         if (!r.timestamp) {
                             let d = new Date(), parts = r.time ? r.time.split(':') : [];
@@ -5005,9 +5042,50 @@
     function removeCard(ticker) { 
         state.cardTickers = state.cardTickers.filter(t => t !== ticker); 
         state.cardTickers = [...new Set(state.cardTickers)];
+        delete state.cardTags[ticker]; // 🏷️ 從看板移除卡片時，一併清掉該代號掛的分類標籤，避免留下孤兒資料
         saveData(); 
         renderPinnedTickers();
     }
+
+    // 🏷️ 分類標籤：目前用「單一使用中的篩選標籤」（null = 不篩選、顯示全部）
+    let activeCardTagFilter = null;
+
+    function toggleCardTagFilter(tag) {
+        activeCardTagFilter = (activeCardTagFilter === tag) ? null : tag;
+        renderCards();
+    }
+    window.toggleCardTagFilter = toggleCardTagFilter;
+
+    // 依目前所有卡片實際掛有的標籤，動態產生頂部篩選列；完全沒有任何標籤時整列隱藏
+    function renderCardTagFilterBar() {
+        const bar = document.getElementById('card-tag-filter-bar');
+        if (!bar) return;
+        const allTags = new Set();
+        state.cardTickers.forEach(t => (state.cardTags[t] || []).forEach(tag => allTags.add(tag)));
+
+        if (allTags.size === 0) { bar.style.display = 'none'; bar.innerHTML = ''; activeCardTagFilter = null; return; }
+        // 若目前篩選中的標籤已經不存在（例如該標籤最後一張卡片被移除或改標籤），自動重置篩選
+        if (activeCardTagFilter && !allTags.has(activeCardTagFilter)) activeCardTagFilter = null;
+
+        bar.style.display = 'flex';
+        const sortedTags = Array.from(allTags).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+        // 用 data-tag 屬性存放標籤原文、透過 this.dataset.tag 讀取，而不是直接把標籤字串拼進 onclick 的 JS 原始碼裡，
+        // 避免標籤內容剛好包含單引號／雙引號時破壞 HTML 屬性或 JS 字串邊界
+        bar.innerHTML = `<button class="card-tag-filter-pill ${activeCardTagFilter === null ? 'active' : ''}" onclick="toggleCardTagFilter(null)">全部</button>` +
+            sortedTags.map(tag => `<button class="card-tag-filter-pill ${activeCardTagFilter === tag ? 'active' : ''}" data-tag="${escapeHtml(tag)}" onclick="toggleCardTagFilter(this.dataset.tag)">${escapeHtml(tag)}</button>`).join('');
+    }
+
+    // 編輯模式下點擊卡片左上角的標籤按鈕：用逗號分隔的文字輸入框編輯該代號的分類標籤（沿用 App 既有的 prompt() 簡易輸入慣例）
+    function editCardTags(ticker) {
+        const current = (state.cardTags[ticker] || []).join(', ');
+        const input = prompt(`為「${ticker}」設定分類標籤（多個標籤請用逗號分隔，例如：科技股, 半導體）`, current);
+        if (input === null) return; // 使用者按取消
+        const tags = [...new Set(input.split(/[,，]/).map(s => s.trim()).filter(Boolean))];
+        if (tags.length > 0) state.cardTags[ticker] = tags; else delete state.cardTags[ticker];
+        saveData();
+        renderCards();
+    }
+    window.editCardTags = editCardTags;
     
     function addCardPrompt() {
         const grid = document.getElementById('cards-grid'), box = document.createElement('div');
@@ -5039,22 +5117,33 @@
     }
 
     function renderCards() {
+        renderCardTagFilterBar();
         const grid = document.getElementById('cards-grid'); let html = '';
-        state.cardTickers.forEach(t => {
+        // ⚠️ 編輯模式（可拖曳排序／刪除）一律顯示完整清單、不套用標籤篩選：
+        // 拖曳排序完成後是直接讀取畫面上目前所有 .draggable-card 的順序寫回 state.cardTickers（見 handleDragEnd），
+        // 如果編輯時畫面因篩選而只顯示部分卡片，排序結果會把「篩選掉、沒顯示出來」的代號直接弄丟。
+        const visibleTickers = (activeCardTagFilter === null || isCardEditMode) ? state.cardTickers : state.cardTickers.filter(t => (state.cardTags[t] || []).includes(activeCardTagFilter));
+        visibleTickers.forEach(t => {
             const rate = getCurrencyMultiplier(t);
             const cData = cardsDataCache[t] || { price: 0, rsi: null }, h = state.holdings[t] || { shares: 0, avgPrice: 0 };
             const gross = h.shares * cData.price * rate, { feeRate, taxRate } = getMarketFeeConfig(t);
             const netValue = gross > 0 ? (gross - (gross * feeRate) - (gross * taxRate)) : 0, totalCost = h.shares * h.avgPrice * rate, pnl = netValue - totalCost;
             const pnlColor = pnl >= 0 ? 'var(--color-up)' : 'var(--color-down)';
             const deleteBtn = isCardEditMode ? `<div class="delete-btn" onclick="removeCard('${t}')" style="position:absolute; top:-8px; right:-8px; background:var(--color-sell); color:#fff; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:10; box-shadow:0 0 10px rgba(0,0,0,0.5);"><i class="fa-solid fa-minus"></i></div>` : '';
+            // 🏷️ 編輯模式下卡片左上角顯示標籤編輯按鈕；非編輯模式下若這張卡片有掛標籤，就在代號旁顯示標籤徽章
+            const tagEditBtn = isCardEditMode ? `<div class="card-tag-edit-btn" onclick="editCardTags('${t}')" title="編輯分類標籤"><i class="fa-solid fa-tag"></i></div>` : '';
+            const cardTags = state.cardTags[t] || [];
+            const tagBadges = (!isCardEditMode && cardTags.length > 0) ? `<div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:-4px;">${cardTags.map(tag => `<span class="card-tag-badge">${escapeHtml(tag)}</span>`).join('')}</div>` : '';
 
             html += `
-            <div class="glass-panel draggable-card" data-ticker="${t}" style="padding: 18px; display:flex; flex-direction:column; gap:12px; cursor:${isCardEditMode ? 'grab' : 'default'};">
+            <div class="glass-panel draggable-card" data-ticker="${t}" style="padding: 18px; display:flex; flex-direction:column; gap:12px; cursor:${isCardEditMode ? 'grab' : 'default'}; position:relative;">
                 ${deleteBtn}
+                ${tagEditBtn}
                 <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:10px;">
                     <span style="font-size:18px; font-weight:900; color:var(--color-acc); letter-spacing:0.5px;">${t}</span>
                     <span style="font-size:22px; font-weight:bold; font-family:monospace;">$${cData.price > 0 ? cData.price.toFixed(2) : '----'}</span>
                 </div>
+                ${tagBadges}
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; font-size:12px;">
                     <div style="display:flex; flex-direction:column; gap:4px;"><span style="color:#777;">14日 RSI</span><span style="font-family:monospace; font-weight:bold; font-size:13px; color:${cData.rsi >= 70 ? 'var(--color-sell)' : cData.rsi <= 30 ? 'var(--color-buy)' : 'var(--color-acc)'}">${cData.rsi !== null ? cData.rsi.toFixed(1) : '--'}</span></div>
                     <div style="display:flex; flex-direction:column; gap:4px; text-align:right;"><span style="color:#777;">持有數量</span><span style="font-family:monospace; font-weight:bold; font-size:13px;">${h.shares} 股</span></div>
@@ -5068,7 +5157,7 @@
             </div>`;
         });
         if (isCardEditMode) html += `<div onclick="addCardPrompt()" style="border: 2px dashed rgba(255,255,255,0.15); border-radius: 12px; background: rgba(0,0,0,0.2); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; min-height: 220px; color: #888; transition: all 0.2s;"><i class="fa-solid fa-plus" style="font-size:35px; margin-bottom:12px; color:var(--color-acc);"></i><span style="font-weight:bold; font-size:14px; letter-spacing:1px;">新增自選資產</span></div>`;
-        grid.innerHTML = html || (!isCardEditMode ? '<div style="color:#666; font-size:14px; grid-column:1/-1; text-align:center; padding:50px;">目前無監控卡片，請點擊右上角「編輯」進行新增</div>' : '');
+        grid.innerHTML = html || (!isCardEditMode ? `<div style="color:#666; font-size:14px; grid-column:1/-1; text-align:center; padding:50px;">${activeCardTagFilter !== null ? `此標籤「${activeCardTagFilter}」目前沒有卡片` : '目前無監控卡片，請點擊右上角「編輯」進行新增'}</div>` : '');
         attachCardDragEvents();
     }
 
@@ -5706,7 +5795,69 @@
     }
 
     // ============================================================
-    // 📅 定期定額（DCA, Dollar-Cost Averaging）
+    // 🌙 啟動時檢查「離線期間」是否曾經觸發過限價單
+    // checkLimitOrders() 平常只比對「當下這一刻」的最新報價，如果使用者關閉分頁一段時間再打開，
+    // 期間股價可能曾經瞬間觸及限價又彈回去，此時只看「回來當下」的報價會完全偵測不到——
+    // 這裡改成在啟動時，額外去抓「上次離線時間點」到「現在」這段區間的歷史 K 棒（含最高/最低價），
+    // 只要區間內任何一根K棒的高/低價曾經觸及限價，就視為「離線期間已觸發」，用限價成交回補這筆交易。
+    // 依離線區間長短自動選擇資料粒度（依 Yahoo Finance 對分鐘級資料的可查範圍上限調整，避免請求失敗）。
+    // ============================================================
+    async function checkOfflineLimitOrderTriggers() {
+        if (!state.limitOrders || !state.limitOrders.length) return;
+        const sinceTs = state.lastActiveAt;
+        if (!sinceTs || sinceTs <= 0) return; // 沒有基準時間可比對（例如全新帳號、或本次更新前建立的舊資料），略過，交給之後的即時輪詢正常處理即可
+        const nowSec = Math.floor(Date.now() / 1000), sinceSec = Math.floor(sinceTs / 1000);
+        if (nowSec - sinceSec < 60) return; // 離線不到 1 分鐘，沒有另外查歷史資料的必要
+
+        const daysDiff = (nowSec - sinceSec) / 86400;
+        let interval = '1m'; if (daysDiff > 59) interval = '1d'; else if (daysDiff > 6) interval = '5m';
+
+        const tickers = Array.from(new Set(state.limitOrders.map(o => o.ticker)));
+        const barsByTicker = {};
+        await Promise.all(tickers.map(async (t) => {
+            try {
+                const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${t}?period1=${sinceSec}&period2=${nowSec}&interval=${interval}`)}`;
+                const res = await fetch(proxyUrl, { cache: "no-store" }); const json = await res.json();
+                const result = json.chart && json.chart.result && json.chart.result[0]; if (!result) return;
+                const timestamps = result.timestamp || [], quote = result.indicators.quote[0];
+                const highs = quote.high || [], lows = quote.low || [], closes = quote.close || [];
+                const bars = [];
+                for (let i = 0; i < timestamps.length; i++) {
+                    if (closes[i] === null || closes[i] === undefined) continue;
+                    bars.push({ t: timestamps[i] * 1000, h: highs[i] !== null && highs[i] !== undefined ? highs[i] : closes[i], l: lows[i] !== null && lows[i] !== undefined ? lows[i] : closes[i] });
+                }
+                barsByTicker[t] = bars;
+            } catch (err) {}
+        }));
+
+        let changed = false;
+        for (const order of state.limitOrders.slice()) {
+            const bars = barsByTicker[order.ticker]; if (!bars || !bars.length) continue;
+            // 找出離線區間內第一根「高低價曾觸及限價」的K棒，而不是只看目前最新報價
+            const hitBar = bars.find(b => order.mode === 'BUY' ? b.l <= order.limitPrice : b.h >= order.limitPrice);
+            if (!hitBar) continue;
+
+            const result = executeTradeCore(order.ticker, order.mode, order.shares, order.limitPrice, { orderType: 'LIMIT' });
+            const idx = state.limitOrders.findIndex(o => o.id === order.id);
+            if (idx !== -1) state.limitOrders.splice(idx, 1);
+            changed = true;
+
+            const hitTimeText = new Date(hitBar.t).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            if (result.success) {
+                triggerDynamicFeedback(`離線期間限價單已觸價成交：${order.mode === 'BUY' ? '買進' : '賣出'} ${order.ticker} @ $${order.limitPrice.toFixed(2)} × ${order.shares} 股（約於 ${hitTimeText} 觸及限價）`, order.mode === 'BUY' ? 'buy' : 'sell', null, null);
+            } else {
+                triggerDynamicFeedback(`離線期間限價單曾觸價，但補算時${result.reason === 'cash' ? '資金' : '持股'}不足，已自動取消：${order.ticker}`, 'gray', null, null);
+            }
+        }
+        if (changed) {
+            rebuildNavHistoryFromLedger();
+            state.lastModified = Date.now();
+            saveData();
+            renderPendingLimitOrders();
+        }
+    }
+
+
     // 依使用者設定的頻率（每日／每週／每月），到期時以固定台幣金額換算成整股自動買進。
     // 與 checkLimitOrders 共用 executeTradeCore()，確保資金/貨幣庫存/分類帳邏輯一致。
     // ============================================================
@@ -7336,6 +7487,8 @@
             cloudState.lastModified = cloudState.lastModified || 0;
             cloudState.stopLoss = cloudState.stopLoss || { enabled: false, percent: 10 };
             cloudState.limitOrders = cloudState.limitOrders || [];
+            cloudState.lastActiveAt = cloudState.lastActiveAt || 0;
+            cloudState.cardTags = cloudState.cardTags || {};
             cloudState.dcaPlans = cloudState.dcaPlans || [];
             cloudState.unlockedAchievements = cloudState.unlockedAchievements || [];
             cloudState.friends = cloudState.friends || [];
@@ -7367,6 +7520,11 @@
 
         await bootPullCloudData();
 
+        // 🌙 檢查離線期間（從上次讀到的 lastActiveAt 到現在）是否曾經觸發過限價單，
+        // 必須寫在「把 lastActiveAt 更新成現在」之前，否則就沒有基準時間可以回溯查歷史了。
+        await checkOfflineLimitOrderTriggers();
+        state.lastActiveAt = Date.now();
+
         await Promise.all([
             fetchExchangeRate(),
             fetchHoldingsPrices()
@@ -7396,6 +7554,7 @@
             updateAllViews(false);
             checkLimitOrders();
             checkDcaPlans();
+            state.lastActiveAt = Date.now(); // 🌙 每輪輪詢順便刷新「最後活躍時間」，供下次啟動時判斷離線區間的起點
             
             fetchRealPrice(currentTicker);
             fetchStockHistoryData(currentTicker, false);
@@ -7404,6 +7563,12 @@
 
         // 每 30 分鐘檢查一次是否已跨過一天，達成「每天自動查詢一次」股息 / 股票分割
         setInterval(() => { checkDividendsIfDue(); checkSplitsIfDue(); }, 30 * 60 * 1000);
+
+        // 🌙 使用者切到背景分頁／關閉分頁前，盡量把當下的 lastActiveAt 落實寫入儲存，
+        // 讓「離線區間」的起點盡量精準（而不是仰賴上一次剛好觸發 saveData() 的時間點，可能已經是好一段時間之前）
+        const persistLastActiveAt = () => { state.lastActiveAt = Date.now(); saveData(); };
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') persistLastActiveAt(); });
+        window.addEventListener('pagehide', persistLastActiveAt);
     }
 
     // --- 📱 QR Code 掃碼登入：手機端 (Receiver) 掃描網址並授權 ---
