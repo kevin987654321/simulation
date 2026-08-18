@@ -840,6 +840,7 @@
                              攔截 mousedown 的預設行為可以避免搶走焦點，讓使用者點完還能接著在輸入框打字。 -->
                         <div id="ai-quick-buttons-row" style="display:flex; gap:6px; overflow-x:auto; scrollbar-width:none; flex: 1; transition: opacity 0.2s;">
                             <button class="qp-btn" onmousedown="event.preventDefault()" onclick="quickAskAI('diagnostic')" style="padding: 4px 10px; flex-shrink:0;"><span class="hide-on-mobile"><i class="fa-solid fa-list-check"></i> </span>綜合體檢</button>
+                            <button class="qp-btn" onmousedown="event.preventDefault()" onclick="quickAskMarketEvent()" style="padding: 4px 10px; flex-shrink:0;"><span class="hide-on-mobile"><i class="fa-solid fa-newspaper"></i> </span>市場事件</button>
                             <button class="qp-btn" onmousedown="event.preventDefault()" onclick="quickAskLedger()" style="padding: 4px 10px; flex-shrink:0;"><span class="hide-on-mobile"><i class="fa-solid fa-clock-rotate-left"></i> </span>歷史帳本</button>
                         </div>
                         
@@ -859,10 +860,10 @@
                             <span style="color: rgba(255,255,255,0.4)">[SYSTEM]</span> 已同步 <strong style="color:#fff" id="ai-current-ticker">NVDA</strong> 之 RSI、持倉成本與帳戶資金。<br>
                         </div>
 
-                        <!-- 📒 歷史帳本時間範圍選擇器：偵測到「(歷史帳本)」標記時顯示 -->
+                        <!-- 📒 歷史帳本 / 市場事件 共用同一個時間範圍選擇器：依偵測到的標記類型顯示不同標題（見 openLedgerRangePicker） -->
                         <div class="ledger-range-picker" id="ledger-range-picker" style="display:none;">
                             <div class="lr-header">
-                                <span class="lr-title"><i class="fa-solid fa-clock-rotate-left" style="color:var(--color-acc)"></i> 選擇歷史帳本時間範圍</span>
+                                <span class="lr-title" id="lr-title"><i class="fa-solid fa-clock-rotate-left" style="color:var(--color-acc)"></i> 選擇歷史帳本時間範圍</span>
                                 <i class="fa-solid fa-xmark lr-close-btn" onclick="cancelLedgerRangePicker()"></i>
                             </div>
                             <div class="lr-preset-row">
@@ -6919,8 +6920,10 @@
 
 **四、AI 顧問室**
 - 於下方輸入框輸入問題並送出，即可獲得根據您目前持股與市場數據的專業分析。
-- 可使用上方的快速提問按鈕，快速詢問「技術體檢」「風控評估」「操作建議」。
-- 輸入含有「(歷史帳本)」文字的問題，可針對指定時間範圍的歷史交易紀錄進行分析。
+- 可使用上方的快速提問按鈕：「綜合體檢」針對目前標的的現價、RSI 與走勢動能提供分析。
+- 「市場事件」可針對指定時間範圍，詢問該標的這段期間可能發生了什麼事、導致股價出現對應走勢。
+- 「歷史帳本」可針對指定時間範圍的歷史交易紀錄進行覆盤分析。
+- 「市場事件」與「歷史帳本」按下後只會把標記文字帶入輸入框，可自行補充想問的問題後再送出；送出當下才會跳出時間範圍選擇器。
 - 輸入「使用說明」即可隨時查看本說明書。
 
 **五、進階設定**
@@ -6930,30 +6933,28 @@
 
     function quickAskAI(type) { const prompts = { 'diagnostic': `請針對 ${currentTicker} 當前的現價、RSI 與實際走勢動能進行短線綜合體檢。` }; document.getElementById("chat-input").value = prompts[type] || ""; askAI(); }
 
-    // 📒 「歷史帳本」快速按鈕：直接把 "(歷史帳本) " 標記帶入輸入框，並馬上開啟時間範圍選擇器（含快速區間／自訂日期等「其他選項」），
-    // 不必像過去那樣得先按一次發送才看得到選單。
-    // 附註：openLedgerRangePicker() 開啟後，既有設計本來就會把輸入框鎖成唯讀（引導改用上方選單操作），
-    // 屬於這個功能原本就有的行為，並非本次「按鈕不搶走輸入焦點」要處理的問題（唯讀欄位本來就無法保留焦點）。
-    function quickAskLedger() {
-        const input = document.getElementById("chat-input");
-        input.value = "(歷史帳本) ";
-        openLedgerRangePicker(input.value);
-    }
+    // 📒 「市場事件」「歷史帳本」快速按鈕：只把對應標記文字帶入輸入框，不會立即跳出時間範圍選擇器，
+    // 讓使用者可以自行在標記後面補充想問的具體問題；選擇器只會在「實際送出」時才攔截並跳出（見 askAI() 內的標記偵測）。
+    function quickAskMarketEvent() { document.getElementById("chat-input").value = "(市場事件) "; }
+    function quickAskLedger() { document.getElementById("chat-input").value = "(歷史帳本) "; }
 
-    // 📒 歷史帳本功能：輸入含有 "(歷史帳本)" 標記的訊息並發送時，攔截並改為請使用者選擇時間範圍
+    // 📒 歷史帳本 / 市場事件 標記偵測：訊息中含有對應標記並送出時，攔截並改為請使用者選擇時間範圍（兩者共用同一個選擇器 UI）
     const LEDGER_MARKER_REGEX = /[\(（]\s*歷史帳本\s*[\)）]/;
+    const EVENT_MARKER_REGEX = /[\(（]\s*市場事件\s*[\)）]/;
     let pendingLedgerQuery = null; // 非 null 時代表正在等待使用者於選擇器中確認時間範圍
+    let pendingPickerMode = 'ledger'; // 'ledger'（歷史帳本覆盤）或 'event'（市場事件詢問），決定確認後要跑哪一套分析邏輯
 
     async function askAI() {
         const input = document.getElementById("chat-input");
 
-        // 若目前正等待使用者選擇歷史帳本時間範圍，這次按下發送 = 確認範圍並送出分析
+        // 若目前正等待使用者選擇時間範圍，這次按下發送 = 確認範圍並送出分析
         if (pendingLedgerQuery !== null) { confirmLedgerRangeAndSend(); return; }
 
         const q = input.value.trim(); if(!q) return;
 
-        // 偵測到「(歷史帳本)」標記：攔截本次發送，改為顯示時間範圍選擇器
-        if (LEDGER_MARKER_REGEX.test(q)) { openLedgerRangePicker(q); return; }
+        // 偵測到「(歷史帳本)」或「(市場事件)」標記：攔截本次發送，改為顯示時間範圍選擇器
+        if (LEDGER_MARKER_REGEX.test(q)) { openLedgerRangePicker(q, 'ledger'); return; }
+        if (EVENT_MARKER_REGEX.test(q)) { openLedgerRangePicker(q, 'event'); return; }
 
         // 📖 「使用說明」關鍵字攔截：直接顯示固定使用說明書，不呼叫 Gemini
         if (q === "使用說明") {
@@ -7049,9 +7050,14 @@
         sendBtn.classList.toggle("pending-confirm", locked);
     }
 
-    function openLedgerRangePicker(originalQuestion) {
+    function openLedgerRangePicker(originalQuestion, mode) {
         pendingLedgerQuery = originalQuestion;
+        pendingPickerMode = mode || 'ledger';
         setLedgerPickerLockUI(true);
+
+        document.getElementById("lr-title").innerHTML = pendingPickerMode === 'event'
+            ? `<i class="fa-solid fa-newspaper" style="color:var(--color-acc)"></i> 選擇要詢問的時間範圍`
+            : `<i class="fa-solid fa-clock-rotate-left" style="color:var(--color-acc)"></i> 選擇歷史帳本時間範圍`;
 
         // 預設帶入最近 30 天
         setLedgerRangePreset('30d');
@@ -7092,8 +7098,12 @@
         const range = getLedgerRangeTimestamps(), el = document.getElementById("lr-match-count");
         if (!range) { el.innerText = ""; return; }
         if (range.startTs > range.endTs) { el.innerText = "⚠ 起始日期不能晚於結束日期"; return; }
-        const count = state.ledger.filter(r => r.timestamp >= range.startTs && r.timestamp <= range.endTs).length;
-        el.innerText = `此範圍內共有 ${count} 筆交易紀錄`;
+        if (pendingPickerMode === 'event') {
+            el.innerText = `將查詢 ${currentTicker} 在此範圍內的價格走勢`;
+        } else {
+            const count = state.ledger.filter(r => r.timestamp >= range.startTs && r.timestamp <= range.endTs).length;
+            el.innerText = `此範圍內共有 ${count} 筆交易紀錄`;
+        }
     }
 
     function cancelLedgerRangePicker() {
@@ -7113,19 +7123,27 @@
 
         let key = localStorage.getItem("MY_GEMINI_KEY") || prompt("請輸入 Gemini API Key："); if(!key) return; localStorage.setItem("MY_GEMINI_KEY", key);
 
-        const cleanQuestion = pendingLedgerQuery.replace(LEDGER_MARKER_REGEX, "").trim() || "請幫我分析這段期間的交易";
-
-        let filtered = state.ledger.filter(r => r.timestamp >= range.startTs && r.timestamp <= range.endTs).sort((a, b) => b.timestamp - a.timestamp);
-        const totalMatched = filtered.length;
-        const MAX_TRADES = 300; // 避免單次夾帶過多交易紀錄導致 prompt 過大
-        let truncated = false;
-        if (filtered.length > MAX_TRADES) { filtered = filtered.slice(0, MAX_TRADES); truncated = true; }
+        const mode = pendingPickerMode;
+        const markerRegex = mode === 'event' ? EVENT_MARKER_REGEX : LEDGER_MARKER_REGEX;
+        const defaultQuestion = mode === 'event' ? `請幫我分析 ${currentTicker} 這段期間發生了什麼事` : "請幫我分析這段期間的交易";
+        const cleanQuestion = pendingLedgerQuery.replace(markerRegex, "").trim() || defaultQuestion;
 
         // 關閉並重置時間範圍選擇器 UI
         pendingLedgerQuery = null;
         document.getElementById("ledger-range-picker").style.display = "none";
         setLedgerPickerLockUI(false);
         document.getElementById("chat-input").value = "";
+
+        if (mode === 'event') {
+            sendMarketEventAnalysisToGemini(key, cleanQuestion, range);
+            return;
+        }
+
+        let filtered = state.ledger.filter(r => r.timestamp >= range.startTs && r.timestamp <= range.endTs).sort((a, b) => b.timestamp - a.timestamp);
+        const totalMatched = filtered.length;
+        const MAX_TRADES = 300; // 避免單次夾帶過多交易紀錄導致 prompt 過大
+        let truncated = false;
+        if (filtered.length > MAX_TRADES) { filtered = filtered.slice(0, MAX_TRADES); truncated = true; }
 
         sendLedgerAnalysisToGemini(key, cleanQuestion, filtered, range, totalMatched, truncated);
     }
@@ -7163,6 +7181,67 @@
 
         const ledgerText = buildLedgerRangeReportText(filteredLedger, range, totalMatched, truncated);
         const fullPrompt = `你是一位講求數據與風險控制的資深華爾街操盤手。請仔細閱讀以下使用者於指定期間內的歷史交易紀錄，針對其操作進行覆盤分析，完整查詢此段時間範圍之情勢後再做回答，用簡潔專業的口吻回答用戶問題（字數約 200 字內）。\n\n${ledgerText}\n\n用戶問題：${question}`;
+
+        callGeminiAPI(fullPrompt, msgId, out, key);
+    }
+
+    // ---- 📰 市場事件：查詢指定標的在指定期間內的價格走勢，交給 Gemini 依其知識推測可能發生的事件 ----
+
+    // 抓取指定標的在指定時間區間內的歷史報價（依區間長短自動選擇資料粒度），供市場事件分析使用
+    async function fetchTickerPriceBars(ticker, startTs, endTs) {
+        const p1 = Math.floor(startTs / 1000), p2 = Math.floor(endTs / 1000), daysDiff = (p2 - p1) / 86400;
+        let interval = '1d'; if (daysDiff <= 1) interval = '5m'; else if (daysDiff <= 7) interval = '30m';
+        try {
+            const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?period1=${p1}&period2=${p2}&interval=${interval}`)}`;
+            const res = await fetch(proxyUrl, { cache: "no-store" }); const json = await res.json();
+            const result = json.chart && json.chart.result && json.chart.result[0]; if (!result) return [];
+            const timestamps = result.timestamp || [], quote = result.indicators.quote[0];
+            const closes = quote.close || [], highs = quote.high || [], lows = quote.low || [];
+            const bars = [];
+            for (let i = 0; i < timestamps.length; i++) {
+                if (closes[i] === null || closes[i] === undefined) continue;
+                bars.push({ t: timestamps[i] * 1000, c: closes[i], h: highs[i] !== null && highs[i] !== undefined ? highs[i] : closes[i], l: lows[i] !== null && lows[i] !== undefined ? lows[i] : closes[i] });
+            }
+            return bars;
+        } catch (e) { return []; }
+    }
+
+    // 把價格走勢整理成文字摘要：區間內漲跌幅、最高最低價；若資料點不算太多，額外逐筆列出讓 Gemini 能看到走勢細節
+    function buildEventRangeSummaryText(ticker, bars, range) {
+        if (!bars || bars.length === 0) return `（查無 ${ticker} 在 ${range.startVal} ~ ${range.endVal} 這段期間的報價資料）`;
+        const first = bars[0], last = bars[bars.length - 1];
+        const changePct = (last.c - first.c) / first.c * 100;
+        const high = Math.max(...bars.map(b => b.h)), low = Math.min(...bars.map(b => b.l));
+        let lines = [];
+        lines.push(`${ticker}：${range.startVal} ~ ${range.endVal}`);
+        lines.push(`起始價 $${first.c.toFixed(2)} → 結束價 $${last.c.toFixed(2)}（${changePct >= 0 ? '+' : ''}${changePct.toFixed(1)}%）`);
+        lines.push(`期間最高 $${high.toFixed(2)}，最低 $${low.toFixed(2)}`);
+        if (bars.length <= 60) {
+            lines.push('----------------------------------------');
+            bars.forEach(b => lines.push(`[${new Date(b.t).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}] $${b.c.toFixed(2)}`));
+        }
+        return lines.join('\n');
+    }
+
+    async function sendMarketEventAnalysisToGemini(key, question, range) {
+        const out = document.getElementById("chat-output"), msgId = "ai-" + Date.now();
+        const displayQuestion = `${question} <span style="color:var(--color-acc)">[市場事件 ${currentTicker} ${range.startVal} ~ ${range.endVal}]</span>`;
+        out.innerHTML += `<br><span style="color:#fff">> ${displayQuestion}</span><br><div id="${msgId}"><span style="color:var(--color-acc)">[GEMINI]</span> <span style="color:#777">查詢期間價格走勢並分析中...</span></div>`; out.scrollTop = out.scrollHeight;
+
+        const bars = await fetchTickerPriceBars(currentTicker, range.startTs, range.endTs);
+        const summaryText = buildEventRangeSummaryText(currentTicker, bars, range);
+
+        // 📰 這裡明確要求 Gemini：優先依它所知的實際新聞／財報／總經事件推測原因，
+        // 但若不確定是否真有相關新聞，要誠實說明這只是根據價格走勢的合理推測，不可以編造不存在的具體新聞內容或日期，
+        // 避免使用者誤把 AI 憑空捏造的「新聞」當真。
+        const fullPrompt = `你是一位熟悉總體經濟與個股基本面的資深金融分析師。使用者想了解「${currentTicker}」在 ${range.startVal} ~ ${range.endVal} 這段期間發生了什麼事，導致股價出現下方所列的走勢。
+
+請根據你所知道的重大新聞、財報發布、總體經濟事件、產業動態等，推測並說明這段期間可能的關鍵原因與事件；如果你並不確定實際是否真有相關新聞，請誠實說明這只是根據價格走勢做的合理推測，不要編造不存在的具體新聞內容或日期。用簡潔專業的口吻回答（字數約 200 字內，直接切入重點）。
+
+【${currentTicker} 這段期間的價格走勢】
+${summaryText}
+
+用戶問題：${question}`;
 
         callGeminiAPI(fullPrompt, msgId, out, key);
     }
