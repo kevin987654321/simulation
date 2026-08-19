@@ -834,7 +834,7 @@
                 <div id="ai-commander" class="glass-panel">
                     <div class="ai-header">
                         <span><img src="gemini.png" width="10" height="10"> ASK GEMINI</span>
-                        <span style="color:#666; font-size:11px;">3.7 Flash</span>
+                        <span style="color:#666; font-size:11px;">3.6 Flash</span>
                     </div>
                     
                     <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 12px; background:rgba(0,0,0,0.2);">
@@ -7449,7 +7449,7 @@
             if (useGoogleSearch) {
                 bodyObj.tools = [{ google_search: {} }]; // 開啟即時網路搜尋，讓回答有真實新聞依據，而非模型憑空推測
             }
-            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent?key=${key}`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(bodyObj) });
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${key}`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(bodyObj) });
             const json = await res.json();
             // 有開搜尋工具時，回覆可能拆成多個 parts（含搜尋過程），這裡把所有文字片段串起來，避免漏字
             const rawReply = (json.candidates[0].content.parts || []).map(p => p.text || '').join('');
