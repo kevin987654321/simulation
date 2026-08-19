@@ -313,7 +313,7 @@
 
 
         .trade-panel { display: flex; flex-direction: column; padding: 14px; gap: 10px; height: 100%; overflow-y: auto; }
-        .panel-header { font-size: 13px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 8px; padding-right: 54px; display: flex; justify-content: space-between; align-items: center; position: relative; }
+        .panel-header { font-size: 13px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 8px; padding-right: 28px; display: flex; justify-content: space-between; align-items: center; position: relative; }
 
         /* ⏰ 模擬限價單：面板標題右上角的時鐘切換按鈕。
            改用 position:absolute 疊加在標題列上（不佔用 flex 版面空間），
@@ -328,14 +328,6 @@
         }
         .limit-order-toggle-btn.active { color: var(--color-acc); border-color: var(--color-acc); background: rgba(0,212,255,0.12); }
 
-        /* 🛡️ 條件單（觸價停損/停利）切換按鈕：外觀與限價單切換鈕一致，僅位移至其左側、啟用色改為警示紅，避免與限價單混淆 */
-        .condition-order-toggle-btn { position: absolute; top: calc(50% - 5px); right: 26px; transform: translateY(-50%); width: 22px; height: 22px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: transparent; border: 1px solid rgba(255,255,255,0.1); color: #888; border-radius: 5px; cursor: pointer; font-size: 10.5px; transition: all 0.2s ease; -webkit-tap-highlight-color: transparent; }
-        @media (hover: hover) and (pointer: fine) {
-            .condition-order-toggle-btn:hover { color: #ccc; background: rgba(255,255,255,0.08); }
-            .condition-order-toggle-btn.active:hover { color: var(--color-sell); background: rgba(255,69,96,0.18); }
-        }
-        .condition-order-toggle-btn.active { color: var(--color-sell); border-color: var(--color-sell); background: rgba(255,69,96,0.12); }
-
         /* ⏰ 限價輸入框：外觀與現價顯示區一致（monospace、粗體），聚焦時邊框亮起提示可編輯 */
         .limit-price-input { font-size: 20px; font-weight: 800; font-family: monospace; color: #fff; background: rgba(0,212,255,0.06); border: 1px solid rgba(0,212,255,0.35); border-radius: 6px; padding: 2px 8px; width: 130px; outline: none; transition: border-color 0.2s ease, background 0.2s ease; }
         .limit-price-input:focus { border-color: var(--color-acc); background: rgba(0,212,255,0.1); }
@@ -343,6 +335,9 @@
         /* ⏰ 待成交限價單清單 */
         .limit-order-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; background: rgba(255,255,255,0.02); }
         .limit-order-item + .limit-order-item { margin-top: 6px; }
+        /* 🔀 歷史帳本「操作」按鈕展開選單：固定在按鈕右側／下方彈出，不佔用表格版面 */
+        .ledger-action-panel { position: absolute; top: 100%; right: 0; margin-top: 4px; z-index: 50; flex-direction: column; background: #111; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); min-width: 150px; }
+        .sltp-mode-btn.active { outline: 2px solid currentColor; outline-offset: -2px; }
         
         .mode-toggle-group { display: flex; gap: 8px; background: rgba(0,0,0,0.5); padding: 5px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); }
         .mode-toggle-btn { flex: 1; padding: 8px; border-radius: 6px; border: none; background: transparent; color: #888; font-weight: bold; cursor: pointer; transition: all 0.2s; font-size: 12px; }
@@ -1143,36 +1138,23 @@
                 <button id="ledger-split-check-btn" onclick="checkSplits(true)" style="display:none; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:#fff; padding:6px 12px; border-radius:6px; font-size:11px; cursor:pointer; font-weight:bold; transition:all 0.2s;"><i class="fa-solid fa-arrows-rotate"></i> 立即查詢分割</button>
             </div>
             <div class="table-responsive" id="ledger-tab-view-ledger">
-                <!-- 🔎 歷史帳本篩選列：代號關鍵字 / 買賣別 / 日期區間，全部可自由組合套用 -->
-                <div id="ledger-filter-bar" style="display:flex; flex-wrap:wrap; align-items:flex-end; gap:8px; margin-bottom:10px; padding:10px; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.06); border-radius:8px;">
-                    <div>
-                        <div style="font-size:10.5px; color:#888; margin-bottom:4px;">代號</div>
-                        <input type="text" id="ledger-filter-ticker" placeholder="全部" oninput="onLedgerFilterChange()" style="width:90px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-transform:uppercase; font-family:monospace; height:30px; box-sizing:border-box;">
-                    </div>
-                    <div>
-                        <div style="font-size:10.5px; color:#888; margin-bottom:4px;">買賣別</div>
-                        <select id="ledger-filter-action" onchange="onLedgerFilterChange()" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; height:30px; box-sizing:border-box;">
-                            <option value="ALL">全部</option>
-                            <option value="BUY">買進</option>
-                            <option value="SELL">賣出</option>
-                        </select>
-                    </div>
-                    <div>
-                        <div style="font-size:10.5px; color:#888; margin-bottom:4px;">起始日期</div>
-                        <span class="dp-wrap" id="ledger-filter-from-wrap">
-                            <input type="date" id="ledger-filter-from" onchange="onLedgerFilterChange()" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-family:monospace; height:30px; box-sizing:border-box;">
-                            <span class="dp-fake" id="ledger-filter-from-fake"></span>
-                        </span>
-                    </div>
-                    <div>
-                        <div style="font-size:10.5px; color:#888; margin-bottom:4px;">結束日期</div>
-                        <span class="dp-wrap" id="ledger-filter-to-wrap">
-                            <input type="date" id="ledger-filter-to" onchange="onLedgerFilterChange()" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-family:monospace; height:30px; box-sizing:border-box;">
-                            <span class="dp-fake" id="ledger-filter-to-fake"></span>
-                        </span>
-                    </div>
-                    <button onclick="clearLedgerFilters()" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:#fff; padding:0 12px; border-radius:6px; font-size:11px; cursor:pointer; height:30px; box-sizing:border-box;"><i class="fa-solid fa-filter-circle-xmark"></i> 清除篩選</button>
-                    <span id="ledger-filter-count" style="font-size:11px; color:#888; margin-left:auto; align-self:center;"></span>
+                <div id="ledger-filter-bar" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:10px;">
+                    <input type="text" id="ledger-filter-ticker" placeholder="篩選代號 (如 NVDA)" oninput="applyLedgerFilters()" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px 10px; border-radius:6px; font-size:12px; width:140px; box-sizing:border-box;">
+                    <select id="ledger-filter-action" onchange="applyLedgerFilters()" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px 10px; border-radius:6px; font-size:12px;">
+                        <option value="">全部買賣</option>
+                        <option value="BUY">買進</option>
+                        <option value="SELL">賣出</option>
+                    </select>
+                    <select id="ledger-filter-ordertype" onchange="applyLedgerFilters()" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px 10px; border-radius:6px; font-size:12px;">
+                        <option value="">全部類型</option>
+                        <option value="MARKET">市價單</option>
+                        <option value="LIMIT">限價單</option>
+                        <option value="DCA">定期定額</option>
+                        <option value="SLTP">停損/停利</option>
+                        <option value="ODDLOT">碎股折算</option>
+                    </select>
+                    <button id="ledger-filter-reset" onclick="resetLedgerFilters()" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:#aaa; padding:6px 12px; border-radius:6px; font-size:11px; cursor:pointer; font-weight:bold;"><i class="fa-solid fa-filter-circle-xmark"></i> 清除篩選</button>
+                    <span id="ledger-filter-summary" style="font-size:11px; color:#666;"></span>
                 </div>
                 <table>
                     <thead><tr><th>時間</th><th>動作</th><th>代號</th><th>成交均價</th><th>股數</th><th>手續費/稅</th><th>交割金額(TWD)</th><th>已實現損益(TWD)</th><th>操作</th></tr></thead>
@@ -1605,22 +1587,49 @@
     </div>
 </div>
 
-<!-- ⏰ 限價單有效期限選擇彈窗：按下送出限價單後彈出，預設「無限期」，選定後才真正送出委託 -->
-<div id="limit-order-expiry-overlay" class="modal-overlay">
+<!-- ⏳ 限價單送出後：選擇有效期限（預設無限期 GTC，亦可手動指定到期日期） -->
+<div id="limit-expiry-overlay" class="modal-overlay">
     <div class="glass-panel modal-box" style="align-items:center; text-align:center;">
         <i class="fa-regular fa-clock" style="color:var(--color-acc); font-size:26px; margin:4px 0;"></i>
-        <div style="font-weight:bold; font-size:14px;">選擇此限價單的有效期限</div>
-        <div id="limit-order-expiry-summary" style="color:#999; font-size:11.5px; line-height:1.6;"></div>
-        <button class="limit-expiry-choice-btn" data-expiry="DAY" style="width:100%; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:10px; border-radius:8px; font-weight:bold; cursor:pointer;"><i class="fa-regular fa-sun"></i> 當日有效</button>
-        <button class="limit-expiry-choice-btn" data-expiry="7D" style="width:100%; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:10px; border-radius:8px; font-weight:bold; cursor:pointer;"><i class="fa-solid fa-calendar-week"></i> 7 天內有效</button>
-        <button class="limit-expiry-choice-btn" data-expiry="30D" style="width:100%; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:10px; border-radius:8px; font-weight:bold; cursor:pointer;"><i class="fa-solid fa-calendar-days"></i> 30 天內有效</button>
-        <button class="limit-expiry-choice-btn" data-expiry="GTC" style="width:100%; background:rgba(0,212,255,0.15); border:1px solid var(--color-acc); color:var(--color-acc); padding:10px; border-radius:8px; font-weight:bold; cursor:pointer;"><i class="fa-solid fa-infinity"></i> 無限期（預設）</button>
-        <button id="limit-order-expiry-cancel" style="width:100%; background:transparent; border:none; color:#888; padding:6px; cursor:pointer; font-size:12px;">取消送出</button>
+        <div style="font-weight:bold; font-size:14px;">設定限價單有效期限</div>
+        <div style="color:#999; font-size:11.5px; line-height:1.6;">預設為「無限期」，委託會持續有效直到成交或手動取消；也可指定到期日，逾期未成交將自動取消。</div>
+        <button id="limit-expiry-gtc" style="width:100%; background:rgba(0,212,255,0.15); border:1px solid var(--color-acc); color:var(--color-acc); padding:10px; border-radius:8px; font-weight:bold; cursor:pointer;"><i class="fa-solid fa-infinity"></i> 無限期（預設）</button>
+        <div style="width:100%; display:flex; align-items:center; gap:8px; color:#666; font-size:11px;"><div style="flex:1; height:1px; background:rgba(255,255,255,0.1);"></div>或指定到期日<div style="flex:1; height:1px; background:rgba(255,255,255,0.1);"></div></div>
+        <span class="dp-wrap" style="width:100%;">
+            <input type="date" id="limit-expiry-date-input" style="width:100%; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:8px; border-radius:6px; font-family:monospace; height:36px; box-sizing:border-box;">
+            <span class="dp-fake" id="limit-expiry-date-fake"></span>
+        </span>
+        <button id="limit-expiry-confirm-date" style="width:100%; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:10px; border-radius:8px; font-weight:bold; cursor:pointer;">以此日期為到期日送出</button>
+        <button id="limit-expiry-cancel" style="width:100%; background:transparent; border:none; color:#888; padding:6px; cursor:pointer; font-size:12px;">取消送出委託</button>
+    </div>
+</div>
+
+<!-- 🎯 觸價停損／停利單（SL/TP）設定彈窗：從歷史帳本列的「操作」按鈕展開後點擊進入 -->
+<div id="sltp-setup-overlay" class="modal-overlay">
+    <div class="glass-panel modal-box" style="align-items:center; text-align:center;">
+        <i class="fa-solid fa-bullseye" style="color:var(--color-warn); font-size:26px; margin:4px 0;"></i>
+        <div style="font-weight:bold; font-size:14px;">設定自動條件單（<span id="sltp-setup-ticker" style="color:var(--color-acc);"></span>）</div>
+        <div style="color:#999; font-size:11.5px; line-height:1.6;">觸及設定價位時，系統會自動以當時價格送出賣出委託。可同時管理多筆條件單。</div>
+        <div style="display:flex; gap:8px; width:100%;">
+            <button id="sltp-mode-sl" class="sltp-mode-btn active" data-mode="SL" style="flex:1; background:rgba(255,69,96,0.15); border:1px solid var(--color-sell); color:var(--color-sell); padding:9px; border-radius:8px; font-weight:bold; cursor:pointer; font-size:12.5px;"><i class="fa-solid fa-arrow-trend-down"></i> 停損 (SL)</button>
+            <button id="sltp-mode-tp" class="sltp-mode-btn" data-mode="TP" style="flex:1; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.2); color:#aaa; padding:9px; border-radius:8px; font-weight:bold; cursor:pointer; font-size:12.5px;"><i class="fa-solid fa-arrow-trend-up"></i> 停利 (TP)</button>
+        </div>
+        <div style="width:100%; text-align:left;">
+            <div style="font-size:11px; color:#888; margin-bottom:4px;">觸發價格</div>
+            <input type="number" id="sltp-trigger-price" step="0.01" placeholder="0.00" style="width:100%; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:8px; border-radius:6px; font-family:monospace; box-sizing:border-box;">
+        </div>
+        <div style="width:100%; text-align:left;">
+            <div style="font-size:11px; color:#888; margin-bottom:4px;">股數（可小於目前持股，最多 <span id="sltp-max-shares"></span> 股）</div>
+            <input type="text" id="sltp-shares" placeholder="0" style="width:100%; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:8px; border-radius:6px; font-family:monospace; box-sizing:border-box;">
+        </div>
+        <button id="sltp-confirm-btn" style="width:100%; background:var(--color-warn); color:#000; border:none; padding:10px; border-radius:8px; font-weight:bold; cursor:pointer;">送出條件單</button>
+        <button id="sltp-cancel-btn" style="width:100%; background:transparent; border:none; color:#888; padding:6px; cursor:pointer; font-size:12px;">取消</button>
     </div>
 </div>
 
 <!-- 📱 QR Code 掃碼登入彈窗（可切換：顯示 QR Code / 開啟相機掃描） -->
 <div id="qr-login-overlay" class="modal-overlay">
+
     <div class="glass-panel modal-box" style="align-items:center; text-align:center;">
         <div style="font-weight:bold; font-size:14px; display:flex; align-items:center; gap:8px;"><i class="fa-solid fa-qrcode" style="color:var(--color-acc)"></i> 掃碼登入</div>
         <div id="qr-login-desc" style="font-size:11px; color:#888; line-height:1.6;">請使用已啟用雲端同步帳號的手機，掃描下方 QR Code 進行授權登入</div>
@@ -1711,9 +1720,6 @@
 <div id="shared-trade-panel" class="glass-panel trade-panel">
     <div class="panel-header">
         <span><img src="終端.png" width="14" height="14"> 即時報價與下單</span>
-        <button id="condition-order-toggle-btn" class="condition-order-toggle-btn" onclick="toggleConditionOrderMode()" title="條件單（觸價停損/停利）">
-            <i class="fa-solid fa-shield-halved"></i>
-        </button>
         <button id="limit-order-toggle-btn" class="limit-order-toggle-btn" onclick="toggleLimitOrderMode()" title="模擬限價單">
             <i class="fa-regular fa-clock"></i>
         </button>
@@ -1781,34 +1787,6 @@
             <i class="fa-regular fa-clock"></i> 待成交限價單
         </div>
         <div id="pending-limit-orders-list" style="display:flex; flex-direction:column; gap:6px;"></div>
-    </div>
-
-    <!-- 🛡️ 條件單（觸價停損／停利）設定表單：點擊面板標題盾牌圖示後顯示。
-         針對「目前持有中的標的」設定停損價與／或停利價，任一價位被觸及時，系統會自動以當時市價送出賣單。
-         兩個價位皆為選填，但至少需填一項；停損價須低於現價、停利價須高於現價，避免送出當下就已誤觸發的無效條件單。 -->
-    <div id="condition-order-form" style="display:none; flex-direction:column; gap:8px; background:rgba(255,69,96,0.06); border:1px solid rgba(255,69,96,0.2); border-radius:8px; padding:10px;">
-        <div style="font-size:11px; color:#ccc; display:flex; align-items:center; gap:5px;">
-            <i class="fa-solid fa-shield-halved" style="color:var(--color-sell);"></i> 條件單：觸價自動停損／停利（依目前輸入的股數，賣出目前持有中的標的）
-        </div>
-        <div style="display:flex; gap:8px;">
-            <div style="flex:1;">
-                <div style="font-size:10.5px; color:#888; margin-bottom:4px;">停損價（跌破觸發）</div>
-                <input type="text" id="cond-stoploss-input" class="mobile-num" data-decimal="true" placeholder="選填" onfocus="this.select()" style="width:100%; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:var(--color-sell); padding:6px; border-radius:6px; font-family:monospace; font-weight:bold; height:30px; box-sizing:border-box;">
-            </div>
-            <div style="flex:1;">
-                <div style="font-size:10.5px; color:#888; margin-bottom:4px;">停利價（漲過觸發）</div>
-                <input type="text" id="cond-takeprofit-input" class="mobile-num" data-decimal="true" placeholder="選填" onfocus="this.select()" style="width:100%; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:var(--color-buy); padding:6px; border-radius:6px; font-family:monospace; font-weight:bold; height:30px; box-sizing:border-box;">
-            </div>
-        </div>
-        <button onclick="placeConditionalOrder()" style="width:100%; background:rgba(255,69,96,0.15); border:1px solid var(--color-sell); color:var(--color-sell); padding:8px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:12px;">送出條件單（使用下方股數欄位）</button>
-    </div>
-
-    <!-- 🛡️ 待觸發條件單清單：有任何尚未觸發的停損/停利條件單時才顯示 -->
-    <div id="pending-condition-orders-box" style="display:none;">
-        <div style="font-size:11px; color:#888; display:flex; align-items:center; gap:5px; margin-bottom:6px;">
-            <i class="fa-solid fa-shield-halved"></i> 待觸發條件單
-        </div>
-        <div id="pending-condition-orders-list" style="display:flex; flex-direction:column; gap:6px;"></div>
     </div>
 
     <div class="mobile-stock-chart-box">
@@ -1987,10 +1965,11 @@
     }
 
     async function fetchHoldingsPrices() {
-        // ⏰ 除了現有持股，尚未持有但已掛有模擬限價單／定期定額計畫的代號也要一併抓報價，才能偵測是否已觸價／到期可執行
+        // ⏰ 除了現有持股，尚未持有但已掛有模擬限價單／定期定額計畫／自動條件單的代號也要一併抓報價，才能偵測是否已觸價／到期可執行
         const orderTickers = (state.limitOrders || []).map(o => o.ticker);
+        const condTickers = (state.conditionalOrders || []).map(o => o.ticker);
         const dcaTickers = (state.dcaPlans || []).map(p => p.ticker);
-        const tickers = Array.from(new Set([...Object.keys(state.holdings), ...orderTickers, ...dcaTickers]));
+        const tickers = Array.from(new Set([...Object.keys(state.holdings), ...orderTickers, ...condTickers, ...dcaTickers]));
         if (tickers.length === 0) return;
         
         const promises = tickers.map(async (t) => {
@@ -2015,49 +1994,13 @@
         return currencyRatesToTWD[currency] !== undefined ? currencyRatesToTWD[currency] : currentUSDTWD;
     }
 
-    // ============================================================
-    // 🟢🟡⚪ 市場交易時段狀態判定（盤中／盤前盤後／已收盤休市）
-    // 依代號後綴判定所屬市場後，換算成該市場所在時區的當地時間，再對照各市場公開的
-    // 一般交易時段（不含節慶休市，節慶行事曆未內建，僅以「平日 vs 週末」概略判斷）。
-    // 目前僅美股（USD）額外建模「盤前／盤後」延長交易時段；其餘市場暫僅回傳「盤中／已收盤」，
-    // 待日後有需要再individually擴充各市場的延長時段規則。
-    // ============================================================
-    const MARKET_SESSION_CONFIG = {
-        TWD: { tz: 'Asia/Taipei',    sessions: [[540, 810]] },              // 09:00–13:30
-        USD: { tz: 'America/New_York', sessions: [[570, 960]], pre: [[240, 570]], post: [[960, 1200]] }, // 盤中 09:30–16:00，盤前 04:00–09:30，盤後 16:00–20:00
-        JPY: { tz: 'Asia/Tokyo',     sessions: [[540, 690], [750, 900]] },  // 09:00–11:30, 12:30–15:00
-        HKD: { tz: 'Asia/Hong_Kong', sessions: [[570, 720], [780, 960]] }, // 09:30–12:00, 13:00–16:00
-        CNY: { tz: 'Asia/Shanghai',  sessions: [[570, 690], [780, 900]] }, // 09:30–11:30, 13:00–15:00
-        KRW: { tz: 'Asia/Seoul',     sessions: [[540, 930]] },              // 09:00–15:30
-        GBP: { tz: 'Europe/London',  sessions: [[480, 990]] },              // 08:00–16:30
-    };
-
-    // 取得某代號目前所屬市場的交易時段狀態：'open'（盤中，綠燈）／'extended'（盤前盤後，黃燈）／'closed'（已收盤休市，灰燈）
-    function getMarketSessionStatus(ticker) {
-        const currency = getCurrencyForTicker(ticker);
-        const cfg = MARKET_SESSION_CONFIG[currency] || MARKET_SESSION_CONFIG.USD; // 未知市場防呆回退比照美股時段
-        try {
-            const now = new Date();
-            const parts = new Intl.DateTimeFormat('en-US', { timeZone: cfg.tz, hour12: false, weekday: 'short', hour: '2-digit', minute: '2-digit' }).formatToParts(now);
-            const get = type => parts.find(p => p.type === type).value;
-            const weekday = get('weekday');
-            if (weekday === 'Sat' || weekday === 'Sun') return { status: 'closed', label: '已收盤（休市）' };
-            const minutesOfDay = (parseInt(get('hour'), 10) % 24) * 60 + parseInt(get('minute'), 10);
-            const inRange = (ranges) => (ranges || []).some(([s, e]) => minutesOfDay >= s && minutesOfDay < e);
-            if (inRange(cfg.sessions)) return { status: 'open', label: '盤中交易' };
-            if (inRange(cfg.pre) || inRange(cfg.post)) return { status: 'extended', label: '盤前／盤後延長交易' };
-            return { status: 'closed', label: '已收盤（休市）' };
-        } catch (e) {
-            return { status: 'closed', label: '已收盤（休市）' }; // 時區資料查詢異常時，防呆回退為灰燈
-        }
-    }
-
-    // 狀態 → 顏色（綠：盤中／黃：盤前盤後／灰：已收盤休市），供圖表標題小圖示使用
-    function getMarketSessionColor(ticker) {
-        const s = getMarketSessionStatus(ticker).status;
-        if (s === 'open') return 'var(--color-buy)';
-        if (s === 'extended') return 'var(--color-warn)';
-        return '#666';
+    // 🔢 股數顯示格式化：股票分割／合股比例非整數時（如 3:2、1:10）會產生小數點股數，
+    // 直接顯示原始浮點數常會出現過長尾數（如 33.33333333336），這裡統一格式化：
+    // 整數股數照常顯示；小數股數最多保留 4 位小數並去除多餘的尾端 0。
+    function formatShares(n) {
+        if (n === null || n === undefined || isNaN(n)) return '0';
+        if (Math.abs(n - Math.round(n)) < 1e-6) return Math.round(n).toLocaleString();
+        return n.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
     }
 
     function getFullFormattedTimeFromDate(timestamp) {
@@ -3306,7 +3249,7 @@
         try { importedState = JSON.parse(result.stateJSON); } catch (e) { importedState = null; }
         if (!importedState) { triggerDynamicFeedback('雲端資料格式錯誤，無法還原', 'sell', null, null); return; }
         importedState.stopLoss = importedState.stopLoss || { enabled: false, percent: 10 };
-        importedState.limitOrders = importedState.limitOrders || []; importedState.conditionalOrders = importedState.conditionalOrders || [];
+        importedState.limitOrders = importedState.limitOrders || [];
         importedState.lastActiveAt = importedState.lastActiveAt || 0;
         importedState.cardTags = importedState.cardTags || {};
         importedState.dcaPlans = importedState.dcaPlans || [];
@@ -3514,7 +3457,7 @@
         try { importedState = JSON.parse(result.stateJSON); } catch (e) { importedState = null; }
         if (!importedState) { triggerDynamicFeedback('雲端資料格式錯誤，無法還原', 'sell', null, null); return; }
         importedState.stopLoss = importedState.stopLoss || { enabled: false, percent: 10 };
-        importedState.limitOrders = importedState.limitOrders || []; importedState.conditionalOrders = importedState.conditionalOrders || [];
+        importedState.limitOrders = importedState.limitOrders || [];
         importedState.lastActiveAt = importedState.lastActiveAt || 0;
         importedState.cardTags = importedState.cardTags || {};
         importedState.dcaPlans = importedState.dcaPlans || [];
@@ -4014,7 +3957,6 @@
         renderRecentTickers();
         renderAccountManagerList();
         renderPendingLimitOrders();
-        renderPendingConditionalOrders();
         renderDcaPlansList();
 
         fetchHoldingsPrices().then(() => { updateLiveNavNode(); updateAllViews(true); checkDcaPlans(); });
@@ -4135,6 +4077,24 @@
     // 獨立管理主儀表板與下單櫃檯的範圍狀態，解決互相干擾問題
     let currentRange = '1M', mCurrentRange = '1M';
     let currentRealPrice = null, isPriceLoading = true, searchDebounceTimer = null, desktopChartMode = 'NAV', tradeMode = 'BUY';
+
+    // 🟢🟡⚪ 目前選定代號的市場交易狀態（來自 Yahoo Finance meta.marketState）：
+    // REGULAR = 盤中交易、PRE/PREPRE = 盤前、POST/POSTPOST = 盤後、CLOSED = 已收盤休市。
+    // 用於下單櫃檯圖表／個股走勢圖表左上角小圖示的顏色顯示，讓使用者一眼判斷現在能否即時交易。
+    let currentMarketState = null;
+    function getMarketStateColor() {
+        if (currentMarketState === 'REGULAR') return 'var(--color-up)'; // 🟢 盤中交易
+        if (currentMarketState === 'PRE' || currentMarketState === 'PREPRE' || currentMarketState === 'POST' || currentMarketState === 'POSTPOST') return 'var(--color-warn)'; // 🟡 盤前／盤後
+        if (currentMarketState) return '#888'; // ⚪ 已收盤休市（CLOSED 等其他狀態）
+        return 'var(--color-buy)'; // 尚未取得市場狀態時，維持原本預設色，避免畫面閃爍
+    }
+    function getMarketStateLabel() {
+        if (currentMarketState === 'REGULAR') return '盤中交易';
+        if (currentMarketState === 'PRE' || currentMarketState === 'PREPRE') return '盤前交易';
+        if (currentMarketState === 'POST' || currentMarketState === 'POSTPOST') return '盤後交易';
+        if (currentMarketState) return '已收盤休市';
+        return '狀態未知';
+    }
     let stockHistData = { labels: [], prices: [], ohlc: [], timestamps: [] }, cardsDataCache = {}, isCardEditMode = false;
     // 👁️ 個股走勢圖：是否在圖表上標記歷史買入/賣出時間點（記住使用者選擇，重新整理後維持）
     const TRADE_MARKERS_KEY = 'SETTING_CHART_TRADE_MARKERS';
@@ -4325,7 +4285,8 @@
                 state.lastSplitCheck = state.lastSplitCheck || 0;
                 state.lastModified = state.lastModified || 0;
                 state.stopLoss = state.stopLoss || { enabled: false, percent: 10 };
-                state.limitOrders = state.limitOrders || []; state.conditionalOrders = state.conditionalOrders || [];
+                state.limitOrders = state.limitOrders || [];
+                state.conditionalOrders = state.conditionalOrders || [];
                 state.lastActiveAt = state.lastActiveAt || 0;
                 state.cardTags = state.cardTags || {};
                 state.dcaPlans = state.dcaPlans || [];
@@ -4404,7 +4365,6 @@
         updateTimeframeButtons();
         initTimeMachineDefault(); renderRecentTickers(); renderCards();
         renderPendingLimitOrders();
-        renderPendingConditionalOrders();
         renderDcaPlansList();
         checkAchievements();
         renderAchievementsPage();
@@ -4635,6 +4595,59 @@
             cancelBtn.addEventListener('click', onCancel);
         });
     }
+
+    // ⏳ 限價單送出前彈出的有效期限選擇：回傳 { cancelled, expiry }，expiry 為 null 代表無限期 (GTC)，
+    // 否則為到期時間戳（當天 23:59:59），供 checkLimitOrders / checkOfflineLimitOrderTriggers 判斷是否已過期。
+    function openLimitExpiryChoice() {
+        return new Promise((resolve) => {
+            const overlay = document.getElementById('limit-expiry-overlay');
+            const gtcBtn = document.getElementById('limit-expiry-gtc');
+            const confirmDateBtn = document.getElementById('limit-expiry-confirm-date');
+            const cancelBtn = document.getElementById('limit-expiry-cancel');
+            const dateInput = document.getElementById('limit-expiry-date-input');
+            dateInput.value = '';
+            dateInput.min = new Date().toISOString().slice(0, 10);
+            overlay.style.display = 'flex';
+
+            function cleanup(result) {
+                overlay.style.display = 'none';
+                gtcBtn.removeEventListener('click', onGtc);
+                confirmDateBtn.removeEventListener('click', onDate);
+                cancelBtn.removeEventListener('click', onCancel);
+                resolve(result);
+            }
+            function onGtc() { cleanup({ cancelled: false, expiry: null }); }
+            function onDate() {
+                if (!dateInput.value) { alert('請先選擇一個到期日期，或改選「無限期」。'); return; }
+                const expiry = new Date(`${dateInput.value}T23:59:59`).getTime();
+                if (isNaN(expiry) || expiry < Date.now()) { alert('到期日期不可早於今天！'); return; }
+                cleanup({ cancelled: false, expiry: expiry });
+            }
+            function onCancel() { cleanup({ cancelled: true, expiry: null }); }
+            gtcBtn.addEventListener('click', onGtc);
+            confirmDateBtn.addEventListener('click', onDate);
+            cancelBtn.addEventListener('click', onCancel);
+        });
+    }
+
+    // 🎯 SL/TP 設定彈窗：切換模式按鈕、送出、取消
+    document.getElementById('sltp-mode-sl').addEventListener('click', () => setSltpMode('SL'));
+    document.getElementById('sltp-mode-tp').addEventListener('click', () => setSltpMode('TP'));
+    document.getElementById('sltp-cancel-btn').addEventListener('click', () => {
+        document.getElementById('sltp-setup-overlay').style.display = 'none';
+    });
+    document.getElementById('sltp-confirm-btn').addEventListener('click', () => {
+        const overlay = document.getElementById('sltp-setup-overlay');
+        const ticker = overlay.dataset.ticker;
+        const maxShares = parseFloat(overlay.dataset.maxShares) || 0;
+        const triggerPrice = parseFloat(document.getElementById('sltp-trigger-price').value);
+        const shares = parseFloat(document.getElementById('sltp-shares').value);
+        if (isNaN(triggerPrice) || triggerPrice <= 0) { alert('請輸入有效的觸發價格！'); return; }
+        if (isNaN(shares) || shares <= 0) { alert('請輸入有效的股數！'); return; }
+        if (shares > maxShares + 1e-6) { alert(`股數不可超過目前持股 ${formatShares(maxShares)} 股！`); return; }
+        createConditionalOrder(ticker, sltpSelectedMode, triggerPrice, shares);
+        overlay.style.display = 'none';
+    });
 
     async function exportReportWithFormatChoice() {
         const format = await openExportFormatChoice();
@@ -4883,41 +4896,6 @@
     // 再依調整後的新帳本重新結算目前庫存與均價，避免長期記帳因分割未反映而造成股數/市值誤差。
     // ============================================================
 
-    // 🪙 碎股自動現金折算：股票分割（尤其非整數比例，如 3:2 分割或 1:10 合股）回溯調整歷史股數後，
-    // 目前持股總股數可能出現小數點碎股（例如 100 股以 3:2 分割後變成 150 股沒有問題，但若原本持股數
-    // 非分割比例分母的整數倍，如 101 股以 3:2 分割會變成 151.5 股）。
-    // 帳本內的歷史交易紀錄仍保留精確（含小數）股數以維持均價/損益計算正確，
-    // 但「目前持股」僅保留整股可交易，多出來的碎股部分依當前報價（查無報價則退回持股均價）折算為現金入帳，
-    // 並在帳本中新增一筆「碎股現金結算」紀錄，方便使用者對帳。
-    function settleFractionalSharesAfterSplit(ticker) {
-        const h = state.holdings[ticker];
-        if (!h) return;
-        const EPS = 1e-6;
-        const wholeShares = Math.floor(h.shares + EPS);
-        const fraction = h.shares - wholeShares;
-        if (fraction <= EPS) return; // 無碎股需處理
-
-        const refPrice = (globalPriceCache[ticker] !== undefined && globalPriceCache[ticker] > 0) ? globalPriceCache[ticker] : (h.avgPrice || 0);
-        const rate = getCurrencyMultiplier(ticker);
-        const curr = getCurrencyForTicker(ticker);
-        const cashNative = fraction * refPrice;
-        const cashTWD = cashNative * rate;
-        const costBasisTWD = fraction * h.avgPrice * rate;
-
-        if (curr === 'TWD') { state.cash += cashTWD; } else { adjustCurrencyBalance(curr, cashNative); }
-
-        h.shares = wholeShares;
-        if (h.shares <= 0) delete state.holdings[ticker];
-
-        const timestamp = Date.now();
-        state.ledger.unshift({
-            time: getFullFormattedTimeFromDate(timestamp), timestamp: timestamp, action: "SELL", ticker: ticker,
-            price: refPrice, shares: fraction, fee: 0, total: cashTWD, realizedPnL: cashTWD - costBasisTWD,
-            rate: rate, walletCurrency: curr !== 'TWD' ? curr : undefined, walletCreditNative: curr !== 'TWD' ? cashNative : undefined,
-            orderType: 'FRACTIONAL_CASHOUT'
-        });
-    }
-
     function checkSplitsIfDue() {
         const last = state.lastSplitCheck || 0;
         const lastDay = new Date(last).toDateString();
@@ -4988,10 +4966,30 @@
                 state.cash = result.cash + getDividendsTotalTWD();
                 state.wallet = result.wallet;
                 state.holdings = result.holdings;
-                // 🪙 碎股容錯：分割比例非整數（如 3:2、合股 1:10）時，結算後的總股數可能出現小數點碎股，
-                // 而下單／庫存顯示等其餘邏輯皆假設整股。這裡對「本輪受影響」的標的自動將碎股部分以現金折算，
-                // 庫存僅保留整股，避免小數股數流入下單與其他既有整股邏輯造成錯誤。
-                appliedTickers.forEach(t => settleFractionalSharesAfterSplit(t));
+
+                // 🪙 碎股容錯：分割比例非整數（如 3:2）或合股（如 1:10）可能讓持股數出現小數點零股。
+                // 系統本身可完整支援小數股數運算（庫存、市值、損益皆以浮點數計算，不會出錯），
+                // 但為貼近實務上「零股無法在整股盤面直接下單」的限制，這裡針對本次分割新增的零股尾數，
+                // 主動詢問使用者是否要以目前市價自動折算為現金，折算後會於帳本留下一筆可追溯的紀錄。
+                appliedTickers.forEach(ticker => {
+                    const h = state.holdings[ticker];
+                    if (!h || h.shares <= 0) return;
+                    const wholeShares = Math.floor(h.shares + 1e-6);
+                    const fracShares = h.shares - wholeShares;
+                    if (fracShares < 1e-4) return; // 幾乎整數，視為無零股
+                    const settlePrice = globalPriceCache[ticker] || h.avgPrice;
+                    const rate = getCurrencyMultiplier(ticker);
+                    const settleValueTWD = fracShares * settlePrice * rate;
+                    const doSettle = confirm(`⚠️ ${ticker} 因股票分割／合股產生零股尾數：${formatShares(fracShares)} 股。\n\n是否要以目前市價 $${settlePrice.toFixed(2)} 自動折算為現金（約 $${Math.floor(settleValueTWD).toLocaleString()}）？\n\n選擇「取消」則保留小數股數（系統仍可正確計算市值與損益）。`);
+                    if (!doSettle) return;
+                    const timestamp = Date.now(), tradeTime = getFullFormattedTimeFromDate(timestamp);
+                    const costBasisTWD = fracShares * h.avgPrice * rate, realizedPnL = settleValueTWD - costBasisTWD;
+                    state.cash += settleValueTWD;
+                    h.shares = wholeShares;
+                    if (h.shares === 0) delete state.holdings[ticker];
+                    state.ledger.unshift({ time: tradeTime, timestamp: timestamp, action: "SELL", ticker: ticker, price: settlePrice, shares: fracShares, fee: 0, total: settleValueTWD, realizedPnL: realizedPnL, rate: rate, orderType: 'ODDLOT' });
+                });
+
                 rebuildNavHistoryFromLedger();
             }
 
@@ -5529,7 +5527,7 @@
         document.getElementById("recent-group-title").style.display = 'block'; document.getElementById("recent-tickers-list").style.display = 'block';
         addToRecentlySelected(t); 
         
-        isPriceLoading = true; currentRealPrice = null; priceFetchFailCount = 0;
+        isPriceLoading = true; currentRealPrice = null; priceFetchFailCount = 0; currentMarketState = null;
         document.getElementById("trade-price-display").innerHTML = `<span style="font-size:14px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> 報價連線中...</span>`;
         document.getElementById("exec-trade-btn").disabled = true;
         // ⏰ 切換代號時，若正處於限價輸入模式則退回市價顯示，避免沿用上一個代號的限價金額造成誤解
@@ -5557,7 +5555,7 @@
             if(res.ok) { 
                 const json = await res.json(), price = json.chart.result[0].meta.regularMarketPrice; 
                 if (ticker !== currentTicker) return;
-                if(price) { currentRealPrice = price; globalPriceCache[ticker] = price; isPriceLoading = false; fetchSucceeded = true; }
+                if(price) { currentRealPrice = price; globalPriceCache[ticker] = price; isPriceLoading = false; fetchSucceeded = true; currentMarketState = json.chart.result[0].meta.marketState || currentMarketState; }
             }
         } catch(e) {}
         finally {
@@ -5576,7 +5574,6 @@
             }
             updateAllViews(false); 
             checkLimitOrders();
-            checkConditionalOrders();
             checkDcaPlans();
         }
     }
@@ -5670,7 +5667,7 @@
     }
 
     const sharesInput = document.getElementById("trade-shares");
-    function stepShares(delta) { sharesInput.value = Math.max(1, (parseInt(sharesInput.value) || 0) + delta); validateSharesInput(); }
+    function stepShares(delta) { sharesInput.value = Math.max(1, (parseFloat(sharesInput.value) || 0) + delta); validateSharesInput(); }
     
     // 💱 買進某代號時的可用購買力（以「該標的原生計價幣別」為單位）：
     // 優先使用貨幣庫存中同幣別的餘額，不足的部分視為可即時以台幣現金換匯補足。
@@ -5688,7 +5685,10 @@
             const buyingPower = getAvailableBuyingPowerNative(currentTicker);
             sharesInput.value = Math.max(1, Math.floor(Math.floor(buyingPower / (getEffectivePrice() * (1 + feeRate))) * pct)); 
         } else { 
-            const holding = state.holdings[currentTicker]?.shares || 0; sharesInput.value = Math.max(1, Math.floor(holding * pct)); 
+            const holding = state.holdings[currentTicker]?.shares || 0;
+            // 🔢 賣出 100% 時直接帶入完整持股數（含小數），避免分割/合股後的零股尾數因無條件捨去而永遠賣不掉；
+            // 部分比例（如 50%）維持無條件捨去，避免湊出難以辨識的細碎小數股數
+            sharesInput.value = pct >= 1 ? holding : Math.max(pct > 0 ? 0 : 1, Math.floor(holding * pct));
         }
         // ✨ 由使用者手動輸入自訂百分比（如「15%」）換算而來時，播放「X% → 股數」的轉換動畫
         if (animateConvert) {
@@ -5731,7 +5731,7 @@
         }
 
         if (isPriceLoading || currentRealPrice === null) { document.getElementById("exec-trade-btn").disabled = true; return; }
-        let s = parseInt(sharesInput.value) || 0; const rate = getCurrencyMultiplier(currentTicker), feeRate = getMarketFeeConfig(currentTicker).feeRate;
+        let s = parseFloat(sharesInput.value) || 0; const rate = getCurrencyMultiplier(currentTicker), feeRate = getMarketFeeConfig(currentTicker).feeRate;
         const buyingPower = getAvailableBuyingPowerNative(currentTicker);
         const maxBuy = Math.max(0, Math.floor(buyingPower / (getEffectivePrice() * (1 + feeRate)))); const holding = state.holdings[currentTicker]?.shares || 0;
         document.getElementById("holding-shares-display").innerText = holding.toLocaleString();
@@ -5762,7 +5762,7 @@
 
     function recalculateOrder() {
         if (isPriceLoading || currentRealPrice === null) return;
-        let s = parseInt(sharesInput.value) || 0; const rate = getCurrencyMultiplier(currentTicker);
+        let s = parseFloat(sharesInput.value) || 0; const rate = getCurrencyMultiplier(currentTicker);
         const { feeRate, taxRate } = getMarketFeeConfig(currentTicker);
         const effPrice = getEffectivePrice() || currentRealPrice;
         const subtotal = s * effPrice * rate, fee = subtotal * feeRate;
@@ -5881,7 +5881,7 @@
             const proceed = confirm(`⚠️ 無法辨識「${currentTicker}」的交易所後綴，系統暫時無法判斷正確計價幣別，將暫以美金匯率（約 ${currentUSDTWD}）換算。\n\n若此代碼實際上並非美元計價，換算出的金額將會嚴重錯誤！\n\n請確認代碼是否輸入正確，或聯絡開發者新增此市場支援。\n\n仍要以美金匯率繼續執行此筆交易嗎？`);
             if (!proceed) { validateSharesInput(); return; }
         }
-        let s = parseInt(sharesInput.value); if(!s || s <= 0) { validateSharesInput(); return; }
+        let s = parseFloat(sharesInput.value); if(!s || s <= 0) { validateSharesInput(); return; }
 
         const result = executeTradeCore(currentTicker, tradeMode, s, currentRealPrice, {});
         if (!result.success) {
@@ -5903,59 +5903,19 @@
         validateSharesInput();
     }
 
-    // ⏰ 限價單有效期限選擇彈窗：回傳 'DAY' / '7D' / '30D' / 'GTC'（無限期），或 null（使用者取消送出）
-    // 沿用「匯出格式選擇」相同的 Promise 型彈窗互動模式
-    function openLimitOrderExpiryChoice(summaryText) {
-        return new Promise((resolve) => {
-            const overlay = document.getElementById('limit-order-expiry-overlay');
-            const summaryEl = document.getElementById('limit-order-expiry-summary');
-            const cancelBtn = document.getElementById('limit-order-expiry-cancel');
-            const choiceBtns = Array.from(document.querySelectorAll('.limit-expiry-choice-btn'));
-            if (summaryEl) summaryEl.textContent = summaryText || '';
-            overlay.style.display = 'flex';
-
-            function cleanup(result) {
-                overlay.style.display = 'none';
-                choiceBtns.forEach(b => b.removeEventListener('click', onChoice));
-                cancelBtn.removeEventListener('click', onCancel);
-                resolve(result);
-            }
-            function onChoice(e) { cleanup(e.currentTarget.getAttribute('data-expiry')); }
-            function onCancel() { cleanup(null); }
-            choiceBtns.forEach(b => b.addEventListener('click', onChoice));
-            cancelBtn.addEventListener('click', onCancel);
-        });
-    }
-
-    // 依選擇的期限代碼換算實際到期時間戳；'GTC'（無限期）回傳 null 代表永不過期
-    function computeLimitOrderExpiryTs(expiryChoice, fromTs) {
-        if (expiryChoice === 'DAY') {
-            const d = new Date(fromTs); d.setHours(23, 59, 59, 999); return d.getTime();
-        }
-        if (expiryChoice === '7D') return fromTs + 7 * 86400000;
-        if (expiryChoice === '30D') return fromTs + 30 * 86400000;
-        return null; // GTC
-    }
-
-    const LIMIT_EXPIRY_LABELS = { DAY: '當日有效', '7D': '7 天內有效', '30D': '30 天內有效', GTC: '無限期' };
-
     // 送出模擬限價單：不立即扣款/扣股，僅記錄委託，待背景報價輪詢偵測到價格觸價時自動成交（見 checkLimitOrders）
-    // 送出前會先跳出「有效期限」選擇彈窗，預設「無限期」，選定（或取消）後才會真正建立委託。
     async function placeLimitOrder() {
         if (isCurrencySuffixUnrecognized(currentTicker)) {
             const proceed = confirm(`⚠️ 無法辨識「${currentTicker}」的交易所後綴，系統暫時無法判斷正確計價幣別，將暫以美金匯率（約 ${currentUSDTWD}）換算。\n\n若此代碼實際上並非美元計價，換算出的金額將會嚴重錯誤！\n\n仍要以美金匯率繼續送出此筆限價單嗎？`);
             if (!proceed) { validateSharesInput(); return; }
         }
-        let s = parseInt(sharesInput.value); if(!s || s <= 0) { validateSharesInput(); return; }
+        let s = parseFloat(sharesInput.value); if(!s || s <= 0) { validateSharesInput(); return; }
         const lp = parseFloat(document.getElementById('limit-price-input').value);
         if (isNaN(lp) || lp <= 0) { alert("請輸入有效的限價金額！"); validateSharesInput(); return; }
 
-        const summaryText = `${tradeMode === 'BUY' ? '買進' : '賣出'} ${currentTicker} @ $${lp.toFixed(2)} × ${s} 股`;
-        const expiryChoice = await openLimitOrderExpiryChoice(summaryText);
-        if (!expiryChoice) { validateSharesInput(); return; } // 使用者取消
-
-        const createdAt = Date.now();
-        const expiresAt = computeLimitOrderExpiryTs(expiryChoice, createdAt);
+        // ⏳ 送出前要求選擇有效期限：預設無限期 (GTC)，亦可手動指定到期日期
+        const choice = await openLimitExpiryChoice();
+        if (choice.cancelled) { validateSharesInput(); return; }
 
         state.limitOrders.push({
             id: 'LMT' + Date.now() + Math.floor(Math.random() * 1000),
@@ -5963,13 +5923,14 @@
             mode: tradeMode,
             shares: s,
             limitPrice: Math.round(lp * 100) / 100,
-            createdAt: createdAt,
-            expiresAt: expiresAt // null = 無限期（GTC）
+            createdAt: Date.now(),
+            expiry: choice.expiry // null = 無限期
         });
         state.lastModified = Date.now();
         saveData();
         renderPendingLimitOrders();
-        triggerDynamicFeedback(`已送出限價${tradeMode === 'BUY' ? '買' : '賣'}單：${currentTicker} @ $${lp.toFixed(2)} × ${s} 股（${LIMIT_EXPIRY_LABELS[expiryChoice]}）`, tradeMode === 'BUY' ? 'buy' : 'sell', document.getElementById('exec-trade-btn'), null);
+        const expiryNote = choice.expiry ? `，有效至 ${new Date(choice.expiry).toLocaleDateString('zh-TW')}` : '（無限期）';
+        triggerDynamicFeedback(`已送出限價${tradeMode === 'BUY' ? '買' : '賣'}單：${currentTicker} @ $${lp.toFixed(2)} × ${s} 股${expiryNote}`, tradeMode === 'BUY' ? 'buy' : 'sell', document.getElementById('exec-trade-btn'), null);
         validateSharesInput();
     }
 
@@ -5989,47 +5950,46 @@
         const list = document.getElementById('pending-limit-orders-list');
         if (!box || !list) return;
         const orders = state.limitOrders || [];
-        if (!orders.length) { box.style.display = 'none'; list.innerHTML = ''; return; }
+        const condOrders = state.conditionalOrders || [];
+        if (!orders.length && !condOrders.length) { box.style.display = 'none'; list.innerHTML = ''; return; }
         box.style.display = 'block';
-        list.innerHTML = orders.slice().reverse().map(o => `
+        const limitHtml = orders.slice().reverse().map(o => `
             <div class="limit-order-item">
                 <div style="display:flex; flex-direction:column; gap:2px;">
-                    <span style="font-weight:bold; font-size:12px;"><span style="color:${o.mode === 'BUY' ? 'var(--color-buy)' : 'var(--color-sell)'};">${o.mode === 'BUY' ? '買' : '賣'}</span> ${o.ticker}</span>
-                    <span style="font-size:11px; color:#888; font-family:monospace;">@ $${o.limitPrice.toFixed(2)} × ${o.shares} 股</span>
-                    <span style="font-size:10px; color:#666;"><i class="fa-regular fa-clock"></i> ${formatLimitOrderExpiryLabel(o.expiresAt)}</span>
+                    <span style="font-weight:bold; font-size:12px;"><span style="color:${o.mode === 'BUY' ? 'var(--color-buy)' : 'var(--color-sell)'};">${o.mode === 'BUY' ? '買' : '賣'}</span> ${o.ticker} <span style="font-size:9px; color:var(--color-acc); border:1px solid var(--color-acc); border-radius:3px; padding:0 3px;">限</span></span>
+                    <span style="font-size:11px; color:#888; font-family:monospace;">@ $${o.limitPrice.toFixed(2)} × ${formatShares(o.shares)} 股 · ${o.expiry ? `效期至 ${new Date(o.expiry).toLocaleDateString('zh-TW')}` : '無限期'}</span>
                 </div>
                 <button onclick="cancelLimitOrder('${o.id}')" title="取消限價單" style="background:rgba(255,69,96,0.15); color:var(--color-sell); border:1px solid rgba(255,69,96,0.3); padding:4px 8px; border-radius:4px; cursor:pointer; font-size:11px;"><i class="fa-solid fa-xmark"></i></button>
             </div>
         `).join('');
+        const condHtml = condOrders.slice().reverse().map(o => `
+            <div class="limit-order-item">
+                <div style="display:flex; flex-direction:column; gap:2px;">
+                    <span style="font-weight:bold; font-size:12px;"><span style="color:var(--color-warn);">${o.mode === 'SL' ? '停損' : '停利'}</span> ${o.ticker} <span style="font-size:9px; color:var(--color-warn); border:1px solid var(--color-warn); border-radius:3px; padding:0 3px;">條件</span></span>
+                    <span style="font-size:11px; color:#888; font-family:monospace;">觸發價 $${o.triggerPrice.toFixed(2)} × ${formatShares(o.shares)} 股</span>
+                </div>
+                <button onclick="cancelConditionalOrder('${o.id}')" title="取消條件單" style="background:rgba(255,69,96,0.15); color:var(--color-sell); border:1px solid rgba(255,69,96,0.3); padding:4px 8px; border-radius:4px; cursor:pointer; font-size:11px;"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+        `).join('');
+        list.innerHTML = limitHtml + condHtml;
     }
 
-    // 舊資料相容：expiresAt 為 undefined（此功能上線前建立的委託）一律視為無限期
-    function formatLimitOrderExpiryLabel(expiresAt) {
-        if (!expiresAt) return '無限期有效';
-        const d = new Date(expiresAt);
-        return `有效至 ${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-    }
-
-    // 每輪報價刷新前先清除已過期（超過使用者設定有效期限）的限價單，未觸價成交也會自動撤單
-    function purgeExpiredLimitOrders() {
-        if (!state.limitOrders || !state.limitOrders.length) return false;
-        const now = Date.now();
-        let changed = false;
-        for (const order of state.limitOrders.slice()) {
-            if (!order.expiresAt || order.expiresAt > now) continue; // 無限期，或尚未到期
-            const idx = state.limitOrders.findIndex(o => o.id === order.id);
-            if (idx !== -1) state.limitOrders.splice(idx, 1);
-            changed = true;
-            triggerDynamicFeedback(`限價單已到期自動撤單：${order.ticker} @ $${order.limitPrice.toFixed(2)} × ${order.shares} 股`, 'gray', null, null);
-        }
-        return changed;
-    }
 
     // 每輪報價刷新後檢查所有待成交限價單：BUY 於現價 ≤ 限價時成交，SELL 於現價 ≥ 限價時成交，成交價採用委託時設定的限價
+    // 同時也會檢查委託是否已超過使用者設定的有效期限（無限期則永遠不會過期），過期則自動取消不成交。
     function checkLimitOrders() {
+        checkConditionalOrders();
         if (!state.limitOrders || !state.limitOrders.length) return;
-        let changed = purgeExpiredLimitOrders(); // ⏰ 先清掉過期委託，避免對已過期的單子繼續觸價成交
+        let changed = false;
         for (const order of state.limitOrders.slice()) {
+            // ⏳ 有效期限檢查：已設定到期日且已超過，直接取消，不再等待觸價
+            if (order.expiry && Date.now() > order.expiry) {
+                const idx = state.limitOrders.findIndex(o => o.id === order.id);
+                if (idx !== -1) state.limitOrders.splice(idx, 1);
+                changed = true;
+                triggerDynamicFeedback(`限價單已到期自動取消：${order.ticker} @ $${order.limitPrice.toFixed(2)}`, 'gray', null, null);
+                continue;
+            }
             const price = globalPriceCache[order.ticker] !== undefined ? globalPriceCache[order.ticker] : (order.ticker === currentTicker ? currentRealPrice : null);
             if (price === null || price === undefined) continue;
             const triggered = order.mode === 'BUY' ? price <= order.limitPrice : price >= order.limitPrice;
@@ -6053,6 +6013,71 @@
             renderPendingLimitOrders();
         }
     }
+
+    // 🎯 每輪報價刷新後檢查所有待成交的自動條件單（觸價停損 / 停利 SL/TP）：
+    // SL（停損）於現價 ≤ 觸發價時賣出；TP（停利）於現價 ≥ 觸發價時賣出。成交價採用觸發當下的市價（非委託時的觸發價），
+    // 更貼近真實停損/停利單「觸價後以市價出場」的行為，與限價單「以掛單價成交」不同。
+    function checkConditionalOrders() {
+        if (!state.conditionalOrders || !state.conditionalOrders.length) return;
+        let changed = false;
+        for (const order of state.conditionalOrders.slice()) {
+            const price = globalPriceCache[order.ticker] !== undefined ? globalPriceCache[order.ticker] : (order.ticker === currentTicker ? currentRealPrice : null);
+            if (price === null || price === undefined) continue;
+            const triggered = order.mode === 'SL' ? price <= order.triggerPrice : price >= order.triggerPrice;
+            if (!triggered) continue;
+
+            const availShares = (state.holdings[order.ticker] && state.holdings[order.ticker].shares) || 0;
+            const sellShares = Math.min(order.shares, availShares);
+            const idx = state.conditionalOrders.findIndex(o => o.id === order.id);
+            if (idx !== -1) state.conditionalOrders.splice(idx, 1);
+            changed = true;
+
+            if (sellShares <= 0) {
+                triggerDynamicFeedback(`條件單已取消：${order.ticker} 觸價時已無持股`, 'gray', null, null);
+                continue;
+            }
+            const result = executeTradeCore(order.ticker, 'SELL', sellShares, price, { orderType: 'SLTP' });
+            if (result.success) {
+                triggerDynamicFeedback(`${order.mode === 'SL' ? '停損' : '停利'}單自動成交：賣出 ${order.ticker} @ $${price.toFixed(2)} × ${formatShares(sellShares)} 股`, 'sell', null, null);
+            } else {
+                triggerDynamicFeedback(`條件單觸價成交失敗：${order.ticker}`, 'gray', null, null);
+            }
+        }
+        if (changed) {
+            rebuildNavHistoryFromLedger();
+            state.lastModified = Date.now();
+            saveData();
+            renderPendingLimitOrders();
+        }
+    }
+
+    // 建立自動條件單（停損／停利），從歷史帳本列的「操作」展開選單中的表單送出
+    function createConditionalOrder(ticker, mode, triggerPrice, shares) {
+        state.conditionalOrders = state.conditionalOrders || [];
+        state.conditionalOrders.push({
+            id: 'SLTP' + Date.now() + Math.floor(Math.random() * 1000),
+            ticker: ticker,
+            mode: mode, // 'SL' | 'TP'
+            triggerPrice: triggerPrice,
+            shares: shares,
+            createdAt: Date.now()
+        });
+        state.lastModified = Date.now();
+        saveData();
+        renderPendingLimitOrders();
+        triggerDynamicFeedback(`已設定${mode === 'SL' ? '停損' : '停利'}單：${ticker} 觸發價 $${triggerPrice.toFixed(2)} × ${formatShares(shares)} 股`, 'sell', null, null);
+    }
+
+    function cancelConditionalOrder(id) {
+        const idx = (state.conditionalOrders || []).findIndex(o => o.id === id);
+        if (idx === -1) return;
+        if (!confirm('確定要取消這筆自動條件單嗎？')) return;
+        state.conditionalOrders.splice(idx, 1);
+        state.lastModified = Date.now();
+        saveData();
+        renderPendingLimitOrders();
+    }
+    window.cancelConditionalOrder = cancelConditionalOrder;
 
     // ============================================================
     // 🌙 啟動時檢查「離線期間」是否曾經觸發過限價單
@@ -6114,147 +6139,6 @@
             state.lastModified = Date.now();
             saveData();
             renderPendingLimitOrders();
-        }
-    }
-
-    // ============================================================
-    // 🛡️ 條件單（觸價停損／停利，SL/TP）
-    // 與模擬限價單並列的另一種自動下單方式：不指定「用多少價格買進/賣出」，
-    // 而是替目前持有中的標的設定一組觸發價位（停損價／停利價，兩者皆可選填但至少需擇一），
-    // 任一價位被觸及即自動以當時市價送出賣單（OCO：其中一邊成交，另一邊視為同一張條件單一併撤銷)。
-    // 執行邏輯同樣共用 executeTradeCore()，確保資金/持股/分類帳與其他下單方式一致。
-    // ============================================================
-    let isConditionOrderMode = false;
-
-    function toggleConditionOrderMode() {
-        isConditionOrderMode = !isConditionOrderMode;
-        const btn = document.getElementById('condition-order-toggle-btn');
-        const form = document.getElementById('condition-order-form');
-        btn.classList.toggle('active', isConditionOrderMode);
-        form.style.display = isConditionOrderMode ? 'flex' : 'none';
-        if (isConditionOrderMode) {
-            // 條件單概念上是替「已持有」的部位設保護，若目前正處於限價輸入模式，一併退回市價顯示以免混淆
-            if (isLimitOrderMode) toggleLimitOrderMode();
-        }
-    }
-    window.toggleConditionOrderMode = toggleConditionOrderMode;
-
-    function placeConditionalOrder() {
-        const h = state.holdings[currentTicker];
-        if (!h || h.shares <= 0) { alert(`目前未持有「${currentTicker}」，無法設定條件單！`); return; }
-
-        let s = parseInt(sharesInput.value);
-        if (!s || s <= 0) { alert("請於下方股數欄位輸入有效股數！"); return; }
-        if (s > h.shares) { alert(`股數不可超過目前持股（${h.shares} 股）！`); return; }
-
-        const stopRaw = document.getElementById('cond-stoploss-input').value;
-        const tpRaw = document.getElementById('cond-takeprofit-input').value;
-        const stopPrice = stopRaw.trim() !== '' ? parseFloat(stopRaw) : null;
-        const takeProfitPrice = tpRaw.trim() !== '' ? parseFloat(tpRaw) : null;
-
-        if (stopPrice === null && takeProfitPrice === null) { alert("停損價與停利價請至少填寫一項！"); return; }
-        if (stopPrice !== null && (isNaN(stopPrice) || stopPrice <= 0)) { alert("停損價格式不正確！"); return; }
-        if (takeProfitPrice !== null && (isNaN(takeProfitPrice) || takeProfitPrice <= 0)) { alert("停利價格式不正確！"); return; }
-
-        const refPrice = currentRealPrice;
-        if (refPrice !== null) {
-            if (stopPrice !== null && stopPrice >= refPrice) { alert(`停損價需低於目前市價（$${refPrice.toFixed(2)}），否則送出當下即會誤觸發！`); return; }
-            if (takeProfitPrice !== null && takeProfitPrice <= refPrice) { alert(`停利價需高於目前市價（$${refPrice.toFixed(2)}），否則送出當下即會誤觸發！`); return; }
-        }
-
-        state.conditionalOrders.push({
-            id: 'SLTP' + Date.now() + Math.floor(Math.random() * 1000),
-            ticker: currentTicker,
-            shares: s,
-            stopPrice: stopPrice,
-            takeProfitPrice: takeProfitPrice,
-            createdAt: Date.now()
-        });
-        state.lastModified = Date.now();
-        saveData();
-        renderPendingConditionalOrders();
-        const parts = [];
-        if (stopPrice !== null) parts.push(`停損 $${stopPrice.toFixed(2)}`);
-        if (takeProfitPrice !== null) parts.push(`停利 $${takeProfitPrice.toFixed(2)}`);
-        triggerDynamicFeedback(`已設定條件單：${currentTicker} × ${s} 股（${parts.join(' / ')}）`, 'sell', document.getElementById('exec-trade-btn'), null);
-        document.getElementById('cond-stoploss-input').value = '';
-        document.getElementById('cond-takeprofit-input').value = '';
-    }
-    window.placeConditionalOrder = placeConditionalOrder;
-
-    function cancelConditionalOrder(id) {
-        const idx = state.conditionalOrders.findIndex(o => o.id === id);
-        if (idx === -1) return;
-        if (!confirm('確定要取消這筆條件單嗎？')) return;
-        state.conditionalOrders.splice(idx, 1);
-        state.lastModified = Date.now();
-        saveData();
-        renderPendingConditionalOrders();
-    }
-    window.cancelConditionalOrder = cancelConditionalOrder;
-
-    function renderPendingConditionalOrders() {
-        const box = document.getElementById('pending-condition-orders-box');
-        const list = document.getElementById('pending-condition-orders-list');
-        if (!box || !list) return;
-        const orders = state.conditionalOrders || [];
-        if (!orders.length) { box.style.display = 'none'; list.innerHTML = ''; return; }
-        box.style.display = 'block';
-        list.innerHTML = orders.slice().reverse().map(o => {
-            const parts = [];
-            if (o.stopPrice !== null && o.stopPrice !== undefined) parts.push(`<span style="color:var(--color-sell);">停損 $${o.stopPrice.toFixed(2)}</span>`);
-            if (o.takeProfitPrice !== null && o.takeProfitPrice !== undefined) parts.push(`<span style="color:var(--color-buy);">停利 $${o.takeProfitPrice.toFixed(2)}</span>`);
-            return `
-            <div class="limit-order-item">
-                <div style="display:flex; flex-direction:column; gap:2px;">
-                    <span style="font-weight:bold; font-size:12px;">${o.ticker} <span style="color:#888; font-weight:normal;">× ${o.shares} 股</span></span>
-                    <span style="font-size:11px; font-family:monospace;">${parts.join(' ／ ')}</span>
-                </div>
-                <button onclick="cancelConditionalOrder('${o.id}')" title="取消條件單" style="background:rgba(255,69,96,0.15); color:var(--color-sell); border:1px solid rgba(255,69,96,0.3); padding:4px 8px; border-radius:4px; cursor:pointer; font-size:11px;"><i class="fa-solid fa-xmark"></i></button>
-            </div>`;
-        }).join('');
-    }
-
-    // 每輪報價刷新後檢查所有條件單：現價 ≤ 停損價 或 現價 ≥ 停利價 任一觸發，即以當時市價送出賣單（OCO，觸發後整張條件單一併撤銷）
-    function checkConditionalOrders() {
-        if (!state.conditionalOrders || !state.conditionalOrders.length) return;
-        let changed = false;
-        for (const order of state.conditionalOrders.slice()) {
-            const price = globalPriceCache[order.ticker] !== undefined ? globalPriceCache[order.ticker] : (order.ticker === currentTicker ? currentRealPrice : null);
-            if (price === null || price === undefined) continue;
-
-            const stopHit = (order.stopPrice !== null && order.stopPrice !== undefined) && price <= order.stopPrice;
-            const tpHit = (order.takeProfitPrice !== null && order.takeProfitPrice !== undefined) && price >= order.takeProfitPrice;
-            if (!stopHit && !tpHit) continue;
-
-            const h = state.holdings[order.ticker];
-            const sellShares = h ? Math.min(order.shares, h.shares) : 0;
-            const idx = state.conditionalOrders.findIndex(o => o.id === order.id);
-
-            if (sellShares <= 0) {
-                // 持股已因其他方式（手動賣出、另一筆條件單等）不足，此條件單失去意義，直接撤銷
-                if (idx !== -1) state.conditionalOrders.splice(idx, 1);
-                changed = true;
-                triggerDynamicFeedback(`條件單已取消：${order.ticker} 持股不足，無法執行`, 'gray', null, null);
-                continue;
-            }
-
-            const result = executeTradeCore(order.ticker, 'SELL', sellShares, price, { orderType: 'SLTP' });
-            if (idx !== -1) state.conditionalOrders.splice(idx, 1);
-            changed = true;
-
-            if (result.success) {
-                const reasonText = stopHit ? '停損' : '停利';
-                triggerDynamicFeedback(`條件單自動成交（${reasonText}）：賣出 ${order.ticker} @ $${price.toFixed(2)} × ${sellShares} 股`, 'sell', null, null);
-            } else {
-                triggerDynamicFeedback(`條件單已取消：${order.ticker} 觸價時持股不足`, 'gray', null, null);
-            }
-        }
-        if (changed) {
-            rebuildNavHistoryFromLedger();
-            state.lastModified = Date.now();
-            saveData();
-            renderPendingConditionalOrders();
         }
     }
 
@@ -6427,7 +6311,7 @@
             const breakEvenPrice = h.avgPrice / (1 - feeRate - taxRate);
 
             return `<tr>
-                <td style="font-weight:bold; color:var(--color-acc)">${t}</td><td>${h.shares}</td>
+                <td style="font-weight:bold; color:var(--color-acc)">${t}</td><td>${formatShares(h.shares)}</td>
                 <td><div style="font-weight:bold;">$${h.avgPrice.toFixed(2)}</div><div style="font-size:10px; color:var(--color-warn); margin-top:2px;">低於 $${breakEvenPrice.toFixed(2)} 虧損</div></td>
                 <td>$${curP.toFixed(2)}</td><td>$${Math.floor(val).toLocaleString()}</td>
                 <td style="color:${itemPnl>=0?'var(--color-up)':'var(--color-down)'}; font-weight:bold;">${itemPnl>=0?'+':''}$${Math.floor(itemPnl).toLocaleString()}</td>
@@ -6447,83 +6331,135 @@
     const LEDGER_PAGE_SIZE = 20;
     let ledgerCurrentPage = 1;
 
-    // 🔎 歷史帳本篩選：代號關鍵字（模糊比對）／買賣別／日期區間，皆可自由組合、即時套用
-    let ledgerFilters = { ticker: '', action: 'ALL', dateFrom: '', dateTo: '' };
+    // 🔍 歷史帳本篩選：依代號（模糊比對）、買賣動作、委託類型篩選，回傳符合條件的「原始 state.ledger 索引」陣列
+    // （保留原始索引而非篩選後重新編號，讓撤銷／設定停損停利等操作仍能正確定位回 state.ledger 中的那一筆）
+    function getFilteredLedgerIndices() {
+        const tickerEl = document.getElementById('ledger-filter-ticker');
+        const actionEl = document.getElementById('ledger-filter-action');
+        const typeEl = document.getElementById('ledger-filter-ordertype');
+        const tickerFilter = tickerEl ? tickerEl.value.trim().toUpperCase() : '';
+        const actionFilter = actionEl ? actionEl.value : '';
+        const typeFilter = typeEl ? typeEl.value : '';
 
-    // 回傳「已套用篩選」的帳本項目，每筆都保留其在 state.ledger 中的原始索引（idx），
-    // 因為撤銷／跳轉定位等既有功能都是用原始索引操作，篩選後絕不能打亂這個對應關係。
-    function getFilteredLedgerEntries() {
-        const f = ledgerFilters;
-        const tickerQ = (f.ticker || '').trim().toUpperCase();
-        const fromTs = f.dateFrom ? new Date(`${f.dateFrom}T00:00:00`).getTime() : null;
-        const toTs = f.dateTo ? new Date(`${f.dateTo}T23:59:59.999`).getTime() : null;
-        const hasFilter = !!(tickerQ || f.action !== 'ALL' || fromTs !== null || toTs !== null);
-        if (!hasFilter) return state.ledger.map((r, idx) => ({ r, idx }));
-        return state.ledger.reduce((acc, r, idx) => {
-            if (tickerQ && !(r.ticker || '').toUpperCase().includes(tickerQ)) return acc;
-            if (f.action !== 'ALL' && r.action !== f.action) return acc;
-            const ts = r.timestamp || 0;
-            if (fromTs !== null && ts < fromTs) return acc;
-            if (toTs !== null && ts > toTs) return acc;
-            acc.push({ r, idx });
-            return acc;
-        }, []);
+        const indices = [];
+        for (let i = 0; i < state.ledger.length; i++) {
+            const r = state.ledger[i];
+            if (tickerFilter && !r.ticker.toUpperCase().includes(tickerFilter)) continue;
+            if (actionFilter && r.action !== actionFilter) continue;
+            if (typeFilter) {
+                const rType = r.orderType || 'MARKET'; // 舊資料／即時市價成交無 orderType 欄位，視為「市價單」
+                if (rType !== typeFilter) continue;
+            }
+            indices.push(i);
+        }
+        return indices;
     }
 
-    function onLedgerFilterChange() {
-        ledgerFilters.ticker = document.getElementById('ledger-filter-ticker').value;
-        ledgerFilters.action = document.getElementById('ledger-filter-action').value;
-        ledgerFilters.dateFrom = document.getElementById('ledger-filter-from').value;
-        ledgerFilters.dateTo = document.getElementById('ledger-filter-to').value;
+    // 篩選條件變更時：重置回第 1 頁並重新渲染
+    function applyLedgerFilters() {
         ledgerCurrentPage = 1;
         renderLedgerTable();
     }
-    window.onLedgerFilterChange = onLedgerFilterChange;
+    window.applyLedgerFilters = applyLedgerFilters;
 
-    function clearLedgerFilters() {
-        ledgerFilters = { ticker: '', action: 'ALL', dateFrom: '', dateTo: '' };
-        const tEl = document.getElementById('ledger-filter-ticker'), aEl = document.getElementById('ledger-filter-action'),
-              fEl = document.getElementById('ledger-filter-from'), toEl = document.getElementById('ledger-filter-to');
-        if (tEl) tEl.value = ''; if (aEl) aEl.value = 'ALL';
-        if (fEl) { fEl.value = ''; syncDatePickerDisplay(fEl); }
-        if (toEl) { toEl.value = ''; syncDatePickerDisplay(toEl); }
-        ledgerCurrentPage = 1;
-        renderLedgerTable();
+    function resetLedgerFilters() {
+        document.getElementById('ledger-filter-ticker').value = '';
+        document.getElementById('ledger-filter-action').value = '';
+        document.getElementById('ledger-filter-ordertype').value = '';
+        applyLedgerFilters();
     }
-    window.clearLedgerFilters = clearLedgerFilters;
+    window.resetLedgerFilters = resetLedgerFilters;
 
     function renderLedgerTable() {
-        const filteredEntries = getFilteredLedgerEntries();
-        const totalRecords = filteredEntries.length;
+        const filteredIndices = getFilteredLedgerIndices();
+        const totalRecords = filteredIndices.length;
         const totalPages = Math.max(1, Math.ceil(totalRecords / LEDGER_PAGE_SIZE));
         if (ledgerCurrentPage > totalPages) ledgerCurrentPage = totalPages;
         if (ledgerCurrentPage < 1) ledgerCurrentPage = 1;
 
         const startIdx = (ledgerCurrentPage - 1) * LEDGER_PAGE_SIZE;
-        const pageItems = filteredEntries.slice(startIdx, startIdx + LEDGER_PAGE_SIZE);
+        const pageIndices = filteredIndices.slice(startIdx, startIdx + LEDGER_PAGE_SIZE);
+        const pageItems = pageIndices.map(idx => state.ledger[idx]);
 
-        const countEl = document.getElementById('ledger-filter-count');
-        if (countEl) {
+        const summaryEl = document.getElementById('ledger-filter-summary');
+        if (summaryEl) {
             const isFiltered = totalRecords !== state.ledger.length;
-            countEl.textContent = isFiltered ? `篩選出 ${totalRecords} / ${state.ledger.length} 筆` : `共 ${state.ledger.length} 筆`;
+            summaryEl.innerText = isFiltered ? `符合篩選條件：${totalRecords} / ${state.ledger.length} 筆` : '';
         }
 
-        document.getElementById("ledger-table-body").innerHTML = pageItems.length ? pageItems.map((entry, i) => {
-            const r = entry.r, index = entry.idx; // index 對應 state.ledger 原始索引，供撤銷/跳轉定位使用
+        document.getElementById("ledger-table-body").innerHTML = pageItems.length ? pageItems.map((r, i) => {
+            const index = pageIndices[i]; // 對應 state.ledger 原始索引，供撤銷/跳轉/設定條件單定位使用
             const pnlHtml = (r.realizedPnL !== null && r.realizedPnL !== undefined) 
                 ? `<td style="color:${r.realizedPnL >= 0 ? 'var(--color-up)' : 'var(--color-down)'}; font-weight:bold;">${r.realizedPnL >= 0 ? '+' : ''}$${Math.floor(r.realizedPnL).toLocaleString()}</td>`
                 : `<td style="color:#666;">-</td>`;
             const displayTime = r.timestamp ? getFullFormattedTimeFromDate(r.timestamp) : r.time;
             return `<tr id="ledger-row-${index}">
-                <td>${displayTime}</td><td><span class="badge ${r.action==='BUY'?'badge-buy':'badge-sell'}">${r.action}</span>${r.orderType==='LIMIT' ? '<span title="限價單自動成交" style="font-size:9px; color:var(--color-acc); border:1px solid var(--color-acc); border-radius:3px; padding:0 3px; margin-left:4px; vertical-align:middle;">限</span>' : ''}${r.orderType==='DCA' ? '<span title="定期定額自動成交" style="font-size:9px; color:var(--color-buy); border:1px solid var(--color-buy); border-radius:3px; padding:0 3px; margin-left:4px; vertical-align:middle;">定</span>' : ''}${r.orderType==='FRACTIONAL_CASHOUT' ? '<span title="股票分割碎股現金結算" style="font-size:9px; color:var(--color-warn); border:1px solid var(--color-warn); border-radius:3px; padding:0 3px; margin-left:4px; vertical-align:middle;">碎</span>' : ''}${r.orderType==='SLTP' ? '<span title="條件單（停損/停利）自動成交" style="font-size:9px; color:var(--color-sell); border:1px solid var(--color-sell); border-radius:3px; padding:0 3px; margin-left:4px; vertical-align:middle;">條</span>' : ''}</td>
-                <td style="font-weight:bold;">${r.ticker}</td><td>$${r.price.toFixed(2)}</td><td>${r.shares}</td><td>$${r.fee.toFixed(1)}</td>
+                <td>${displayTime}</td><td><span class="badge ${r.action==='BUY'?'badge-buy':'badge-sell'}">${r.action}</span>${r.orderType==='LIMIT' ? '<span title="限價單自動成交" style="font-size:9px; color:var(--color-acc); border:1px solid var(--color-acc); border-radius:3px; padding:0 3px; margin-left:4px; vertical-align:middle;">限</span>' : ''}${r.orderType==='DCA' ? '<span title="定期定額自動成交" style="font-size:9px; color:var(--color-buy); border:1px solid var(--color-buy); border-radius:3px; padding:0 3px; margin-left:4px; vertical-align:middle;">定</span>' : ''}${r.orderType==='ODDLOT' ? '<span title="股票分割零股現金折算" style="font-size:9px; color:var(--color-warn); border:1px solid var(--color-warn); border-radius:3px; padding:0 3px; margin-left:4px; vertical-align:middle;">碎</span>' : ''}${r.orderType==='SLTP' ? '<span title="觸價停損/停利單自動成交" style="font-size:9px; color:var(--color-sell); border:1px solid var(--color-sell); border-radius:3px; padding:0 3px; margin-left:4px; vertical-align:middle;">停</span>' : ''}</td>
+                <td style="font-weight:bold;">${r.ticker}</td><td>$${r.price.toFixed(2)}</td><td>${formatShares(r.shares)}</td><td>$${r.fee.toFixed(1)}</td>
                 <td style="font-weight:bold;">$${Math.floor(r.total).toLocaleString()}</td>${pnlHtml}
-                <td><button onclick="undoTrade(${index})" style="background:rgba(255,69,96,0.15); color:var(--color-sell); border:1px solid rgba(255,69,96,0.3); padding:4px 10px; border-radius:4px; cursor:pointer; font-weight:bold; font-size:11px; transition:all 0.2s;">撤銷</button></td>
+                <td style="position:relative;"><button onclick="toggleLedgerRowActions(${index})" id="ledger-action-btn-${index}" title="操作" style="background:rgba(255,255,255,0.08); color:#ccc; border:1px solid rgba(255,255,255,0.2); padding:4px 10px; border-radius:4px; cursor:pointer; font-weight:bold; font-size:11px; transition:all 0.2s;"><i class="fa-solid fa-ellipsis"></i></button>
+                    <div id="ledger-action-panel-${index}" class="ledger-action-panel" style="display:none;">
+                        <button onclick="undoTradeFromPanel(${index})" style="width:100%; background:rgba(255,69,96,0.15); color:var(--color-sell); border:1px solid rgba(255,69,96,0.3); padding:7px 10px; border-radius:4px; cursor:pointer; font-weight:bold; font-size:11px; white-space:nowrap; text-align:left;"><i class="fa-solid fa-rotate-left"></i> 撤銷此筆交易</button>
+                        ${r.action === 'BUY' && state.holdings[r.ticker] && state.holdings[r.ticker].shares > 0 ? `<button onclick="openSltpSetupModal('${r.ticker}')" style="width:100%; background:rgba(254,176,25,0.15); color:var(--color-warn); border:1px solid rgba(254,176,25,0.3); padding:7px 10px; border-radius:4px; cursor:pointer; font-weight:bold; font-size:11px; white-space:nowrap; text-align:left; margin-top:6px;"><i class="fa-solid fa-bullseye"></i> 設定停損／停利</button>` : ''}
+                    </div>
+                </td>
             </tr>`;
         }).join("") : `<tr><td colspan="9" style="text-align:center; color:#555; padding:40px;">${state.ledger.length ? '查無符合篩選條件的紀錄' : '尚無紀錄'}</td></tr>`;
 
         renderLedgerPagination(totalPages, totalRecords);
     }
+
+    // 🔀 歷史帳本「操作」按鈕：整合「撤銷」與「設定停損/停利」為同一顆按鈕，按下後於按鈕旁展開選單讓使用者挑選動作
+    function toggleLedgerRowActions(index) {
+        document.querySelectorAll('.ledger-action-panel').forEach(panel => {
+            if (panel.id !== `ledger-action-panel-${index}`) panel.style.display = 'none';
+        });
+        const panel = document.getElementById(`ledger-action-panel-${index}`);
+        if (panel) panel.style.display = panel.style.display === 'none' ? 'flex' : 'none';
+    }
+    window.toggleLedgerRowActions = toggleLedgerRowActions;
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.ledger-action-panel') && !e.target.closest('[id^="ledger-action-btn-"]')) {
+            document.querySelectorAll('.ledger-action-panel').forEach(panel => panel.style.display = 'none');
+        }
+    });
+
+    function undoTradeFromPanel(index) {
+        document.querySelectorAll('.ledger-action-panel').forEach(panel => panel.style.display = 'none');
+        undoTrade(index);
+    }
+    window.undoTradeFromPanel = undoTradeFromPanel;
+
+    // 開啟「設定停損/停利」彈窗，帶入目前持股上限，並依表單輸入送出 createConditionalOrder
+    function openSltpSetupModal(ticker) {
+        document.querySelectorAll('.ledger-action-panel').forEach(panel => panel.style.display = 'none');
+        const holding = (state.holdings[ticker] && state.holdings[ticker].shares) || 0;
+        if (holding <= 0) { alert(`目前並未持有 ${ticker}，無法設定停損/停利單。`); return; }
+        document.getElementById('sltp-setup-ticker').innerText = ticker;
+        document.getElementById('sltp-max-shares').innerText = formatShares(holding);
+        document.getElementById('sltp-trigger-price').value = '';
+        document.getElementById('sltp-shares').value = formatShares(holding);
+        setSltpMode('SL');
+        document.getElementById('sltp-setup-overlay').style.display = 'flex';
+        document.getElementById('sltp-setup-overlay').dataset.ticker = ticker;
+        document.getElementById('sltp-setup-overlay').dataset.maxShares = holding;
+    }
+    window.openSltpSetupModal = openSltpSetupModal;
+
+    let sltpSelectedMode = 'SL';
+    function setSltpMode(mode) {
+        sltpSelectedMode = mode;
+        const slBtn = document.getElementById('sltp-mode-sl'), tpBtn = document.getElementById('sltp-mode-tp');
+        slBtn.classList.toggle('active', mode === 'SL');
+        tpBtn.classList.toggle('active', mode === 'TP');
+        slBtn.style.background = mode === 'SL' ? 'rgba(255,69,96,0.15)' : 'rgba(255,255,255,0.06)';
+        slBtn.style.borderColor = mode === 'SL' ? 'var(--color-sell)' : 'rgba(255,255,255,0.2)';
+        slBtn.style.color = mode === 'SL' ? 'var(--color-sell)' : '#aaa';
+        tpBtn.style.background = mode === 'TP' ? 'rgba(0,255,170,0.15)' : 'rgba(255,255,255,0.06)';
+        tpBtn.style.borderColor = mode === 'TP' ? 'var(--color-buy)' : 'rgba(255,255,255,0.2)';
+        tpBtn.style.color = mode === 'TP' ? 'var(--color-buy)' : '#aaa';
+    }
+    window.setSltpMode = setSltpMode;
 
     function renderLedgerPagination(totalPages, totalRecords) {
         const el = document.getElementById("ledger-pagination");
@@ -6539,7 +6475,7 @@
     }
 
     function goToLedgerPage(page) {
-        const totalPages = Math.max(1, Math.ceil(state.ledger.length / LEDGER_PAGE_SIZE));
+        const totalPages = Math.max(1, Math.ceil(getFilteredLedgerIndices().length / LEDGER_PAGE_SIZE));
         ledgerCurrentPage = Math.max(1, Math.min(totalPages, page));
         renderLedgerTable();
     }
@@ -6547,6 +6483,9 @@
     // 📅 依指定日期跳轉至該日「第一筆交易」（當日最早成交的一筆）所在的分頁，並捲動、閃爍高亮該列
     function jumpLedgerToDate(dateStr) {
         if (!dateStr) return;
+        // 🔍 跳轉前先清除既有篩選條件，確保目標交易不會被目前的篩選條件隱藏而找不到
+        const tickerEl = document.getElementById('ledger-filter-ticker'), actionEl = document.getElementById('ledger-filter-action'), typeEl = document.getElementById('ledger-filter-ordertype');
+        if (tickerEl) tickerEl.value = ''; if (actionEl) actionEl.value = ''; if (typeEl) typeEl.value = '';
         const parts = dateStr.split('-').map(Number);
         const [y, m, d] = parts;
         // 🩹 部分行動裝置瀏覽器（尤其 iOS/Android 原生日期選擇器）在使用者僅是點開、尚未實際選定日期時，
@@ -7113,7 +7052,7 @@
             stockOverlay = stockBenchmarkActive ? computeBenchmarkOverlay(stockHistData.prices, stockHistData.timestamps) : null;
 
             if (stockOverlay) {
-                document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> <span style="margin-left:4px;">${currentTicker}</span> <span class="hide-on-mobile">對標比較中</span>`;
+                document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:${getMarketStateColor()}" title="${getMarketStateLabel()}"></i> <span style="margin-left:4px;">${currentTicker}</span> <span class="hide-on-mobile">對標比較中</span>`;
                 navChart.data.labels = stockHistData.labels;
 
                 const navPctData = stockOverlay.navPctData, benchPctData = stockOverlay.benchPctData;
@@ -7135,7 +7074,7 @@
                         <span style="font-weight:bold; color:${isAhead ? 'var(--color-up)' : 'var(--color-down)'};">${isAhead ? '領先大盤 ' : '落後大盤 '}${isAhead ? '+' : ''}${diffPct.toFixed(2)}%</span>`;
                 }
             } else {
-                document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:var(--color-buy)"></i> <span style="margin-left:4px;">${currentTicker}</span> <span class="hide-on-mobile">${titlePrefix}</span>`;
+                document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:${getMarketStateColor()}" title="${getMarketStateLabel()}"></i> <span style="margin-left:4px;">${currentTicker}</span> <span class="hide-on-mobile">${titlePrefix}</span>`;
                 navChart.data.labels = stockHistData.labels;
                 const tradeMarkerDatasets = buildTradeMarkerDatasets(stockHistData);
                 applyChartDatasets(navChart, getStockDatasets(stockHistData, showNodes, densityVal).concat(tradeMarkerDatasets));
@@ -7144,9 +7083,7 @@
         
         navChart.update(); 
 
-        // 🟢🟡⚪ 圖示顏色依目前標的所屬市場的即時交易時段狀態變換：綠＝盤中交易、黃＝盤前/盤後、灰＝已收盤休市
-        { const ms = getMarketSessionStatus(currentTicker);
-          document.getElementById("m-main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:${getMarketSessionColor(currentTicker)}" title="市場狀態：${ms.label}"></i> <span style="margin-left:4px;">${currentTicker}</span>`; }
+        document.getElementById("m-main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:${getMarketStateColor()}" title="${getMarketStateLabel()}"></i> <span style="margin-left:4px;">${currentTicker}</span>`;
         mobileChart.data.labels = stockHistData.labels; 
         const mDensity = (densityVal === 'All') ? 'All' : Math.floor(densityVal / 2);
 
@@ -7365,15 +7302,17 @@
 **二、交易與自動化**
 - 系統會依「手續費費率」與「證交稅率」設定自動計算買賣成本，可於系統設定調整。
 - 開啟「停損警示」並設定百分比後，未實現虧損達門檻時會跳出提醒。
-- 按下「送出限價買單／賣單」後會先跳出有效期限選擇彈窗（當日有效／7 天內有效／30 天內有效／無限期），預設為「無限期」；到期仍未觸價成交的限價單會自動撤單。
-- 持有股票時可設定「條件單」（觸價停損／停利），於下單面板切換至條件單模式後輸入停損價與／或停利價，任一價位被觸及即自動送出市價賣單。
 - 「股票分割自動偵測」與「股息自動配發」會每天自動查詢一次，偵測到時自動調整持股或入帳股息；開啟「股息再投資」後，入帳股息會自動買回同一標的。
+- 送出模擬限價單後，系統會要求選擇有效期限：預設為「無限期」（持續有效直到成交或手動取消），亦可手動指定到期日期，逾期未成交會自動取消。
+- 於「歷史帳本」列按下「操作」按鈕可展開選單：「撤銷此筆交易」用於刪除該筆紀錄並重新結算；買進紀錄若目前仍持有該標的，另可選擇「設定停損／停利」，建立自動條件單（觸價後以當時市價自動賣出），可於「待成交限價單」清單中管理與取消。
+- 股票分割／合股比例非整數時（如 3:2、1:10）可能產生小數點零股，系統可完整支援小數股數的市值與損益計算；偵測到零股尾數時會詢問是否要以目前市價自動折算為現金。
+- 「歷史帳本」表格上方提供篩選列，可依代號（模糊比對）、買賣方向、委託類型（市價／限價／定期定額／停損停利／碎股折算）篩選紀錄，按「清除篩選」可一鍵還原顯示全部紀錄。
 
 **三、圖表與外觀**
 - 可切換「K線圖」或「折線圖」顯示個股走勢，K線圖另可設定週期（5分K～月K）。
 - 「紅綠反轉」可切換漲跌顏色；「動態十字輔助線」與「轉折節點」可輔助閱讀圖表細節。
+- 下單櫃檯圖表與個股走勢圖表左上角的小圖示會依目前市場交易狀態自動變換顏色：綠色代表盤中交易、黃色代表盤前／盤後交易、灰色代表已收盤休市；滑鼠移到圖示上（或手機長按）可看到文字說明。
 - 「流光特效強度」可調整卡片邊框光效亮度；手機版可另外授權「陀螺儀權限」，讓光效依裝置傾斜方向呈現。
-- 手機版下單櫃檯走勢圖左上角的小圖示會依目前標的所屬市場的即時交易時段變換顏色：綠色代表盤中交易、黃色代表盤前／盤後延長交易、灰色代表已收盤休市（含週末），點按或長按圖示可看到完整文字說明。
 
 **四、AI 顧問室**
 - 於下方輸入框輸入問題並送出，即可獲得根據您目前持股與市場數據的專業分析。
@@ -8164,7 +8103,7 @@ ${summaryText}
             cloudState.lastDividendCheck = cloudState.lastDividendCheck || 0;
             cloudState.lastModified = cloudState.lastModified || 0;
             cloudState.stopLoss = cloudState.stopLoss || { enabled: false, percent: 10 };
-            cloudState.limitOrders = cloudState.limitOrders || []; cloudState.conditionalOrders = cloudState.conditionalOrders || [];
+            cloudState.limitOrders = cloudState.limitOrders || [];
             cloudState.lastActiveAt = cloudState.lastActiveAt || 0;
             cloudState.cardTags = cloudState.cardTags || {};
             cloudState.dcaPlans = cloudState.dcaPlans || [];
@@ -8190,7 +8129,6 @@ ${summaryText}
         setTradeMode('BUY');
         renderAccountManagerList();
         renderPendingLimitOrders();
-        renderPendingConditionalOrders();
         renderDcaPlansList();
 
         // 🩹 先以本機暫存資料立即呈現畫面（此時報價尚未抓取，updateAllViews 會以持股均價暫時估值），
@@ -8211,7 +8149,6 @@ ${summaryText}
         
         updateLiveNavNode();
         updateAllViews(true);
-        checkConditionalOrders(); // 🛡️ 開機取得最新報價後立即檢查一次條件單是否已達觸發價位
         checkAchievements();
 
         selectTicker(currentTicker);
@@ -8233,7 +8170,6 @@ ${summaryText}
             
             updateAllViews(false);
             checkLimitOrders();
-            checkConditionalOrders();
             checkDcaPlans();
             state.lastActiveAt = Date.now(); // 🌙 每輪輪詢順便刷新「最後活躍時間」，供下次啟動時判斷離線區間的起點
             
