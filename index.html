@@ -7267,16 +7267,76 @@
         return lines.join('\n');
     }
 
+    // 🩹 修復（第四輪）：Gemini 內建的 Google Search grounding 工具在這個環境裡不可靠——
+    // 使用者反映即使加了 google_search 工具，Gemini 仍然直接回覆「無法取得該期間的新聞報導」。
+    // 與其依賴 Gemini 自己上網搜尋，改成由我們的前端「自己先爬」：
+    // 透過現有的 CORS Proxy 抓 Google 新聞 RSS，篩出發布日期落在查詢區間內的真實新聞標題／來源／日期，
+    // 直接整理成文字附進 prompt 餵給 Gemini。這樣 Gemini 不需要自己搜尋，只需要根據
+    // 我們已經給它、已核實的真實新聞資料做整理與分析，不會再有藉口回覆「無法取得新聞」。
+    async function fetchNewsForTickerRange(ticker, range) {
+        // .TW / .TWO 結尾視為台股，用中文關鍵字查詢比較容易查到相關新聞；其餘視為美股/國際股，用英文查詢
+        const isTaiwanStock = /\.(TW|TWO)$/i.test(ticker);
+        const bareCode = ticker.replace(/\.(TW|TWO)$/i, '');
+        const query = isTaiwanStock ? `${bareCode} 股價` : `${ticker} stock`;
+        const hl = isTaiwanStock ? 'zh-TW' : 'en-US';
+        const gl = isTaiwanStock ? 'TW' : 'US';
+        const ceid = isTaiwanStock ? 'TW:zh-Hant' : 'US:en';
+        const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=${hl}&gl=${gl}&ceid=${ceid}`;
+        try {
+            const proxyUrl = `${myProxy}${encodeURIComponent(rssUrl)}`;
+            const res = await fetch(proxyUrl, { cache: "no-store" });
+            const xmlText = await res.text();
+            const xmlDoc = new DOMParser().parseFromString(xmlText, 'text/xml');
+            const items = Array.from(xmlDoc.querySelectorAll('item'));
+            // 篩選發布日期落在查詢區間內（前後各留 1 天緩衝，避免時區誤差漏掉邊界新聞）的新聞
+            const bufferMs = 24 * 60 * 60 * 1000;
+            const rangeStart = range.startTs - bufferMs, rangeEnd = range.endTs + bufferMs;
+            const matched = [];
+            for (const item of items) {
+                const titleRaw = item.querySelector('title')?.textContent || '';
+                const pubDateStr = item.querySelector('pubDate')?.textContent || '';
+                const sourceEl = item.querySelector('source');
+                const source = sourceEl ? sourceEl.textContent : '';
+                const pubTs = Date.parse(pubDateStr);
+                if (!titleRaw || isNaN(pubTs)) continue;
+                if (pubTs >= rangeStart && pubTs <= rangeEnd) {
+                    // Google 新聞標題常帶有「 - 來源名稱」的結尾，這裡去除重複的來源字樣，減少雜訊
+                    const escSource = source.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    const title = source ? titleRaw.replace(new RegExp(`\\s*-\\s*${escSource}$`), '') : titleRaw;
+                    matched.push({ title, source, pubTs });
+                }
+            }
+            matched.sort((a, b) => a.pubTs - b.pubTs);
+            return matched.slice(0, 10); // 最多帶 10 則，避免 prompt 過長
+        } catch (e) {
+            return [];
+        }
+    }
+
+    // 把爬到的新聞整理成文字清單，附上日期與來源，方便 Gemini（也方便使用者除錯）確認每則新聞的時間點
+    function buildNewsSummaryText(newsItems) {
+        if (!newsItems || newsItems.length === 0) return null;
+        return newsItems.map(n => {
+            const dateStr = new Date(n.pubTs).toLocaleDateString('zh-TW', { year: 'numeric', month: 'numeric', day: 'numeric' });
+            return `- [${dateStr}]${n.source ? `（${n.source}）` : ''} ${n.title}`;
+        }).join('\n');
+    }
+
     async function sendMarketEventAnalysisToGemini(key, question, range) {
         const out = document.getElementById("chat-output"), msgId = "ai-" + Date.now();
         const displayQuestion = `${question} <span style="color:var(--color-acc)">[市場事件 ${currentTicker} ${range.startVal} ~ ${range.endVal}]</span>`;
-        out.innerHTML += `<br><span style="color:#fff">> ${displayQuestion}</span><br><div id="${msgId}"><span style="color:var(--color-acc)">[GEMINI]</span> <span style="color:#777">查詢期間價格走勢並分析中...</span></div>`; out.scrollTop = out.scrollHeight;
+        out.innerHTML += `<br><span style="color:#fff">> ${displayQuestion}</span><br><div id="${msgId}"><span style="color:var(--color-acc)">[GEMINI]</span> <span style="color:#777">查詢期間價格走勢與新聞中...</span></div>`; out.scrollTop = out.scrollHeight;
 
-        const bars = await fetchTickerPriceBars(currentTicker, range.startTs, range.endTs);
+        // 價格走勢與新聞可以平行抓取，加快回應速度
+        const [bars, newsItems] = await Promise.all([
+            fetchTickerPriceBars(currentTicker, range.startTs, range.endTs),
+            fetchNewsForTickerRange(currentTicker, range)
+        ]);
         const summaryText = buildEventRangeSummaryText(currentTicker, bars, range);
+        const newsSummaryText = buildNewsSummaryText(newsItems);
 
-        // 📰 這裡明確要求 Gemini：優先依它所知的實際新聞／財報／總經事件推測原因，
-        // 但若不確定是否真有相關新聞，要誠實說明這只是根據價格走勢的合理推測，不可以編造不存在的具體新聞內容或日期，
+        // 📰 這裡明確要求 Gemini：優先依「我們已經實際爬到的真實新聞」分析原因，
+        // 只有在完全沒爬到相關新聞時，才誠實說明是根據價格走勢的合理推測，不可以編造不存在的新聞內容或日期，
         // 避免使用者誤把 AI 憑空捏造的「新聞」當真。
         // 🩹 修復（第二輪）：光是在 prompt 文字裡告知「今天日期」仍不夠——Gemini 會直接無視這段文字，
         // 堅持以自己訓練資料的知識截止日期為準，判定 2026 年是「未來」。這裡改用兩個更強的手段：
@@ -7289,20 +7349,26 @@
             ? `這段期間就在最近，甚至可能包含今天`
             : `距離今天已經過了約 ${daysAgoEnd} 天，是已經確確實實發生、走完的歷史資料，不是預測或未來`;
 
-        const marketEventSystemInstruction = buildTodaySystemInstruction() + `\n\n【本次額外查證】使用者這次詢問的期間是 ${range.startVal} ~ ${range.endVal}，${daysAgoText}。系統已經即時向市場報價來源查得這段期間內「已經成交過」的真實歷史價格數據（見下方使用者訊息），這是鐵一般的事實佐證，並非假設或未來推演。你現在擁有即時 Google 搜尋工具，請務必先實際搜尋這段期間關於「${currentTicker}」的新聞、財報、總經事件、產業動態，用搜尋到的真實資訊回答，而不是只依賴你自己訓練資料裡的記憶——你的訓練資料本來就不包含這段期間的新聞，所以「查不到」是預期中的事，正確做法是去搜尋，而不是拒絕回答或回覆「無法取得這段期間的新聞報導」。絕對不要再以「未來」、「尚未發生」、「無法討論未來事件」、「無法取得該期間新聞」等理由拒絕回答。`;
+        const marketEventSystemInstruction = buildTodaySystemInstruction() + `\n\n【本次額外查證】使用者這次詢問的期間是 ${range.startVal} ~ ${range.endVal}，${daysAgoText}。系統已經即時查得這段期間內「已經成交過」的真實歷史價格數據，並且已經幫你「實際爬過」這段期間的相關新聞（見下方使用者訊息），這些都是已核實的既成事實，不是假設或未來推演。你不需要、也不能自己再去搜尋——直接根據下方已經提供給你的新聞與價格資料做分析即可。絕對不要再以「未來」、「尚未發生」、「無法討論未來事件」、「無法取得該期間新聞」等理由拒絕回答；如果下方新聞清單是空的，就誠實說「查無直接相關新聞」，改用價格走勢做合理推測，而不是聲稱自己無法取得新聞。`;
 
-        const fullPrompt = `你是一位熟悉總體經濟與個股基本面的資深金融分析師，並擁有即時 Google 搜尋工具。今天的實際日期是 ${todayStr}。使用者想了解「${currentTicker}」在 ${range.startVal} ~ ${range.endVal} 這段期間發生了什麼事，導致股價出現下方所列的走勢。
+        const newsBlock = newsSummaryText
+            ? `【系統已實際爬到這段期間相關的真實新聞標題（依日期排序，已標註來源，非你自己搜尋而來，是我們已核實提供給你的資料）】\n${newsSummaryText}\n\n請主要依據以上「已核實」的新聞標題，推測、整理出可能導致股價如此走勢的關鍵原因；不要編造上面沒有列出的新聞內容或日期。`
+            : `（系統已經實際爬過這段期間關於「${currentTicker}」的新聞，但沒有查到符合條件的中文/英文新聞報導——這是真的查無結果，不是你「不能」查或「無法取得」。請誠實告知使用者目前查無直接相關新聞，並改以下方價格走勢數據做合理推測分析，不要編造不存在的新聞內容，也不要回覆「無法取得新聞報導」這類說法。）`;
+
+        const fullPrompt = `你是一位熟悉總體經濟與個股基本面的資深金融分析師。今天的實際日期是 ${todayStr}。使用者想了解「${currentTicker}」在 ${range.startVal} ~ ${range.endVal} 這段期間發生了什麼事，導致股價出現下方所列的走勢。
 
 注意：下方列出的價格走勢是系統即時從市場報價來源查得的真實歷史資料，代表 ${range.startVal} ~ ${range.endVal} 這段期間「確實已經發生過」（${daysAgoText}），並非未來、也並非假設情境。
 
-請先實際使用 Google 搜尋工具，查詢這段期間「${currentTicker}」相關的新聞、財報發布、總體經濟事件、產業動態等（你的訓練資料不包含這段期間的新聞是正常的，這正是要你去搜尋、而不是拒答或回覆查不到的原因），再根據搜尋到的實際資訊，說明這段期間可能導致股價如此走勢的關鍵原因與事件。若搜尋後仍找不到直接相關的新聞，才誠實說明這只是根據下方價格走勢數據做的合理推測，不要編造不存在的具體新聞內容或日期。用簡潔專業的口吻回答（字數約 200 字內，直接切入重點）。
+${newsBlock}
+
+用簡潔專業的口吻回答（字數約 200 字內，直接切入重點）。
 
 【${currentTicker} 這段期間的價格走勢（真實歷史報價數據）】
 ${summaryText}
 
 用戶問題：${question}`;
 
-        callGeminiAPI(fullPrompt, msgId, out, key, marketEventSystemInstruction, true);
+        callGeminiAPI(fullPrompt, msgId, out, key, marketEventSystemInstruction);
     }
 
     // 🚀 手機端極簡玻璃數字鍵盤核心邏輯
