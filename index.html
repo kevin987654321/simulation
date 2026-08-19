@@ -7060,13 +7060,23 @@
 
     // 實際呼叫 Gemini API 並將結果渲染到指定訊息節點（一般提問與歷史帳本分析共用）
     // 回應以打字機效果（約每秒 50 字）逐字顯示，模擬一般 AI 軟體的輸出體驗
-    async function callGeminiAPI(fullPrompt, msgId, out, key, systemInstructionText) {
+    // 🩹 修復（第三輪）：光靠「告訴 Gemini 今天日期＋這是過去」還是不夠——因為就算 Gemini
+    // 接受這是過去的日期，它自己訓練資料的知識截止日期還是更早，導致它「真的沒有」那段期間的
+    // 新聞內容可查，只能誠實回答「無法取得這段期間的新聞報導」。這不是它在鬧脾氣，是真的沒資料。
+    // 解法：改用 Gemini API 原生支援的 Google Search grounding 工具（tools: [{ google_search: {} }]），
+    // 讓 Gemini 在回答前「真的去網路上搜尋」該期間的實際新聞、財報、總經事件，而不是單純憑訓練記憶回答。
+    async function callGeminiAPI(fullPrompt, msgId, out, key, systemInstructionText, useGoogleSearch) {
         try {
             const bodyObj = { contents: [{ parts: [{ text: fullPrompt }] }] };
             // 預設一律附上「今天真實日期」的系統指令，除非呼叫端明確傳入其他系統指令內容
             bodyObj.system_instruction = { parts: [{ text: systemInstructionText || buildTodaySystemInstruction() }] };
+            if (useGoogleSearch) {
+                bodyObj.tools = [{ google_search: {} }]; // 開啟即時網路搜尋，讓回答有真實新聞依據，而非模型憑空推測
+            }
             const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${key}`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(bodyObj) });
-            const json = await res.json(), rawReply = json.candidates[0].content.parts[0].text;
+            const json = await res.json();
+            // 有開搜尋工具時，回覆可能拆成多個 parts（含搜尋過程），這裡把所有文字片段串起來，避免漏字
+            const rawReply = (json.candidates[0].content.parts || []).map(p => p.text || '').join('');
             const msgEl = document.getElementById(msgId);
             msgEl.innerHTML = `<span style="color:var(--color-acc)">[GEMINI]</span> <span id="${msgId}-text" style="color:#ddd"></span>`;
             await typewriterRender(document.getElementById(`${msgId}-text`), rawReply, 50, () => { out.scrollTop = out.scrollHeight; });
@@ -7279,20 +7289,20 @@
             ? `這段期間就在最近，甚至可能包含今天`
             : `距離今天已經過了約 ${daysAgoEnd} 天，是已經確確實實發生、走完的歷史資料，不是預測或未來`;
 
-        const marketEventSystemInstruction = buildTodaySystemInstruction() + `\n\n【本次額外查證】使用者這次詢問的期間是 ${range.startVal} ~ ${range.endVal}，${daysAgoText}。系統已經即時向市場報價來源查得這段期間內「已經成交過」的真實歷史價格數據（見下方使用者訊息），這是鐵一般的事實佐證，並非假設或未來推演。你的任務只是根據這些已發生的價格數據與你所知的相關背景知識做分析，絕對不要再以「未來」、「尚未發生」、「無法討論未來事件」等理由拒絕回答；如果照做，就是不理解使用者提供的既成事實。`;
+        const marketEventSystemInstruction = buildTodaySystemInstruction() + `\n\n【本次額外查證】使用者這次詢問的期間是 ${range.startVal} ~ ${range.endVal}，${daysAgoText}。系統已經即時向市場報價來源查得這段期間內「已經成交過」的真實歷史價格數據（見下方使用者訊息），這是鐵一般的事實佐證，並非假設或未來推演。你現在擁有即時 Google 搜尋工具，請務必先實際搜尋這段期間關於「${currentTicker}」的新聞、財報、總經事件、產業動態，用搜尋到的真實資訊回答，而不是只依賴你自己訓練資料裡的記憶——你的訓練資料本來就不包含這段期間的新聞，所以「查不到」是預期中的事，正確做法是去搜尋，而不是拒絕回答或回覆「無法取得這段期間的新聞報導」。絕對不要再以「未來」、「尚未發生」、「無法討論未來事件」、「無法取得該期間新聞」等理由拒絕回答。`;
 
-        const fullPrompt = `你是一位熟悉總體經濟與個股基本面的資深金融分析師。今天的實際日期是 ${todayStr}。使用者想了解「${currentTicker}」在 ${range.startVal} ~ ${range.endVal} 這段期間發生了什麼事，導致股價出現下方所列的走勢。
+        const fullPrompt = `你是一位熟悉總體經濟與個股基本面的資深金融分析師，並擁有即時 Google 搜尋工具。今天的實際日期是 ${todayStr}。使用者想了解「${currentTicker}」在 ${range.startVal} ~ ${range.endVal} 這段期間發生了什麼事，導致股價出現下方所列的走勢。
 
-注意：下方列出的價格走勢是系統即時從市場報價來源查得的真實歷史資料，代表 ${range.startVal} ~ ${range.endVal} 這段期間「確實已經發生過」（${daysAgoText}），並非未來、也並非假設情境。即使這段期間可能晚於你自身訓練資料的知識截止日期，也請不要以「這是未來日期」、「這個時間尚未到來」或類似理由拒絕回答——請直接依據下方提供的實際價格數據進行分析。
+注意：下方列出的價格走勢是系統即時從市場報價來源查得的真實歷史資料，代表 ${range.startVal} ~ ${range.endVal} 這段期間「確實已經發生過」（${daysAgoText}），並非未來、也並非假設情境。
 
-請根據你所知道的重大新聞、財報發布、總體經濟事件、產業動態等，推測並說明這段期間可能的關鍵原因與事件；如果你的知識確實沒有涵蓋到這段期間的具體新聞，請誠實說明這只是根據下方價格走勢數據做的合理推測，不要編造不存在的具體新聞內容或日期，也不要因此拒絕分析。用簡潔專業的口吻回答（字數約 200 字內，直接切入重點）。
+請先實際使用 Google 搜尋工具，查詢這段期間「${currentTicker}」相關的新聞、財報發布、總體經濟事件、產業動態等（你的訓練資料不包含這段期間的新聞是正常的，這正是要你去搜尋、而不是拒答或回覆查不到的原因），再根據搜尋到的實際資訊，說明這段期間可能導致股價如此走勢的關鍵原因與事件。若搜尋後仍找不到直接相關的新聞，才誠實說明這只是根據下方價格走勢數據做的合理推測，不要編造不存在的具體新聞內容或日期。用簡潔專業的口吻回答（字數約 200 字內，直接切入重點）。
 
 【${currentTicker} 這段期間的價格走勢（真實歷史報價數據）】
 ${summaryText}
 
 用戶問題：${question}`;
 
-        callGeminiAPI(fullPrompt, msgId, out, key, marketEventSystemInstruction);
+        callGeminiAPI(fullPrompt, msgId, out, key, marketEventSystemInstruction, true);
     }
 
     // 🚀 手機端極簡玻璃數字鍵盤核心邏輯
