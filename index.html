@@ -1773,7 +1773,22 @@
 </div>
 
 <script>
-    let currentUSDTWD = 32.5;
+    // 💾 上次成功取得的匯率快取：避免「第一次即時匯率 API 呼叫失敗」時，一路沿用寫死的預設值（例如美元固定 32.5）
+    // 計算 NAV，讓使用者看到失真的資產總值。改為開機時優先讀取「上一次實際查詢成功」的匯率作為初始值，
+    // 比寫死的常數更接近真實情況；只有在「連快取都沒有」（例如全新裝置、從未成功查詢過匯率）時才會真的用到寫死常數。
+    const FX_RATES_CACHE_KEY = 'CACHED_FX_RATES_TO_TWD';
+    function loadCachedFxRates() {
+        try {
+            const cached = JSON.parse(localStorage.getItem(FX_RATES_CACHE_KEY));
+            if (cached && typeof cached === 'object' && cached.USD) return cached;
+        } catch (e) {}
+        return null;
+    }
+    function saveCachedFxRates() {
+        try { localStorage.setItem(FX_RATES_CACHE_KEY, JSON.stringify(currencyRatesToTWD)); } catch (e) {}
+    }
+
+    let currentUSDTWD = 32.5; // 寫死常數僅作為「連快取都沒有」時的最終防線
     const DEFAULT_PROXY_URL = "https://square-moon-a3d9.kevinchang090818.workers.dev/?url=";
     let myProxy = localStorage.getItem('CUSTOM_PROXY_URL') || DEFAULT_PROXY_URL;
     let AUTO_SYNC_ENABLED = localStorage.getItem('SETTING_AUTO_SYNC_ENABLED') !== 'false'; // 預設開啟，維持原本行為
@@ -1807,6 +1822,13 @@
         KRW: 0.024,
         GBP: 40.5,
     };
+    // 💾 開機時優先套用「上次實際查詢成功」的匯率快取，覆蓋掉上面寫死的預設值——
+    // 這樣即使這次開機第一次的 API 呼叫剛好失敗，NAV 也是用「上次真實查到的匯率」估算，而不是硬編碼常數。
+    const cachedFxRatesOnBoot = loadCachedFxRates();
+    if (cachedFxRatesOnBoot) {
+        Object.assign(currencyRatesToTWD, cachedFxRatesOnBoot);
+        currentUSDTWD = currencyRatesToTWD.USD;
+    }
 
     // 依 Ticker 後綴查表判定所屬幣別；找不到對應後綴時，防呆回退為 USD（維持舊版預設行為，不會讓系統崩潰）
     function getCurrencyForTicker(ticker) {
@@ -1852,6 +1874,7 @@
                 if (price) {
                     currencyRatesToTWD[code] = price;
                     if (code === 'USD') currentUSDTWD = price;
+                    saveCachedFxRates(); // 💾 每次成功取得新匯率就更新快取，供下次開機時優先使用
                     return price;
                 }
             }
@@ -7265,9 +7288,38 @@ ${summaryText}
             <div class="numpad-btn" onmousedown="numpadPress(event, '9')" ontouchstart="numpadPress(event, '9')">9</div>
             <div class="numpad-btn ${bottomLeftKey ? '' : 'empty'}" onmousedown="numpadPress(event, '${bottomLeftKey}')" ontouchstart="numpadPress(event, '${bottomLeftKey}')">${bottomLeftKey}</div>
             <div class="numpad-btn" onmousedown="numpadPress(event, '0')" ontouchstart="numpadPress(event, '0')">0</div>
-            <div class="numpad-btn" onmousedown="numpadPress(event, 'backspace')" ontouchstart="numpadPress(event, 'backspace')"><i class="fa-solid fa-angle-left"></i></div>
+            <div class="numpad-btn" onmousedown="startBackspaceHold(event)" ontouchstart="startBackspaceHold(event)" onmouseup="stopBackspaceHold()" ontouchend="stopBackspaceHold()" onmouseleave="stopBackspaceHold()" ontouchcancel="stopBackspaceHold()"><i class="fa-solid fa-angle-left"></i></div>
         `;
     }
+
+    // ⌫ 數字小鍵盤退格鍵支援「按住連續刪除」：按下先刪一個字（維持原本單點行為），
+    // 若持續按住超過 450ms 才開始以固定間隔連續刪除，避免一般單點誤觸也連續刪掉多字。
+    // 重用 numpadPress(e, 'backspace') 本身（而非另外複製一份刪除邏輯），
+    // 確保連續刪除跟單次按下的行為（含流光強度輸入框的特例、input/change 事件派發）完全一致、不會日後各自維護出現落差。
+    let backspaceRepeatTimeout = null, backspaceRepeatInterval = null;
+    const NOOP_EVENT = { preventDefault: () => {} }; // 供計時器重複觸發時使用，不是真正的瀏覽器事件，不需要 preventDefault 任何東西
+
+    function startBackspaceHold(e) {
+        numpadPress(e, 'backspace'); // 立即刪一個字，維持原本單點按下的行為
+        stopBackspaceHold(); // 保險：避免同一次觸控在部分裝置上 touchstart 與合成的 mousedown 都各自觸發，疊加出多個計時器
+        backspaceRepeatTimeout = setTimeout(() => {
+            backspaceRepeatInterval = setInterval(() => {
+                if (!activeNumInput || activeNumInput.value.length === 0) { stopBackspaceHold(); return; } // 已經刪光了，沒東西可刪，順便停止計時器
+                numpadPress(NOOP_EVENT, 'backspace');
+            }, 70);
+        }, 450);
+    }
+
+    function stopBackspaceHold() {
+        if (backspaceRepeatTimeout) { clearTimeout(backspaceRepeatTimeout); backspaceRepeatTimeout = null; }
+        if (backspaceRepeatInterval) { clearInterval(backspaceRepeatInterval); backspaceRepeatInterval = null; }
+    }
+
+    // 保險：若使用者按住退格鍵拖曳後在按鈕以外的地方放開，按鈕自身的 onmouseup/ontouchend 不會觸發，
+    // 這裡額外掛一份全域監聽，無論在哪裡放開都能確實停止連續刪除
+    document.addEventListener('mouseup', stopBackspaceHold);
+    document.addEventListener('touchend', stopBackspaceHold);
+    document.addEventListener('touchcancel', stopBackspaceHold);
 
     document.querySelectorAll('.mobile-num').forEach(input => {
         if(window.innerWidth <= 768) {
