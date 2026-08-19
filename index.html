@@ -7047,11 +7047,25 @@
         await callGeminiAPI(fullPrompt, msgId, out, key);
     }
 
+    // 🩹 修復：先前只把「今天日期」寫在使用者 prompt 內文中，Gemini 仍然會因為那段日期
+    // 晚於自己模型訓練資料的知識截止日，而直接判斷成「尚未發生的未來」並拒絕回答——
+    // 即使 prompt 裡已經講了「今天是 X 年」也一樣，因為那段文字對模型來說權重不夠高。
+    // 改用 Gemini API 原生支援的 system_instruction 欄位傳遞日期資訊：這個欄位在模型內部
+    // 的優先權高於一般使用者訊息，且用字更直接、更不留模糊空間，大幅降低模型仍誤判為未來的機率。
+    function buildTodaySystemInstruction() {
+        const now = new Date();
+        const todayStr = now.toLocaleDateString('zh-TW', { year: 'numeric', month: 'numeric', day: 'numeric' });
+        return `【系統資訊，非使用者輸入，優先級最高】現在的真實西元日期是 ${todayStr}。這是使用者當下所在的真實世界時間，不是你的知識截止日期，也不是任何假設情境。你的訓練資料可能只涵蓋到較早的某個時間點，但這不代表「現在」還沒到——現在確確實實已經是 ${todayStr}，包含西元2026年在內的日期，只要早於或等於今天，都已經是「已經發生的過去」，並非未來。你絕對不可以因為某個日期、年份（例如 2026 年或其中任何月份）超出你自己訓練資料的知識範圍，就判斷、暗示或回覆使用者「這是未來的日期」、「這個時間點尚未到來」、「無法討論尚未發生的事」之類的話——這種判斷在事實上是錯誤的。若你對某段期間的具體新聞、事件不熟悉，只需誠實告知你的知識可能沒有涵蓋到這段期間、資訊有限，並改以使用者提供的實際數據做合理推測即可，絕不可以「這是未來」為理由拒絕回答。`;
+    }
+
     // 實際呼叫 Gemini API 並將結果渲染到指定訊息節點（一般提問與歷史帳本分析共用）
     // 回應以打字機效果（約每秒 50 字）逐字顯示，模擬一般 AI 軟體的輸出體驗
-    async function callGeminiAPI(fullPrompt, msgId, out, key) {
+    async function callGeminiAPI(fullPrompt, msgId, out, key, systemInstructionText) {
         try {
-            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${key}`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ contents: [{ parts: [{ text: fullPrompt }] }] }) });
+            const bodyObj = { contents: [{ parts: [{ text: fullPrompt }] }] };
+            // 預設一律附上「今天真實日期」的系統指令，除非呼叫端明確傳入其他系統指令內容
+            bodyObj.system_instruction = { parts: [{ text: systemInstructionText || buildTodaySystemInstruction() }] };
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${key}`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(bodyObj) });
             const json = await res.json(), rawReply = json.candidates[0].content.parts[0].text;
             const msgEl = document.getElementById(msgId);
             msgEl.innerHTML = `<span style="color:var(--color-acc)">[GEMINI]</span> <span id="${msgId}-text" style="color:#ddd"></span>`;
@@ -7254,14 +7268,22 @@
         // 📰 這裡明確要求 Gemini：優先依它所知的實際新聞／財報／總經事件推測原因，
         // 但若不確定是否真有相關新聞，要誠實說明這只是根據價格走勢的合理推測，不可以編造不存在的具體新聞內容或日期，
         // 避免使用者誤把 AI 憑空捏造的「新聞」當真。
-        // 🩹 修復：Gemini 本身的知識截止日期早於「現在」，若沒有明確告知目前的實際日期，
-        // 它容易誤把使用者查詢的區間（其實是已經發生過的近期日期）當成「尚未到來的未來」而拒答。
-        // 這裡明確附上系統當下的實際日期，並附上下方已經查到的真實歷史報價數據作為佐證，
-        // 強制要求 Gemini 不得再以「這是未來日期」為由拒絕分析。
+        // 🩹 修復（第二輪）：光是在 prompt 文字裡告知「今天日期」仍不夠——Gemini 會直接無視這段文字，
+        // 堅持以自己訓練資料的知識截止日期為準，判定 2026 年是「未來」。這裡改用兩個更強的手段：
+        // 1) 改用 API 原生的 system_instruction 欄位（權重高於一般使用者文字）明確告知今天日期；
+        // 2) 額外附上「距今已經過了 N 天」這種具體、無法用「知識截止日期」反駁的既成事實作為佐證，
+        //    比起單純講「今天是幾號」更難被模型忽略或誤判。
         const todayStr = new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: 'numeric', day: 'numeric' });
+        const daysAgoEnd = Math.max(0, Math.floor((Date.now() - range.endTs) / 86400000));
+        const daysAgoText = daysAgoEnd <= 0
+            ? `這段期間就在最近，甚至可能包含今天`
+            : `距離今天已經過了約 ${daysAgoEnd} 天，是已經確確實實發生、走完的歷史資料，不是預測或未來`;
+
+        const marketEventSystemInstruction = buildTodaySystemInstruction() + `\n\n【本次額外查證】使用者這次詢問的期間是 ${range.startVal} ~ ${range.endVal}，${daysAgoText}。系統已經即時向市場報價來源查得這段期間內「已經成交過」的真實歷史價格數據（見下方使用者訊息），這是鐵一般的事實佐證，並非假設或未來推演。你的任務只是根據這些已發生的價格數據與你所知的相關背景知識做分析，絕對不要再以「未來」、「尚未發生」、「無法討論未來事件」等理由拒絕回答；如果照做，就是不理解使用者提供的既成事實。`;
+
         const fullPrompt = `你是一位熟悉總體經濟與個股基本面的資深金融分析師。今天的實際日期是 ${todayStr}。使用者想了解「${currentTicker}」在 ${range.startVal} ~ ${range.endVal} 這段期間發生了什麼事，導致股價出現下方所列的走勢。
 
-注意：下方列出的價格走勢是系統即時從市場報價來源查得的真實歷史資料，代表 ${range.startVal} ~ ${range.endVal}這段期間「確實已經發生過」，並非未來、也並非假設情境。即使這段期間可能晚於你自身訓練資料的知識截止日期，也請不要以「這是未來日期」、「這個時間尚未到來」或類似理由拒絕回答——請直接依據下方提供的實際價格數據進行分析。
+注意：下方列出的價格走勢是系統即時從市場報價來源查得的真實歷史資料，代表 ${range.startVal} ~ ${range.endVal} 這段期間「確實已經發生過」（${daysAgoText}），並非未來、也並非假設情境。即使這段期間可能晚於你自身訓練資料的知識截止日期，也請不要以「這是未來日期」、「這個時間尚未到來」或類似理由拒絕回答——請直接依據下方提供的實際價格數據進行分析。
 
 請根據你所知道的重大新聞、財報發布、總體經濟事件、產業動態等，推測並說明這段期間可能的關鍵原因與事件；如果你的知識確實沒有涵蓋到這段期間的具體新聞，請誠實說明這只是根據下方價格走勢數據做的合理推測，不要編造不存在的具體新聞內容或日期，也不要因此拒絕分析。用簡潔專業的口吻回答（字數約 200 字內，直接切入重點）。
 
@@ -7270,7 +7292,7 @@ ${summaryText}
 
 用戶問題：${question}`;
 
-        callGeminiAPI(fullPrompt, msgId, out, key);
+        callGeminiAPI(fullPrompt, msgId, out, key, marketEventSystemInstruction);
     }
 
     // 🚀 手機端極簡玻璃數字鍵盤核心邏輯
