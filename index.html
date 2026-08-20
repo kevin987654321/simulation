@@ -680,12 +680,7 @@
             /* 📱 手機版換頁滑動動畫：實際位移改用 JS 的 Web Animations API（element.animate）直接播放，
                不透過這裡的 CSS transition 觸發（transition 搭配「先瞬間定位、強制 reflow、再改值」的寫法在部分手機瀏覽器上
                容易把起始畫面吃掉，導致新頁面像是「快到終點才突然出現」，改用 WAAPI 明確指定起訖 keyframe 可以避免這個問題）。
-               這裡只需確保切換動畫進行中兩個 .view-section 能同時以 opacity:1 疊圖顯示，opacity 淡入淡出動畫仍照舊維持。
-               另外預先給 will-change 提示瀏覽器把每個頁面獨立成合成層，避免第一次滑入時才臨時合成整層內容（含圖表 canvas）
-               造成掉幀，讓「舊頁滑出、新頁滑入」在畫面上看起來是連續的位移，而不是瞬間消失/覆蓋。
-               同時把 switchView() 裡「進場後要抓資料/重繪圖表」等較吃重的工作延後到動畫播完才執行（見 JS），
-               避免這些工作跟滑動動畫搶主執行緒繪圖時間。 */
-            .view-section { will-change: transform, opacity; }
+               這裡只需確保切換動畫進行中兩個 .view-section 能同時以 opacity:1 疊圖顯示，opacity 淡入淡出動畫仍照舊維持。 */
             .stat-grid { grid-template-columns: 1fr 1fr; grid-template-areas: "c1 c2" "hl hl" "c3 c4"; column-gap: 12px; row-gap: 0; height: auto; margin-bottom: 5px; }
             .stat-grid .glow-line-v { display: none; }
             .stat-grid .stat-grid-hline { display: block; }
@@ -2982,19 +2977,9 @@
         document.querySelectorAll(".menu-item").forEach(m => m.classList.remove("active"));
         if(btn) btn.classList.add("active");
 
-        // 進場後要做的事（渲染卡片／抓圖表資料等）獨立成一個函式：
-        // 手機版滑動動畫進行中，若同時執行這些較吃重的工作（尤其是圖表重繪），
-        // 會佔用主執行緒繪圖時間，導致滑動動畫掉幀、看起來像是「瞬間切換」而非平滑滑動，
-        // 因此手機版會等滑動動畫播完才執行；電腦版沒有滑動動畫，維持原本「立即執行」。
-        const runEnterTasks = () => {
-            if(id === 'view-cards') { renderCards(); }
-            if(id === 'view-dashboard' || id === 'view-mobile-trade') { fetchStockHistoryData(currentTicker, true); }
-            if(id === 'view-achievements') { renderAchievementsPage(); }
-        };
-
         // 僅手機版套用首尾相連的橫向滑動換頁動畫；電腦版維持原本 opacity 切換，完全不變動
         if (isMobile && currentMobileViewId !== id && document.getElementById(currentMobileViewId)) {
-            animateMobileViewSwitch(document.getElementById(currentMobileViewId), targetSection, runEnterTasks);
+            animateMobileViewSwitch(document.getElementById(currentMobileViewId), targetSection);
         } else {
             document.querySelectorAll(".view-section").forEach(v => {
                 if (v._slideAnim) { v._slideAnim.cancel(); v._slideAnim = null; }
@@ -3002,11 +2987,14 @@
                 v.style.transform = '';
             });
             targetSection.classList.add("active");
-            runEnterTasks();
         }
         currentMobileViewId = id;
 
         if(window.innerWidth <= 768 && sidebarEl.classList.contains('open')) toggleSidebar();
+        
+        if(id === 'view-cards') { renderCards(); }
+        if(id === 'view-dashboard' || id === 'view-mobile-trade') { fetchStockHistoryData(currentTicker, true); }
+        if(id === 'view-achievements') { renderAchievementsPage(); }
     }
 
     // 📱 手機版換頁滑動動畫本體：現在的頁面（prevSection）往左滑出，準備切換的頁面（targetSection）從右側滑入，
@@ -3015,7 +3003,7 @@
     // 後者在部分手機瀏覽器上，瀏覽器可能把「瞬間定位到右側」跟「接下來位移到定位」這兩個動作合併成同一次繪製，
     // 導致新頁面看起來像是快到終點才突然出現；WAAPI 直接明確指定 0% 與 100% 兩個 keyframe，
     // 瀏覽器一定會完整播放這段位移，不會被跳過或合併。
-    function animateMobileViewSwitch(prevSection, targetSection, onDone) {
+    function animateMobileViewSwitch(prevSection, targetSection) {
         const duration = 320, easing = 'cubic-bezier(0.22, 1, 0.36, 1)';
 
         // 若上一次切換動畫還沒播完就又觸發新的切換，先取消所有進行中的動畫並讓非目標頁立即歸位，
@@ -3049,7 +3037,6 @@
             prevSection.style.transform = 'translateX(-100%)';
             targetSection.style.transform = '';
             prevSection._slideAnim = null; targetSection._slideAnim = null;
-            if (onDone) onDone(); // 滑動動畫完全播完才執行進場後的重渲染／抓資料等較吃重的工作
         }).catch(() => {}); // 若動畫途中被新的切換取消，finished 會 reject，此處忽略即可
     }
 
