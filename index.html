@@ -336,7 +336,7 @@
         .limit-order-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; background: rgba(255,255,255,0.02); }
         .limit-order-item + .limit-order-item { margin-top: 6px; }
         /* 🔀 歷史帳本「操作」按鈕展開選單：固定在按鈕右側／下方彈出，不佔用表格版面 */
-        .ledger-action-panel { position: absolute; top: 100%; right: 0; margin-top: 4px; z-index: 50; flex-direction: column; background: #111; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); min-width: 150px; }
+        .ledger-action-panel { position: absolute; top: 100%; right: 0; margin-top: 4px; z-index: 50; flex-direction: column; background: rgba(17,17,17,0.72); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); min-width: 150px; }
         .sltp-mode-btn.active { outline: 2px solid currentColor; outline-offset: -2px; }
         
         .mode-toggle-group { display: flex; gap: 8px; background: rgba(0,0,0,0.5); padding: 5px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); }
@@ -350,7 +350,7 @@
         .select-input-box input { flex: 1; background: transparent; border: none; color: #fff; padding: 10px 0; font-size: 14px; font-weight: bold; font-family: monospace; outline: none; }
         .select-dropdown-btn { background: transparent; border: none; color: #888; cursor: pointer; padding: 8px; font-size: 14px; }
         
-        .opaque-dropdown-list { position: absolute; top: calc(100% + 5px); left: 0; width: 100%; background: #0d0d0d; border: 1px solid rgba(255,255,255,0.18); border-radius: 8px; box-shadow: 0 15px 40px rgba(0,0,0,0.95); z-index: 9999; max-height: 240px; overflow-y: auto; display: none; }
+        .opaque-dropdown-list { position: absolute; top: calc(100% + 5px); left: 0; width: 100%; background: rgba(13,13,13,0.82); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border: 1px solid rgba(255,255,255,0.18); border-radius: 8px; box-shadow: 0 15px 40px rgba(0,0,0,0.95); z-index: 9999; max-height: 240px; overflow-y: auto; display: none; }
         .opaque-dropdown-list.show { display: block; }
         .dropdown-group-title { font-size: 10px; color: #666; padding: 8px 12px 4px 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
         .dropdown-item { padding: 9px 12px; font-size: 13px; font-family: monospace; color: #ccc; cursor: pointer; display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); }
@@ -413,7 +413,7 @@
         @keyframes pendingPulse { 0%, 100% { box-shadow: 0 0 0px rgba(0,212,255,0); } 50% { box-shadow: 0 0 12px rgba(0,212,255,0.5); } }
 
         /* 📒 歷史帳本時間範圍選擇器 */
-        .ledger-range-picker { position: absolute; inset: 0; z-index: 20; background: rgba(6,6,8,0.97); backdrop-filter: blur(10px); display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; overflow-y: auto; animation: lrFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1); }
+        .ledger-range-picker { position: absolute; inset: 0; z-index: 20; background: rgba(18,18,18,0.55); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; overflow-y: auto; animation: lrFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1); }
         @keyframes lrFadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
         .lr-header { display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
         .lr-title { font-size: 12px; font-weight: bold; color: #fff; display: flex; align-items: center; gap: 6px; }
@@ -461,7 +461,7 @@
         .setting-item.disabled { opacity: 0.3; pointer-events: none; }
 
         /* 👤 帳號管理 & 🔐 密碼彈窗 / 開機鎖定畫面 */
-        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(3,3,3,0.88); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); z-index: 20000; align-items: center; justify-content: center; animation: modalFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(8,8,10,0.55); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); z-index: 20000; align-items: center; justify-content: center; animation: modalFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
         @keyframes modalFadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes achvIconPop { 0% { transform: scale(0); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
         /* 🎊 拉炮式彩帶：以訊息卡為噴發源頭，先向外噴射再受重力墜落 */
@@ -676,6 +676,11 @@
             .menu-item.active .nav-line { opacity: 1; }
 
             .view-section { top: 60px; height: calc(100dvh - 60px); padding: 12px; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+
+            /* 📱 手機版換頁滑動動畫：實際位移改用 JS 的 Web Animations API（element.animate）直接播放，
+               不透過這裡的 CSS transition 觸發（transition 搭配「先瞬間定位、強制 reflow、再改值」的寫法在部分手機瀏覽器上
+               容易把起始畫面吃掉，導致新頁面像是「快到終點才突然出現」，改用 WAAPI 明確指定起訖 keyframe 可以避免這個問題）。
+               這裡只需確保切換動畫進行中兩個 .view-section 能同時以 opacity:1 疊圖顯示，opacity 淡入淡出動畫仍照舊維持。 */
             .stat-grid { grid-template-columns: 1fr 1fr; grid-template-areas: "c1 c2" "hl hl" "c3 c4"; column-gap: 12px; row-gap: 0; height: auto; margin-bottom: 5px; }
             .stat-grid .glow-line-v { display: none; }
             .stat-grid .stat-grid-hline { display: block; }
@@ -1540,7 +1545,7 @@
 </div>
 
 <!-- 🔐 開機帳號密碼鎖定畫面 -->
-<div id="boot-lock-overlay" class="modal-overlay" style="background:#030303;">
+<div id="boot-lock-overlay" class="modal-overlay">
     <div class="modal-box" style="align-items:center; text-align:center;">
         <div class="glass-title-text" style="margin:0 0 4px 0;"><i class="fa-solid fa-cube" style="color:var(--color-acc)"></i> ACORNTRADE</div>
         <i class="fa-solid fa-lock" style="color:var(--color-acc); font-size:26px; margin:6px 0;"></i>
@@ -2962,16 +2967,79 @@
     function closeFriendDetail() { document.getElementById('friend-detail-overlay').style.display = 'none'; }
     function removeFriend() { if (currentFriendDetailId) { removeFriendById(currentFriendDetailId); closeFriendDetail(); } }
 
+    // 📱 手機版換頁滑動動畫用：獨立追蹤「目前真正定格顯示」的頁面 id，不透過 DOM 查詢 .active
+    // （動畫進行中會有兩個 .view-section 同時帶有 .active，若用查詢法取值可能抓錯來源頁，改用變數記錄更可靠）
+    let currentMobileViewId = 'view-dashboard';
+
     function switchView(id, btn) {
-        document.querySelectorAll(".view-section").forEach(v => v.classList.remove("active"));
+        const isMobile = window.innerWidth <= 768;
+        const targetSection = document.getElementById(id);
         document.querySelectorAll(".menu-item").forEach(m => m.classList.remove("active"));
-        document.getElementById(id).classList.add("active"); if(btn) btn.classList.add("active");
+        if(btn) btn.classList.add("active");
+
+        // 僅手機版套用首尾相連的橫向滑動換頁動畫；電腦版維持原本 opacity 切換，完全不變動
+        if (isMobile && currentMobileViewId !== id && document.getElementById(currentMobileViewId)) {
+            animateMobileViewSwitch(document.getElementById(currentMobileViewId), targetSection);
+        } else {
+            document.querySelectorAll(".view-section").forEach(v => {
+                if (v._slideAnim) { v._slideAnim.cancel(); v._slideAnim = null; }
+                v.classList.remove("active");
+                v.style.transform = '';
+            });
+            targetSection.classList.add("active");
+        }
+        currentMobileViewId = id;
+
         if(window.innerWidth <= 768 && sidebarEl.classList.contains('open')) toggleSidebar();
         
         if(id === 'view-cards') { renderCards(); }
         if(id === 'view-dashboard' || id === 'view-mobile-trade') { fetchStockHistoryData(currentTicker, true); }
         if(id === 'view-achievements') { renderAchievementsPage(); }
     }
+
+    // 📱 手機版換頁滑動動畫本體：現在的頁面（prevSection）往左滑出，準備切換的頁面（targetSection）從右側滑入，
+    // 兩者首尾相連、同步等速位移，銜接處不會出現縫隙或重疊。
+    // 改用 Web Animations API（element.animate）而非「切換 CSS transition class + 強制 reflow」的寫法：
+    // 後者在部分手機瀏覽器上，瀏覽器可能把「瞬間定位到右側」跟「接下來位移到定位」這兩個動作合併成同一次繪製，
+    // 導致新頁面看起來像是快到終點才突然出現；WAAPI 直接明確指定 0% 與 100% 兩個 keyframe，
+    // 瀏覽器一定會完整播放這段位移，不會被跳過或合併。
+    function animateMobileViewSwitch(prevSection, targetSection) {
+        const duration = 320, easing = 'cubic-bezier(0.22, 1, 0.36, 1)';
+
+        // 若上一次切換動畫還沒播完就又觸發新的切換，先取消所有進行中的動畫並讓非目標頁立即歸位，
+        // 避免動畫疊加導致畫面卡在切一半的錯亂狀態
+        document.querySelectorAll('.view-section').forEach(v => {
+            if (v._slideAnim) { v._slideAnim.cancel(); v._slideAnim = null; }
+            if (v !== prevSection && v !== targetSection) { v.classList.remove('active'); v.style.transform = ''; }
+        });
+
+        prevSection.classList.add('active');
+        targetSection.classList.add('active');
+        // 動畫播放期間兩頁都是 opacity:1（皆有 .active），視覺上完全靠 transform 位移區分位置
+
+        const prevAnim = prevSection.animate(
+            [{ transform: 'translateX(0%)' }, { transform: 'translateX(-100%)' }],
+            { duration, easing, fill: 'forwards' }
+        );
+        const targetAnim = targetSection.animate(
+            [{ transform: 'translateX(100%)' }, { transform: 'translateX(0%)' }],
+            { duration, easing, fill: 'forwards' }
+        );
+        prevSection._slideAnim = prevAnim;
+        targetSection._slideAnim = targetAnim;
+
+        Promise.all([prevAnim.finished, targetAnim.finished]).then(() => {
+            // 動畫結束：關掉舊頁的 active（此時它已經在畫面外，opacity 淡出不會被看到，不會閃爍），
+            // 並取消兩個 WAAPI 動畫（連同其 fill:forwards 效果一併移除），改由乾淨的 inline transform 定格在終點位置，
+            // 避免下一輪動畫開始時新舊效果疊加衝突。
+            prevSection.classList.remove('active');
+            prevAnim.cancel(); targetAnim.cancel();
+            prevSection.style.transform = 'translateX(-100%)';
+            targetSection.style.transform = '';
+            prevSection._slideAnim = null; targetSection._slideAnim = null;
+        }).catch(() => {}); // 若動畫途中被新的切換取消，finished 會 reject，此處忽略即可
+    }
+
 
     /* =========================================
        ⌨️ 電腦版快捷鍵：Alt+1~4 切換左側選單四個主要頁面，Alt+I 切換到系統設定
