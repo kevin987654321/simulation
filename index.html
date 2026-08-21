@@ -602,6 +602,13 @@
         @keyframes ledgerRowFlash { 0% { background: rgba(0,212,255,0.35); } 100% { background: transparent; } }
         .ledger-row-flash { animation: ledgerRowFlash 1.8s ease-out; }
 
+        /* 💹 現價區塊：每次 WebSocket／輪詢抓到「有變動」的新報價時，整塊背景瞬間閃過極微弱的紅／綠光後於 0.5 秒內淡出，
+           讓使用者能用餘光察覺報價跳動，不必緊盯數字本身。漲用 --color-buy（綠），跌用 --color-sell（紅）。 */
+        @keyframes priceBlockFlashUp { 0% { background: rgba(0, 255, 170, 0.16); } 100% { background: transparent; } }
+        @keyframes priceBlockFlashDown { 0% { background: rgba(255, 69, 96, 0.16); } 100% { background: transparent; } }
+        .price-rsi-container.price-flash-up { animation: priceBlockFlashUp 0.5s ease-out; }
+        .price-rsi-container.price-flash-down { animation: priceBlockFlashDown 0.5s ease-out; }
+
         /* AI Mini Ticker 手機專屬外觀 */
         .ai-mini-ticker .select-input-box { border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; min-height: 26px; padding: 0 4px; background: rgba(0,0,0,0.5); }
         .ai-mini-ticker .select-input-box:focus-within { border-color: var(--color-acc); }
@@ -5596,6 +5603,7 @@
         addToRecentlySelected(t); 
         
         isPriceLoading = true; currentRealPrice = null; priceFetchFailCount = 0; currentMarketState = null;
+        lastFlashedPrice = null; // 💹 切換代號視為全新報價序列的開端，不應與上一檔標的的價格比較後觸發閃爍
         document.getElementById("trade-price-display").innerHTML = `<span style="font-size:14px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> 報價連線中...</span>`;
         document.getElementById("exec-trade-btn").disabled = true;
         // ⏰ 切換代號時，若正處於限價輸入模式則退回市價顯示，避免沿用上一個代號的限價金額造成誤解
@@ -5612,6 +5620,15 @@
     // 改為：每次選定代碼時重置失敗計數；只要曾經失敗過一次，就明確顯示「查詢失敗」並提供重試按鈕，
     // 不再讓使用者卡在無限期的假性「連線中」狀態。
     let priceFetchFailCount = 0;
+    let lastFlashedPrice = null; // 💹 用於比對「這次抓到的報價」與「上一次已顯示的報價」，藉此判斷漲跌並觸發現價區塊閃爍
+    function flashPriceBlock(newPrice, oldPrice) {
+        if (oldPrice === null || newPrice === oldPrice) return; // 首次取價或價格未變動，不觸發閃爍
+        const el = document.getElementById("trade-price-display").closest(".price-rsi-container");
+        if (!el) return;
+        el.classList.remove("price-flash-up", "price-flash-down");
+        void el.offsetWidth; // 強制重排以重新啟動 CSS animation，讓連續同方向的跳動也能重新觸發閃爍
+        el.classList.add(newPrice > oldPrice ? "price-flash-up" : "price-flash-down");
+    }
     async function fetchRealPrice(ticker) {
         let fetchSucceeded = false;
         try {
@@ -5623,7 +5640,11 @@
             if(res.ok) { 
                 const json = await res.json(), price = json.chart.result[0].meta.regularMarketPrice; 
                 if (ticker !== currentTicker) return;
-                if(price) { currentRealPrice = price; globalPriceCache[ticker] = price; isPriceLoading = false; fetchSucceeded = true; currentMarketState = json.chart.result[0].meta.marketState || currentMarketState; }
+                if(price) {
+                    flashPriceBlock(price, lastFlashedPrice); // 💹 與上一次成功取得的報價比較，有變動才閃爍現價區塊背景
+                    lastFlashedPrice = price;
+                    currentRealPrice = price; globalPriceCache[ticker] = price; isPriceLoading = false; fetchSucceeded = true; currentMarketState = json.chart.result[0].meta.marketState || currentMarketState;
+                }
             }
         } catch(e) {}
         finally {
@@ -7399,14 +7420,28 @@
 
     // 📒 「市場事件」「歷史帳本」快速按鈕：只把對應標記文字帶入輸入框，不會立即跳出時間範圍選擇器，
     // 讓使用者可以自行在標記後面補充想問的具體問題；選擇器只會在「實際送出」時才攔截並跳出（見 askAI() 內的標記偵測）。
-    function quickAskMarketEvent() { document.getElementById("chat-input").value = "(市場事件) "; }
-    function quickAskLedger() { document.getElementById("chat-input").value = "(歷史帳本) "; }
+    // 🩹 修復：先前是直接「覆蓋」輸入框內容，導致（1）已輸入的文字會被整個蓋掉，
+    // （2）連續按下「市場事件」與「歷史帳本」時，後按的標記會蓋掉先按的，永遠只剩一個標記。
+    // 改為在現有內容「後方追加」該標記（已存在則不重複插入、只聚焦輸入框），讓兩種標記可以同時並存於同一則訊息中。
+    function insertQuickAskMarker(markerText, markerRegex) {
+        const input = document.getElementById("chat-input");
+        const current = input.value;
+        if (markerRegex.test(current)) { input.focus(); return; } // 已包含該標記，不重複插入
+        const separator = current.length > 0 && !/\s$/.test(current) ? " " : "";
+        input.value = current + separator + markerText + " ";
+        input.focus();
+    }
+    function quickAskMarketEvent() { insertQuickAskMarker("(市場事件)", EVENT_MARKER_REGEX); }
+    function quickAskLedger() { insertQuickAskMarker("(歷史帳本)", LEDGER_MARKER_REGEX); }
 
     // 📒 歷史帳本 / 市場事件 標記偵測：訊息中含有對應標記並送出時，攔截並改為請使用者選擇時間範圍（兩者共用同一個選擇器 UI）
     const LEDGER_MARKER_REGEX = /[\(（]\s*歷史帳本\s*[\)）]/;
     const EVENT_MARKER_REGEX = /[\(（]\s*市場事件\s*[\)）]/;
     let pendingLedgerQuery = null; // 非 null 時代表正在等待使用者於選擇器中確認時間範圍
-    let pendingPickerMode = 'ledger'; // 'ledger'（歷史帳本覆盤）或 'event'（市場事件詢問），決定確認後要跑哪一套分析邏輯
+    // 🩹 修復：先前 'ledger' 與 'event' 互斥，同時輸入兩個標記時只有先偵測到的那個會生效，
+    // 另一個標記形同被吃掉。改為新增 'both' 模式：兩個標記同時存在時，共用同一個時間範圍選擇器，
+    // 確認後「市場事件」與「歷史帳本」兩套分析會依序各自送出一則訊息，讓兩者可以共存。
+    let pendingPickerMode = 'ledger'; // 'ledger'（歷史帳本覆盤）／'event'（市場事件詢問）／'both'（兩者皆要），決定確認後要跑哪一套分析邏輯
 
     async function askAI() {
         const input = document.getElementById("chat-input");
@@ -7416,9 +7451,12 @@
 
         const q = input.value.trim(); if(!q) return;
 
-        // 偵測到「(歷史帳本)」或「(市場事件)」標記：攔截本次發送，改為顯示時間範圍選擇器
-        if (LEDGER_MARKER_REGEX.test(q)) { openLedgerRangePicker(q, 'ledger'); return; }
-        if (EVENT_MARKER_REGEX.test(q)) { openLedgerRangePicker(q, 'event'); return; }
+        // 偵測到「(歷史帳本)」與／或「(市場事件)」標記：攔截本次發送，改為顯示時間範圍選擇器。
+        // 兩個標記可以同時存在於同一則訊息中，此時以 'both' 模式開啟選擇器，確認後兩套分析都會送出。
+        const hasLedgerMarker = LEDGER_MARKER_REGEX.test(q), hasEventMarker = EVENT_MARKER_REGEX.test(q);
+        if (hasLedgerMarker && hasEventMarker) { openLedgerRangePicker(q, 'both'); return; }
+        if (hasLedgerMarker) { openLedgerRangePicker(q, 'ledger'); return; }
+        if (hasEventMarker) { openLedgerRangePicker(q, 'event'); return; }
 
         // 📖 「使用說明」關鍵字攔截：直接顯示固定使用說明書，不呼叫 Gemini
         if (q === "使用說明") {
@@ -7545,6 +7583,8 @@
 
         document.getElementById("lr-title").innerHTML = pendingPickerMode === 'event'
             ? `<i class="fa-solid fa-newspaper" style="color:var(--color-acc)"></i> 選擇要詢問的時間範圍`
+            : pendingPickerMode === 'both'
+            ? `<i class="fa-solid fa-layer-group" style="color:var(--color-acc)"></i> 選擇時間範圍（市場事件＋歷史帳本）`
             : `<i class="fa-solid fa-clock-rotate-left" style="color:var(--color-acc)"></i> 選擇歷史帳本時間範圍`;
 
         // 預設帶入最近 30 天
@@ -7588,6 +7628,9 @@
         if (range.startTs > range.endTs) { el.innerText = "⚠ 起始日期不能晚於結束日期"; return; }
         if (pendingPickerMode === 'event') {
             el.innerText = `將查詢 ${currentTicker} 在此範圍內的價格走勢`;
+        } else if (pendingPickerMode === 'both') {
+            const count = state.ledger.filter(r => r.timestamp >= range.startTs && r.timestamp <= range.endTs).length;
+            el.innerText = `將查詢 ${currentTicker} 的價格走勢，並附上此範圍內共 ${count} 筆交易紀錄`;
         } else {
             const count = state.ledger.filter(r => r.timestamp >= range.startTs && r.timestamp <= range.endTs).length;
             el.innerText = `此範圍內共有 ${count} 筆交易紀錄`;
@@ -7612,9 +7655,12 @@
         let key = localStorage.getItem("MY_GEMINI_KEY") || prompt("請輸入 Gemini API Key："); if(!key) return; localStorage.setItem("MY_GEMINI_KEY", key);
 
         const mode = pendingPickerMode;
-        const markerRegex = mode === 'event' ? EVENT_MARKER_REGEX : LEDGER_MARKER_REGEX;
-        const defaultQuestion = mode === 'event' ? `請幫我分析 ${currentTicker} 這段期間發生了什麼事` : "請幫我分析這段期間的交易";
-        const cleanQuestion = pendingLedgerQuery.replace(markerRegex, "").trim() || defaultQuestion;
+        // 🩹 修復：'both' 模式下訊息中同時含有兩個標記，兩個都要從問題文字中移除，
+        // 否則殘留的標記文字會原封不動被送進 prompt。無論哪種模式都直接把兩種標記都清乾淨即可。
+        const defaultQuestion = mode === 'event' ? `請幫我分析 ${currentTicker} 這段期間發生了什麼事`
+            : mode === 'both' ? `請幫我分析 ${currentTicker} 這段期間發生了什麼事，並覆盤這段期間的交易`
+            : "請幫我分析這段期間的交易";
+        const cleanQuestion = pendingLedgerQuery.replace(LEDGER_MARKER_REGEX, "").replace(EVENT_MARKER_REGEX, "").trim() || defaultQuestion;
 
         // 關閉並重置時間範圍選擇器 UI
         pendingLedgerQuery = null;
@@ -7622,18 +7668,19 @@
         setLedgerPickerLockUI(false);
         document.getElementById("chat-input").value = "";
 
-        if (mode === 'event') {
+        // 「市場事件」與「歷史帳本」不再互斥：'both' 模式下，兩套分析各自以獨立訊息依序送出，讓兩者共存。
+        if (mode === 'event' || mode === 'both') {
             sendMarketEventAnalysisToGemini(key, cleanQuestion, range);
-            return;
         }
+        if (mode === 'ledger' || mode === 'both') {
+            let filtered = state.ledger.filter(r => r.timestamp >= range.startTs && r.timestamp <= range.endTs).sort((a, b) => b.timestamp - a.timestamp);
+            const totalMatched = filtered.length;
+            const MAX_TRADES = 300; // 避免單次夾帶過多交易紀錄導致 prompt 過大
+            let truncated = false;
+            if (filtered.length > MAX_TRADES) { filtered = filtered.slice(0, MAX_TRADES); truncated = true; }
 
-        let filtered = state.ledger.filter(r => r.timestamp >= range.startTs && r.timestamp <= range.endTs).sort((a, b) => b.timestamp - a.timestamp);
-        const totalMatched = filtered.length;
-        const MAX_TRADES = 300; // 避免單次夾帶過多交易紀錄導致 prompt 過大
-        let truncated = false;
-        if (filtered.length > MAX_TRADES) { filtered = filtered.slice(0, MAX_TRADES); truncated = true; }
-
-        sendLedgerAnalysisToGemini(key, cleanQuestion, filtered, range, totalMatched, truncated);
+            sendLedgerAnalysisToGemini(key, cleanQuestion, filtered, range, totalMatched, truncated);
+        }
     }
 
     function buildLedgerRangeReportText(filteredLedger, range, totalMatched, truncated) {
