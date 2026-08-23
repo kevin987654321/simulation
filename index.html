@@ -960,12 +960,24 @@
                     </div>
                     <div id="holdings-allocation-legend" style="flex:1; min-width:180px; display:flex; flex-direction:column; gap:10px;"></div>
                 </div>
+
+                <!-- 📉📐 帳戶風險指標：與上方資產配置區共用同一張卡片，以 glow-divide-top 分隔線區隔，維持與頁面其餘卡片一致的視覺留白 -->
+                <div class="glow-divide-top" style="margin-top:14px; padding-top:14px; display:flex; gap:24px; flex-wrap:wrap;">
+                    <div style="flex:1; min-width:140px;">
+                        <div class="stat-title"><i class="fa-solid fa-arrow-trend-down"></i> 最大回撤 (MDD)</div>
+                        <div class="stat-value" id="holdings-max-drawdown">--</div>
+                    </div>
+                    <div style="flex:1; min-width:140px;">
+                        <div class="stat-title"><i class="fa-solid fa-scale-balanced"></i> 夏普值 (Sharpe Ratio)</div>
+                        <div class="stat-value" id="holdings-sharpe-ratio">--</div>
+                    </div>
+                </div>
             </div>
 
             <div class="glow-divide-top" style="padding:16px;">
                 <div class="table-responsive">
                     <table>
-                        <thead><tr><th>代號</th><th>持有股數</th><th>買入均價<br><span style="font-size:10px; font-weight:normal; color:#888;">(損平賣價)</span></th><th>當前現價</th><th>市值</th><th>未實現損益</th><th>操作</th></tr></thead>
+                        <thead><tr><th>代號</th><th>持有股數</th><th>買入均價<br><span style="font-size:10px; font-weight:normal; color:#888;">(損平賣價)</span></th><th>當前現價</th><th>市值</th><th>未實現損益</th></tr></thead>
                         <tbody id="holdings-table-body"></tbody>
                     </table>
                 </div>
@@ -6362,6 +6374,45 @@
         }
     }
 
+    // 📉📐 最大回撤 (Max Drawdown) 與夏普值 (Sharpe Ratio)：皆依 state.navHistory.data（帳戶淨值歷史紀錄點）計算。
+    // 因紀錄點是「每筆交易 + 即時報價刷新」觸發，時間間隔並不固定，並非嚴格意義上的「每日」取樣，
+    // 故此處的夏普值為「未年化」版本（單純以各紀錄點間報酬率的平均值 / 標準差計算），僅供相對比較參考，非學術嚴謹的年化夏普值。
+    function computeMaxDrawdown(navArr) {
+        if (!navArr || navArr.length < 2) return null;
+        let peak = navArr[0], maxDD = 0;
+        for (let i = 1; i < navArr.length; i++) {
+            if (navArr[i] > peak) peak = navArr[i];
+            if (peak > 0) { const dd = (navArr[i] - peak) / peak; if (dd < maxDD) maxDD = dd; }
+        }
+        return maxDD; // 負數小數，例如 -0.123 代表回撤 12.3%
+    }
+
+    function computeSharpeRatio(navArr) {
+        if (!navArr || navArr.length < 3) return null;
+        const returns = [];
+        for (let i = 1; i < navArr.length; i++) {
+            if (navArr[i - 1] > 0) returns.push((navArr[i] - navArr[i - 1]) / navArr[i - 1]);
+        }
+        if (returns.length < 2) return null;
+        const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
+        const variance = returns.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / (returns.length - 1);
+        const stdev = Math.sqrt(variance);
+        if (stdev === 0) return null;
+        return mean / stdev;
+    }
+
+    function updateHoldingsRiskMetrics() {
+        const mddEl = document.getElementById("holdings-max-drawdown"), sharpeEl = document.getElementById("holdings-sharpe-ratio");
+        if (!mddEl || !sharpeEl) return; // 尚未渲染到「庫存與資產損益」頁面時，元素不存在，略過即可
+        const navArr = (state.navHistory && state.navHistory.data) ? state.navHistory.data.filter(v => v !== null && v !== undefined) : [];
+        const mdd = computeMaxDrawdown(navArr);
+        mddEl.innerText = mdd === null ? "資料不足" : `${(mdd * 100).toFixed(1)}%`;
+        mddEl.style.color = (mdd !== null && mdd < 0) ? "var(--color-down)" : "";
+        const sharpe = computeSharpeRatio(navArr);
+        sharpeEl.innerText = sharpe === null ? "資料不足" : sharpe.toFixed(2);
+        sharpeEl.style.color = sharpe === null ? "" : (sharpe >= 0 ? "var(--color-up)" : "var(--color-down)");
+    }
+
     function updateAllViews(animate = true) {
         let holdingsVal = 0, totalCost = 0, unrealizedPnlNet = 0;
         for(let t in state.holdings) { 
@@ -6404,9 +6455,10 @@
                 <td><div style="font-weight:bold;">$${h.avgPrice.toFixed(2)}</div><div style="font-size:10px; color:var(--color-warn); margin-top:2px;">低於 $${breakEvenPrice.toFixed(2)} 虧損</div></td>
                 <td>$${curP.toFixed(2)}</td><td>$${Math.floor(val).toLocaleString()}</td>
                 <td style="color:${itemPnl>=0?'var(--color-up)':'var(--color-down)'}; font-weight:bold;">${itemPnl>=0?'+':''}$${Math.floor(itemPnl).toLocaleString()}</td>
-                <td><button onclick="selectTicker('${t}')" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:#fff; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:bold; transition:all 0.2s;">即時交易</button></td>
             </tr>`;
-        }).join("") : `<tr><td colspan="7" style="text-align:center; color:#555; padding:40px;">尚未持有任何證券</td></tr>`;
+        }).join("") : `<tr><td colspan="6" style="text-align:center; color:#555; padding:40px;">尚未持有任何證券</td></tr>`;
+
+        updateHoldingsRiskMetrics();
 
         renderHoldingsAllocationChart();
 
@@ -7502,12 +7554,16 @@
             const navChangePct = (navArr[navArr.length - 1] - navArr[0]) / navArr[0] * 100;
             navTrendText = `近期${navChangePct >= 0 ? '成長' : '縮水'} ${Math.abs(navChangePct).toFixed(1)}%`;
         }
+        // 📉📐 綜合體檢／一般問答一併附上帳戶層級的風險指標（依帳戶淨值歷史紀錄點計算，見 computeMaxDrawdown / computeSharpeRatio）
+        const mddVal = computeMaxDrawdown(navArr), sharpeVal = computeSharpeRatio(navArr);
+        const mddText = mddVal === null ? "資料不足" : `${(mddVal * 100).toFixed(1)}%`;
+        const sharpeText = sharpeVal === null ? "資料不足" : sharpeVal.toFixed(2);
         const positionRatio = (holdingValueTWD + state.cash) > 0 ? (holdingValueTWD / (holdingValueTWD + state.cash) * 100) : 0;
 
         const fullPrompt = `你是一位講求數據與風險控制的資深華爾街操盤手，個性直接、不說模稜兩可的場面話。
 
 請完全根據下方提供的「實際數據」進行分析與建議，特別注意：
-1. 不要只看 RSI 一個數字就下結論，RSI 只是眾多線索之一，要跟走勢方向、短線動能、帳戶淨值趨勢一起交叉判斷。
+1. 不要只看 RSI 一個數字就下結論，RSI 只是眾多線索之一，要跟走勢方向、短線動能、帳戶淨值趨勢、最大回撤與夏普值一起交叉判斷。
 2. 不要不管情況如何都套用「先買一部分部位試水」「分批進場」之類的制式化萬用建議——如果數據明確指向某個方向（例如強勢上升趨勢中的超賣、或下降趨勢中的反彈無力），就給出明確、有理有據的判斷與具體動作；如果數據彼此矛盾或不足以下定論，就誠實說明原因與你會觀察的下一個訊號，而不是含糊帶過。
 3. 回答要具體對應到下方數據中的實際數字與趨勢描述，不要講放諸四海皆準、跟這次數據無關的空話。
 
@@ -7517,6 +7573,8 @@
 • 14日 RSI 指標: ${rsiVal}${rsiTrendText}
 • 價格走勢: ${trendText}
 • 帳戶淨值走勢: ${navTrendText}
+• 帳戶最大回撤 (MDD): ${mddText}
+• 帳戶夏普值 (Sharpe Ratio): ${sharpeText}
 • 當前持股數量: ${holding.shares} 股（約占「此標的市值＋現金」的 ${positionRatio.toFixed(0)}%）
 • 持股買入均價: $${holding.avgPrice.toFixed(2)}
 • 該標的未實現損益: TWD $${Math.floor(pnlTWD).toLocaleString()}
