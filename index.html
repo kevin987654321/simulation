@@ -926,7 +926,7 @@
 
     <main id="view-cards" class="view-section">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 4px; padding:0 4px;">
-            <span style="font-size:16px; font-weight:bold;">自選監控看板</span>
+            <span style="font-size:16px; font-weight:bold;"></span>
             <button id="edit-cards-btn" onclick="toggleCardEditMode()" style="background:transparent; border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px 14px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s;">
                 編輯
             </button>
@@ -939,17 +939,18 @@
     </main>
 
     <main id="view-holdings" class="view-section">
-        <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
-            <div class="ledger-tab-toggle">
-                <button class="ledger-tab-btn active" id="holdings-subtab-btn-stock" onclick="switchHoldingsSubview('stock')"><i class="fa-solid fa-chart-simple"></i> 股票庫存</button>
-                <button class="ledger-tab-btn" id="holdings-subtab-btn-currency" onclick="switchHoldingsSubview('currency')"><i class="fa-solid fa-money-bill-transfer"></i> 貨幣庫存</button>
-                <button class="ledger-tab-btn" id="holdings-subtab-btn-dca" onclick="switchHoldingsSubview('dca')"><i class="fa-solid fa-calendar-check"></i> 定期定額</button>
-            </div>
-        </div>
-
         <div id="holdings-subview-stock">
             <div class="glass-panel" style="padding:16px;" id="holdings-allocation-panel">
-                <div style="font-weight:bold; font-size:15px; margin-bottom:12px; white-space:nowrap;">資產配置佔比</div>
+                <!-- 🔀 分頁切換（股票庫存／貨幣庫存／定期定額）現在固定顯示在第一個區塊右上角；
+                     實際的 .ledger-tab-toggle 節點只有一份，切換分頁時會由 JS 搬移到對應分頁的第一個區塊標題列（見 switchHoldingsSubview） -->
+                <div id="holdings-panel-header-stock" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:10px; flex-wrap:wrap;">
+                    <div style="font-weight:bold; font-size:15px; white-space:nowrap;">資產配置佔比</div>
+                    <div class="ledger-tab-toggle" id="holdings-subtab-toggle">
+                        <button class="ledger-tab-btn active" id="holdings-subtab-btn-stock" onclick="switchHoldingsSubview('stock')"><i class="fa-solid fa-chart-simple"></i> 股票庫存</button>
+                        <button class="ledger-tab-btn" id="holdings-subtab-btn-currency" onclick="switchHoldingsSubview('currency')"><i class="fa-solid fa-money-bill-transfer"></i> 貨幣庫存</button>
+                        <button class="ledger-tab-btn" id="holdings-subtab-btn-dca" onclick="switchHoldingsSubview('dca')"><i class="fa-solid fa-calendar-check"></i> 定期定額</button>
+                    </div>
+                </div>
                 <div style="display:flex; align-items:center; gap:24px; flex-wrap:wrap;">
                     <div style="position:relative; width:150px; height:150px; flex-shrink:0;">
                         <canvas id="holdingsAllocationChart"></canvas>
@@ -974,19 +975,30 @@
                 </div>
             </div>
 
-            <div class="glow-divide-top" style="padding:16px;">
+            <!-- 🩹 依需求移除此區塊上緣原本的 glow-divide-top 分隔線，改為單純留白區隔 -->
+            <div style="padding:16px;">
                 <div class="table-responsive">
                     <table>
-                        <thead><tr><th>代號</th><th>持有股數</th><th>買入均價<br><span style="font-size:10px; font-weight:normal; color:#888;">(損平賣價)</span></th><th>當前現價</th><th>市值</th><th>未實現損益</th></tr></thead>
+                        <thead><tr><th>代號</th><th>持有股數</th><th>買入均價<br><span style="font-size:10px; font-weight:normal; color:#888;">(損平賣價)</span></th><th>當前現價</th><th>市值</th><th>未實現損益</th><th>操作</th></tr></thead>
                         <tbody id="holdings-table-body"></tbody>
                     </table>
                 </div>
+            </div>
+
+            <!-- ⏰ 待成交限價單／自動條件單清單：從「即時報價與下單」區域移入「庫存與資產損益」，有任何模擬限價單或停損停利條件單尚未成交時才顯示 -->
+            <div class="glass-panel" id="pending-limit-orders-box" style="display:none; padding:16px; margin-top:14px;">
+                <div style="font-size:11px; color:#888; display:flex; align-items:center; gap:5px; margin-bottom:10px;">
+                    <i class="fa-regular fa-clock"></i> 待成交限價單／自動條件單
+                </div>
+                <div id="pending-limit-orders-list" style="display:flex; flex-direction:column; gap:6px;"></div>
             </div>
         </div>
 
         <div id="holdings-subview-currency" style="display:none;">
             <div class="glass-panel" style="padding:16px;">
-                <div style="font-weight:bold; font-size:15px; margin-bottom:12px;">貨幣庫存總覽</div>
+                <div id="holdings-panel-header-currency" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:10px; flex-wrap:wrap;">
+                    <div style="font-weight:bold; font-size:15px;">貨幣庫存總覽</div>
+                </div>
                 <div class="table-responsive">
                     <table>
                         <thead><tr><th>幣別</th><th>持有金額</th><th>兌台幣匯率</th><th>台幣價值</th></tr></thead>
@@ -1044,7 +1056,9 @@
                  兩者預設 z-index 皆為 auto，此時後面的手足元素（執行中計畫）會蓋住前面的（新增計畫，含下拉選單）。
                  加上 position:relative + z-index，讓整個新增計畫卡片（連同下拉選單）確實蓋在下方卡片之上。 -->
             <div class="glass-panel" style="padding:16px; position:relative; z-index:5;">
-                <div style="font-weight:bold; font-size:15px; margin-bottom:14px;"><i class="fa-solid fa-calendar-check"></i> 新增定期定額計畫</div>
+                <div id="holdings-panel-header-dca" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; gap:10px; flex-wrap:wrap;">
+                    <div style="font-weight:bold; font-size:15px; white-space:nowrap;"><i class="fa-solid fa-calendar-check"></i> 新增定期定額計畫</div>
+                </div>
                 <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
                     <div>
                         <div style="font-size:11px; color:#888; margin-bottom:4px;">標的代號</div>
@@ -1632,7 +1646,7 @@
 <div id="sltp-setup-overlay" class="modal-overlay">
     <div class="glass-panel modal-box" style="align-items:center; text-align:center;">
         <i class="fa-solid fa-bullseye" style="color:var(--color-warn); font-size:26px; margin:4px 0;"></i>
-        <div style="font-weight:bold; font-size:14px;">設定自動條件單（<span id="sltp-setup-ticker" style="color:var(--color-acc);"></span>）</div>
+        <div style="font-weight:bold; font-size:14px;"><span id="sltp-setup-title-verb">設定</span>自動條件單（<span id="sltp-setup-ticker" style="color:var(--color-acc);"></span>）</div>
         <div style="color:#999; font-size:11.5px; line-height:1.6;">觸及設定價位時，系統會自動以當時價格送出賣出委託。可同時管理多筆條件單。</div>
         <div style="display:flex; gap:8px; width:100%;">
             <button id="sltp-mode-sl" class="sltp-mode-btn active" data-mode="SL" style="flex:1; background:rgba(255,69,96,0.15); border:1px solid var(--color-sell); color:var(--color-sell); padding:9px; border-radius:8px; font-weight:bold; cursor:pointer; font-size:12.5px;"><i class="fa-solid fa-arrow-trend-down"></i> 停損 (SL)</button>
@@ -1640,7 +1654,7 @@
         </div>
         <div style="width:100%; text-align:left;">
             <div style="font-size:11px; color:#888; margin-bottom:4px;">觸發價格</div>
-            <input type="number" id="sltp-trigger-price" step="0.01" placeholder="0.00" style="width:100%; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:8px; border-radius:6px; font-family:monospace; box-sizing:border-box;">
+            <input type="text" id="sltp-trigger-price" class="mobile-num" data-decimal="true" onfocus="this.select()" placeholder="0.00" style="width:100%; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:8px; border-radius:6px; font-family:monospace; box-sizing:border-box;">
         </div>
         <div style="width:100%; text-align:left;">
             <div style="font-size:11px; color:#888; margin-bottom:4px;">股數（可小於目前持股，最多 <span id="sltp-max-shares"></span> 股）</div>
@@ -1803,14 +1817,6 @@
             <span id="wallet-balance-indicator-label"><i class="fa-solid fa-wallet"></i> 外幣錢包可用</span>
             <span id="wallet-balance-indicator-val" style="font-family:monospace; color:var(--color-buy); font-weight:bold;">--</span>
         </div>
-    </div>
-
-    <!-- ⏰ 待成交限價單清單：有任何模擬限價單尚未成交時才顯示 -->
-    <div id="pending-limit-orders-box" style="display:none;">
-        <div style="font-size:11px; color:#888; display:flex; align-items:center; gap:5px; margin-bottom:6px;">
-            <i class="fa-regular fa-clock"></i> 待成交限價單
-        </div>
-        <div id="pending-limit-orders-list" style="display:flex; flex-direction:column; gap:6px;"></div>
     </div>
 
     <div class="mobile-stock-chart-box">
@@ -2131,7 +2137,17 @@
         return total;
     }
 
+    // 🔀 分頁切換鈕（股票庫存／貨幣庫存／定期定額）現在固定顯示在「第一個區塊」右上角：
+    // 三個分頁各自的第一個區塊都保留一個標題列容器（holdings-panel-header-<mode>），
+    // 這裡只搬移同一份 .ledger-tab-toggle 節點到目前分頁對應的容器內，而非各分頁各自複製一份按鈕，
+    // 避免重複 id 並確保切換狀態永遠一致。
+    function relocateHoldingsSubtabToggle(mode) {
+        const toggle = document.getElementById('holdings-subtab-toggle');
+        const target = document.getElementById('holdings-panel-header-' + mode);
+        if (toggle && target && toggle.parentElement !== target) target.appendChild(toggle);
+    }
     function switchHoldingsSubview(mode) {
+        relocateHoldingsSubtabToggle(mode);
         document.getElementById('holdings-subview-stock').style.display = mode === 'stock' ? 'block' : 'none';
         document.getElementById('holdings-subview-currency').style.display = mode === 'currency' ? 'block' : 'none';
         document.getElementById('holdings-subview-dca').style.display = mode === 'dca' ? 'block' : 'none';
@@ -4732,7 +4748,11 @@
         if (isNaN(triggerPrice) || triggerPrice <= 0) { alert('請輸入有效的觸發價格！'); return; }
         if (isNaN(shares) || shares <= 0) { alert('請輸入有效的股數！'); return; }
         if (shares > maxShares + 1e-6) { alert(`股數不可超過目前持股 ${formatShares(maxShares)} 股！`); return; }
-        createConditionalOrder(ticker, sltpSelectedMode, triggerPrice, shares);
+        if (overlay.dataset.editId) {
+            updateConditionalOrder(overlay.dataset.editId, sltpSelectedMode, triggerPrice, shares);
+        } else {
+            createConditionalOrder(ticker, sltpSelectedMode, triggerPrice, shares);
+        }
         overlay.style.display = 'none';
     });
 
@@ -6069,7 +6089,10 @@
                     <span style="font-weight:bold; font-size:12px;"><span style="color:var(--color-warn);">${o.mode === 'SL' ? '停損' : '停利'}</span> ${o.ticker} <span style="font-size:9px; color:var(--color-warn); border:1px solid var(--color-warn); border-radius:3px; padding:0 3px;">條件</span></span>
                     <span style="font-size:11px; color:#888; font-family:monospace;">觸發價 $${o.triggerPrice.toFixed(2)} × ${formatShares(o.shares)} 股</span>
                 </div>
-                <button onclick="cancelConditionalOrder('${o.id}')" title="取消條件單" style="background:rgba(255,69,96,0.15); color:var(--color-sell); border:1px solid rgba(255,69,96,0.3); padding:4px 8px; border-radius:4px; cursor:pointer; font-size:11px;"><i class="fa-solid fa-xmark"></i></button>
+                <div style="display:flex; gap:6px; flex-shrink:0;">
+                    <button onclick="openSltpEditModal('${o.id}')" title="修改條件單" style="background:rgba(254,176,25,0.15); color:var(--color-warn); border:1px solid rgba(254,176,25,0.3); padding:4px 8px; border-radius:4px; cursor:pointer; font-size:11px;"><i class="fa-solid fa-pen"></i></button>
+                    <button onclick="cancelConditionalOrder('${o.id}')" title="取消條件單" style="background:rgba(255,69,96,0.15); color:var(--color-sell); border:1px solid rgba(255,69,96,0.3); padding:4px 8px; border-radius:4px; cursor:pointer; font-size:11px;"><i class="fa-solid fa-xmark"></i></button>
+                </div>
             </div>
         `).join('');
         list.innerHTML = limitHtml + condHtml;
@@ -6455,8 +6478,9 @@
                 <td><div style="font-weight:bold;">$${h.avgPrice.toFixed(2)}</div><div style="font-size:10px; color:var(--color-warn); margin-top:2px;">低於 $${breakEvenPrice.toFixed(2)} 虧損</div></td>
                 <td>$${curP.toFixed(2)}</td><td>$${Math.floor(val).toLocaleString()}</td>
                 <td style="color:${itemPnl>=0?'var(--color-up)':'var(--color-down)'}; font-weight:bold;">${itemPnl>=0?'+':''}$${Math.floor(itemPnl).toLocaleString()}</td>
+                <td><button onclick="openSltpSetupModal('${t}')" title="新增停損／停利單" style="background:rgba(254,176,25,0.15); color:var(--color-warn); border:1px solid rgba(254,176,25,0.3); padding:5px 9px; border-radius:4px; cursor:pointer; font-weight:bold; font-size:11px; white-space:nowrap;"><i class="fa-solid fa-bullseye"></i> 停損／停利</button></td>
             </tr>`;
-        }).join("") : `<tr><td colspan="6" style="text-align:center; color:#555; padding:40px;">尚未持有任何證券</td></tr>`;
+        }).join("") : `<tr><td colspan="7" style="text-align:center; color:#555; padding:40px;">尚未持有任何證券</td></tr>`;
 
         updateHoldingsRiskMetrics();
 
@@ -6577,6 +6601,8 @@
         const holding = (state.holdings[ticker] && state.holdings[ticker].shares) || 0;
         if (holding <= 0) { alert(`目前並未持有 ${ticker}，無法設定停損/停利單。`); return; }
         document.getElementById('sltp-setup-ticker').innerText = ticker;
+        document.getElementById('sltp-setup-title-verb').innerText = '設定';
+        document.getElementById('sltp-confirm-btn').innerText = '送出條件單';
         document.getElementById('sltp-max-shares').innerText = formatShares(holding);
         document.getElementById('sltp-trigger-price').value = '';
         document.getElementById('sltp-shares').value = formatShares(holding);
@@ -6584,8 +6610,44 @@
         document.getElementById('sltp-setup-overlay').style.display = 'flex';
         document.getElementById('sltp-setup-overlay').dataset.ticker = ticker;
         document.getElementById('sltp-setup-overlay').dataset.maxShares = holding;
+        delete document.getElementById('sltp-setup-overlay').dataset.editId;
     }
     window.openSltpSetupModal = openSltpSetupModal;
+
+    // ✏️ 開啟「修改停損/停利」彈窗：帶入既有條件單的原始設定值，確認送出時改為就地更新而非新增一筆
+    function openSltpEditModal(id) {
+        document.querySelectorAll('.ledger-action-panel').forEach(panel => panel.style.display = 'none');
+        const order = (state.conditionalOrders || []).find(o => o.id === id);
+        if (!order) return;
+        const ticker = order.ticker;
+        const holding = (state.holdings[ticker] && state.holdings[ticker].shares) || 0;
+        const maxShares = Math.max(holding, order.shares);
+        document.getElementById('sltp-setup-ticker').innerText = ticker;
+        document.getElementById('sltp-setup-title-verb').innerText = '修改';
+        document.getElementById('sltp-confirm-btn').innerText = '確認修改';
+        document.getElementById('sltp-max-shares').innerText = formatShares(maxShares);
+        document.getElementById('sltp-trigger-price').value = order.triggerPrice.toFixed(2);
+        document.getElementById('sltp-shares').value = formatShares(order.shares);
+        setSltpMode(order.mode);
+        document.getElementById('sltp-setup-overlay').style.display = 'flex';
+        document.getElementById('sltp-setup-overlay').dataset.ticker = ticker;
+        document.getElementById('sltp-setup-overlay').dataset.maxShares = maxShares;
+        document.getElementById('sltp-setup-overlay').dataset.editId = id;
+    }
+    window.openSltpEditModal = openSltpEditModal;
+
+    // 就地更新既有的停損/停利條件單（不改變原始 id / 建立時間）
+    function updateConditionalOrder(id, mode, triggerPrice, shares) {
+        const order = (state.conditionalOrders || []).find(o => o.id === id);
+        if (!order) return;
+        order.mode = mode;
+        order.triggerPrice = triggerPrice;
+        order.shares = shares;
+        state.lastModified = Date.now();
+        saveData();
+        renderPendingLimitOrders();
+        triggerDynamicFeedback(`已修改${mode === 'SL' ? '停損' : '停利'}單：${order.ticker} 觸發價 $${triggerPrice.toFixed(2)} × ${formatShares(shares)} 股`, 'sell', null, null);
+    }
 
     let sltpSelectedMode = 'SL';
     function setSltpMode(mode) {
@@ -8107,7 +8169,8 @@ ${summaryText}
         'cfg-valueaxis-val':     { type: 'slider', sliderId: 'cfg-valueaxis-slider' },
         'cfg-glow-intensity-val':{ type: 'slider', sliderId: 'cfg-glow-intensity' },
         'trade-shares':          { type: 'stepShares' },
-        'limit-price-input':     { type: 'decimal', min: 0.01, step: 0.01, decimals: 2 }
+        'limit-price-input':     { type: 'decimal', min: 0.01, step: 0.01, decimals: 2 },
+        'sltp-trigger-price':    { type: 'decimal', min: 0.01, step: 0.01, decimals: 2 }
     };
 
     function adjustNumInput(input, dir) {
