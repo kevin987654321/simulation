@@ -37,7 +37,7 @@
         #tm-row-break { display: none; }
         :root {
             --bg-color: #030303;
-            --bg-gradient: radial-gradient(#0B0B0B);
+            --bg-gradient: radial-gradient(circle at 50% 0%, #121212 0%, #030303 85%);
             --border-color: rgba(255, 255, 255, 0.08);
             --text-main: #e6e6e6;
             --text-sub: #666;
@@ -96,7 +96,7 @@
             /* 1. 新增這行：給 iOS 狀態列和鍵盤彈出時抓取的「純色底色」 */
             background-color: #181818 !important; 
             
-            /* 2. 把原本的 background 改成 background-image，讓漸層疊在純色之上 */
+            /* 2. 把原本的 background 改成 background-image，讓漸層疊在純色之上（手機版維持這個漸層背景） */
             background-image: var(--bg-gradient); 
             
             color: var(--text-main);
@@ -106,6 +106,14 @@
             
             /* 3. 建議補上這行：避免透明狀態列的時間/電量與你的網頁內容重疊 */
             padding-top: env(safe-area-inset-top);
+        }
+
+        /* 🖥️ 電腦版背景：改為純色 #0B0B0B（不使用漸層），手機版（≤768px）維持上方的漸層背景不變 */
+        @media (min-width: 769px) {
+            html, body {
+                background-color: #0B0B0B !important;
+                background-image: none;
+            }
         }
 
         .glass-title-text {
@@ -772,18 +780,18 @@
 
 <aside id="sidebar">
     <div class="glass-title-text" onclick="switchView('view-achievements', null)" style="cursor:pointer;" title="娛樂中心：成就與好友"><img src="logo.png" width="25" height="25"> ACORNTRADE</div>
-    <div class="menu-item active" id="menu-item-dashboard" onclick="switchView('view-dashboard', this)"><span class="nav-line"></span> 指揮操盤中心</div>
-    <div class="menu-item mobile-only" onclick="switchView('view-mobile-trade', this)"><span class="nav-line"></span> 下單櫃檯</div>
-    <div class="menu-item" id="menu-item-cards" onclick="switchView('view-cards', this)"><span class="nav-line"></span> 自選資產卡片</div>
-    <div class="menu-item" id="menu-item-holdings" onclick="switchView('view-holdings', this)"><span class="nav-line"></span> 庫存與資產損益</div>
-    <div class="menu-item" id="menu-item-ledger" onclick="switchView('view-ledger', this)"><span class="nav-line"></span> 時光機與歷史帳本</div>
-    <div class="menu-item" id="menu-item-settings" style="margin-top: auto;" onclick="switchView('view-settings', this)"><i class="fa-solid fa-sliders"></i></div>
+    <div class="menu-item active" id="menu-item-dashboard" data-view="view-dashboard" onclick="switchView('view-dashboard', this)"><span class="nav-line"></span> 指揮操盤中心</div>
+    <div class="menu-item mobile-only" data-view="view-mobile-trade" onclick="switchView('view-mobile-trade', this)"><span class="nav-line"></span> 下單櫃檯</div>
+    <div class="menu-item" id="menu-item-cards" data-view="view-cards" onclick="switchView('view-cards', this)"><span class="nav-line"></span> 自選資產卡片</div>
+    <div class="menu-item" id="menu-item-holdings" data-view="view-holdings" onclick="switchView('view-holdings', this)"><span class="nav-line"></span> 庫存與資產損益</div>
+    <div class="menu-item" id="menu-item-ledger" data-view="view-ledger" onclick="switchView('view-ledger', this)"><span class="nav-line"></span> 時光機與歷史帳本</div>
+    <div class="menu-item" id="menu-item-settings" data-view="view-settings" style="margin-top: auto;" onclick="switchView('view-settings', this)"><i class="fa-solid fa-sliders"></i></div>
 </aside>
 
 <div id="content-area">
     <div id="mobile-header">
         <button class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
-        <div class="mobile-header-title" onclick="switchView('view-dashboard', document.querySelectorAll('.menu-item')[0])">
+        <div class="mobile-header-title" onclick="switchView('view-dashboard', document.querySelectorAll('.menu-item')[0], true)">
             ACORNTRADE
         </div>
         <div class="mobile-reload-btn" onclick="location.reload()"></div>
@@ -2430,6 +2438,25 @@
     const SIDEBAR_WIDTH = 260, SWIPE_THRESHOLD = SIDEBAR_WIDTH * 0.25;
 
     function toggleSidebar() { sidebarEl.classList.toggle('open'); overlayEl.classList.toggle('active'); sidebarEl.style.transform = ''; }
+
+    // 🖱️ 游標停留在左側選單範圍內時，可用滑鼠滾輪上下切換選單項目（依目前畫面上實際可見的項目切換，
+    // 略過因裝置類型被 CSS 隱藏的項目，例如手機版限定的「下單櫃檯」）。加上節流避免單次滾動觸發連續多次切換。
+    let sidebarWheelLocked = false;
+    sidebarEl.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        if (sidebarWheelLocked) return;
+        const items = Array.from(sidebarEl.querySelectorAll('.menu-item[data-view]')).filter(el => el.offsetParent !== null);
+        if (!items.length) return;
+        let idx = items.findIndex(el => el.classList.contains('active'));
+        if (idx === -1) idx = 0;
+        const dir = e.deltaY > 0 ? 1 : -1;
+        const nextIdx = Math.max(0, Math.min(items.length - 1, idx + dir));
+        if (nextIdx === idx) return;
+        sidebarWheelLocked = true;
+        setTimeout(() => { sidebarWheelLocked = false; }, 220);
+        const target = items[nextIdx];
+        switchView(target.dataset.view, target);
+    }, { passive: false });
     
     let activeTouches = 0;
     document.addEventListener('touchstart', (e) => {
@@ -3006,14 +3033,15 @@
     // （動畫進行中會有兩個 .view-section 同時帶有 .active，若用查詢法取值可能抓錯來源頁，改用變數記錄更可靠）
     let currentMobileViewId = 'view-dashboard';
 
-    function switchView(id, btn) {
+    function switchView(id, btn, skipMobileSlideAnim) {
         const isMobile = window.innerWidth <= 768;
         const targetSection = document.getElementById(id);
         document.querySelectorAll(".menu-item").forEach(m => m.classList.remove("active"));
         if(btn) btn.classList.add("active");
 
         // 僅手機版套用首尾相連的橫向滑動換頁動畫；電腦版維持原本 opacity 切換，完全不變動
-        if (isMobile && currentMobileViewId !== id && document.getElementById(currentMobileViewId)) {
+        // 🩹 skipMobileSlideAnim：手機版點擊頂端標題返回首頁時，改走跟電腦版一樣的一般切換過渡，不套用滑動翻頁動畫
+        if (isMobile && !skipMobileSlideAnim && currentMobileViewId !== id && document.getElementById(currentMobileViewId)) {
             animateMobileViewSwitch(document.getElementById(currentMobileViewId), targetSection);
         } else {
             document.querySelectorAll(".view-section").forEach(v => {
@@ -8170,7 +8198,7 @@ ${summaryText}
         'cfg-glow-intensity-val':{ type: 'slider', sliderId: 'cfg-glow-intensity' },
         'trade-shares':          { type: 'stepShares' },
         'limit-price-input':     { type: 'decimal', min: 0.01, step: 0.01, decimals: 2 },
-        'sltp-trigger-price':    { type: 'decimal', min: 0.01, step: 0.01, decimals: 2 }
+        'sltp-trigger-price':    { type: 'decimal', min: 0.01, step: 1, decimals: 2 }
     };
 
     function adjustNumInput(input, dir) {
