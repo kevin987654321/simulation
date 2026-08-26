@@ -2035,6 +2035,85 @@
         await Promise.all(promises);
     }
 
+    // ============================================================
+    // 🚀 批次報價合併查詢（即時股價／外匯匯率／市場狀態 三合一）
+    // Yahoo Finance 的 v7/finance/quote 這個 Endpoint 原生支援以逗號分隔的多代號查詢 (Batch Quotes)，
+    // 回應中每一筆 quote 物件都同時帶有 regularMarketPrice 與 marketState，
+    // 因此可以把「所有持股／委託中代號／目前選定代號」的股票代號，
+    // 和「所有使用中幣別」換算出的匯率代號（如 TWD=X、JPYTWD=X…）全部塞進同一個請求，
+    // 取代過去 fetchHoldingsPrices()（每檔股票各發一次）+ fetchExchangeRate()（每種幣別各發一次）
+    // + fetchRealPrice()（目前選定代號再發一次）合計 N+1 次請求的做法。
+    // 例：15 檔持股 + 5 種關注外幣，原本每輪需要 20 次請求，合併後只需要 1 次。
+    // 每 8 秒隨主輪詢一起呼叫，取代原本個別呼叫 fetchExchangeRate() / fetchHoldingsPrices() / fetchRealPrice(currentTicker) 的組合。
+    // ============================================================
+    async function fetchAllQuotesBatched() {
+        const orderTickers = (state.limitOrders || []).map(o => o.ticker);
+        const condTickers = (state.conditionalOrders || []).map(o => o.ticker);
+        const dcaTickers = (state.dcaPlans || []).map(p => p.ticker);
+        const stockTickers = Array.from(new Set([...Object.keys(state.holdings), ...orderTickers, ...condTickers, ...dcaTickers, currentTicker].filter(Boolean)));
+
+        const currencies = getActiveCurrencySet();
+        // 匯率 symbol（如 JPYTWD=X）→ 幣別代碼（如 JPY）反向對照，供批次回應寫回 currencyRatesToTWD 時查找
+        const fxSymbolToCurrency = {};
+        currencies.forEach(c => { fxSymbolToCurrency[getCurrencyFxSymbol(c)] = c; });
+        const fxSymbols = Object.keys(fxSymbolToCurrency);
+
+        const allSymbols = Array.from(new Set([...stockTickers, ...fxSymbols]));
+        if (allSymbols.length === 0) return;
+
+        let currentTickerFound = false;
+        try {
+            const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${allSymbols.join(',')}`)}`;
+            const res = await fetch(proxyUrl, { cache: "no-store" });
+            if (res.ok) {
+                const json = await res.json();
+                const results = (json && json.quoteResponse && json.quoteResponse.result) || [];
+                results.forEach(q => {
+                    if (!q || !q.symbol || typeof q.regularMarketPrice !== 'number') return;
+                    const sym = q.symbol;
+                    if (fxSymbolToCurrency[sym]) {
+                        // 匯率查詢結果
+                        const code = fxSymbolToCurrency[sym];
+                        currencyRatesToTWD[code] = q.regularMarketPrice;
+                        if (code === 'USD') currentUSDTWD = q.regularMarketPrice;
+                    } else {
+                        // 個股／ETF 報價結果
+                        globalPriceCache[sym] = q.regularMarketPrice;
+                        if (sym === currentTicker) {
+                            currentTickerFound = true;
+                            flashPriceBlock(q.regularMarketPrice, lastFlashedPrice); // 💹 與上一次成功取得的報價比較，有變動才閃爍現價區塊背景
+                            lastFlashedPrice = q.regularMarketPrice;
+                            currentRealPrice = q.regularMarketPrice;
+                            isPriceLoading = false;
+                            priceFetchFailCount = 0;
+                            currentMarketState = q.marketState || currentMarketState;
+                            const priceDisplay = document.getElementById("trade-price-display");
+                            if (priceDisplay) priceDisplay.innerHTML = `$ ${q.regularMarketPrice.toFixed(2)} <span style="font-size:12px; font-weight:400; color:#888;">${getCurrencyForTicker(sym)}</span>`;
+                            const aiTickerEl = document.getElementById("ai-current-ticker");
+                            if (aiTickerEl) aiTickerEl.innerText = currentTicker;
+                            validateSharesInput();
+                        }
+                    }
+                });
+                persistFxRatesCache(); // 🩹 每輪成功查詢都立即寫回匯率快取，確保下次開機能讀到最新值
+            }
+        } catch (e) {}
+
+        // 🩹 目前選定代號若這輪批次查詢中沒查到（代碼錯誤／下市／離線等），沿用 fetchRealPrice 原本的失敗提示邏輯，
+        // 避免使用者卡在無限期的假性「連線中」狀態卻毫無說明
+        if (!currentTickerFound && currentTicker) {
+            if (currentRealPrice !== null && !isPriceLoading) {
+                // 之前已經成功取過價，這次只是暫時查無資料，保留舊價格顯示，不清空畫面
+            } else {
+                priceFetchFailCount++;
+                const priceDisplay = document.getElementById("trade-price-display");
+                if (priceDisplay && priceFetchFailCount >= 1) {
+                    priceDisplay.innerHTML = `<span style="font-size:13px; color:var(--color-sell);"><i class="fa-solid fa-triangle-exclamation"></i> 查詢失敗，請確認代碼是否正確</span> <button type="button" onclick="event.stopPropagation(); fetchRealPrice('${currentTicker}');" style="margin-left:6px; font-size:11px; padding:2px 8px; border-radius:4px; border:1px solid var(--color-acc); background:transparent; color:var(--color-acc); cursor:pointer;">重試</button>`;
+                }
+            }
+        }
+    }
+
     // 依 Ticker 判定的幣別，回傳「換算為台幣」所需的乘數；未知幣別防呆回退至 USD 匯率，避免 NAV 計算中斷
     function getCurrencyMultiplier(ticker) {
         const currency = getCurrencyForTicker(ticker);
@@ -8061,6 +8140,14 @@ ${summaryText}
 
     // 🚀 手機端極簡玻璃數字鍵盤核心邏輯
     let activeNumInput = null;
+    // 🩹 修復：真機上（尤其 iOS Safari）readonly 輸入框無法可靠地透過 .select() / selectionStart /
+    // setSelectionRange 建立「非塌陷（start !== end）」的原生選取範圍——WebKit 會直接讓這類操作失效，
+    // 導致 onfocus="this.select()" 在真機上形同虛設，聚焦後看似「全選」卻其實完全沒有選取任何內容，
+    // 下一次按數字鍵時就會變成插入到舊值後面，而非預期中「取代整個舊值」。
+    // 但透過縮小視窗模擬手機版的一般桌機瀏覽器並沒有這個 WebKit 限制，.select() 仍正常運作，才會看起來完全沒問題。
+    // 解法：不再依賴原生選取 API 判斷「是否為全選狀態」，改用這個旗標由我們自己的 JS 邏輯追蹤，
+    // 聚焦當下標記為 true，下一次按鍵若仍是 true 就直接整個取代舊值，不需要真的呼叫 .select()。
+    let numInputFreshSelectAll = false;
     
     function renderNumpad(allowDecimal, allowPercent) {
         const numpad = document.getElementById('glass-numpad');
@@ -8133,6 +8220,7 @@ ${summaryText}
 
             input.addEventListener('focus', (e) => {
                 activeNumInput = e.target;
+                numInputFreshSelectAll = true; // 🩹 以自訂旗標取代不可靠的原生 .select()，確保真機上聚焦後第一次按鍵一定是「取代整個舊值」
                 const allowDec = activeNumInput.dataset.decimal === 'true';
                 const allowPct = activeNumInput.dataset.percent === 'true';
                 renderNumpad(allowDec, allowPct);
@@ -8155,8 +8243,11 @@ ${summaryText}
             // 不會觸發上面的 focus 事件（因為本來就已經是 focus 狀態），這種情況下瀏覽器
             // 只會處理原生的游標移動，不會重新呼叫我們的邏輯 —— 這正是預期行為，
             // 小鍵盤面板本來就不需要因此重新渲染或位移，維持顯示原地即可。
+            // 這種「重新點擊已聚焦欄位」的動作代表使用者想自行定位游標，而非延續剛聚焦時的「全選取代」狀態，
+            // 因此順手清掉 numInputFreshSelectAll，避免使用者點完游標位置後，下一鍵卻整個把值蓋掉。
             input.addEventListener('touchend', (e) => {
                 if (document.activeElement !== activeNumInput) return;
+                numInputFreshSelectAll = false;
                 const numpad = document.getElementById('glass-numpad');
                 if (numpad && numpad.style.display !== 'grid') numpad.style.display = 'grid';
             });
@@ -8166,6 +8257,28 @@ ${summaryText}
     function numpadPress(e, key) {
         e.preventDefault(); 
         if(!activeNumInput || key === '') return;
+        
+        // 🩹 修復真機全選失效：聚焦後的第一次按鍵，一律視為「取代整個舊值」，不依賴不可靠的原生選取範圍
+        if (numInputFreshSelectAll) {
+            numInputFreshSelectAll = false;
+            const isGlowIntensityFresh = activeNumInput.id === 'cfg-glow-intensity-val';
+            if (key === 'backspace') {
+                activeNumInput.value = '';
+            } else if (key === '%') {
+                activeNumInput.value = (activeNumInput.value || '') + '%';
+            } else {
+                activeNumInput.value = (key === '.') ? '0.' : key;
+            }
+            if (isGlowIntensityFresh) {
+                const digits = activeNumInput.value.replace(/%/g, '');
+                activeNumInput.value = digits + '%';
+            }
+            const endPos = activeNumInput.value.length;
+            try { activeNumInput.setSelectionRange(endPos, endPos); } catch (err) {}
+            activeNumInput.dispatchEvent(new Event('input', {bubbles: true}));
+            if (isGlowIntensityFresh) activeNumInput.dispatchEvent(new Event('change', {bubbles: true}));
+            return;
+        }
         
         // 🩹 流光特效強度輸入框固定以「%」結尾，選取/游標範圍需排除該符號，避免使用者誤刪或把數字打進符號後方
         const isGlowIntensity = activeNumInput.id === 'cfg-glow-intensity-val';
@@ -8455,10 +8568,7 @@ ${summaryText}
         await checkOfflineLimitOrderTriggers();
         state.lastActiveAt = Date.now();
 
-        await Promise.all([
-            fetchExchangeRate(),
-            fetchHoldingsPrices()
-        ]);
+        await fetchAllQuotesBatched();
         
         updateLiveNavNode();
         updateAllViews(true);
@@ -8475,10 +8585,7 @@ ${summaryText}
         if (selectedBenchmark) fetchBenchmarkHistoryData();
 
         setInterval(async () => {
-            await Promise.all([
-                fetchExchangeRate(),
-                fetchHoldingsPrices()
-            ]);
+            await fetchAllQuotesBatched();
             updateLiveNavNode();
             
             updateAllViews(false);
@@ -8486,7 +8593,6 @@ ${summaryText}
             checkDcaPlans();
             state.lastActiveAt = Date.now(); // 🌙 每輪輪詢順便刷新「最後活躍時間」，供下次啟動時判斷離線區間的起點
             
-            fetchRealPrice(currentTicker);
             fetchStockHistoryData(currentTicker, false);
             fetchAllCardsData();
         }, 8000);
