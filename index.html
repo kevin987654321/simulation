@@ -826,7 +826,7 @@
             <div class="dashboard-left-col">
                 <div class="glass-panel" id="chart-container">
                     <div class="chart-header">
-                        <span style="font-weight: bold; font-size: 13px;" id="main-chart-title"></span>
+                        <span style="font-weight: bold; font-size: 13px;" id="main-chart-title" onclick="quickToggleChartType(false)" style="cursor:pointer;" title="點擊切換 K線圖／折線圖"></span>
                         <div class="header-controls" style="position:relative;">
                             <!-- 🚀 動態時間區段 -->
                             <div class="timeframe-selector" id="tf-group"></div>
@@ -1433,6 +1433,16 @@
                 </button>
             </div>
 
+            <div class="settings-category-title">選單與操作</div>
+
+            <div class="setting-item">
+                <div><div style="font-weight:bold;">左側選單滾輪切換模式</div><div style="font-size:11px; color:#777; margin-top:2px;">游標停留在左側選單時，可用滾輪上下切換頁面；「依滾動速度動態調整」滾越快切換越快，「固定間隔」則每次切換間隔固定</div></div>
+                <select id="cfg-sidebar-wheel-mode" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-weight:bold; outline:none;">
+                    <option value="dynamic">依滾動速度動態調整</option>
+                    <option value="fixed">固定間隔</option>
+                </select>
+            </div>
+
             <div class="settings-category-title">進階</div>
 
             <div class="setting-item" style="flex-direction:column; align-items:stretch; gap:10px;">
@@ -1830,7 +1840,7 @@
     <div class="mobile-stock-chart-box">
         <div class="mobile-chart-header">
             <span style="font-size:11px; color:#aaa; font-weight:bold; display:flex; align-items:center; gap:6px;">
-                <span id="m-main-chart-title"></span>
+                <span id="m-main-chart-title" onclick="quickToggleChartType(true)" style="cursor:pointer;" title="點擊切換 K線圖／折線圖"></span>
                 <!-- 👁️ 歷史買賣點標記開關（手機版下單櫃檯走勢圖），與主頁圖表共用同一份開關狀態 -->
                 <button class="chart-marker-eye-btn chart-marker-eye-btn-mobile" id="chart-trade-marker-toggle-mobile" onclick="toggleTradeMarkersOnChart()" title="標記歷史買賣點">
                     <i class="fa-regular fa-eye" id="chart-trade-marker-icon-mobile"></i>
@@ -2440,8 +2450,15 @@
     function toggleSidebar() { sidebarEl.classList.toggle('open'); overlayEl.classList.toggle('active'); sidebarEl.style.transform = ''; }
 
     // 🖱️ 游標停留在左側選單範圍內時，可用滑鼠滾輪上下切換選單項目（依目前畫面上實際可見的項目切換，
-    // 略過因裝置類型被 CSS 隱藏的項目，例如手機版限定的「下單櫃檯」）。加上節流避免單次滾動觸發連續多次切換。
+    // 略過因裝置類型被 CSS 隱藏的項目，例如手機版限定的「下單櫃檯」）。
+    // 切換節流依「設定」頁的 cfg-sidebar-wheel-mode 決定：
+    //   'dynamic'（預設）：依滾動速度動態調整節流間隔，滾越快切換越快、滾越慢切換越慢；
+    //   'fixed'：維持固定節流間隔，滾動速度不影響切換快慢。
+    let sidebarWheelMode = 'dynamic';
     let sidebarWheelLocked = false;
+    const SIDEBAR_WHEEL_FIXED_COOLDOWN = 100;
+    const SIDEBAR_WHEEL_MIN_COOLDOWN = 60, SIDEBAR_WHEEL_MAX_COOLDOWN = 100;
+    const SIDEBAR_WHEEL_MIN_SPEED = 25, SIDEBAR_WHEEL_MAX_SPEED = 40;
     sidebarEl.addEventListener('wheel', (e) => {
         e.preventDefault();
         if (sidebarWheelLocked) return;
@@ -2452,8 +2469,17 @@
         const dir = e.deltaY > 0 ? 1 : -1;
         const nextIdx = Math.max(0, Math.min(items.length - 1, idx + dir));
         if (nextIdx === idx) return;
+
+        let cooldown = SIDEBAR_WHEEL_FIXED_COOLDOWN;
+        if (sidebarWheelMode === 'dynamic') {
+            // 滾動速度以單次滾輪事件的 |deltaY| 估算：速度越快（數值越大）節流間隔越短，速度越慢節流間隔越長
+            const speed = Math.max(SIDEBAR_WHEEL_MIN_SPEED, Math.min(SIDEBAR_WHEEL_MAX_SPEED, Math.abs(e.deltaY)));
+            const speedPct = (speed - SIDEBAR_WHEEL_MIN_SPEED) / (SIDEBAR_WHEEL_MAX_SPEED - SIDEBAR_WHEEL_MIN_SPEED);
+            cooldown = SIDEBAR_WHEEL_MAX_COOLDOWN - speedPct * (SIDEBAR_WHEEL_MAX_COOLDOWN - SIDEBAR_WHEEL_MIN_COOLDOWN);
+        }
+
         sidebarWheelLocked = true;
-        setTimeout(() => { sidebarWheelLocked = false; }, 220);
+        setTimeout(() => { sidebarWheelLocked = false; }, cooldown);
         const target = items[nextIdx];
         switchView(target.dataset.view, target);
     }, { passive: false });
@@ -4278,9 +4304,12 @@
         const type = document.getElementById("cfg-chart-type").value;
         const interval = document.getElementById("cfg-kline-interval").value;
         const isNav = desktopChartMode === 'NAV';
+        // 📊 個股走勢圖即使設定為K線圖，只要對標比較功能已啟用（會強制暫時改用一般折線圖疊圖比較），
+        // 右上角時間範圍選項也要跟著改成一般折線圖的 1D~All，而非K線週期限定的選項
+        const stockBenchmarkActive = !!selectedBenchmark && benchmarkHistData.prices.length > 1 && stockHistData.prices && stockHistData.prices.length > 1;
 
         // 1. Desktop Dashboard buttons (tf-group)
-        let deskBtns = (isNav || type === 'LINE') ? RANGE_MAP['LINE'] : RANGE_MAP['KLINE'][interval];
+        let deskBtns = (isNav || type === 'LINE' || stockBenchmarkActive) ? RANGE_MAP['LINE'] : RANGE_MAP['KLINE'][interval];
         if (!deskBtns.find(b => b.label === currentRange)) currentRange = deskBtns[0].label;
         
         document.getElementById('tf-group').innerHTML = `<div class="tf-active-bg" id="tf-active-bg"></div>` + 
@@ -4288,7 +4317,7 @@
 
         // 2. Mobile Trade Panel buttons (m-tf-group) 
         // Always depends on user KLINE setting, regardless of Dashboard's NAV mode
-        let mobBtns = (type === 'LINE') ? RANGE_MAP['LINE'] : RANGE_MAP['KLINE'][interval];
+        let mobBtns = (type === 'LINE' || stockBenchmarkActive) ? RANGE_MAP['LINE'] : RANGE_MAP['KLINE'][interval];
         if (!mobBtns.find(b => b.label === mCurrentRange)) mCurrentRange = mobBtns[0].label;
         
         document.getElementById('m-tf-group').innerHTML = mobBtns.map(b => `<button class="tf-btn ${b.label === mCurrentRange ? 'active' : ''}" data-label="${b.label}" style="padding:3px 6px;">${b.label}</button>`).join('');
@@ -4459,6 +4488,9 @@
         const savedShow = localStorage.getItem('SETTING_NODE_SHOW'); if (savedShow !== null) document.getElementById("cfg-node-show").checked = savedShow === 'true'; else document.getElementById("cfg-node-show").checked = false;
         const savedCrosshair = localStorage.getItem('SETTING_CROSSHAIR_SHOW'); if (savedCrosshair !== null) document.getElementById("cfg-crosshair-show").checked = savedCrosshair === 'true'; else document.getElementById("cfg-crosshair-show").checked = false;
         const savedColorInvert = localStorage.getItem('SETTING_COLOR_INVERT'); document.getElementById("cfg-color-invert").checked = savedColorInvert === 'true'; applyColorInvert(savedColorInvert === 'true');
+        const savedSidebarWheelMode = localStorage.getItem('SETTING_SIDEBAR_WHEEL_MODE');
+        sidebarWheelMode = (savedSidebarWheelMode === 'fixed') ? 'fixed' : 'dynamic';
+        document.getElementById("cfg-sidebar-wheel-mode").value = sidebarWheelMode;
         const savedVal = localStorage.getItem('SETTING_NODE_VAL');
         const effectiveVal = (savedVal !== null) ? savedVal : 'All';
         document.getElementById("cfg-node-slider").value = (effectiveVal === 'All') ? 60 : effectiveVal; document.getElementById("cfg-node-val").value = effectiveVal;
@@ -7283,7 +7315,7 @@
             stockOverlay = stockBenchmarkActive ? computeBenchmarkOverlay(stockHistData.prices, stockHistData.timestamps) : null;
 
             if (stockOverlay) {
-                document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:${getMarketStateColor()}" title="${getMarketStateLabel()}"></i> <span style="margin-left:4px;">${currentTicker}</span> <span class="hide-on-mobile">對標比較中</span>`;
+                document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:${getMarketStateColor()}" title="${getMarketStateLabel()}"></i> <span class="hide-on-mobile" style="margin-left:4px;">${currentTicker}</span> <span class="hide-on-mobile">對標比較中</span>`;
                 navChart.data.labels = stockHistData.labels;
 
                 const navPctData = stockOverlay.navPctData, benchPctData = stockOverlay.benchPctData;
@@ -7305,7 +7337,7 @@
                         <span style="font-weight:bold; color:${isAhead ? 'var(--color-up)' : 'var(--color-down)'};">${isAhead ? '領先大盤 ' : '落後大盤 '}${isAhead ? '+' : ''}${diffPct.toFixed(2)}%</span>`;
                 }
             } else {
-                document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:${getMarketStateColor()}" title="${getMarketStateLabel()}"></i> <span style="margin-left:4px;">${currentTicker}</span> <span class="hide-on-mobile">${titlePrefix}</span>`;
+                document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:${getMarketStateColor()}" title="${getMarketStateLabel()}"></i> <span class="hide-on-mobile" style="margin-left:4px;">${currentTicker}</span> <span class="hide-on-mobile">${titlePrefix}</span>`;
                 navChart.data.labels = stockHistData.labels;
                 const tradeMarkerDatasets = buildTradeMarkerDatasets(stockHistData);
                 applyChartDatasets(navChart, getStockDatasets(stockHistData, showNodes, densityVal).concat(tradeMarkerDatasets));
@@ -7314,7 +7346,7 @@
         
         navChart.update(); 
 
-        document.getElementById("m-main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:${getMarketStateColor()}" title="${getMarketStateLabel()}"></i> <span style="margin-left:4px;">${currentTicker}</span>`;
+        document.getElementById("m-main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:${getMarketStateColor()}" title="${getMarketStateLabel()}"></i>`;
         mobileChart.data.labels = stockHistData.labels; 
         const mDensity = (densityVal === 'All') ? 'All' : Math.floor(densityVal / 2);
 
@@ -7356,6 +7388,22 @@
         if (selectedBenchmark) fetchBenchmarkHistoryData(); // 📊 圖表類型/區段變動時同步更新對標指數資料範圍
     });
 
+    // 🖱️ 點擊個股走勢圖表左上角圖標（main-chart-title / m-main-chart-title）快速切換 K線圖／折線圖模式，
+    // 等同於直接改動設定頁的「個股圖表類型切換」下拉選單，兩者共用同一份設定與後續更新流程。
+    // isFromMobile 僅用來知道是從哪個圖表觸發（目前兩者行為一致，保留參數以利未來擴充）。
+    function quickToggleChartType(isFromMobile) {
+        const select = document.getElementById("cfg-chart-type");
+        if (!select) return;
+        const nextType = select.value === 'KLINE' ? 'LINE' : 'KLINE';
+        select.value = nextType;
+        localStorage.setItem('SETTING_CHART_TYPE', nextType);
+        updateChartSettingsUI();
+        updateTimeframeButtons();
+        fetchStockHistoryData(currentTicker, true);
+        if (selectedBenchmark) fetchBenchmarkHistoryData();
+    }
+    window.quickToggleChartType = quickToggleChartType;
+
     document.getElementById("cfg-kline-interval").addEventListener("change", (e) => { 
         localStorage.setItem('SETTING_KLINE_INTERVAL', e.target.value); 
         updateTimeframeButtons();
@@ -7366,6 +7414,7 @@
     document.getElementById("cfg-node-show").addEventListener("change", (e) => { localStorage.setItem('SETTING_NODE_SHOW', e.target.checked); document.getElementById("node-settings-wrapper").classList.toggle("disabled", !e.target.checked); renderAllCharts(); });
     document.getElementById("cfg-crosshair-show").addEventListener("change", (e) => { localStorage.setItem('SETTING_CROSSHAIR_SHOW', e.target.checked); });
     document.getElementById("cfg-color-invert").addEventListener("change", (e) => { localStorage.setItem('SETTING_COLOR_INVERT', e.target.checked); applyColorInvert(e.target.checked); renderAllCharts(false); });
+    document.getElementById("cfg-sidebar-wheel-mode").addEventListener("change", (e) => { sidebarWheelMode = e.target.value; localStorage.setItem('SETTING_SIDEBAR_WHEEL_MODE', e.target.value); });
     document.getElementById("cfg-node-slider").addEventListener("input", (e) => { const val = parseInt(e.target.value), displayVal = (val >= 60) ? 'All' : val; document.getElementById("cfg-node-val").value = displayVal; localStorage.setItem('SETTING_NODE_VAL', displayVal); const pct = (val - e.target.min) / (e.target.max - e.target.min); document.getElementById("jelly-thumb").style.left = `${pct * 162}px`; renderAllCharts(false); });
 
     // 🩹 修復：轉折節點密度篩選拉桿右側數值框，讓使用者可直接輸入數字（原本為 readonly）
