@@ -281,20 +281,28 @@
         
         .chart-wrapper, canvas { flex: 1; min-height: 0; position: relative; -webkit-touch-callout: none !important; -webkit-user-select: none !important; user-select: none !important; touch-action: none !important; }
 
+        /* ✨ 主頁圖表卡片：預設移除玻璃底色與框線（維持 .glass-panel 原有的滑鼠流光邊框特效）。
+           在「設定 → 圖表與外觀 → 還原圖表卡片樣式」開啟後，由下方 body.chart-classic-style 規則還原成原本樣式。 */
+        #chart-container { background: transparent; border-color: transparent; box-shadow: none; }
+
         .header-controls { display: flex; align-items: center; gap: 8px; }
-        .timeframe-selector { position: relative; display: flex; align-items: center; gap: 4px; background: rgba(0,0,0,0.6); padding: 3px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.04); }
+        /* ✨ 圖表按鈕（時間區段選單／模式切換）：預設移除底色與框線，改由 .chart-glow-btn 提供
+           hover 時的流光細框線（與其他區塊的流光特效相同技法），設定中可還原為原本的底色/框線樣式。 */
+        .timeframe-selector { position: relative; display: flex; align-items: center; gap: 4px; background: transparent; padding: 3px; border-radius: 6px; border: 1px solid transparent; }
         .tf-active-bg { position: absolute; top: 3px; bottom: 3px; left: 0; background: rgba(255,255,255,0.15); border-radius: 4px; transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 1; }
         .tf-btn { position: relative; z-index: 2; background: transparent; border: none; color: #666; padding: 4px 11px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; transition: color 0.2s; }
         .tf-btn.active { color: #fff; }
         
-        .standalone-mode-btn { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.12); color: #aaa; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1); -webkit-tap-highlight-color: transparent; }
+        .standalone-mode-btn { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: transparent; border: 1px solid transparent; color: #aaa; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1); -webkit-tap-highlight-color: transparent; }
         /* 🩹 修復：手機觸控沒有真正的「滑鼠移開」事件，:hover 套用後會像殘留底色一樣卡住不消失，
            因此 hover 樣式只在「真的有滑鼠且為精準指標」的裝置上套用；觸控裝置改用 :active 做按下瞬間的回饋，
            放開手指後就會自動清除，不會殘留。 */
         @media (hover: hover) and (pointer: fine) {
-            .standalone-mode-btn:hover { color: var(--color-acc); border-color: var(--color-acc); background: rgba(0,212,255,0.1); }
+            .standalone-mode-btn:hover { color: var(--color-acc); }
         }
-        .standalone-mode-btn:active { color: var(--color-acc); border-color: var(--color-acc); background: rgba(0,212,255,0.15); }
+        .standalone-mode-btn:active { color: var(--color-acc); }
+        body.chart-classic-style .standalone-mode-btn:hover { border-color: var(--color-acc); background: rgba(0,212,255,0.1); }
+        body.chart-classic-style .standalone-mode-btn:active { border-color: var(--color-acc); background: rgba(0,212,255,0.15); }
         .standalone-mode-btn i { transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
 
         /* 👁️ 歷史買賣點標記開關：浮動於切換按鈕（standalone-mode-btn）正下方，置頂於圖表之上，
@@ -302,10 +310,12 @@
            維持原本（未搬移前）的極簡樣式：無底色、無邊框，僅圖示本身變色，不做成切換按鈕的方塊外觀。 */
         .chart-marker-eye-btn { position: absolute; top: calc(100% + 6px); right: 0; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; color: #666; border-radius: 5px; cursor: pointer; font-size: 12px; z-index: 8; transition: all 0.2s ease; -webkit-tap-highlight-color: transparent; }
         @media (hover: hover) and (pointer: fine) {
-            .chart-marker-eye-btn:hover { color: #ccc; background: rgba(255,255,255,0.08); }
-            .chart-marker-eye-btn.active:hover { color: var(--color-acc); background: rgba(0,212,255,0.12); }
+            .chart-marker-eye-btn:hover { color: #ccc; }
+            .chart-marker-eye-btn.active:hover { color: var(--color-acc); }
         }
         .chart-marker-eye-btn.active { color: var(--color-acc); }
+        body.chart-classic-style .chart-marker-eye-btn:hover { background: rgba(255,255,255,0.08); }
+        body.chart-classic-style .chart-marker-eye-btn.active:hover { background: rgba(0,212,255,0.12); }
         /* 手機下單櫃檯的迷你走勢圖標題列空間較小，改為行內小尺寸圖示，不使用置頂浮動樣式 */
         .chart-marker-eye-btn-mobile { position: static; width: 16px; height: 16px; font-size: 10px; background: transparent; border: none; flex-shrink: 0;
             /* 🩹 修復手機版下單櫃檯圖表小眼睛按鈕點擊沒反應的問題：
@@ -319,6 +329,57 @@
         }
         .chart-marker-eye-btn-mobile.active { background: transparent; border: none; }
 
+        /* =========================================
+           ✨ 主頁圖表按鈕流光細框線（Chart Button Glow FX）
+           與 .glass-panel 的流光特效採用完全相同的 mask-composite 技法，
+           只在 hover（桌機）／陀螺儀（手機）觸發時，沿按鈕邊緣呈現一圈極細的流光邊框，
+           平時完全沒有底色也沒有邊框。套用於：時間區段選單、模式切換鈕、對標指數／買賣點標記開關鈕。
+           ========================================= */
+        .chart-glow-btn { position: relative; --gx: 50%; --gy: 50%; }
+        .chart-glow-btn::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            padding: 0.4px;
+            background: radial-gradient(var(--glow-radius) circle at var(--gx) var(--gy), var(--glow-color), transparent 45%);
+            filter: brightness(var(--glow-brightness));
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+            z-index: 3;
+        }
+        @media (hover: hover) and (pointer: fine) {
+            .chart-glow-btn:hover::after {
+                opacity: calc(min(1, var(--glow-user-strength)) * var(--glow-platform-scale));
+            }
+        }
+        .chart-glow-btn.glow-gyro-active::after {
+            opacity: calc(min(1, var(--glow-user-strength)) * var(--glow-platform-scale));
+        }
+
+        /* =========================================
+           🕹️ 設定選項：還原主頁圖表卡片／按鈕為原本的玻璃底色＋框線樣式
+           開啟後（body.chart-classic-style），蓋回原本的底色與框線，
+           並關閉新版的按鈕流光細框線效果，讓畫面回到修改前的樣子。
+           ========================================= */
+        body.chart-classic-style #chart-container {
+            background: rgba(18, 18, 18, 0.45);
+            border-color: rgba(255, 255, 255, 0.06);
+            box-shadow: 0 10px 35px rgba(0, 0, 0, 0.7);
+        }
+        body.chart-classic-style .timeframe-selector {
+            background: rgba(0,0,0,0.6);
+            border-color: rgba(255,255,255,0.04);
+        }
+        body.chart-classic-style .standalone-mode-btn {
+            background: rgba(0,0,0,0.6);
+            border-color: rgba(255,255,255,0.12);
+        }
+        body.chart-classic-style .chart-glow-btn::after { display: none; }
 
         .trade-panel { display: flex; flex-direction: column; padding: 14px; gap: 10px; height: 100%; overflow-y: auto; }
         .panel-header { font-size: 13px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 8px; padding-right: 28px; display: flex; justify-content: space-between; align-items: center; position: relative; }
@@ -829,17 +890,17 @@
                         <span style="font-weight: bold; font-size: 13px;" id="main-chart-title" onclick="quickToggleChartType(false)" style="cursor:pointer;" title="點擊切換 K線圖／折線圖"></span>
                         <div class="header-controls" style="position:relative;">
                             <!-- 🚀 動態時間區段 -->
-                            <div class="timeframe-selector" id="tf-group"></div>
-                            <button class="standalone-mode-btn" onclick="toggleDesktopChartMode()" title="切換顯示：組合總淨值 / 個股走勢">
+                            <div class="timeframe-selector chart-glow-btn" id="tf-group"></div>
+                            <button class="standalone-mode-btn chart-glow-btn" onclick="toggleDesktopChartMode()" title="切換顯示：組合總淨值 / 個股走勢">
                                 <i class="fa-solid fa-repeat" id="mode-icon"></i>
                             </button>
                             <!-- 📊 基準指數對標開關：組合總淨值／個股走勢模式皆可使用，固定在小眼睛上方（小眼睛下移一格）。
                                  讓使用者選擇一個大盤指數疊圖比較，一眼看出投資組合（或個股）是否擊敗大盤 -->
-                            <button class="chart-marker-eye-btn" id="benchmark-toggle-btn" onclick="toggleBenchmarkDropdown()" title="對標基準指數" style="display:none;">
+                            <button class="chart-marker-eye-btn chart-glow-btn" id="benchmark-toggle-btn" onclick="toggleBenchmarkDropdown()" title="對標基準指數" style="display:none;">
                                 <i class="fa-solid fa-chart-line" id="benchmark-toggle-icon"></i>
                             </button>
                             <!-- 👁️ 歷史買賣點標記開關：僅個股走勢模式顯示，位置下移至對標開關下方 -->
-                            <button class="chart-marker-eye-btn" id="chart-trade-marker-toggle" onclick="toggleTradeMarkersOnChart()" title="標記歷史買賣點" style="display:none; top: calc(100% + 34px);">
+                            <button class="chart-marker-eye-btn chart-glow-btn" id="chart-trade-marker-toggle" onclick="toggleTradeMarkersOnChart()" title="標記歷史買賣點" style="display:none; top: calc(100% + 34px);">
                                 <i class="fa-regular fa-eye" id="chart-trade-marker-icon"></i>
                             </button>
                             <!-- 下拉選單高度限制為5個選項，超過則可滾動 -->
@@ -1336,6 +1397,11 @@
             <div class="settings-category-title">圖表與外觀</div>
 
             <div class="setting-item">
+                <div><div style="font-weight:bold;">還原圖表卡片樣式</div><div style="font-size:11px; color:#777; margin-top:2px;">預設已移除主頁圖表卡片與按鈕的底色/框線（按鈕改為滑鼠移到上面時顯示流光細框線）；開啟後還原為原本的玻璃底色與框線樣式</div></div>
+                <label class="switch"><input type="checkbox" id="cfg-chart-classic-style"><span class="slider"></span></label>
+            </div>
+
+            <div class="glow-divide-top setting-item">
                 <div><div style="font-weight:bold;">個股圖表類型切換</div><div style="font-size:11px; color:#777; margin-top:2px;">選擇以 K線圖 (Candlestick) 或折線圖顯示個股走勢</div></div>
                 <select id="cfg-chart-type" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; font-weight:bold; outline:none;">
                     <option value="KLINE">K線圖</option>
@@ -4379,6 +4445,11 @@
         document.documentElement.style.setProperty('--color-down', inverted ? '#00ffaa' : '#ff4560');
     }
 
+    // 🕹️ 還原主頁圖表卡片／按鈕為原本的玻璃底色＋框線樣式（預設關閉＝使用新版無底色樣式）
+    function applyChartClassicStyle(classic) {
+        document.body.classList.toggle('chart-classic-style', !!classic);
+    }
+
     function updateTimeframeButtons() {
         const type = document.getElementById("cfg-chart-type").value;
         const interval = document.getElementById("cfg-kline-interval").value;
@@ -4567,6 +4638,7 @@
         const savedShow = localStorage.getItem('SETTING_NODE_SHOW'); if (savedShow !== null) document.getElementById("cfg-node-show").checked = savedShow === 'true'; else document.getElementById("cfg-node-show").checked = false;
         const savedCrosshair = localStorage.getItem('SETTING_CROSSHAIR_SHOW'); if (savedCrosshair !== null) document.getElementById("cfg-crosshair-show").checked = savedCrosshair === 'true'; else document.getElementById("cfg-crosshair-show").checked = false;
         const savedColorInvert = localStorage.getItem('SETTING_COLOR_INVERT'); document.getElementById("cfg-color-invert").checked = savedColorInvert === 'true'; applyColorInvert(savedColorInvert === 'true');
+        const savedChartClassicStyle = localStorage.getItem('SETTING_CHART_CLASSIC_STYLE'); document.getElementById("cfg-chart-classic-style").checked = savedChartClassicStyle === 'true'; applyChartClassicStyle(savedChartClassicStyle === 'true');
         const savedSidebarWheelMode = localStorage.getItem('SETTING_SIDEBAR_WHEEL_MODE');
         sidebarWheelMode = (savedSidebarWheelMode === 'fixed') ? 'fixed' : 'dynamic';
         document.getElementById("cfg-sidebar-wheel-mode").value = sidebarWheelMode;
@@ -7320,7 +7392,7 @@
         let stockOverlay = null; // 個股走勢對標疊圖資料（在 STOCK 分支計算，於下方手機版走勢圖共用）
 
         if (showNav) {
-            document.getElementById("main-chart-title").innerHTML = `<img src="走勢圖.png" width="12" height="12"> <span class="hide-on-mobile" style="margin-left:4px;">總淨值走勢</span>`;
+            document.getElementById("main-chart-title").innerHTML = `<img src="走勢圖.png" width="12" height="12"> <span class="hide-on-mobile" style="margin-left:4px;"></span>`;
             let cutoff = 0; const now = Date.now();
             if (currentRange === '1D') cutoff = now - 86400000; 
             else if (currentRange === '1W') cutoff = now - 86400000 * 7; 
@@ -7493,6 +7565,7 @@
     document.getElementById("cfg-node-show").addEventListener("change", (e) => { localStorage.setItem('SETTING_NODE_SHOW', e.target.checked); document.getElementById("node-settings-wrapper").classList.toggle("disabled", !e.target.checked); renderAllCharts(); });
     document.getElementById("cfg-crosshair-show").addEventListener("change", (e) => { localStorage.setItem('SETTING_CROSSHAIR_SHOW', e.target.checked); });
     document.getElementById("cfg-color-invert").addEventListener("change", (e) => { localStorage.setItem('SETTING_COLOR_INVERT', e.target.checked); applyColorInvert(e.target.checked); renderAllCharts(false); });
+    document.getElementById("cfg-chart-classic-style").addEventListener("change", (e) => { localStorage.setItem('SETTING_CHART_CLASSIC_STYLE', e.target.checked); applyChartClassicStyle(e.target.checked); });
     document.getElementById("cfg-sidebar-wheel-mode").addEventListener("change", (e) => { sidebarWheelMode = e.target.value; localStorage.setItem('SETTING_SIDEBAR_WHEEL_MODE', e.target.value); });
     document.getElementById("cfg-node-slider").addEventListener("input", (e) => { const val = parseInt(e.target.value), displayVal = (val >= 60) ? 'All' : val; document.getElementById("cfg-node-val").value = displayVal; localStorage.setItem('SETTING_NODE_VAL', displayVal); const pct = (val - e.target.min) / (e.target.max - e.target.min); document.getElementById("jelly-thumb").style.left = `${pct * 162}px`; renderAllCharts(false); });
 
@@ -8669,7 +8742,7 @@ ${summaryText}
         }
 
         function updateTargets(clientX, clientY, markGyro) {
-            const panels = document.querySelectorAll('.glass-panel, .glow-line, .glow-divide-top');
+            const panels = document.querySelectorAll('.glass-panel, .glow-line, .glow-divide-top, .chart-glow-btn');
             for (let i = 0; i < panels.length; i++) {
                 const el = panels[i];
                 // 📱 手機陀螺儀模式：跳過「非目前顯示頁面」內的元件。
