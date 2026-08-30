@@ -275,7 +275,7 @@
         .stat-value { font-size: 19px; font-weight: 800; font-family: monospace; letter-spacing: -0.5px; transition: color 0.3s; }
 
         .dashboard-body { display: grid; grid-template-columns: 3fr 1fr; gap: 14px; flex: 1; min-height: 0; }
-        .dashboard-left-col { display: flex; flex-direction: column; gap: 14px; flex: 1; min-height: 0; }
+        .dashboard-left-col { display: flex; flex-direction: column; gap: 0; flex: 1; min-height: 0; }
         #chart-container { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 14px 18px; position: relative; }
         .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-shrink: 0; }
         
@@ -284,6 +284,13 @@
         /* ✨ 主頁圖表卡片：預設移除玻璃底色與框線（維持 .glass-panel 原有的滑鼠流光邊框特效）。
            在「設定 → 圖表與外觀 → 還原圖表卡片樣式」開啟後，由下方 body.chart-classic-style 規則還原成原本樣式。 */
         #chart-container { background: transparent; border-color: transparent; box-shadow: none; }
+
+        /* ✨ Gemini 顧問室卡片：改為與上方圖表卡片一致的無底色／無框線效果（仍保留 .glass-panel 的滑鼠流光邊框特效）。
+           改用獨立的 .glow-line.glow-line-h 分隔線元件（與首頁上方四個統計區塊之間的分隔線同一套元件），
+           而不是把 .glow-divide-top 直接掛在 #ai-commander 本身上——因為 #ai-commander 同時也是 .glass-panel，
+           兩者都會用到同一個 ::after 偽元素，掛在同一個節點上會互相覆蓋，導致外框流光消失、分隔線又重複顯示。
+           分隔線元件本身寬 100%／高 21px（線置中），.dashboard-left-col 的 gap 因此改為 0，改由這個獨立元件產生間距。 */
+        #ai-commander { background: transparent; border-color: transparent; box-shadow: none; }
 
         .header-controls { display: flex; align-items: center; gap: 8px; }
         /* ✨ 圖表按鈕（時間區段選單／模式切換）：預設移除底色與框線，改由 .chart-glow-btn 提供
@@ -371,6 +378,13 @@
             border-color: rgba(255, 255, 255, 0.06);
             box-shadow: 0 10px 35px rgba(0, 0, 0, 0.7);
         }
+        body.chart-classic-style #ai-commander {
+            background: rgba(12, 12, 12, 0.7);
+            border-color: rgba(255, 255, 255, 0.06);
+        }
+        body.chart-classic-style .ai-header { background: rgba(255,255,255,0.02); }
+        body.chart-classic-style .chat-input-area { background: rgba(0,0,0,0.3); }
+        body.chart-classic-style .ai-quick-buttons-wrap { background: rgba(0,0,0,0.2); }
         body.chart-classic-style .timeframe-selector {
             background: rgba(0,0,0,0.6);
             border-color: rgba(255,255,255,0.04);
@@ -470,11 +484,11 @@
         .exec-btn:active:not(:disabled) { transform: scale(0.95); }
         .exec-btn:disabled { opacity: 0.3; cursor: not-allowed; border-color: rgba(255,255,255,0.1) !important; color: #666 !important; background: rgba(255,255,255,0.05) !important; box-shadow: none !important; }
 
-        #ai-commander { height: 230px; flex-shrink: 0; display: flex; flex-direction: column; background: rgba(12, 12, 12, 0.7); border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); overflow: hidden; position: relative; }
-        .ai-header { padding: 8px 16px; background: rgba(255,255,255,0.02); border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: bold; }
+        #ai-commander { height: 230px; flex-shrink: 0; display: flex; flex-direction: column; border-radius: 12px; border: 1px solid transparent; overflow: hidden; position: relative; }
+        .ai-header { padding: 8px 16px; background: transparent; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: bold; }
         .chat-output-wrapper { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
         .chat-display { flex: 1; padding: 10px 16px; font-size: 12.5px; color: #aaa; overflow-y: auto; line-height: 1.6; font-family: monospace; }
-        .chat-input-area { padding: 10px 16px; border-top: 1px solid rgba(255,255,255,0.05); display: flex; gap: 10px; background: rgba(0,0,0,0.3); }
+        .chat-input-area { padding: 10px 16px; border-top: 1px solid rgba(255,255,255,0.05); display: flex; gap: 10px; background: transparent; }
         .chat-input-area input { flex: 1; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); padding: 8px 12px; border-radius: 6px; color: #fff; font-size: 12px; outline: none; transition: opacity 0.2s; }
         .chat-input-area input:disabled { opacity: 0.4; cursor: not-allowed; }
         .send-btn { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 0 16px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: bold; flex-shrink: 0; }
@@ -764,7 +778,7 @@
             .stat-value { font-size: 16px; }
             
             .dashboard-body { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 12px; }
-            .dashboard-left-col { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 12px; }
+            .dashboard-left-col { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 0; }
             #desktop-trade-col { display: none; }
             
             /* 手機版同樣顯示圖表切換按鈕並進行尺寸調整 */
@@ -912,13 +926,17 @@
                     <div class="chart-wrapper"><canvas id="navChart"></canvas></div>
                 </div>
 
+                <!-- ✨ 與上方圖表卡片之間的分隔線：獨立元件（與首頁上方四個統計區塊之間的分隔線同一套 .glow-line.glow-line-h），
+                     不與任何 .glass-panel 共用節點，避免流光邊框的 ::after 偽元素互相覆蓋。 -->
+                <div class="glow-line glow-line-h"></div>
+
                 <div id="ai-commander" class="glass-panel">
                     <div class="ai-header">
                         <span><img src="gemini.png" width="10" height="10"> ASK GEMINI</span>
                         <span style="color:#666; font-size:11px;">3.6 Flash</span>
                     </div>
                     
-                    <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 12px; background:rgba(0,0,0,0.2);">
+                    <div class="ai-quick-buttons-wrap" style="display:flex; justify-content:space-between; align-items:center; padding:6px 12px;">
                         <!-- 🖱️ 兩顆快速按鈕都加上 onmousedown="event.preventDefault()"：
                              預設點擊按鈕會把輸入焦點從 #chat-input 搶走（連帶手機上可能收起虛擬鍵盤），
                              攔截 mousedown 的預設行為可以避免搶走焦點，讓使用者點完還能接著在輸入框打字。 -->
