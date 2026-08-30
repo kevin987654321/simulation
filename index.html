@@ -449,9 +449,11 @@
         .mobile-stock-chart-box { display: none; flex-direction: column; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 10px 12px; -webkit-touch-callout: none !important; -webkit-user-select: none !important; user-select: none !important; touch-action: none !important; }
         .mobile-chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 4px; }
 
-        .stepper-row { display: flex; gap: 8px; align-items: center; }
-        .stepper-btn { width: 38px; height: 38px; border-radius: 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 16px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-        .stepper-input { flex: 1; height: 38px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; text-align: center; color: #fff; font-size: 15px; font-weight: bold; font-family: monospace; outline: none; }
+        /* ✨ 下單股數增減列：「－ / 數量輸入框 / ＋」原本是三個獨立方塊，改成同一個外框內的一個整體區塊，
+           中間以 1px 分隔線區隔，只在最外層畫框線與圓角。 */
+        .stepper-row { display: flex; align-items: stretch; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; overflow: hidden; background: rgba(0,0,0,0.25); }
+        .stepper-btn { width: 38px; height: 38px; border-radius: 0; background: transparent; border: none; color: #fff; font-size: 16px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .stepper-input { flex: 1; height: 38px; background: transparent; border: none; border-radius: 0; text-align: center; color: #fff; font-size: 15px; font-weight: bold; font-family: monospace; outline: none; }
 
         /* ✨ 下單股數輸入框：輸入自訂百分比（如「15%」）換算為股數時的轉場動畫 */
         @keyframes pctConvertPop {
@@ -461,7 +463,10 @@
         }
         .shares-pct-convert { animation: pctConvertPop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1); }
         
-        .quick-percent-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+        /* ✨ 下單快捷比例列（25%／50%／75%／MAX）：同一個外框內的一個整體區塊，選項之間不加分隔線，
+           僅作用於 .quick-percent-grid 內的 .qp-btn，不影響 Gemini 快捷提問列共用的 .qp-btn 基底樣式。 */
+        .quick-percent-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border: 1px solid rgba(255,255,255,0.07); border-radius: 6px; overflow: hidden; background: rgba(255,255,255,0.04); }
+        .quick-percent-grid .qp-btn { background: transparent; border: none; border-radius: 0; }
         .qp-btn { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); color: #888; border-radius: 6px; padding: 5px 0; font-size: 11px; font-weight: bold; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
 
         /* 🏷️ 自選監控看板：分類標籤篩選 pill（頂部篩選列）與卡片上顯示的小標籤 */
@@ -488,11 +493,14 @@
         .ai-header { padding: 8px 16px; background: transparent; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: bold; }
         .chat-output-wrapper { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
         .chat-display { flex: 1; padding: 10px 16px; font-size: 12.5px; color: #aaa; overflow-y: auto; line-height: 1.6; font-family: monospace; }
-        .chat-input-area { padding: 10px 16px; border-top: 1px solid rgba(255,255,255,0.05); display: flex; gap: 10px; background: transparent; }
-        .chat-input-area input { flex: 1; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); padding: 8px 12px; border-radius: 6px; color: #fff; font-size: 12px; outline: none; transition: opacity 0.2s; }
+        /* ✨ Gemini 輸入框與發送鍵：同一個外框內的一個整體區塊，中間不加分隔線，
+           外層 .chat-input-area 仍維持無底色、僅作外距與上緣分隔線；合併後的區塊本身才有邊框。 */
+        .chat-input-area { padding: 10px 16px; border-top: 1px solid rgba(255,255,255,0.05); display: flex; background: transparent; }
+        .chat-input-group { flex: 1; display: flex; align-items: stretch; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; overflow: hidden; background: rgba(0,0,0,0.2); }
+        .chat-input-area input { flex: 1; background: transparent; border: none; border-radius: 0; padding: 8px 12px; color: #fff; font-size: 12px; outline: none; transition: opacity 0.2s; }
         .chat-input-area input:disabled { opacity: 0.4; cursor: not-allowed; }
-        .send-btn { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 0 16px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: bold; flex-shrink: 0; }
-        .send-btn.pending-confirm { background: rgba(0,212,255,0.18); border-color: var(--color-acc); color: var(--color-acc); animation: pendingPulse 1.6s ease-in-out infinite; }
+        .send-btn { background: transparent; border: none; border-radius: 0; color: #fff; padding: 0 16px; cursor: pointer; font-size: 11px; font-weight: bold; flex-shrink: 0; }
+        .send-btn.pending-confirm { background: rgba(0,212,255,0.18); color: var(--color-acc); animation: pendingPulse 1.6s ease-in-out infinite; }
         @keyframes pendingPulse { 0%, 100% { box-shadow: 0 0 0px rgba(0,212,255,0); } 50% { box-shadow: 0 0 12px rgba(0,212,255,0.5); } }
 
         /* 📒 歷史帳本時間範圍選擇器 */
@@ -998,8 +1006,10 @@
                     </div>
 
                     <div class="chat-input-area">
-                        <input type="text" id="chat-input" placeholder="問問 Gemini" onkeypress="if(event.key==='Enter') askAI()">
-                        <button class="send-btn" id="chat-send-btn" onclick="askAI()"><i class="fa-solid fa-arrow-right-long"></i></button>
+                        <div class="chat-input-group">
+                            <input type="text" id="chat-input" placeholder="問問 Gemini" onkeypress="if(event.key==='Enter') askAI()">
+                            <button class="send-btn" id="chat-send-btn" onclick="askAI()"><i class="fa-solid fa-arrow-right-long"></i></button>
+                        </div>
                     </div>
                 </div>
             </div>
