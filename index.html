@@ -163,7 +163,7 @@
                 opacity: calc(min(1, var(--glow-user-strength)) * var(--glow-platform-scale));
             }
         }
-        .glass-panel.glow-gyro-active::after {
+        .glass-panel.glow-gyro-active::after, .glass-panel.glow-touch-active::after {
             opacity: calc(min(1, var(--glow-user-strength)) * var(--glow-platform-scale));
         }
 
@@ -209,7 +209,8 @@
                 opacity: calc(min(1, var(--glow-user-strength)) * var(--glow-platform-scale));
             }
         }
-        .glow-line.glow-gyro-active::after, .glow-divide-top.glow-gyro-active::after {
+        .glow-line.glow-gyro-active::after, .glow-divide-top.glow-gyro-active::after,
+        .glow-line.glow-touch-active::after, .glow-divide-top.glow-touch-active::after {
             opacity: calc(min(1, var(--glow-user-strength)) * var(--glow-platform-scale));
         }
 
@@ -412,7 +413,7 @@
                 opacity: calc(min(1, var(--glow-user-strength)) * var(--glow-platform-scale));
             }
         }
-        .chart-glow-btn.glow-gyro-active::after {
+        .chart-glow-btn.glow-gyro-active::after, .chart-glow-btn.glow-touch-active::after {
             opacity: calc(min(1, var(--glow-user-strength)) * var(--glow-platform-scale));
         }
 
@@ -1566,6 +1567,14 @@
                     </div>
                     <input type="text" id="cfg-glow-intensity-val" class="jelly-input mobile-num" data-decimal="false" inputmode="numeric" value="100%" onfocus="this.select()">
                 </div>
+            </div>
+
+            <div class="glow-divide-top setting-item">
+                <div>
+                    <div style="font-weight:bold;"><i class="fa-solid fa-hand-pointer" style="color:#aaa"></i> 手指觸控流光特效</div>
+                    <div style="font-size:11px; color:#777; margin-top:2px;">手機版以手指觸摸卡片時呈現流光邊框，放開手指即消失</div>
+                </div>
+                <label class="switch"><input type="checkbox" id="cfg-glow-touch-enable" checked><span class="slider"></span></label>
             </div>
 
             <div class="glow-divide-top setting-item" id="gyro-permission-setting-item">
@@ -4814,6 +4823,7 @@
         const savedShow = localStorage.getItem('SETTING_NODE_SHOW'); if (savedShow !== null) document.getElementById("cfg-node-show").checked = savedShow === 'true'; else document.getElementById("cfg-node-show").checked = false;
         const savedCrosshair = localStorage.getItem('SETTING_CROSSHAIR_SHOW'); if (savedCrosshair !== null) document.getElementById("cfg-crosshair-show").checked = savedCrosshair === 'true'; else document.getElementById("cfg-crosshair-show").checked = false;
         const savedColorInvert = localStorage.getItem('SETTING_COLOR_INVERT'); document.getElementById("cfg-color-invert").checked = savedColorInvert === 'true'; applyColorInvert(savedColorInvert === 'true');
+        const savedGlowTouchEnable = localStorage.getItem('SETTING_GLOW_TOUCH_ENABLE'); document.getElementById("cfg-glow-touch-enable").checked = savedGlowTouchEnable !== 'false'; // 預設開啟
         const savedChartClassicStyle = localStorage.getItem('SETTING_CHART_CLASSIC_STYLE'); document.getElementById("cfg-chart-classic-style").checked = savedChartClassicStyle === 'true'; applyChartClassicStyle(savedChartClassicStyle === 'true');
         const savedSidebarWheelMode = localStorage.getItem('SETTING_SIDEBAR_WHEEL_MODE');
         sidebarWheelMode = (savedSidebarWheelMode === 'fixed') ? 'fixed' : 'dynamic';
@@ -7741,6 +7751,8 @@
     document.getElementById("cfg-node-show").addEventListener("change", (e) => { localStorage.setItem('SETTING_NODE_SHOW', e.target.checked); document.getElementById("node-settings-wrapper").classList.toggle("disabled", !e.target.checked); renderAllCharts(); });
     document.getElementById("cfg-crosshair-show").addEventListener("change", (e) => { localStorage.setItem('SETTING_CROSSHAIR_SHOW', e.target.checked); });
     document.getElementById("cfg-color-invert").addEventListener("change", (e) => { localStorage.setItem('SETTING_COLOR_INVERT', e.target.checked); applyColorInvert(e.target.checked); renderAllCharts(false); });
+    // ✨ 手指觸控流光特效開關：關閉時立即清除目前正在顯示中的觸控流光，避免殘留
+    document.getElementById("cfg-glow-touch-enable").addEventListener("change", (e) => { localStorage.setItem('SETTING_GLOW_TOUCH_ENABLE', e.target.checked); if (!e.target.checked && typeof GlowFX !== 'undefined') GlowFX.clearTouchGlow(); });
     document.getElementById("cfg-chart-classic-style").addEventListener("change", (e) => { localStorage.setItem('SETTING_CHART_CLASSIC_STYLE', e.target.checked); applyChartClassicStyle(e.target.checked); });
     document.getElementById("cfg-sidebar-wheel-mode").addEventListener("change", (e) => { sidebarWheelMode = e.target.value; localStorage.setItem('SETTING_SIDEBAR_WHEEL_MODE', e.target.value); });
     document.getElementById("cfg-node-slider").addEventListener("input", (e) => { const val = parseInt(e.target.value), displayVal = (val >= 60) ? 'All' : val; document.getElementById("cfg-node-val").value = displayVal; localStorage.setItem('SETTING_NODE_VAL', displayVal); const pct = (val - e.target.min) / (e.target.max - e.target.min); document.getElementById("jelly-thumb").style.left = `${pct * 162}px`; renderAllCharts(false); });
@@ -8906,28 +8918,37 @@ ${summaryText}
        手機：改由陀螺儀（裝置傾斜）驅動虛擬光源位置，效果自動減弱；
              不需要使用者持續觸摸螢幕，且游標/光源正下方不會出現填色光暈，
              只有卡片「邊框」會依距離發亮。
+       手機（手指觸控）：手指觸摸/滑動時，比照桌機游標即時追蹤觸點位置呈現流光，
+             手指放開（touchend/touchcancel）時立即消失；可於「系統設定」關閉。
+             與陀螺儀模式各自獨立（各自使用不同的啟動 class），互不影響。
        ========================================= */
     const GlowFX = (function () {
         let rafId = null;
         let gyroActive = false;
         let gyroBaseline = null;
+        const TOUCH_ACTIVE_CLASS = 'glow-touch-active';
 
         function isTouchDevice() {
             return (('ontouchstart' in window) || navigator.maxTouchPoints > 0) &&
                    window.matchMedia('(pointer: coarse)').matches;
         }
 
-        function updateTargets(clientX, clientY, markGyro) {
+        // 設定中可關閉「手指觸控流光特效」，預設開啟（未設定過視為開啟）
+        function isTouchGlowEnabled() {
+            return localStorage.getItem('SETTING_GLOW_TOUCH_ENABLE') !== 'false';
+        }
+
+        function updateTargets(clientX, clientY, activeClass) {
             const panels = document.querySelectorAll('.glass-panel, .glow-line, .glow-divide-top, .chart-glow-btn');
             for (let i = 0; i < panels.length; i++) {
                 const el = panels[i];
-                // 📱 手機陀螺儀模式：跳過「非目前顯示頁面」內的元件。
+                // 📱 手機陀螺儀／觸控模式：跳過「非目前顯示頁面」內的元件。
                 // .view-section 未啟用時是 opacity:0（非 display:none），仍佔滿版面，
                 // 不會被下方的可視範圍檢查排除掉，导致每一幀都要對所有分頁裡的大量卡片
                 // 做 getBoundingClientRect（觸發 layout）與樣式寫入，這正是手機卡頓、發熱的主因。
-                // 這裡只在陀螺儀路徑套用此優化；桌機滑鼠模式與不屬於任何分頁的元件（彈窗、
+                // 這裡只在陀螺儀／觸控路徑套用此優化；桌機滑鼠模式與不屬於任何分頁的元件（彈窗、
                 // 共用交易面板等）不受影響，維持原本行為。
-                if (markGyro) {
+                if (activeClass) {
                     const section = el.closest('.view-section');
                     if (section && !section.classList.contains('active')) continue;
                 }
@@ -8935,15 +8956,15 @@ ${summaryText}
                 if (rect.bottom < -80 || rect.top > window.innerHeight + 80 || rect.right < -80 || rect.left > window.innerWidth + 80) continue;
                 el.style.setProperty('--gx', (clientX - rect.left) + 'px');
                 el.style.setProperty('--gy', (clientY - rect.top) + 'px');
-                if (markGyro && !el.classList.contains('glow-gyro-active')) el.classList.add('glow-gyro-active');
+                if (activeClass && !el.classList.contains(activeClass)) el.classList.add(activeClass);
             }
         }
 
-        function schedule(clientX, clientY, markGyro) {
+        function schedule(clientX, clientY, activeClass) {
             if (rafId) return;
             rafId = requestAnimationFrame(() => {
                 rafId = null;
-                updateTargets(clientX, clientY, markGyro);
+                updateTargets(clientX, clientY, activeClass);
             });
         }
 
@@ -8966,7 +8987,7 @@ ${summaryText}
             const vx = window.innerWidth / 2 + (dGamma / 35) * (window.innerWidth * 0.5);
             const vy = window.innerHeight / 2 + (dBeta / 35) * (window.innerHeight * 0.5);
 
-            schedule(vx, vy, true);
+            schedule(vx, vy, 'glow-gyro-active');
         }
 
         function activateGyro() {
@@ -8976,7 +8997,26 @@ ${summaryText}
             window.addEventListener('deviceorientation', handleOrientation, true);
         }
 
-        return { activateGyro, isTouchDevice };
+        // --- 手機：手指觸控追蹤（跟隨手指位置，放開即消失） ---
+        function clearTouchGlow() {
+            const active = document.querySelectorAll('.' + TOUCH_ACTIVE_CLASS);
+            for (let i = 0; i < active.length; i++) active[i].classList.remove(TOUCH_ACTIVE_CLASS);
+        }
+
+        function handleTouch(e) {
+            if (gyroActive || !isTouchGlowEnabled()) return;
+            if (!e.touches || !e.touches.length) return;
+            const t = e.touches[0];
+            schedule(t.clientX, t.clientY, TOUCH_ACTIVE_CLASS);
+        }
+
+        document.addEventListener('touchstart', handleTouch, { passive: true });
+        document.addEventListener('touchmove', handleTouch, { passive: true });
+        // 手指放開／被中斷（如來電、切換 App）時，立即清除流光效果
+        document.addEventListener('touchend', clearTouchGlow, { passive: true });
+        document.addEventListener('touchcancel', clearTouchGlow, { passive: true });
+
+        return { activateGyro, isTouchDevice, clearTouchGlow };
     })();
 
     /* =========================================
