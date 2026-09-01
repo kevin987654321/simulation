@@ -275,7 +275,14 @@
         .stat-value { font-size: 19px; font-weight: 800; font-family: monospace; letter-spacing: -0.5px; transition: color 0.3s; }
 
         .dashboard-body { display: grid; grid-template-columns: 3fr 1fr; gap: 14px; flex: 1; min-height: 0; }
-        .dashboard-left-col { display: flex; flex-direction: column; gap: 0; flex: 1; min-height: 0; }
+        /* 🩹 修復「展開後卡在螢幕外」的真正根因：#dashboard-left-col 是 Grid 子項目，預設
+           min-width:auto 會被「圖表畫布曾經撐到的寬度」卡住——收合下單區時圖表變寬，若這時剛好
+           遇到報價背景輪詢（每 8 秒，見 bootSystem 的 setInterval）重繪圖表，Chart.js 會把
+           canvas 的實際寬度定格在當下（很寬）的容器尺寸；之後展開下單區、圖表理應縮回原本比例時，
+           min-width:auto 卻用這個「曾經撐到的寬度」當下限，讓圖表區怎麼樣都縮不回去，
+           連帶把下單區擠出螢幕外，只剩右邊緣一條窄縫。明確蓋掉 min-width:0，圖表區永遠能自由縮放，
+           不受它自己過去畫布尺寸的影響——這跟先前的畫面比例、原本排版完全無關，純粹是修這個 bug。 */
+        .dashboard-left-col { display: flex; flex-direction: column; gap: 0; flex: 1; min-height: 0; min-width: 0; }
         #chart-container { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 14px 18px; position: relative; }
         .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-shrink: 0; }
         
@@ -291,6 +298,47 @@
            兩者都會用到同一個 ::after 偽元素，掛在同一個節點上會互相覆蓋，導致外框流光消失、分隔線又重複顯示。
            分隔線元件本身寬 100%／高 21px（線置中），.dashboard-left-col 的 gap 因此改為 0，改由這個獨立元件產生間距。 */
         #ai-commander { background: transparent; border-color: transparent; box-shadow: none; }
+
+        /* ✨ 下單區收合／展開：游標移到下單區最左緣會浮現極小的右三角手把，點擊後將下單區滑出畫面外，
+           圖表／Gemini 區域隨之延伸填滿；收合後在畫面最右緣會浮現左三角手把，點擊可滑回原狀。
+
+           🩹 修復（第三版）：前兩版都讓瀏覽器用 CSS transition 動畫 grid-template-columns（無論是
+           fr↔fr 或搭配 setTimeout 分階段），但不同瀏覽器／重複點擊時對這個屬性的轉場支援不夠穩定，
+           容易卡在動畫中途的某個寬度，導致「再次展開只剩一小截」「跟內容淡入時序對不上」等問題。
+           改成完全由 toggleTradeColumn()（見下方 script）用 requestAnimationFrame 每一影格直接
+           指定「明確的 px 寬度」到 grid-template-columns，不再依賴 CSS 對這個屬性做轉場動畫：
+             - 明確的 px 數值不會受瀏覽器「grid 子項目 min-width:auto 內容保護」影響，寬度永遠精準
+               等於程式指定的數值，不會被內容撐開，也不會卡在瀏覽器算出來的中間值。
+             - 動畫全程由同一個 requestAnimationFrame 迴圈掌控，重複點擊只會取消前一個動畫、
+               從「目前實際畫面上的寬度」接續播放，不會有兩段動畫互相打架、也不會卡住。
+             - 動畫結束後才清空 inline style，交還給下方 .trade-col-collapsed 規則（收合）或
+               最上方原本的 3fr 1fr 規則（展開），確保靜止狀態的響應式行為與修改前完全一致。 */
+        .dashboard-body.trade-col-collapsed { grid-template-columns: 1fr 0fr; }
+        #desktop-trade-col { position: relative; }
+        .dashboard-body.trade-col-collapsed #desktop-trade-col { overflow: hidden; min-width: 0; pointer-events: none; }
+        #shared-trade-panel { transition: opacity 0.25s ease, transform 0.25s ease; }
+        #shared-trade-panel.trade-panel-fading { opacity: 0; transform: translateX(26px); }
+
+        #trade-collapse-handle {
+            position: absolute; left: 0; top: 0; bottom: 0; width: 14px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; z-index: 20; opacity: 0; transition: opacity 0.25s ease, color 0.2s ease;
+            color: rgba(255,255,255,0.35); font-size: 11px;
+        }
+        #trade-collapse-handle:hover { opacity: 1; color: rgba(255,255,255,0.8); }
+        .dashboard-body.trade-col-collapsed #trade-collapse-handle { display: none; }
+
+        #trade-expand-handle {
+            position: fixed; right: 0; top: 50%; transform: translateY(-50%);
+            width: 14px; height: 64px; align-items: center; justify-content: center;
+            cursor: pointer; z-index: 500; opacity: 0; transition: opacity 0.25s ease, color 0.2s ease;
+            color: rgba(255,255,255,0.35); font-size: 11px;
+            background: rgba(255,255,255,0.04); border-radius: 6px 0 0 6px;
+            display: none;
+        }
+        body.trade-col-collapsed #trade-expand-handle { display: flex; }
+        #trade-expand-handle:hover { opacity: 1; color: rgba(255,255,255,0.8); }
+        @media (max-width: 768px) { #trade-expand-handle { display: none !important; } }
 
         .header-controls { display: flex; align-items: center; gap: 8px; }
         /* ✨ 圖表按鈕（時間區段選單／模式切換）：預設移除底色與框線，改由 .chart-glow-btn 提供
@@ -967,7 +1015,7 @@
 
                     <div class="chat-output-wrapper">
                         <div class="chat-display" id="chat-output">
-                            <span style="color: rgba(255,255,255,0.4)">[SYSTEM]</span> 已同步 <strong style="color:#fff" id="ai-current-ticker">NVDA</strong> 之 RSI、持倉成本與帳戶資金。<br>
+                            <span style="color: rgba(255,255,255,0.4)">[SYSTEM]</span> 已同步 <strong style="color:#fff" id="ai-current-ticker">未選擇</strong> 之 RSI、持倉成本與帳戶資金。<br>
                         </div>
 
                         <!-- 📒 歷史帳本 / 市場事件 共用同一個時間範圍選擇器：依偵測到的標記類型顯示不同標題（見 openLedgerRangePicker） -->
@@ -1013,9 +1061,12 @@
                     </div>
                 </div>
             </div>
-            <div id="desktop-trade-col"></div>
+            <div id="desktop-trade-col">
+                <div id="trade-collapse-handle" onclick="toggleTradeColumn()" title="收合下單區"><i class="fa-solid fa-caret-right"></i></div>
+            </div>
         </div>
     </main>
+    <div id="trade-expand-handle" onclick="toggleTradeColumn()" title="展開下單區"><i class="fa-solid fa-caret-left"></i></div>
 
     <main id="view-mobile-trade" class="view-section">
         <div id="mobile-trade-col"></div>
@@ -2202,7 +2253,7 @@
                 priceFetchFailCount++;
                 const priceDisplay = document.getElementById("trade-price-display");
                 if (priceDisplay && priceFetchFailCount >= 1) {
-                    priceDisplay.innerHTML = `<span style="font-size:13px; color:var(--color-sell);"><i class="fa-solid fa-triangle-exclamation"></i> 查詢失敗，請確認代碼是否正確</span> <button type="button" onclick="event.stopPropagation(); fetchRealPrice('${currentTicker}');" style="margin-left:6px; font-size:11px; padding:2px 8px; border-radius:4px; border:1px solid var(--color-acc); background:transparent; color:var(--color-acc); cursor:pointer;">重試</button>`;
+                    priceDisplay.innerHTML = `<span style="font-size:13px; color:var(--color-sell);"><i class="fa-solid fa-triangle-exclamation"></i> 查詢失敗</span> <button type="button" onclick="event.stopPropagation(); fetchRealPrice('${currentTicker}');" style="margin-left:6px; font-size:11px; padding:2px 8px; border-radius:4px; border:1px solid var(--color-acc); background:transparent; color:var(--color-acc); cursor:pointer;">重試</button>`;
                 }
             }
         }
@@ -2614,6 +2665,58 @@
     }
 
     function adaptTradeLayout() { const panel = document.getElementById("shared-trade-panel"); if (window.innerWidth <= 768) document.getElementById("mobile-trade-col").appendChild(panel); else document.getElementById("desktop-trade-col").appendChild(panel); }
+
+    // ✨ 下單區收合／展開：僅桌機版適用。改用 requestAnimationFrame 每一影格直接指定明確的 px
+    // 寬度到 grid-template-columns，完全不依賴 CSS 對這個屬性做轉場動畫（詳見上方 CSS 註解），
+    // 徹底避開「動畫卡在中間值」「重複點擊狀態打架」的問題。
+    let tradeColRAF = null;
+    function toggleTradeColumn() {
+        if (window.innerWidth <= 768) return;
+        const body = document.querySelector('.dashboard-body');
+        const col = document.getElementById('desktop-trade-col');
+        const panel = document.getElementById('shared-trade-panel');
+        if (!body || !col || !panel) return;
+
+        // 若上一個收合／展開動畫還在跑，先取消，並以「目前畫面上實際的寬度」作為新動畫的起點，
+        // 這樣快速重複點擊也只會平順地接續播放，不會卡住或跳動。
+        if (tradeColRAF) { cancelAnimationFrame(tradeColRAF); tradeColRAF = null; }
+
+        const collapsing = !body.classList.contains('trade-col-collapsed');
+        const gap = 14; // 對應 .dashboard-body 的 gap
+        const naturalWidth = Math.max(0, (body.clientWidth - gap) / 4); // 3fr:1fr → 下單區固定佔可用寬度的 1/4
+        const startWidth = col.getBoundingClientRect().width;
+        const endWidth = collapsing ? 0 : naturalWidth;
+
+        // 動畫全程用明確 px 鎖定欄寬，欄寬不會受內容大小影響，因此淡出/淡入可以跟欄寬動畫同步進行，
+        // 不需要再分成「先淡出/後收欄寬」兩個階段。
+        col.style.overflow = 'hidden';
+        body.style.gridTemplateColumns = `1fr ${startWidth}px`;
+        void body.offsetWidth; // 強制 reflow，確保起始寬度先套用，動畫才會從正確的起點開始
+
+        body.classList.toggle('trade-col-collapsed', collapsing);
+        document.body.classList.toggle('trade-col-collapsed', collapsing);
+        panel.classList.toggle('trade-panel-fading', collapsing);
+
+        const duration = 350;
+        const startTime = performance.now();
+        const ease = (t) => 1 - Math.pow(1 - t, 3); // cubic ease-out
+
+        function step(now) {
+            const t = Math.min(1, (now - startTime) / duration);
+            const w = startWidth + (endWidth - startWidth) * ease(t);
+            body.style.gridTemplateColumns = `1fr ${w}px`;
+            if (t < 1) {
+                tradeColRAF = requestAnimationFrame(step);
+            } else {
+                tradeColRAF = null;
+                // 動畫結束，清空 inline style，交還給 CSS 規則（收合：.trade-col-collapsed{1fr 0fr}；
+                // 展開：最上方原本的 3fr 1fr），確保靜止時的響應式行為與修改前完全一致。
+                body.style.gridTemplateColumns = '';
+                col.style.overflow = collapsing ? 'hidden' : '';
+            }
+        }
+        tradeColRAF = requestAnimationFrame(step);
+    }
     adaptTradeLayout(); window.addEventListener("resize", adaptTradeLayout);
 
     const sidebarEl = document.getElementById('sidebar'), overlayEl = document.getElementById('sidebar-overlay');
@@ -3318,6 +3421,13 @@
         if (e.key === 'Escape' && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
             if (document.activeElement && typeof document.activeElement.blur === 'function') document.activeElement.blur();
             switchView('view-dashboard', document.getElementById('menu-item-dashboard'));
+            return;
+        }
+        // ⌨️ Ctrl+S（Mac 為 Cmd+S）：直接觸發目前使用中帳號的手動同步，並阻止瀏覽器預設的「儲存網頁」行為
+        if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.code === 'KeyS') {
+            e.preventDefault();
+            const acc = getActiveAccount();
+            if (acc) manualSyncAccount(acc.id);
             return;
         }
         if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
@@ -5927,7 +6037,7 @@
             } else if (!fetchSucceeded && ticker === currentTicker) {
                 priceFetchFailCount++;
                 if (priceFetchFailCount >= 1) {
-                    document.getElementById("trade-price-display").innerHTML = `<span style="font-size:13px; color:var(--color-sell);"><i class="fa-solid fa-triangle-exclamation"></i> 查詢失敗，請確認代碼是否正確</span> <button type="button" onclick="event.stopPropagation(); fetchRealPrice('${ticker}');" style="margin-left:6px; font-size:11px; padding:2px 8px; border-radius:4px; border:1px solid var(--color-acc); background:transparent; color:var(--color-acc); cursor:pointer;">重試</button>`;
+                    document.getElementById("trade-price-display").innerHTML = `<span style="font-size:13px; color:var(--color-sell);"><i class="fa-solid fa-triangle-exclamation"></i> 查詢失敗</span> <button type="button" onclick="event.stopPropagation(); fetchRealPrice('${ticker}');" style="margin-left:6px; font-size:11px; padding:2px 8px; border-radius:4px; border:1px solid var(--color-acc); background:transparent; color:var(--color-acc); cursor:pointer;">重試</button>`;
                 } else {
                     document.getElementById("trade-price-display").innerHTML = `<span style="font-size:14px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> 報價連線中...</span>`;
                 }
