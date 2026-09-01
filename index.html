@@ -9004,7 +9004,7 @@ ${summaryText}
         }
 
         function handleTouch(e) {
-            if (gyroActive || !isTouchGlowEnabled()) return;
+            if (!isTouchGlowEnabled()) return;
             if (!e.touches || !e.touches.length) return;
             const t = e.touches[0];
             schedule(t.clientX, t.clientY, TOUCH_ACTIVE_CLASS);
