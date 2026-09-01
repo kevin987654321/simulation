@@ -2717,6 +2717,44 @@
         }
         tradeColRAF = requestAnimationFrame(step);
     }
+
+    // 🩹 圖表區高度「隨視窗高度鎖定」：問題不只發生在動畫過程中，收合／展開「定型」後的
+    // 靜止狀態，圖表區高度也可能出現些微落差（寬度改變連帶讓 Chart.js 響應式重繪，重繪結果
+    // 偶爾跟純 CSS flex 算出來的高度差個幾 px），導致下方 Gemini 區塊的位置在兩種狀態下
+    // 「定型」後仍有落差。做法：只要視窗高度沒變，就把圖表區高度明確鎖死在目前量到的實際高度，
+    // 不論收合、展開、或任何跟寬度有關的版面調整都不會牽動它；只有當視窗高度真的改變時，
+    // 才重新解鎖、量測一次「彈性狀態下應有的高度」、再鎖回新的高度，維持原本的響應式行為。
+    // 手機版（<=768px）維持原本彈性版面，不套用鎖定。
+    let chartHeightLockedForViewportH = null;
+    function relockChartHeight() {
+        const chartContainer = document.getElementById('chart-container');
+        if (!chartContainer) return;
+        if (window.innerWidth <= 768) {
+            chartContainer.style.flex = '';
+            chartContainer.style.height = '';
+            chartHeightLockedForViewportH = null;
+            return;
+        }
+        chartContainer.style.flex = '';
+        chartContainer.style.height = '';
+        void chartContainer.offsetHeight; // 強制 reflow，量出「彈性狀態下」應有的自然高度
+        const naturalHeight = chartContainer.getBoundingClientRect().height;
+        if (naturalHeight > 0) {
+            chartContainer.style.flex = 'none';
+            chartContainer.style.height = `${naturalHeight}px`;
+        }
+        chartHeightLockedForViewportH = window.innerHeight;
+    }
+    // 🩹 初次鎖定的時機很重要：此時開機流程（帳號資料、主題／設定 class）都還沒跑完，
+    // 這裡量到的高度可能是「還沒套用完整設定」前的暫時值，鎖錯了會導致初始高度跟開機完成後
+    // 應有的樣子對不上（要手動縮放視窗觸發一次重新量測才會恢復正常）。真正的初次鎖定改成在
+    // startApp() 完全跑完、畫面確定穩定繪製過後才執行（見檔案最下方 startApp().then() 區塊），
+    // 這裡先只註冊 resize 監聽，不在此時鎖定。
+    window.addEventListener('resize', () => {
+        if (window.innerWidth <= 768) { relockChartHeight(); return; }
+        if (window.innerHeight !== chartHeightLockedForViewportH) relockChartHeight();
+    });
+
     adaptTradeLayout(); window.addEventListener("resize", adaptTradeLayout);
 
     const sidebarEl = document.getElementById('sidebar'), overlayEl = document.getElementById('sidebar-overlay');
@@ -9110,6 +9148,9 @@ ${summaryText}
     startApp().then(() => {
         requestAnimationFrame(() => requestAnimationFrame(() => {
             document.body.classList.remove('boot-no-blur');
+            // 圖表區高度鎖定（見 relockChartHeight）也在這裡才第一次真正執行：
+            // 開機流程此時已完全跑完、畫面也已穩定繪製過，量到的才是「設定套用完成後」應有的正確高度。
+            relockChartHeight();
         }));
     });
 
