@@ -8999,21 +8999,52 @@ ${summaryText}
         }
 
         // --- 手機：手指觸控追蹤（跟隨手指位置，放開即消失） ---
-        // 🩹 使用獨立的 touchRafId／scheduleTouch，不與陀螺儀共用排程佇列：
+        // 🩹 使用獨立的 touchRafId，不與陀螺儀共用排程佇列：
         // 陀螺儀的 deviceorientation 事件觸發頻率非常高，若與觸控共用同一個
         // requestAnimationFrame 排程，陀螺儀啟用時會幾乎持續佔滿排程空檔，
         // 導致觸控的更新請求永遠排不進去（看起來像完全沒有反應）。
+        //
+        // 🩹 與陀螺儀「目前頁面所有卡片一起依距離發光」的機制不同，觸控改成
+        // 比照桌機滑鼠 :hover 的行為：用 elementFromPoint 找出手指實際壓著的
+        // 那張卡片，只讓「這一張」卡片發光（其餘卡片不受影響）；手指移動到別
+        // 張卡片上時，前一張會自動熄滅。.view-section 未啟用時帶有
+        // pointer-events:none，elementFromPoint 天生就會跳過非目前頁面的卡片，
+        // 不需要再另外判斷。
+        //
+        // 🩹 放開手指時，除了移除已啟用的 class，也要 cancelAnimationFrame()
+        // 取消掉「還沒來得及執行」的排程：若最後一次 touchmove 排到下一影格才
+        // 執行，而 touchend 是在那一影格「之前」同步觸發並清除 class，那個晚一
+        // 步才執行的 touchmove 回呼會在清除之後又把 class 加回去，造成流光殘
+        // 留在畫面上（帶角度滑開時，手指離開前幾乎都會多觸發一次 touchmove，
+        // 所以特別容易發生；純垂直上抬則較少觸發，才會看起來「沒事」）。
+        let touchActiveEl = null;
+
+        function updateTouchTarget(clientX, clientY) {
+            const hit = document.elementFromPoint(clientX, clientY);
+            const panel = hit ? hit.closest('.glass-panel, .glow-line, .glow-divide-top, .chart-glow-btn') : null;
+            if (panel !== touchActiveEl) {
+                if (touchActiveEl) touchActiveEl.classList.remove(TOUCH_ACTIVE_CLASS);
+                touchActiveEl = panel;
+                if (touchActiveEl) touchActiveEl.classList.add(TOUCH_ACTIVE_CLASS);
+            }
+            if (touchActiveEl) {
+                const rect = touchActiveEl.getBoundingClientRect();
+                touchActiveEl.style.setProperty('--gx', (clientX - rect.left) + 'px');
+                touchActiveEl.style.setProperty('--gy', (clientY - rect.top) + 'px');
+            }
+        }
+
         function scheduleTouch(clientX, clientY) {
             if (touchRafId) return;
             touchRafId = requestAnimationFrame(() => {
                 touchRafId = null;
-                updateTargets(clientX, clientY, TOUCH_ACTIVE_CLASS);
+                updateTouchTarget(clientX, clientY);
             });
         }
 
         function clearTouchGlow() {
-            const active = document.querySelectorAll('.' + TOUCH_ACTIVE_CLASS);
-            for (let i = 0; i < active.length; i++) active[i].classList.remove(TOUCH_ACTIVE_CLASS);
+            if (touchRafId) { cancelAnimationFrame(touchRafId); touchRafId = null; } // 取消尚未執行的排程，避免殘留
+            if (touchActiveEl) { touchActiveEl.classList.remove(TOUCH_ACTIVE_CLASS); touchActiveEl = null; }
         }
 
         function handleTouch(e) {
