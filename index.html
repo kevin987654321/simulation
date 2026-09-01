@@ -8923,7 +8923,8 @@ ${summaryText}
              與陀螺儀模式各自獨立（各自使用不同的啟動 class），互不影響。
        ========================================= */
     const GlowFX = (function () {
-        let rafId = null;
+        let rafId = null;         // 桌機滑鼠／陀螺儀共用（兩者互斥，共用排程不會有競爭問題）
+        let touchRafId = null;    // 觸控使用獨立排程佇列，避免陀螺儀高頻更新把觸控的更新請求「餓死」
         let gyroActive = false;
         let gyroBaseline = null;
         const TOUCH_ACTIVE_CLASS = 'glow-touch-active';
@@ -8998,6 +8999,18 @@ ${summaryText}
         }
 
         // --- 手機：手指觸控追蹤（跟隨手指位置，放開即消失） ---
+        // 🩹 使用獨立的 touchRafId／scheduleTouch，不與陀螺儀共用排程佇列：
+        // 陀螺儀的 deviceorientation 事件觸發頻率非常高，若與觸控共用同一個
+        // requestAnimationFrame 排程，陀螺儀啟用時會幾乎持續佔滿排程空檔，
+        // 導致觸控的更新請求永遠排不進去（看起來像完全沒有反應）。
+        function scheduleTouch(clientX, clientY) {
+            if (touchRafId) return;
+            touchRafId = requestAnimationFrame(() => {
+                touchRafId = null;
+                updateTargets(clientX, clientY, TOUCH_ACTIVE_CLASS);
+            });
+        }
+
         function clearTouchGlow() {
             const active = document.querySelectorAll('.' + TOUCH_ACTIVE_CLASS);
             for (let i = 0; i < active.length; i++) active[i].classList.remove(TOUCH_ACTIVE_CLASS);
@@ -9007,7 +9020,7 @@ ${summaryText}
             if (!isTouchGlowEnabled()) return;
             if (!e.touches || !e.touches.length) return;
             const t = e.touches[0];
-            schedule(t.clientX, t.clientY, TOUCH_ACTIVE_CLASS);
+            scheduleTouch(t.clientX, t.clientY);
         }
 
         document.addEventListener('touchstart', handleTouch, { passive: true });
