@@ -1127,6 +1127,11 @@
         </div>
 
         <div class="glass-panel" style="padding:16px; display:flex; flex-direction:column; gap:10px;">
+            <span style="font-size:13px; font-weight:bold;"><i class="fa-solid fa-scale-balanced" style="color:var(--color-acc)"></i> 委買委賣</span>
+            <div id="detail-bidask-panel"><div style="color:#666; font-size:12px; text-align:center; padding:10px;"><i class="fa-solid fa-spinner fa-spin"></i> 讀取中...</div></div>
+        </div>
+
+        <div class="glass-panel" style="padding:16px; display:flex; flex-direction:column; gap:10px;">
             <span style="font-size:13px; font-weight:bold;"><i class="fa-solid fa-newspaper" style="color:var(--color-acc)"></i> 相關新聞</span>
             <div id="detail-news-list" style="display:flex; flex-direction:column; gap:2px;"></div>
         </div>
@@ -5938,7 +5943,7 @@
         { label: '1M', range: '1mo', interval: '1d' }, { label: '3M', range: '3mo', interval: '1d' },
         { label: '1Y', range: '1y', interval: '1d' }, { label: 'All', range: '5y', interval: '1wk' }
     ];
-    let detailTicker = null, detailRangeLabel = '1M', detailReqToken = 0, detailNewsToken = 0;
+    let detailTicker = null, detailRangeLabel = '1M', detailReqToken = 0, detailNewsToken = 0, detailQuoteToken = 0;
 
     function openTickerDetail(ticker) {
         detailTicker = ticker; detailRangeLabel = '1M';
@@ -5948,10 +5953,12 @@
         document.getElementById('detail-price-value').innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i>`;
         document.getElementById('detail-price-change').innerText = '';
         document.getElementById('detail-info-grid').innerHTML = '';
+        document.getElementById('detail-bidask-panel').innerHTML = `<div style="color:#666; font-size:12px; text-align:center; padding:10px;"><i class="fa-solid fa-spinner fa-spin"></i> 讀取中...</div>`;
         document.getElementById('detail-news-list').innerHTML = `<div style="color:#666; font-size:12px; padding:20px; text-align:center;"><i class="fa-solid fa-spinner fa-spin"></i> 新聞讀取中...</div>`;
         renderDetailRangeButtons();
         loadTickerDetailChart();
         loadTickerDetailNews();
+        loadTickerDetailQuoteExtra(ticker);
     }
     window.openTickerDetail = openTickerDetail;
 
@@ -6034,6 +6041,66 @@
         ).join('');
     }
 
+    // ============================================================
+    // 📊 委買委賣（Bid / Ask）：沿用 fetchAllQuotesBatched 已在用、確認可正常運作的
+    // Yahoo v7/finance/quote 端點（走 Yahoo，不經過 Google 新聞那個常被限流的路徑），
+    // 抓取該代號目前的委買價／量與委賣價／量。
+    // ⚠️ 這只是「最佳一檔」揭示（Level 1），不是台股官方五檔完整委買委賣簿；
+    // 且不同交易所、不同標的，Yahoo 是否有回傳這筆資料本身就不保證，抓不到時會誠實顯示「暫無資料」。
+    // ============================================================
+    async function loadTickerDetailQuoteExtra(ticker) {
+        const myToken = ++detailQuoteToken;
+        try {
+            const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(ticker)}`)}`;
+            const res = await fetch(proxyUrl, { cache: "no-store" });
+            if (!res.ok) throw new Error('http ' + res.status);
+            const json = await res.json();
+            const q = (json && json.quoteResponse && json.quoteResponse.result && json.quoteResponse.result[0]) || null;
+            if (myToken !== detailQuoteToken || ticker !== detailTicker) return; // 已切換代號，忽略過期結果
+            renderDetailBidAsk(ticker, q, false);
+        } catch (e) {
+            console.error('[委買委賣讀取失敗]', e); // 🩹 印出實際錯誤（如 HTTP 狀態碼），方便從瀏覽器 console 判斷是被擋、逾時、還是格式錯誤
+            if (myToken === detailQuoteToken && ticker === detailTicker) renderDetailBidAsk(ticker, null, true);
+        }
+    }
+    window.loadTickerDetailQuoteExtra = loadTickerDetailQuoteExtra;
+
+    function renderDetailBidAsk(ticker, q, failed) {
+        const wrap = document.getElementById('detail-bidask-panel');
+        if (!wrap) return;
+        if (failed) {
+            wrap.innerHTML = `<div style="color:#888; font-size:12px; text-align:center; padding:10px; display:flex; flex-direction:column; gap:8px; align-items:center;">
+                <span><i class="fa-solid fa-triangle-exclamation" style="color:var(--color-sell)"></i> 委買委賣讀取失敗</span>
+                <button type="button" onclick="loadTickerDetailQuoteExtra('${ticker}')" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:6px 14px; border-radius:6px; font-size:11px; cursor:pointer; font-weight:bold;"><i class="fa-solid fa-rotate-right"></i> 重試</button>
+            </div>`;
+            return;
+        }
+        const hasBid = q && typeof q.bid === 'number' && q.bid > 0;
+        const hasAsk = q && typeof q.ask === 'number' && q.ask > 0;
+        if (!hasBid && !hasAsk) {
+            wrap.innerHTML = `<div style="color:#666; font-size:12px; text-align:center; padding:10px;">此標的目前無委買委賣報價資料</div>`;
+            return;
+        }
+        // 台股 Yahoo 回傳的 bidSize/askSize 慣例上即為「張」數；其餘市場多為「股」數，依交易所回傳格式而異，此處僅盡量標示單位供參考
+        const unit = isTaiwanTicker(ticker) ? '張' : '股';
+        const fmtSize = (v) => (v === null || v === undefined) ? '--' : Math.round(v).toLocaleString() + ' ' + unit;
+        wrap.innerHTML = `
+            <div style="display:flex; gap:12px; flex-wrap:wrap;">
+                <div style="flex:1; min-width:120px; background:rgba(0,255,170,0.08); border:1px solid rgba(0,255,170,0.2); border-radius:8px; padding:10px 12px;">
+                    <div style="font-size:11px; color:#888; margin-bottom:4px;">委買 Bid</div>
+                    <div style="font-family:monospace; font-weight:bold; font-size:16px; color:var(--color-buy);">${hasBid ? '$' + q.bid.toFixed(2) : '--'}</div>
+                    <div style="font-size:11px; color:#888; margin-top:2px;">${hasBid ? fmtSize(q.bidSize) : '--'}</div>
+                </div>
+                <div style="flex:1; min-width:120px; background:rgba(255,69,96,0.08); border:1px solid rgba(255,69,96,0.2); border-radius:8px; padding:10px 12px;">
+                    <div style="font-size:11px; color:#888; margin-bottom:4px;">委賣 Ask</div>
+                    <div style="font-family:monospace; font-weight:bold; font-size:16px; color:var(--color-sell);">${hasAsk ? '$' + q.ask.toFixed(2) : '--'}</div>
+                    <div style="font-size:11px; color:#888; margin-top:2px;">${hasAsk ? fmtSize(q.askSize) : '--'}</div>
+                </div>
+            </div>
+            ${(hasBid && hasAsk) ? `<div style="font-size:11px; color:#666; text-align:center; margin-top:8px;">價差 Spread: $${(q.ask - q.bid).toFixed(2)}</div>` : ''}
+        `;
+    }
+
     // 📰 抓取個股最新相關新聞（不限日期區間，僅取最新幾則），沿用「市場事件」分析已有的 Google 新聞 RSS 爬取邏輯，
     // 但額外保留連結網址，讓使用者可以直接點進去閱讀原文。
     // 回傳 { items, failed }：failed=true 代表代理伺服器連線或新聞來源本身出錯（例如被來源網站擋下、回傳非 XML 內容），
@@ -6051,39 +6118,58 @@
         return Array.from(xmlDoc.querySelectorAll('item'));
     }
 
-    async function fetchLatestNewsForTicker(ticker, limit = 8) {
+async function fetchLatestNewsForTicker(ticker, limit = 8) {
+    try {
         const isTaiwanStock = /\.(TW|TWO)$/i.test(ticker);
         const bareCode = ticker.replace(/\.(TW|TWO)$/i, '');
-        const hl = isTaiwanStock ? 'zh-TW' : 'en-US', gl = isTaiwanStock ? 'TW' : 'US', ceid = isTaiwanStock ? 'TW:zh-Hant' : 'US:en';
-        // 先用「代號＋股價/stock」查，若這樣完全查不到結果（很常見於較冷門的代號），
-        // 再退一步只用代號本身重查一次，盡量提高命中率
-        const queries = isTaiwanStock ? [`${bareCode} 股價`, bareCode] : [`${ticker} stock`, ticker];
-        let items = [];
-        try {
-            for (const q of queries) {
-                items = await tryFetchNewsRss(q, hl, gl, ceid);
-                if (items.length > 0) break;
+        
+        // 台股搜「代號 股價」，美股搜「代號 stock」，以取得最精準的在地新聞
+        const query = isTaiwanStock ? `${bareCode} 股價` : `${ticker} stock`;
+        const hl = isTaiwanStock ? 'zh-TW' : 'en-US';
+        const gl = isTaiwanStock ? 'TW' : 'US';
+        const ceid = isTaiwanStock ? 'TW:zh-Hant' : 'US:en';
+
+        // 組合 Google News RSS 網址
+        const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=${hl}&gl=${gl}&ceid=${ceid}`;
+        
+        // ✨ 關鍵解法：透過第三方 RSS2JSON 服務，完全繞過 Cloudflare Worker (解決 503 問題) 且支援跨域 (CORS)
+        const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
+
+        // 注意：這裡不使用 myProxy，直接打 apiUrl
+        const res = await fetch(apiUrl, { cache: "no-store" });
+        if (!res.ok) throw new Error(`RSS2JSON HTTP ${res.status}`);
+
+        const json = await res.json();
+        if (json.status !== 'ok') throw new Error('RSS 解析失敗');
+
+        const items = json.items || [];
+
+        return items.slice(0, limit).map(item => {
+            const dateObj = new Date(item.pubDate);
+            const pubDateStr = `${String(dateObj.getMonth() + 1).padStart(2, '0')}/${String(dateObj.getDate()).padStart(2, '0')} ${String(dateObj.getHours()).padStart(2, '0')}:${String(dateObj.getMinutes()).padStart(2, '0')}`;
+            
+            // 整理標題與媒體來源 (Google News 的標題格式通常為 "實際標題 - 新聞媒體名稱")
+            let title = item.title;
+            let publisher = 'Google News';
+            const splitIndex = title.lastIndexOf(' - ');
+            if (splitIndex !== -1) {
+                publisher = title.substring(splitIndex + 3);
+                title = title.substring(0, splitIndex);
             }
-        } catch (e) {
-            console.error('[新聞抓取失敗]', e);
-            return null; // null = 抓取過程本身出錯（代理／來源網站問題），非「查無新聞」
-        }
-        const out = [];
-        for (const item of items) {
-            const titleRaw = item.querySelector('title')?.textContent || '';
-            const link = item.querySelector('link')?.textContent || '';
-            const pubDateStr = item.querySelector('pubDate')?.textContent || '';
-            const sourceEl = item.querySelector('source');
-            const source = sourceEl ? sourceEl.textContent : '';
-            if (!titleRaw) continue;
-            const pubTs = Date.parse(pubDateStr);
-            const escSource = source.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const title = source ? titleRaw.replace(new RegExp(`\\s*-\\s*${escSource}$`), '') : titleRaw;
-            out.push({ title, source, link, pubTs });
-            if (out.length >= limit) break;
-        }
-        return out; // 走完全程但確實沒有新聞 → 回傳空陣列（非 null）
+
+            return {
+                title: title,
+                link: item.link,
+                publisher: publisher,
+                pubDate: pubDateStr,
+                timestamp: dateObj.getTime()
+            };
+        });
+    } catch (e) {
+        console.error('[新聞抓取失敗]', e);
+        return null; 
     }
+}
 
     async function loadTickerDetailNews() {
         const ticker = detailTicker, myToken = ++detailNewsToken;
@@ -8585,34 +8671,49 @@
         const hl = isTaiwanStock ? 'zh-TW' : 'en-US';
         const gl = isTaiwanStock ? 'TW' : 'US';
         const ceid = isTaiwanStock ? 'TW:zh-Hant' : 'US:en';
+        
         const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=${hl}&gl=${gl}&ceid=${ceid}`;
+        
         try {
-            const proxyUrl = `${myProxy}${encodeURIComponent(rssUrl)}`;
-            const res = await fetch(proxyUrl, { cache: "no-store" });
-            const xmlText = await res.text();
-            const xmlDoc = new DOMParser().parseFromString(xmlText, 'text/xml');
-            const items = Array.from(xmlDoc.querySelectorAll('item'));
+            // ✨ 改用 rss2json 繞過 Cloudflare Worker (解決 503 被阻擋問題)，不使用 myProxy
+            const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
+            const res = await fetch(apiUrl, { cache: "no-store" });
+            
+            if (!res.ok) throw new Error(`RSS2JSON HTTP ${res.status}`);
+            
+            const json = await res.json();
+            if (json.status !== 'ok') return [];
+            
+            const items = json.items || [];
+            
             // 篩選發布日期落在查詢區間內（前後各留 1 天緩衝，避免時區誤差漏掉邊界新聞）的新聞
             const bufferMs = 24 * 60 * 60 * 1000;
             const rangeStart = range.startTs - bufferMs, rangeEnd = range.endTs + bufferMs;
             const matched = [];
+            
             for (const item of items) {
-                const titleRaw = item.querySelector('title')?.textContent || '';
-                const pubDateStr = item.querySelector('pubDate')?.textContent || '';
-                const sourceEl = item.querySelector('source');
-                const source = sourceEl ? sourceEl.textContent : '';
-                const pubTs = Date.parse(pubDateStr);
-                if (!titleRaw || isNaN(pubTs)) continue;
+                const pubTs = new Date(item.pubDate).getTime();
+                if (isNaN(pubTs)) continue;
+                
                 if (pubTs >= rangeStart && pubTs <= rangeEnd) {
-                    // Google 新聞標題常帶有「 - 來源名稱」的結尾，這裡去除重複的來源字樣，減少雜訊
-                    const escSource = source.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                    const title = source ? titleRaw.replace(new RegExp(`\\s*-\\s*${escSource}$`), '') : titleRaw;
+                    let title = item.title;
+                    let source = 'Google News';
+                    
+                    // Google 新聞標題常帶有「 - 來源名稱」的結尾，這裡分離出來源字樣，減少雜訊
+                    const splitIndex = title.lastIndexOf(' - ');
+                    if (splitIndex !== -1) {
+                        source = title.substring(splitIndex + 3);
+                        title = title.substring(0, splitIndex);
+                    }
+                    
                     matched.push({ title, source, pubTs });
                 }
             }
+            
             matched.sort((a, b) => a.pubTs - b.pubTs);
-            return matched.slice(0, 10); // 最多帶 10 則，避免 prompt 過長
+            return matched.slice(0, 10); // 最多帶 10 則，避免給 Gemini 的 prompt 過長
         } catch (e) {
+            console.error('[歷史新聞抓取失敗]', e);
             return [];
         }
     }
@@ -9132,6 +9233,8 @@ ${summaryText}
             
             fetchStockHistoryData(currentTicker, false);
             fetchAllCardsData();
+            // 🔁 個股詳情頁開著時，委買委賣資料也跟著每輪報價輪詢一起更新
+            if (detailTicker && document.getElementById('view-ticker-detail').classList.contains('active')) loadTickerDetailQuoteExtra(detailTicker);
         }, 8000);
 
         // 每 30 分鐘檢查一次是否已跨過一天，達成「每天自動查詢一次」股息 / 股票分割
