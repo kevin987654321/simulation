@@ -563,6 +563,18 @@
         .lr-preset-btn { flex: 1; min-width: 56px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); color: #888; border-radius: 6px; padding: 6px 0; font-size: 11px; font-weight: bold; cursor: pointer; transition: all 0.2s; }
         .lr-preset-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
         .lr-preset-btn.active { background: rgba(0,212,255,0.15); border-color: var(--color-acc); color: var(--color-acc); }
+
+        /* 🔍 個股詳情頁：資訊格與新聞列表 */
+        .detail-info-cell { display:flex; flex-direction:column; gap:4px; }
+        .detail-info-label { color:#777; }
+        .detail-info-value { font-family:monospace; font-weight:bold; font-size:13px; }
+        .detail-news-item { display:flex; flex-direction:column; gap:3px; padding:10px 8px; border-radius:8px; text-decoration:none; color:inherit; border-bottom:1px solid rgba(255,255,255,0.05); transition: background 0.15s; }
+        .detail-news-item:last-child { border-bottom:none; }
+        .detail-news-item:hover { background:rgba(255,255,255,0.05); }
+        .detail-news-title { font-size:13px; color:#eee; line-height:1.4; }
+        .detail-news-meta { font-size:11px; color:#777; }
+        .draggable-card.clickable-card { cursor: pointer; }
+        .draggable-card.clickable-card:hover { border-color: rgba(0,212,255,0.35); }
         .lr-date-row { display: flex; gap: 10px; align-items: flex-end; flex-shrink: 0; }
         .lr-date-box { flex: 1; }
         .lr-date-box label { display: block; font-size: 10px; color: #888; margin-bottom: 4px; }
@@ -1084,6 +1096,39 @@
              沒有任何卡片掛有標籤時，這一列不會出現（見 renderCardTagFilterBar 邏輯）。 -->
         <div id="card-tag-filter-bar" style="display:none; gap:6px; overflow-x:auto; scrollbar-width:none; padding:0 4px 4px; margin-bottom:4px;"></div>
         <div id="cards-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:14px; position:relative;">
+        </div>
+    </main>
+
+    <!-- 🔍 自選資產卡片點擊後的個股詳情頁：更詳細資訊、走勢圖、相關新聞。
+         點卡片本體 = 進來這頁；Ctrl/Cmd+點擊（手機雙擊）則略過這頁，直接跳去下單頁並選定該代號（見 handleCardClick/handleCardDblClick）。 -->
+    <main id="view-ticker-detail" class="view-section">
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom: 4px; padding:0 4px; flex-wrap:wrap;">
+            <button onclick="switchView('view-cards', document.getElementById('menu-item-cards'))" style="background:transparent; border:1px solid rgba(255,255,255,0.2); color:#fff; width:34px; height:34px; border-radius:8px; cursor:pointer; flex-shrink:0;"><i class="fa-solid fa-arrow-left"></i></button>
+            <div style="display:flex; flex-direction:column; line-height:1.3;">
+                <span style="font-size:18px; font-weight:900; color:var(--color-acc); letter-spacing:0.5px;" id="detail-ticker-symbol">--</span>
+                <span style="font-size:11px; color:#888;" id="detail-name"></span>
+            </div>
+            <div style="margin-left:auto; text-align:right;">
+                <div style="font-size:22px; font-weight:bold; font-family:monospace;" id="detail-price-value">--</div>
+                <div style="font-size:12px; font-family:monospace;" id="detail-price-change"></div>
+            </div>
+            <button onclick="goToTradeWithTicker(detailTicker)" style="background:rgba(0,212,255,0.15); border:1px solid var(--color-acc); color:var(--color-acc); padding:8px 14px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s; white-space:nowrap; flex-shrink:0;">
+                <i class="fa-solid fa-bolt"></i> 前往下單
+            </button>
+        </div>
+
+        <div class="glass-panel" style="padding:16px; display:flex; flex-direction:column; gap:10px;">
+            <div id="detail-range-group" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
+            <div style="height:260px; position:relative;"><canvas id="tickerDetailChart"></canvas></div>
+        </div>
+
+        <div class="glass-panel" style="padding:16px;">
+            <div id="detail-info-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:14px; font-size:12px;"></div>
+        </div>
+
+        <div class="glass-panel" style="padding:16px; display:flex; flex-direction:column; gap:10px;">
+            <span style="font-size:13px; font-weight:bold;"><i class="fa-solid fa-newspaper" style="color:var(--color-acc)"></i> 相關新聞</span>
+            <div id="detail-news-list" style="display:flex; flex-direction:column; gap:2px;"></div>
         </div>
     </main>
 
@@ -5822,14 +5867,14 @@
             const gross = h.shares * cData.price * rate, { feeRate, taxRate } = getMarketFeeConfig(t);
             const netValue = gross > 0 ? (gross - (gross * feeRate) - (gross * taxRate)) : 0, totalCost = h.shares * h.avgPrice * rate, pnl = netValue - totalCost;
             const pnlColor = pnl >= 0 ? 'var(--color-up)' : 'var(--color-down)';
-            const deleteBtn = isCardEditMode ? `<div class="delete-btn" onclick="removeCard('${t}')" style="position:absolute; top:-8px; right:-8px; background:var(--color-sell); color:#fff; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:10; box-shadow:0 0 10px rgba(0,0,0,0.5);"><i class="fa-solid fa-minus"></i></div>` : '';
+            const deleteBtn = isCardEditMode ? `<div class="delete-btn" onclick="event.stopPropagation(); removeCard('${t}')" style="position:absolute; top:-8px; right:-8px; background:var(--color-sell); color:#fff; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:10; box-shadow:0 0 10px rgba(0,0,0,0.5);"><i class="fa-solid fa-minus"></i></div>` : '';
             // 🏷️ 編輯模式下卡片左上角顯示標籤編輯按鈕；非編輯模式下若這張卡片有掛標籤，就在代號旁顯示標籤徽章
-            const tagEditBtn = isCardEditMode ? `<div class="card-tag-edit-btn" onclick="editCardTags('${t}')" title="編輯分類標籤"><i class="fa-solid fa-tag"></i></div>` : '';
+            const tagEditBtn = isCardEditMode ? `<div class="card-tag-edit-btn" onclick="event.stopPropagation(); editCardTags('${t}')" title="編輯分類標籤"><i class="fa-solid fa-tag"></i></div>` : '';
             const cardTags = state.cardTags[t] || [];
             const tagBadges = (!isCardEditMode && cardTags.length > 0) ? `<div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:-4px;">${cardTags.map(tag => `<span class="card-tag-badge">${escapeHtml(tag)}</span>`).join('')}</div>` : '';
 
             html += `
-            <div class="glass-panel draggable-card" data-ticker="${t}" style="padding: 18px; display:flex; flex-direction:column; gap:12px; cursor:${isCardEditMode ? 'grab' : 'default'}; position:relative;">
+            <div class="glass-panel draggable-card ${isCardEditMode ? '' : 'clickable-card'}" data-ticker="${t}" onclick="handleCardClick(event, '${t}')" ondblclick="handleCardDblClick(event, '${t}')" title="${isCardEditMode ? '' : '點擊查看詳情；Ctrl+點擊（手機雙擊）直接前往下單'}" style="padding: 18px; display:flex; flex-direction:column; gap:12px; cursor:${isCardEditMode ? 'grab' : 'pointer'}; position:relative;">
                 ${deleteBtn}
                 ${tagEditBtn}
                 <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:10px;">
@@ -5853,6 +5898,218 @@
         grid.innerHTML = html || (!isCardEditMode ? `<div style="color:#666; font-size:14px; grid-column:1/-1; text-align:center; padding:50px;">${activeCardTagFilter !== null ? `此標籤「${activeCardTagFilter}」目前沒有卡片` : '目前無監控卡片，請點擊右上角「編輯」進行新增'}</div>` : '');
         attachCardDragEvents();
     }
+
+    // ============================================================
+    // 🔍 自選資產卡片 → 個股詳情頁
+    // 單純點擊卡片：進入詳情頁（更詳細資訊／走勢圖／新聞）。
+    // Ctrl+點擊（Mac 為 Cmd+點擊）或手機雙擊：略過詳情頁，直接跳去下單頁面並選定該代號。
+    // 單擊動作延遲觸發，若短時間內偵測到第二次點擊（=雙擊）則取消單擊、改走跳轉下單的邏輯，
+    // 避免「雙擊下單」誤觸發一次「單擊看詳情」的畫面閃爍。
+    // ============================================================
+    let cardClickTimer = null;
+    function handleCardClick(e, ticker) {
+        if (isCardEditMode) return; // 編輯模式（拖曳排序）時，點擊卡片不做導覽
+        if (e.ctrlKey || e.metaKey) { e.preventDefault(); clearTimeout(cardClickTimer); goToTradeWithTicker(ticker); return; }
+        clearTimeout(cardClickTimer);
+        cardClickTimer = setTimeout(() => { openTickerDetail(ticker); }, 220);
+    }
+    function handleCardDblClick(e, ticker) {
+        if (isCardEditMode) return;
+        e.preventDefault(); clearTimeout(cardClickTimer);
+        goToTradeWithTicker(ticker);
+    }
+
+    // 🚀 跳轉到下單頁面並選定代號：電腦版是「指揮操盤中心」(view-dashboard)，手機版是「下單櫃檯」(view-mobile-trade)
+    function goToTradeWithTicker(ticker) {
+        if (!ticker) return;
+        const isMobile = window.innerWidth <= 768;
+        if (isMobile) {
+            switchView('view-mobile-trade', document.querySelector('.menu-item[data-view="view-mobile-trade"]'));
+        } else {
+            switchView('view-dashboard', document.getElementById('menu-item-dashboard'));
+        }
+        selectTicker(ticker);
+    }
+    window.goToTradeWithTicker = goToTradeWithTicker;
+
+    // 📈 個股詳情頁使用的時間範圍選項（沿用主圖表 LINE 模式的區間設定，維持與其他圖表一致的抓取邏輯）
+    const DETAIL_RANGES = [
+        { label: '1D', range: '1d', interval: '5m' }, { label: '1W', range: '5d', interval: '15m' },
+        { label: '1M', range: '1mo', interval: '1d' }, { label: '3M', range: '3mo', interval: '1d' },
+        { label: '1Y', range: '1y', interval: '1d' }, { label: 'All', range: '5y', interval: '1wk' }
+    ];
+    let detailTicker = null, detailRangeLabel = '1M', detailReqToken = 0, detailNewsToken = 0;
+
+    function openTickerDetail(ticker) {
+        detailTicker = ticker; detailRangeLabel = '1M';
+        switchView('view-ticker-detail', null);
+        document.getElementById('detail-ticker-symbol').innerText = ticker;
+        document.getElementById('detail-name').innerText = '';
+        document.getElementById('detail-price-value').innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i>`;
+        document.getElementById('detail-price-change').innerText = '';
+        document.getElementById('detail-info-grid').innerHTML = '';
+        document.getElementById('detail-news-list').innerHTML = `<div style="color:#666; font-size:12px; padding:20px; text-align:center;"><i class="fa-solid fa-spinner fa-spin"></i> 新聞讀取中...</div>`;
+        renderDetailRangeButtons();
+        loadTickerDetailChart();
+        loadTickerDetailNews();
+    }
+    window.openTickerDetail = openTickerDetail;
+
+    function renderDetailRangeButtons() {
+        document.getElementById('detail-range-group').innerHTML = DETAIL_RANGES.map(r =>
+            `<button type="button" class="lr-preset-btn ${r.label === detailRangeLabel ? 'active' : ''}" onclick="setDetailRange('${r.label}')">${r.label}</button>`
+        ).join('');
+    }
+    function setDetailRange(label) {
+        if (label === detailRangeLabel) return;
+        detailRangeLabel = label;
+        renderDetailRangeButtons();
+        loadTickerDetailChart();
+    }
+    window.setDetailRange = setDetailRange;
+
+    async function loadTickerDetailChart() {
+        const ticker = detailTicker, myToken = ++detailReqToken;
+        const config = DETAIL_RANGES.find(r => r.label === detailRangeLabel) || DETAIL_RANGES[2];
+        try {
+            const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=${config.range}&interval=${config.interval}`)}`;
+            const res = await fetch(proxyUrl, { cache: "no-store" });
+            const json = await res.json(), result = json.chart && json.chart.result ? json.chart.result[0] : null;
+            // 🩹 若使用者在等待期間已切換到其他代號或按了其他區間，這次回應已過期，不應覆寫畫面
+            if (myToken !== detailReqToken || ticker !== detailTicker) return;
+            if (!result) throw new Error('no data');
+            const meta = result.meta || {};
+            const timestamps = result.timestamp || [], closes = (result.indicators.quote[0] || {}).close || [];
+            let labels = [], prices = [];
+            for (let i = 0; i < timestamps.length; i++) {
+                if (closes[i] === null || closes[i] === undefined) continue;
+                prices.push(closes[i]);
+                const d = new Date(timestamps[i] * 1000);
+                labels.push(config.range === '1d' ? `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}` : `${String(d.getFullYear()).slice(-2)}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`);
+            }
+            renderDetailInfo(ticker, meta, prices);
+            const prevClose = meta.chartPreviousClose ?? meta.previousClose ?? (prices.length ? prices[0] : null);
+            const lastPrice = prices.length ? prices[prices.length - 1] : null;
+            const up = (lastPrice !== null && prevClose) ? lastPrice >= prevClose : true;
+            const rootStyle = getComputedStyle(document.documentElement);
+            const lineColor = up ? (rootStyle.getPropertyValue('--color-up').trim() || '#00ffaa') : (rootStyle.getPropertyValue('--color-down').trim() || '#ff4560');
+            detailChart.data.labels = labels;
+            detailChart.data.datasets = [{ data: prices, borderColor: lineColor, backgroundColor: lineColor + '22', borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, tension: 0.15, fill: true }];
+            detailChart.update();
+        } catch (err) {
+            if (ticker === detailTicker) { detailChart.data.labels = []; detailChart.data.datasets = []; detailChart.update(); }
+        }
+    }
+
+    function renderDetailInfo(ticker, meta, prices) {
+        document.getElementById('detail-name').innerText = meta.longName || meta.shortName || '';
+        const last = prices.length ? prices[prices.length - 1] : (meta.regularMarketPrice ?? null);
+        const prevClose = meta.chartPreviousClose ?? meta.previousClose ?? null;
+        const priceEl = document.getElementById('detail-price-value'), changeEl = document.getElementById('detail-price-change');
+        if (last !== null && last !== undefined) {
+            priceEl.innerText = '$' + last.toFixed(2);
+            if (prevClose) {
+                const diff = last - prevClose, pct = (diff / prevClose) * 100, isUp = diff >= 0;
+                changeEl.style.color = isUp ? 'var(--color-up)' : 'var(--color-down)';
+                changeEl.innerText = `${isUp ? '+' : ''}${diff.toFixed(2)} (${isUp ? '+' : ''}${pct.toFixed(2)}%)`;
+            } else changeEl.innerText = '';
+        } else { priceEl.innerText = '--'; changeEl.innerText = ''; }
+
+        const rsi = prices.length >= 15 ? calculateRSI(prices, 14) : (cardsDataCache[ticker] ? cardsDataCache[ticker].rsi : null);
+        const h = state.holdings[ticker] || { shares: 0, avgPrice: 0 };
+        const fmtPrice = (v) => (v === null || v === undefined || isNaN(v)) ? '--' : '$' + v.toFixed(2);
+        const rows = [
+            ['昨收', fmtPrice(prevClose)],
+            ['成交量', (meta.regularMarketVolume !== undefined && meta.regularMarketVolume !== null) ? meta.regularMarketVolume.toLocaleString() : '--'],
+            ['今日最高', fmtPrice(meta.regularMarketDayHigh)],
+            ['今日最低', fmtPrice(meta.regularMarketDayLow)],
+            ['52週最高', fmtPrice(meta.fiftyTwoWeekHigh)],
+            ['52週最低', fmtPrice(meta.fiftyTwoWeekLow)],
+            ['14日 RSI', (rsi !== null && rsi !== undefined) ? rsi.toFixed(1) : '--'],
+            ['持有數量', h.shares + ' 股'],
+            ['買入均價', fmtPrice(h.avgPrice)]
+        ];
+        document.getElementById('detail-info-grid').innerHTML = rows.map(([label, val]) =>
+            `<div class="detail-info-cell"><span class="detail-info-label">${escapeHtml(label)}</span><span class="detail-info-value">${escapeHtml(String(val))}</span></div>`
+        ).join('');
+    }
+
+    // 📰 抓取個股最新相關新聞（不限日期區間，僅取最新幾則），沿用「市場事件」分析已有的 Google 新聞 RSS 爬取邏輯，
+    // 但額外保留連結網址，讓使用者可以直接點進去閱讀原文。
+    // 回傳 { items, failed }：failed=true 代表代理伺服器連線或新聞來源本身出錯（例如被來源網站擋下、回傳非 XML 內容），
+    // 和「真的查無相關新聞」是兩種不同狀況，畫面上要顯示不同訊息，使用者才看得出問題出在哪。
+    async function tryFetchNewsRss(query, hl, gl, ceid) {
+        const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=${hl}&gl=${gl}&ceid=${ceid}`;
+        const proxyUrl = `${myProxy}${encodeURIComponent(rssUrl)}`;
+        const res = await fetch(proxyUrl, { cache: "no-store" });
+        if (!res.ok) throw new Error(`proxy http ${res.status}`);
+        const xmlText = await res.text();
+        const xmlDoc = new DOMParser().parseFromString(xmlText, 'text/xml');
+        // 代理伺服器出錯、或來源網站回傳的不是合法 XML（例如被擋下改回傳 HTML 錯誤頁）時，
+        // DOMParser 會產生 <parsererror> 節點，這種情況要視為「抓取失敗」，不能當成「查無新聞」處理
+        if (xmlDoc.querySelector('parsererror')) throw new Error('rss parse error');
+        return Array.from(xmlDoc.querySelectorAll('item'));
+    }
+
+    async function fetchLatestNewsForTicker(ticker, limit = 8) {
+        const isTaiwanStock = /\.(TW|TWO)$/i.test(ticker);
+        const bareCode = ticker.replace(/\.(TW|TWO)$/i, '');
+        const hl = isTaiwanStock ? 'zh-TW' : 'en-US', gl = isTaiwanStock ? 'TW' : 'US', ceid = isTaiwanStock ? 'TW:zh-Hant' : 'US:en';
+        // 先用「代號＋股價/stock」查，若這樣完全查不到結果（很常見於較冷門的代號），
+        // 再退一步只用代號本身重查一次，盡量提高命中率
+        const queries = isTaiwanStock ? [`${bareCode} 股價`, bareCode] : [`${ticker} stock`, ticker];
+        let items = [];
+        try {
+            for (const q of queries) {
+                items = await tryFetchNewsRss(q, hl, gl, ceid);
+                if (items.length > 0) break;
+            }
+        } catch (e) {
+            console.error('[新聞抓取失敗]', e);
+            return null; // null = 抓取過程本身出錯（代理／來源網站問題），非「查無新聞」
+        }
+        const out = [];
+        for (const item of items) {
+            const titleRaw = item.querySelector('title')?.textContent || '';
+            const link = item.querySelector('link')?.textContent || '';
+            const pubDateStr = item.querySelector('pubDate')?.textContent || '';
+            const sourceEl = item.querySelector('source');
+            const source = sourceEl ? sourceEl.textContent : '';
+            if (!titleRaw) continue;
+            const pubTs = Date.parse(pubDateStr);
+            const escSource = source.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const title = source ? titleRaw.replace(new RegExp(`\\s*-\\s*${escSource}$`), '') : titleRaw;
+            out.push({ title, source, link, pubTs });
+            if (out.length >= limit) break;
+        }
+        return out; // 走完全程但確實沒有新聞 → 回傳空陣列（非 null）
+    }
+
+    async function loadTickerDetailNews() {
+        const ticker = detailTicker, myToken = ++detailNewsToken;
+        const listEl = document.getElementById('detail-news-list');
+        listEl.innerHTML = `<div style="color:#666; font-size:12px; padding:20px; text-align:center;"><i class="fa-solid fa-spinner fa-spin"></i> 新聞讀取中...</div>`;
+        const items = await fetchLatestNewsForTicker(ticker, 8);
+        if (myToken !== detailNewsToken || ticker !== detailTicker) return; // 已切換代號，忽略過期結果
+        if (items === null) {
+            listEl.innerHTML = `<div style="color:#888; font-size:12px; padding:20px; text-align:center; display:flex; flex-direction:column; gap:8px; align-items:center;">
+                <span><i class="fa-solid fa-triangle-exclamation" style="color:var(--color-sell)"></i> 新聞讀取失敗，可能是代理伺服器或新聞來源暫時無法連線</span>
+                <button type="button" onclick="loadTickerDetailNews()" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:6px 14px; border-radius:6px; font-size:11px; cursor:pointer; font-weight:bold;"><i class="fa-solid fa-rotate-right"></i> 重試</button>
+            </div>`;
+            return;
+        }
+        if (items.length === 0) { listEl.innerHTML = `<div style="color:#666; font-size:12px; padding:20px; text-align:center;">查無相關新聞</div>`; return; }
+        listEl.innerHTML = items.map(n => {
+            const dateStr = !isNaN(n.pubTs) ? new Date(n.pubTs).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' }) : '';
+            const metaLine = [n.source, dateStr].filter(Boolean).join(' · ');
+            const href = n.link ? escapeHtml(n.link) : '#';
+            return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="detail-news-item">
+                <div class="detail-news-title">${escapeHtml(n.title)}</div>
+                ${metaLine ? `<div class="detail-news-meta">${escapeHtml(metaLine)}</div>` : ''}
+            </a>`;
+        }).join('');
+    }
+    window.loadTickerDetailNews = loadTickerDetailNews;
 
     // 🩹 「最近選過」上限固定為 5 筆，最新選取的代號會排到最前面，超過上限則自動移除最舊的
     function addToRecentlySelected(t) { state.recentTickers = [t, ...state.recentTickers.filter(item => item !== t)].slice(0, 5); saveData(); renderRecentTickers(); }
@@ -7218,6 +7475,25 @@
                 } 
             } 
         } 
+    });
+
+    // 🔍 個股詳情頁專用的獨立走勢圖（與主頁 navChart / 手機版 mobileChart 完全分開，不共用資料狀態）
+    const detailChart = new Chart(document.getElementById('tickerDetailChart').getContext('2d'), {
+        type: 'line', data: { labels: [], datasets: [] },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            events: ['mousedown', 'mouseup', 'mousemove', 'mouseout', 'touchstart', 'touchmove', 'touchend', 'touchcancel'],
+            interaction: { mode: 'index', intersect: false },
+            layout: { padding: { top: 15, bottom: 10, left: 10, right: 10 } },
+            plugins: {
+                legend: { display: false },
+                tooltip: { enabled: true, mode: 'index', intersect: false, callbacks: { label: (ctx) => '價: $' + ctx.parsed.y.toFixed(2) } }
+            },
+            scales: {
+                x: { grid: { display: false }, offset: true, ticks: { maxTicksLimit: 6, color: '#666', font: { size: 10 } } },
+                y: { beginAtZero: false, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#666', font: { size: 10 } }, grace: '10%' }
+            }
+        }
     });
 
     // 🍩 庫存與資產損益：各檔標的資金佔比圓環圖
