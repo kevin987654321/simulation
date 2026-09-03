@@ -576,7 +576,13 @@
         .detail-news-title { font-size:13px; color:#eee; line-height:1.4; }
         .detail-news-meta { font-size:11px; color:#777; }
         .draggable-card.clickable-card { cursor: pointer; }
-        .draggable-card.clickable-card:hover { border-color: rgba(0,212,255,0.35); }
+        /* 🩹 修復手機版藍色邊框殘留：:hover 在觸控裝置上是由「點一下」模擬觸發，
+           且往往要等使用者點別的地方才會解除，導致手指點過的卡片邊框卡住不消失。
+           改用 @media (hover: hover) and (pointer: fine) 限定只有滑鼠等真正具備懸停能力的裝置才套用，
+           觸控裝置點擊時只會走 onclick 邏輯，不會再有殘留的 hover 邊框。 */
+        @media (hover: hover) and (pointer: fine) {
+            .draggable-card.clickable-card:hover { border-color: rgba(0,212,255,0.35); }
+        }
         .lr-date-row { display: flex; gap: 10px; align-items: flex-end; flex-shrink: 0; }
         .lr-date-box { flex: 1; }
         .lr-date-box label { display: block; font-size: 10px; color: #888; margin-bottom: 4px; }
@@ -597,8 +603,13 @@
         .badge-sell { background: rgba(255,69,96,0.12); color: var(--color-sell); border: 1px solid rgba(255,69,96,0.3); }
 
         .settings-list { max-width: 650px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; width: 100%; }
-        .settings-category-title { font-size: 11px; color: #666; padding: 14px 6px 2px 6px; font-weight: bold; text-transform: uppercase; letter-spacing: 1.5px; }
+        /* 🩹 分類標題原本上方留白太小（僅 list gap 12px + padding-top 14px），文字顏色又偏暗，
+           容易與上一個分類最後一項的內容混在一起、看起來雜亂。除了加大上方留白，另外加一條細分隔線
+           清楚標示「上一分類結束」的位置，兩者搭配比單純加大留白更能讓分類分界一眼可辨。 */
+        .settings-category-title { position: relative; font-size: 11px; color: #666; padding: 28px 6px 4px 6px; font-weight: bold; text-transform: uppercase; letter-spacing: 1.5px; }
+        .settings-category-title::before { content: ""; position: absolute; left: 6px; right: 6px; top: 9px; height: 1px; background: var(--border-color); }
         .settings-category-title:first-child { padding-top: 2px; }
+        .settings-category-title:first-child::before { content: none; }
         .setting-item { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; }
         .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
         .switch input { opacity: 0; width: 0; height: 0; }
@@ -4588,11 +4599,45 @@
     }
 
     // --- 📌 設定頁置頂展開式快速切換帳戶元件 ---
+    // 🩹 修復展開/收合動畫卡頓、僵硬的問題：原本 max-height 是直接動畫到一個固定的較大數值（420px），
+    // 但實際內容通常遠矮於這個數值，導致畫面早早就已經長到「內容真實高度」而停止變化，
+    // 剩下的動畫時間看起來像是卡住不動——因為過場曲線是依「宣告的 420px」分佈時間，而不是依實際可見高度分佈。
+    // 改為動態量測內容的實際高度（scrollHeight）並動畫到該精確數值，讓過場曲線與畫面實際變化的高度完全對應，才會滑順。
+    const QAS_MAX_CAP = 420; // 帳號數量極多時的高度上限，超過則於展開後改為可捲動
     function toggleQuickAccountSwitcher() {
         const panel = document.getElementById('qas-panel');
+        const body = panel.querySelector('.qas-body');
         const expanding = !panel.classList.contains('expanded');
-        panel.classList.toggle('expanded');
-        if (expanding) renderQuickAccountSwitcher();
+
+        // 若前一次展開/收合的動畫尚未完全結束（transitionend 監聽器還掛著），先清掉避免互相干擾
+        if (body._qasTransitionHandler) {
+            body.removeEventListener('transitionend', body._qasTransitionHandler);
+            body._qasTransitionHandler = null;
+        }
+
+        if (expanding) {
+            renderQuickAccountSwitcher();
+            panel.classList.add('expanded');
+            const targetHeight = Math.min(body.scrollHeight, QAS_MAX_CAP);
+            body.style.overflowY = body.scrollHeight > QAS_MAX_CAP ? 'auto' : 'hidden';
+            body.style.maxHeight = targetHeight + 'px';
+            const handler = (e) => {
+                if (e.propertyName !== 'max-height') return;
+                body.removeEventListener('transitionend', handler);
+                body._qasTransitionHandler = null;
+                // 展開動畫結束後，若內容本來就沒超過上限，改回 none：日後帳號列表若異動，高度可自動貼合，不會被鎖死的舊數值裁切
+                if (body.scrollHeight <= QAS_MAX_CAP) body.style.maxHeight = 'none';
+            };
+            body._qasTransitionHandler = handler;
+            body.addEventListener('transitionend', handler);
+        } else {
+            // 收合前，先把目前高度（可能已是 'none'）鎖定成明確的 px 數值，強制 reflow 後再動畫到 0，
+            // 這樣瀏覽器才有正確的起始值可以過渡，而不是直接從不存在的 auto 瞬間消失
+            body.style.maxHeight = body.scrollHeight + 'px';
+            void body.offsetHeight;
+            panel.classList.remove('expanded');
+            body.style.maxHeight = '0px';
+        }
     }
 
     function renderQuickAccountSwitcher() {
@@ -8081,7 +8126,10 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
             }
         }
         
-        navChart.update(); 
+        // 🩹 修復：animate 參數先前未真正生效，navChart.update() 一律套用 Chart.js 預設動畫，
+        // 導致呼叫端想要「無動畫立即更新」時（例如圖表翻轉切換的替換瞬間）數值軸仍會有過場彈跳。
+        // 傳入 'none' 可讓這次 update 完全跳過動畫，圖表與座標軸立即以最終狀態呈現。
+        navChart.update(animate ? undefined : 'none'); 
 
         document.getElementById("m-main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:${getMarketStateColor()}" title="${getMarketStateLabel()}"></i>`;
         mobileChart.data.labels = stockHistData.labels; 
@@ -8114,7 +8162,7 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         }
         
 
-        mobileChart.update();
+        mobileChart.update(animate ? undefined : 'none');
     }
 
     document.getElementById("cfg-chart-type").addEventListener("change", (e) => { 
