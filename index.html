@@ -284,7 +284,9 @@
            連帶把下單區擠出螢幕外，只剩右邊緣一條窄縫。明確蓋掉 min-width:0，圖表區永遠能自由縮放，
            不受它自己過去畫布尺寸的影響——這跟先前的畫面比例、原本排版完全無關，純粹是修這個 bug。 */
         .dashboard-left-col { display: flex; flex-direction: column; gap: 0; flex: 1; min-height: 0; min-width: 0; }
-        #chart-container { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 14px 18px; position: relative; }
+        #chart-container { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 14px 18px; position: relative; perspective: 1400px; }
+        /* 📊 圖表切換翻轉動畫：僅作用於桌面版主圖表容器，翻轉時以底邊為軸心，避免影響其他共用 .chart-wrapper/canvas 的一般樣式 */
+        #chart-container .chart-wrapper { transform-style: preserve-3d; backface-visibility: hidden; -webkit-backface-visibility: hidden; transform-origin: center bottom; will-change: transform; }
         .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-shrink: 0; }
         
         .chart-wrapper, canvas { flex: 1; min-height: 0; position: relative; -webkit-touch-callout: none !important; -webkit-user-select: none !important; user-select: none !important; touch-action: none !important; }
@@ -614,6 +616,8 @@
 
         /* 👤 帳號管理 & 🔐 密碼彈窗 / 開機鎖定畫面 */
         .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(8,8,10,0.55); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); z-index: 20000; align-items: center; justify-content: center; animation: modalFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+        /* 🔒 啟動 App 時的輸入密碼鎖定畫面：改為黑色背景填滿整個畫面（不使用其他彈窗共用的半透明模糊背景） */
+        #boot-lock-overlay { background: #000; backdrop-filter: none; -webkit-backdrop-filter: none; }
         @keyframes modalFadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes achvIconPop { 0% { transform: scale(0); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
         /* 🎊 拉炮式彩帶：以訊息卡為噴發源頭，先向外噴射再受重力墜落 */
@@ -7633,13 +7637,48 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         }).join("") : `<div style="color:#555; font-size:12px;">尚未持有任何證券</div>`;
     }
 
-    function toggleDesktopChartMode() { 
-        desktopChartMode = (desktopChartMode === 'NAV') ? 'STOCK' : 'NAV'; 
-        document.getElementById('mode-icon').style.transform = (desktopChartMode === 'STOCK') ? 'rotate(180deg)' : 'rotate(0deg)'; 
-        updateTimeframeButtons(); 
-        fetchStockHistoryData(currentTicker, true); 
+    let isChartFlipping = false; // 🩹 防止翻轉動畫進行中被連續點擊打斷，造成圖表卡在翻轉一半的角度
+    // 📊 圖表切換：按鈕按下後，「將被替換的舊圖表」先翻轉 180 度的前半段（往下貼合、隱沒到現有圖表下方），
+    // 資料就緒後「新圖表」再從相同的下方位置翻轉回正面，與切換按鈕的圖示旋轉同步完成整個替換過程
+    async function toggleDesktopChartMode() {
+        if (isChartFlipping) return;
+        isChartFlipping = true;
+
+        const wrapper = document.querySelector('#chart-container .chart-wrapper');
+        const icon = document.getElementById('mode-icon');
+        const FLIP_HALF_MS = 220; // 翻轉動畫單段（轉出／轉入）時間，前後兩段合計 180 度
+
+        desktopChartMode = (desktopChartMode === 'NAV') ? 'STOCK' : 'NAV';
+        // 切換按鈕圖示與圖表翻轉動畫同步進行（總時長 = 翻轉前後兩段之和）
+        icon.style.transition = `transform ${FLIP_HALF_MS * 2}ms cubic-bezier(0.34, 1.56, 0.64, 1)`;
+        icon.style.transform = (desktopChartMode === 'STOCK') ? 'rotate(180deg)' : 'rotate(0deg)';
+
+        if (wrapper) {
+            // 第一段：舊圖表以底邊為軸心，向下翻轉 90 度，貼合、隱沒到現有圖表下方
+            wrapper.style.transition = `transform ${FLIP_HALF_MS}ms cubic-bezier(0.55, 0.06, 0.68, 0.19)`;
+            wrapper.style.transform = 'rotateX(-90deg)';
+            await new Promise(resolve => setTimeout(resolve, FLIP_HALF_MS));
+        }
+
+        updateTimeframeButtons();
+        const fetches = [fetchStockHistoryData(currentTicker, false)];
         // 📊 若使用者已選擇對標基準，切換模式後時間區段設定可能改變，重新抓取一次以確保與主圖表範圍一致
-        if (selectedBenchmark) fetchBenchmarkHistoryData();
+        if (selectedBenchmark) fetches.push(fetchBenchmarkHistoryData());
+        await Promise.all(fetches);
+
+        if (wrapper) {
+            // 第二段：新圖表資料就緒後，從舊圖表隱沒的下方位置翻轉回正面，完成整個 180 度替換
+            wrapper.style.transition = 'none';
+            wrapper.style.transform = 'rotateX(90deg)';
+            void wrapper.offsetHeight; // 強制 reflow，讓上面的瞬間定位先生效，才能接著套用下方的真正過場動畫
+            wrapper.style.transition = `transform ${FLIP_HALF_MS}ms cubic-bezier(0.34, 1.56, 0.64, 1)`;
+            wrapper.style.transform = 'rotateX(0deg)';
+            await new Promise(resolve => setTimeout(resolve, FLIP_HALF_MS));
+            wrapper.style.transition = '';
+            wrapper.style.transform = '';
+        }
+
+        isChartFlipping = false;
     }
 
     // 📊 基準指數對標：下拉選單開關 + 選取邏輯（dropdownId 可指定要開關哪一個選單，預設為桌面版主圖表的選單）
