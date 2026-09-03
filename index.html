@@ -6562,6 +6562,10 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
                 stockHistData.ohlc = arrOHLC; 
                 stockHistData.timestamps = arrTimestamps;
                 updateRSIDisplay(arrPrices); 
+                // 🔍 資料來源確實換了一批新的（換代號／改時間區間／改K線週期／切換NAV-個股模式），
+                // 先重置縮放範圍，避免沿用舊資料的可視索引範圍套用到新資料上造成顯示錯亂
+                resetChartZoom(navChart);
+                resetChartZoom(mobileChart);
                 renderAllCharts(animate); 
             }
         } catch(err) {}
@@ -7611,6 +7615,200 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         } 
     });
 
+    /* =========================================
+       🔍 圖表縮放功能（navChart / mobileChart 共用）
+       - 電腦：滑鼠滾輪，以游標所在的時間點為中心縮放
+       - 手機：雙指縮放（比照原生 pinch 手感）
+       - 手機（單指）：快速點兩下（第二下不放開）後上下滑動來縮放——
+         模仿 Google 地圖的單指縮放手勢，方便單手操作時使用。
+         上滑＝放大、下滑＝縮小。
+       實作方式：不依賴任何縮放外掛，直接控制 Chart.js 類別座標軸（category scale）
+       的 min/max（資料索引範圍）來裁切可視範圍，並同步依可視範圍內的數值重新計算
+       Y 軸上下限（自動貼合），縮放後才不會出現大量留白。
+       兩張圖表原本用來偵測「畫面上實際壓著哪張卡片」的 touch-action:none 已經套用在
+       所有 canvas 上（見全域 CSS），這一步已經能攔掉 iOS 原生的雙擊放大鏡與雙指縮放，
+       這裡另外在辨識出的縮放手勢上呼叫 preventDefault() 做雙重保險。
+       ========================================= */
+    const CHART_ZOOM_MIN_POINTS = 5; // 最少可視資料點數，避免縮放到圖表失去意義
+
+    function getChartVisibleRange(chart) {
+        const totalLen = (chart.data.labels || []).length;
+        const xOpt = chart.options.scales.x;
+        let min = (typeof xOpt.min === 'number') ? xOpt.min : 0;
+        let max = (typeof xOpt.max === 'number') ? xOpt.max : totalLen - 1;
+        min = Math.max(0, Math.min(min, Math.max(0, totalLen - 1)));
+        max = Math.max(0, Math.min(max, Math.max(0, totalLen - 1)));
+        if (max <= min) max = Math.min(totalLen - 1, min + 1);
+        return { min, max, totalLen };
+    }
+
+    // 依目前可視的資料索引範圍，重新計算 Y 軸上下限，讓縮放後的數值區間佔滿可視高度
+    function autoscaleChartY(chart, minIdx, maxIdx) {
+        let lo = Infinity, hi = -Infinity;
+        (chart.data.datasets || []).forEach(ds => {
+            if (!ds.data || !ds.data.length) return;
+            const from = Math.max(0, Math.floor(minIdx)), to = Math.min(ds.data.length - 1, Math.ceil(maxIdx));
+            for (let i = from; i <= to; i++) {
+                const v = ds.data[i];
+                if (v === null || v === undefined) continue;
+                // K線圖的 Body/Wick 資料集是 [a, b] 陣列格式（見 getStockDatasets），而非 {o,h,l,c} 物件，
+                // 一般折線／買賣點標記則是單一數字，這裡三種格式都要能正確取出最高最低值
+                if (Array.isArray(v)) {
+                    v.forEach(n => { if (typeof n === 'number') { hi = Math.max(hi, n); lo = Math.min(lo, n); } });
+                } else if (typeof v === 'object') {
+                    if (typeof v.h === 'number') hi = Math.max(hi, v.h);
+                    if (typeof v.l === 'number') lo = Math.min(lo, v.l);
+                    if (typeof v.y === 'number') { hi = Math.max(hi, v.y); lo = Math.min(lo, v.y); }
+                } else if (typeof v === 'number') {
+                    hi = Math.max(hi, v); lo = Math.min(lo, v);
+                }
+            }
+        });
+        if (!isFinite(lo) || !isFinite(hi)) return; // 沒有有效資料點：維持原本依全部資料自動計算的 y 軸
+        if (lo === hi) { lo -= 1; hi += 1; }
+        const pad = (hi - lo) * 0.1;
+        chart.options.scales.y.min = lo - pad;
+        chart.options.scales.y.max = hi + pad;
+    }
+
+    // 將可視範圍設為 [min, max]（資料索引），並同步更新 Y 軸與畫面
+    function setChartVisibleRange(chart, min, max) {
+        const totalLen = (chart.data.labels || []).length;
+        if (totalLen < 2) return;
+        min = Math.round(min); max = Math.round(max);
+        if (max - min < CHART_ZOOM_MIN_POINTS) {
+            const center = (min + max) / 2;
+            min = Math.round(center - CHART_ZOOM_MIN_POINTS / 2);
+            max = min + CHART_ZOOM_MIN_POINTS;
+        }
+        if (min < 0) { max -= min; min = 0; }
+        if (max > totalLen - 1) { min -= (max - (totalLen - 1)); max = totalLen - 1; }
+        min = Math.max(0, min);
+        if (min <= 0 && max >= totalLen - 1) {
+            // 已回到完整範圍：改回 auto，讓 Y 軸也還原成依全部資料自動計算
+            delete chart.options.scales.x.min;
+            delete chart.options.scales.x.max;
+            delete chart.options.scales.y.min;
+            delete chart.options.scales.y.max;
+        } else {
+            chart.options.scales.x.min = min;
+            chart.options.scales.x.max = max;
+            autoscaleChartY(chart, min, max);
+        }
+        chart.update('none');
+    }
+
+    // 以 centerIdx 為中心、依 scaleRatio（>1 放大／<1 縮小）從 baseRange 算出新的可視範圍並套用
+    function applyChartZoomRatio(chart, baseRange, scaleRatio, centerIdx) {
+        if (!baseRange || !scaleRatio || !isFinite(scaleRatio) || scaleRatio <= 0) return;
+        const curSpan = baseRange.max - baseRange.min;
+        let newSpan = curSpan / scaleRatio;
+        newSpan = Math.max(CHART_ZOOM_MIN_POINTS, Math.min(newSpan, Math.max(1, baseRange.totalLen - 1)));
+        const ratio = curSpan > 0 ? (centerIdx - baseRange.min) / curSpan : 0.5;
+        const newMin = centerIdx - newSpan * ratio;
+        const newMax = newMin + newSpan;
+        setChartVisibleRange(chart, newMin, newMax);
+    }
+
+    // 資料來源真正改變時（換代號／改時間區間／改K線週期／切換NAV-個股模式）呼叫，避免縮放範圍對應到錯誤的舊資料
+    function resetChartZoom(chart) {
+        delete chart.options.scales.x.min;
+        delete chart.options.scales.x.max;
+        delete chart.options.scales.y.min;
+        delete chart.options.scales.y.max;
+    }
+
+    function touchDist(t1, t2) { return Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY); }
+
+    function attachChartZoomGestures(canvas, chart) {
+        if (!canvas) return;
+
+        // --- 電腦：滑鼠滾輪縮放，以游標所在時間點為中心 ---
+        canvas.addEventListener('wheel', function (e) {
+            e.preventDefault();
+            const range = getChartVisibleRange(chart);
+            let centerIdx = (range.min + range.max) / 2;
+            try {
+                const xScale = chart.scales && chart.scales.x;
+                if (xScale && typeof xScale.getValueForPixel === 'function') {
+                    const rect = canvas.getBoundingClientRect();
+                    const v = xScale.getValueForPixel(e.clientX - rect.left);
+                    if (typeof v === 'number' && !isNaN(v)) centerIdx = v;
+                }
+            } catch (err) {}
+            const scaleRatio = e.deltaY < 0 ? 1.15 : (1 / 1.15); // 往上滾＝放大
+            applyChartZoomRatio(chart, range, scaleRatio, centerIdx);
+        }, { passive: false });
+
+        // --- 手機：雙指縮放 + 單指「快速二次按壓後上下滑動」縮放 ---
+        let pinchActive = false, pinchStartDist = 0, pinchStartRange = null;
+        let dragZoomActive = false, dragStartY = 0, dragStartRange = null;
+        let lastTapTime = 0, lastTapX = 0, lastTapY = 0;
+
+        canvas.addEventListener('touchstart', function (e) {
+            if (e.touches.length === 2) {
+                dragZoomActive = false; // 雙指優先，中止可能正在進行的單指拖曳縮放
+                pinchActive = true;
+                pinchStartDist = touchDist(e.touches[0], e.touches[1]);
+                pinchStartRange = getChartVisibleRange(chart);
+                e.preventDefault();
+                return;
+            }
+            if (e.touches.length === 1 && !pinchActive) {
+                const t = e.touches[0];
+                const now = Date.now();
+                const isQuickSecondTap = (now - lastTapTime < 320) &&
+                    touchDist({ clientX: lastTapX, clientY: lastTapY }, t) < 40;
+                if (isQuickSecondTap) {
+                    // 這是快速的第二下按壓：視為縮放手勢的開始，攔截這次事件避免觸發 iOS 原生雙擊放大鏡
+                    dragZoomActive = true;
+                    dragStartY = t.clientY;
+                    dragStartRange = getChartVisibleRange(chart);
+                    e.preventDefault();
+                }
+            }
+        }, { passive: false });
+
+        canvas.addEventListener('touchmove', function (e) {
+            if (pinchActive && e.touches.length === 2) {
+                e.preventDefault();
+                const d = touchDist(e.touches[0], e.touches[1]);
+                if (!d || !pinchStartDist) return;
+                const scaleRatio = d / pinchStartDist; // 手指分開＝放大
+                applyChartZoomRatio(chart, pinchStartRange, scaleRatio, (pinchStartRange.min + pinchStartRange.max) / 2);
+                return;
+            }
+            if (dragZoomActive && e.touches.length === 1) {
+                e.preventDefault();
+                const t = e.touches[0];
+                const deltaY = dragStartY - t.clientY; // 手指往上滑為正值
+                // 每上滑 150px 縮放為原本 2 倍（下滑則反向縮小），指數映射讓手感較線性好控制
+                const scaleRatio = Math.pow(2, deltaY / 150);
+                applyChartZoomRatio(chart, dragStartRange, scaleRatio, (dragStartRange.min + dragStartRange.max) / 2);
+            }
+        }, { passive: false });
+
+        function onTouchEnd(e) {
+            if (e.touches.length < 2) { pinchActive = false; pinchStartDist = 0; pinchStartRange = null; }
+            if (e.touches.length === 0) {
+                if (dragZoomActive) {
+                    dragZoomActive = false;
+                    lastTapTime = 0; // 拖曳縮放結束後歸零，避免緊接著的放開被誤判為下一次的「快速二次按壓」
+                } else if (e.changedTouches && e.changedTouches.length) {
+                    const t = e.changedTouches[0];
+                    lastTapTime = Date.now();
+                    lastTapX = t.clientX;
+                    lastTapY = t.clientY;
+                }
+            }
+        }
+        canvas.addEventListener('touchend', onTouchEnd, { passive: true });
+        canvas.addEventListener('touchcancel', function () { pinchActive = false; dragZoomActive = false; }, { passive: true });
+    }
+
+    attachChartZoomGestures(document.getElementById('navChart'), navChart);
+    attachChartZoomGestures(document.getElementById('mobileStockChart'), mobileChart);
+
     // 🔍 個股詳情頁專用的獨立走勢圖（與主頁 navChart / 手機版 mobileChart 完全分開，不共用資料狀態）
     const detailChart = new Chart(document.getElementById('tickerDetailChart').getContext('2d'), {
         type: 'line', data: { labels: [], datasets: [] },
@@ -8126,10 +8324,7 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
             }
         }
         
-        // 🩹 修復：animate 參數先前未真正生效，navChart.update() 一律套用 Chart.js 預設動畫，
-        // 導致呼叫端想要「無動畫立即更新」時（例如圖表翻轉切換的替換瞬間）數值軸仍會有過場彈跳。
-        // 傳入 'none' 可讓這次 update 完全跳過動畫，圖表與座標軸立即以最終狀態呈現。
-        navChart.update(animate ? undefined : 'none'); 
+        navChart.update(); 
 
         document.getElementById("m-main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:${getMarketStateColor()}" title="${getMarketStateLabel()}"></i>`;
         mobileChart.data.labels = stockHistData.labels; 
@@ -8162,7 +8357,7 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         }
         
 
-        mobileChart.update(animate ? undefined : 'none');
+        mobileChart.update();
     }
 
     document.getElementById("cfg-chart-type").addEventListener("change", (e) => { 
