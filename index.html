@@ -55,13 +55,10 @@
             --glow-radius: 300px;
             --glow-brightness: 1;
             --glow-user-strength: 0.9;   /* 由設定頁滑桿控制，0 ~ 2 */
-            --glow-platform-scale: 0.9;  /* 桌機為 1，手機（陀螺儀模式）自動減弱 */
+            --glow-platform-scale: 0.9;  /* 桌機與手機強度一致 */
         }
 
-        /* 📱 觸控/手機裝置：流光特效強度自動減弱 */
-        @media (hover: none), (pointer: coarse) {
-            :root { --glow-platform-scale: 0.45; }
-        }
+        /* 📱 觸控/手機裝置：流光特效強度改為與電腦版一致（不再自動減弱） */
 
         * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
         input[type="number"]::-webkit-inner-spin-button,
@@ -833,6 +830,21 @@
             #mobile-header { display: flex; justify-content: space-between; align-items: center; height: 60px; padding: 0 20px; background: rgba(10, 10, 10, 0.95); border-bottom: 1px solid rgba(255,255,255,0.06); z-index: 50; position: absolute; top: 0; left: 0; width: 100%; }
             .mobile-menu-btn { background: transparent; border: none; color: #fff; font-size: 20px; cursor: pointer; padding: 10px; margin-left: -10px; z-index: 2; }
             .mobile-header-title { position: absolute; left: 50%; transform: translateX(-50%); font-weight: 900; letter-spacing: 3px; font-size: 16px; color: #fff; cursor: pointer; white-space: nowrap; z-index: 1; }
+            /* ✨ 手機版頂端標題「長按手動同步」：長按後標題文字會被下面這個畫線＋填色的進度動畫取代，
+               同步進行中持續循環播放，同步結束後才換回原本的標題文字。線寬刻意加粗許多，
+               是因為圖案原本是以 496x496 的 viewBox 畫給 350px 大圖顯示用，縮小到頂端標題這種小尺寸
+               (約 32px) 後，若沿用原本的線寬（相對 viewBox 單位）會細到幾乎看不見。 */
+            .header-sync-svg { display: block; height: 32px; width: 32px; }
+            .header-sync-path {
+                fill: transparent;
+                stroke: #fff;
+                stroke-width: 22;
+                animation:
+                    header-sync-draw 2s ease-in-out infinite,
+                    header-sync-fill 1s ease-in-out 2s infinite;
+            }
+            @keyframes header-sync-draw { to { stroke-dashoffset: 0; } }
+            @keyframes header-sync-fill { to { fill: #fff; stroke: transparent; } }
             .mobile-reload-btn { width: 50px; height: 100%; cursor: pointer; z-index: 2; margin-right: -10px; position: absolute; right: 0; top: 0; }
             
             #sidebar-overlay { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 900; backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); opacity: 0; pointer-events: none; transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
@@ -950,7 +962,7 @@
 <div id="content-area">
     <div id="mobile-header">
         <button class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
-        <div class="mobile-header-title" onclick="switchView('view-dashboard', document.querySelectorAll('.menu-item')[0], true)">
+        <div class="mobile-header-title" id="mobile-header-title" onclick="handleMobileHeaderTitleClick()">
             ACORNTRADE
         </div>
         <div class="mobile-reload-btn" onclick="location.reload()"></div>
@@ -3726,6 +3738,85 @@
             if (btn) { btn.disabled = false; btn.innerHTML = originalHtml; }
         }
     }
+
+    /* =========================================
+       ✨ 手機版頂端標題「長按手動同步」
+       長按頂端標題（原本點一下是回首頁）觸發手動同步至雲端，同步進行中標題文字會被替換成
+       一個畫線＋填色的循環動畫，充當進度指示；同步完成（不論成功或失敗）後才換回原本的標題文字。
+       ========================================= */
+    // 取自附帶的「動畫.html」：畫線動畫用的向量路徑（viewBox 0 0 496 496），這裡只保留 <path> 本身，
+    // 樣式與播放邏輯改由下面的 JS／CSS 接手，才能在同步完成後動態換回文字。
+    const MOBILE_HEADER_SYNC_SVG = `<svg class="header-sync-svg" viewBox="0 0 496 496" xmlns="http://www.w3.org/2000/svg">
+        <path class="header-sync-path" d="M259.178833,91.620316 C266.152069,94.934486 272.700317,98.379951 277.908752,103.589928 C283.011871,108.694580 289.504822,108.220306 295.551880,108.523460 C344.408264,110.972809 385.764587,129.306213 418.210571,166.279938 C437.514679,188.277908 448.762573,214.225723 454.480133,242.844391 C458.486877,262.899597 459.683197,283.179657 458.057190,303.347961 C455.578064,334.098083 446.966400,363.327271 431.471344,390.274506 C425.828156,400.088501 420.326691,409.922821 411.079712,417.090759 C401.337677,424.642487 390.129456,426.322052 378.938690,423.606262 C364.540344,420.112030 355.471100,409.974640 352.789398,395.285614 C348.311829,370.759674 331.376770,359.983490 309.402649,358.832397 C295.328979,358.095123 282.177917,364.178741 270.123108,371.666809 C263.031036,376.072144 256.557739,381.220581 250.735092,387.259766 C241.262070,397.084961 231.579987,406.681915 220.445496,414.722229 C210.753357,421.721039 200.168716,425.218903 188.206848,424.324493 C183.785828,423.993866 180.937454,421.597290 180.750931,417.189270 C180.006531,399.597839 184.693558,383.705048 195.955185,369.903229 C206.505859,356.972778 220.039047,347.552246 233.303284,337.809631 C249.422501,325.970062 265.001678,313.588318 276.214508,296.636841 C279.072357,292.316376 281.273468,287.668671 283.318329,282.933533 C284.305695,280.647156 284.890503,278.276733 282.161041,276.882874 C279.273407,275.408264 277.488159,277.089111 276.189972,279.582947 C270.214691,291.061584 262.165863,300.963959 252.975311,309.986420 C231.483459,331.085205 206.158264,343.900024 175.813232,346.484253 C149.076248,348.761230 123.219795,345.956085 99.448463,332.908020 C75.099579,319.542847 55.906422,300.830475 44.203632,275.147919 C41.824776,269.927307 40.333305,264.570740 40.635674,258.772461 C40.765663,256.279724 40.864357,253.754517 40.623890,251.278397 C39.229172,236.916824 44.315315,225.222595 55.027901,215.813095 C55.636559,215.278473 56.553093,215.094360 58.105061,214.397446 C47.136478,210.994873 47.093258,206.782822 49.126503,196.286469 C58.953934,145.553680 88.471291,110.264412 135.872742,90.230148 C159.810760,80.112732 185.263123,76.740616 211.014023,78.939468 C227.458420,80.343643 243.866089,83.606644 259.178833,91.620316 M136.503616,233.121658 C144.786255,246.569733 142.371689,261.336639 141.762207,275.878571 C141.748871,276.197021 141.555679,276.506714 141.453873,276.822906 C139.672470,282.355927 135.646469,284.320007 128.203781,283.285614 C124.147514,282.721924 121.954041,279.328796 121.586708,274.190399 C121.202812,268.820343 123.540802,263.639709 122.546143,258.315155 C119.906662,244.185638 113.130081,233.393616 99.015381,227.868622 C87.272476,223.272034 76.484428,225.429337 68.034691,233.573547 C59.872730,241.440384 57.895439,251.962448 62.643532,263.040070 C69.257164,278.470093 78.753258,291.687988 92.143456,301.942200 C117.020317,320.992889 144.724258,330.928772 176.218674,325.581726 C210.863998,319.699646 237.971298,301.805145 255.688583,271.107758 C261.898224,260.348755 269.617493,255.256287 282.520325,255.260300 C293.603180,255.263733 305.389618,266.589325 305.275238,277.835114 C305.207489,284.496338 303.793732,290.647491 301.116241,296.641022 C293.077911,314.634827 279.167938,327.863403 264.887634,340.645691 C252.624786,351.622131 238.806305,360.669922 225.722229,370.631287 C216.291367,377.811310 209.236404,386.688721 204.652725,398.930786 C207.553680,396.997284 209.546921,395.812256 211.383438,394.420441 C220.291763,387.669067 228.327454,379.964722 235.997787,371.851624 C260.099091,346.359039 289.156647,334.684723 324.461945,339.600403 C347.098541,342.752197 368.546417,363.051819 372.374664,385.748535 C372.986115,389.373566 374.082428,392.838776 375.912476,396.058075 C379.849426,402.983734 387.770813,405.271545 394.696198,401.525299 C399.352203,399.006653 403.062958,395.586182 405.661835,390.927795 C408.173676,386.425354 410.909943,382.047974 413.415619,377.542206 C429.296692,348.984344 437.970459,318.240387 438.409393,285.694916 C438.726898,262.149475 433.622498,239.207993 424.412598,217.374863 C418.093170,202.393829 409.756073,188.649399 398.660065,176.685349 C378.358093,154.795135 352.980194,141.580582 324.521240,133.886292 C317.494904,131.986603 310.337006,130.067322 302.416687,130.163757 C303.233246,131.666473 303.776947,132.665833 304.319519,133.665817 C312.102661,148.009659 316.951752,163.276093 318.159485,179.563553 C318.603638,185.553360 315.583496,188.834198 310.674591,189.347061 C301.758698,190.278580 298.859619,186.426895 297.822876,180.893448 C296.963898,176.308762 295.841309,171.820633 294.606873,167.349915 C290.928406,154.027313 284.896393,141.897430 275.927246,131.317307 C274.350067,129.456818 272.912506,127.160332 269.871216,127.606369 C259.716431,129.095673 249.491623,129.949539 239.372131,131.889343 C232.066605,133.289734 225.136490,136.649414 217.489349,136.262024 C212.523285,136.010452 208.851227,132.289215 208.667328,127.338562 C208.405243,120.282173 210.736038,117.249893 217.655548,115.164734 C226.421539,112.523155 235.542526,111.445686 245.190613,109.308769 C166.206543,76.537895 76.553574,130.129715 69.132538,207.236252 C76.200897,205.167374 83.362114,205.914139 90.472656,205.622192 C111.521431,204.758011 125.457748,215.837189 136.503616,233.121658 z"></path>
+        <path class="header-sync-path" d="M163.737595,208.556061 C168.357605,195.675308 183.182693,191.818542 192.254745,200.715836 C196.543381,204.921860 198.265625,214.504791 195.190323,220.696320 C192.366333,226.381836 187.732788,229.538834 180.883209,229.422821 C168.315140,229.209961 163.488083,223.690872 163.737595,208.556061 z"></path>
+    </svg>`;
+
+    let mobileHeaderTitleOriginalHTML = null; // 標題原本的文字內容，同步結束後要換回來
+    let mobileHeaderLongPressTimer = null;
+    let mobileHeaderLongPressTriggered = false; // 這次按壓是否已經被判定為長按（用來擋掉放開手指後接著觸發的 click 導頁）
+    let mobileHeaderSyncing = false; // 避免同步進行中被重複長按觸發
+
+    // 一般點一下（非長按）：回首頁。若剛剛才由長按觸發過同步，這次放開手指產生的 click 要被忽略掉。
+    function handleMobileHeaderTitleClick() {
+        if (mobileHeaderLongPressTriggered) { mobileHeaderLongPressTriggered = false; return; }
+        switchView('view-dashboard', document.querySelectorAll('.menu-item')[0], true);
+    }
+
+    async function triggerMobileHeaderManualSync() {
+        if (mobileHeaderSyncing) return;
+        const titleEl = document.getElementById('mobile-header-title');
+        if (!titleEl) return;
+        const acc = (typeof getActiveAccount === 'function') ? getActiveAccount() : null;
+        if (!acc) return; // 理論上不會發生（一定有使用中的帳號），保險起見沒有帳號就不觸發
+        mobileHeaderSyncing = true;
+        if (navigator.vibrate) navigator.vibrate(15); // 輕微震動回饋，讓使用者感受到長按已被觸發
+        if (mobileHeaderTitleOriginalHTML === null) mobileHeaderTitleOriginalHTML = titleEl.innerHTML;
+        titleEl.innerHTML = MOBILE_HEADER_SYNC_SVG;
+        // 關鍵同步步驟：動態取得每條路徑的真實長度，讓「畫線」動畫的起點（完全隱藏）與終點（畫完整條線）精準對齊，
+        // 兩條路徑長度不同（外框大圖案 vs 小圓點），寫死一個共用數值會導致長度對不上
+        titleEl.querySelectorAll('.header-sync-path').forEach(path => {
+            const len = path.getTotalLength();
+            path.style.strokeDasharray = len;
+            path.style.strokeDashoffset = len;
+        });
+        try {
+            await manualSyncAccount(acc.id);
+        } finally {
+            titleEl.innerHTML = mobileHeaderTitleOriginalHTML;
+            mobileHeaderSyncing = false;
+        }
+    }
+
+    // 長按判定：手指按住超過 550ms 視為長按，中途手指移動或提早放開則視為一般點擊、取消長按判定
+    function setupMobileHeaderTitleLongPress() {
+        const titleEl = document.getElementById('mobile-header-title');
+        if (!titleEl) return;
+        const LONG_PRESS_MS = 550;
+
+        function cancelPressTimer() {
+            clearTimeout(mobileHeaderLongPressTimer);
+            mobileHeaderLongPressTimer = null;
+        }
+
+        titleEl.addEventListener('touchstart', function () {
+            if (mobileHeaderSyncing) return;
+            mobileHeaderLongPressTriggered = false;
+            cancelPressTimer();
+            mobileHeaderLongPressTimer = setTimeout(() => {
+                mobileHeaderLongPressTriggered = true;
+                triggerMobileHeaderManualSync();
+            }, LONG_PRESS_MS);
+        }, { passive: true });
+
+        titleEl.addEventListener('touchend', function (e) {
+            cancelPressTimer();
+            if (mobileHeaderLongPressTriggered) e.preventDefault(); // 長按已觸發同步，這次放開不要再讓瀏覽器補發 click 導去首頁
+        }, { passive: false });
+
+        titleEl.addEventListener('touchmove', cancelPressTimer, { passive: true });
+        titleEl.addEventListener('touchcancel', cancelPressTimer, { passive: true });
+    }
+    setupMobileHeaderTitleLongPress();
 
     // 依目前使用中帳號的變動，延遲(去抖動)自動推送至雲端，避免頻繁操作時過度發送請求
     let cloudSyncDebounceTimer = null;
