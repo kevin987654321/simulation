@@ -839,9 +839,13 @@
                 fill: transparent;
                 stroke: #fff;
                 stroke-width: 22;
+                /* 🩹 原本 fill 動畫有 2s 起始延遲：CSS 的 animation-delay 只作用在「第一次」播放前，
+                   之後每次循環不會再重複延遲，導致 draw（週期2s）跟 fill（週期1s）從第二輪開始才對齊，
+                   變成「邊畫線邊閃爍填色兩次」的效果——這正是使用者覺得好看、想要從第一次播放就出現的效果。
+                   拿掉延遲後兩者從一開始就同步，第一次播放就會是這個效果。 */
                 animation:
                     header-sync-draw 2s ease-in-out infinite,
-                    header-sync-fill 1s ease-in-out 2s infinite;
+                    header-sync-fill 1s ease-in-out infinite;
             }
             @keyframes header-sync-draw { to { stroke-dashoffset: 0; } }
             @keyframes header-sync-fill { to { fill: #fff; stroke: transparent; } }
