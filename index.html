@@ -543,7 +543,7 @@
         .chat-display { flex: 1; padding: 10px 16px; font-size: 12.5px; color: #aaa; overflow-y: auto; line-height: 1.6; font-family: monospace; }
         /* ✨ Gemini 輸入框與發送鍵：同一個外框內的一個整體區塊，中間不加分隔線，
            外層 .chat-input-area 仍維持無底色、僅作外距與上緣分隔線；合併後的區塊本身才有邊框。 */
-        .chat-input-area { padding: 10px 16px; border-top: 1px solid rgba(255,255,255,0.05); display: flex; background: transparent; }
+        .chat-input-area { padding: 10px 16px; border-top: 1px solid rgba(255,255,255,0.05); display: flex; background: transparent; position: relative; }
         .chat-input-group { flex: 1; display: flex; align-items: stretch; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; overflow: hidden; background: rgba(0,0,0,0.2); }
         .chat-input-area input { flex: 1; background: transparent; border: none; border-radius: 0; padding: 8px 12px; color: #fff; font-size: 12px; outline: none; transition: opacity 0.2s; }
         .chat-input-area input:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -576,6 +576,10 @@
         .detail-news-meta { font-size:11px; color:#777; }
         /* 個股詳情頁頂端的價格顯示區塊：電腦版靠右對齊（維持原樣），手機版改為靠左對齊（見手機版 media query 覆寫） */
         .detail-price-block { margin-left: auto; text-align: right; }
+        /* 手機版強制換行用的空白區塊：flex-basis:100% 是讓 flex-wrap 容器裡的項目強制換行的常見寫法——
+           自己佔滿一整行寬度，後面的項目（價格、前往下單按鈕）就會被推到下一行、但彼此仍同一行並排，
+           不會像直接把 flex-basis:100% 設在價格區塊本身那樣，連下單按鈕也被拆到第三行。電腦版預設隱藏。 */
+        .detail-header-break { display: none; }
         /* 📰 相關新聞「長按 → Ask Gemini」快捷選單 */
         .news-action-popup {
             position: fixed; z-index: 20000; display: none;
@@ -592,7 +596,9 @@
         }
         .news-action-popup button:hover, .news-action-popup button:active { background: rgba(0,212,255,0.12); color: var(--color-acc); }
         /* 📰 Gemini 提問框上方的「已附上新聞」提示標籤：用提示取代直接把整段 prompt 塞進輸入框 */
-        .news-context-chip { display:flex; align-items:center; gap:6px; background: rgba(0,212,255,0.1); border:1px solid rgba(0,212,255,0.3); border-radius: 8px; padding: 6px 10px; margin-bottom:6px; font-size: 11px; color: #9be8ff; }
+        /* 📰 Gemini 提問框上方的「已附上新聞」提示標籤：用提示取代直接把整段 prompt 塞進輸入框。
+           改為 position:absolute 懸浮在輸入框正上方，不佔用版面空間，才不會把輸入框往下擠壓變窄。 */
+        .news-context-chip { position:absolute; left:16px; right:16px; bottom:100%; margin-bottom:8px; display:flex; align-items:center; gap:6px; background: rgba(17,17,17,0.95); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border:1px solid rgba(0,212,255,0.3); border-radius: 8px; padding: 6px 10px; font-size: 11px; color: #9be8ff; box-shadow: 0 4px 16px rgba(0,0,0,0.4); animation: modalPopIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
         .news-context-chip span { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .news-context-chip button { background:none; border:none; color:#9be8ff; font-size:15px; cursor:pointer; line-height:1; padding:0 2px; }
         .draggable-card.clickable-card { cursor: pointer; }
@@ -856,10 +862,10 @@
             #mobile-header { display: flex; justify-content: space-between; align-items: center; height: 60px; padding: 0 20px; background: rgba(10, 10, 10, 0.95); border-bottom: 1px solid rgba(255,255,255,0.06); z-index: 50; position: absolute; top: 0; left: 0; width: 100%; }
             .mobile-menu-btn { background: transparent; border: none; color: #fff; font-size: 20px; cursor: pointer; padding: 10px; margin-left: -10px; z-index: 2; }
             .mobile-header-title { position: absolute; left: 50%; transform: translateX(-50%); font-weight: 900; letter-spacing: 3px; font-size: 16px; color: #fff; cursor: pointer; white-space: nowrap; z-index: 1; }
-            /* 個股詳情頁的價格顯示區塊：手機版改為靠左對齊，並強制換行到代號/名稱下方自成一行
-               （flex-basis:100% 是讓 flex-wrap 容器裡的項目強制換行的常見寫法：自己佔滿一整行寬度，
-               後面的項目自然就會被推到下一行） */
-            .detail-price-block { margin-left: 0; text-align: left; flex-basis: 100%; margin-top: 2px; }
+            /* 個股詳情頁的價格顯示區塊：手機版改為靠左對齊；換行由 .detail-header-break 負責，
+               這裡不再對價格區塊本身設 flex-basis:100%，讓「前往下單」按鈕能繼續跟價格同一行、排在右邊 */
+            .detail-price-block { margin-left: 0; text-align: left; }
+            .detail-header-break { display: block; flex-basis: 100%; width: 0; height: 0; }
             /* ✨ 手機版頂端標題「長按手動同步」：長按後標題文字會被下面這個畫線＋填色的進度動畫取代，
                同步進行中持續循環播放，同步結束後才換回原本的標題文字。線寬刻意加粗許多，
                是因為圖案原本是以 496x496 的 viewBox 畫給 350px 大圖顯示用，縮小到頂端標題這種小尺寸
@@ -1174,6 +1180,7 @@
                 <span style="font-size:18px; font-weight:900; color:var(--color-acc); letter-spacing:0.5px;" id="detail-ticker-symbol">--</span>
                 <span style="font-size:11px; color:#888;" id="detail-name"></span>
             </div>
+            <div class="detail-header-break"></div>
             <div class="detail-price-block">
                 <div style="font-size:22px; font-weight:bold; font-family:monospace;" id="detail-price-value">--</div>
                 <div style="font-size:12px; font-family:monospace;" id="detail-price-change"></div>
@@ -6484,17 +6491,19 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         listEl.addEventListener('touchmove', cancelTimer, { passive: true });
         listEl.addEventListener('touchend', function (e) { cancelTimer(); if (newsLongPressTriggered) e.preventDefault(); }, { passive: false });
         listEl.addEventListener('touchcancel', cancelTimer, { passive: true });
-        // 🩹 額外保險：部分瀏覽器（尤其 Android）長按連結會觸發原生的 contextmenu（複製連結/在新分頁開啟等選單），
-        // 這裡直接攔掉，統一改用我們自己的長按選單
-        listEl.addEventListener('contextmenu', function (e) { if (e.target.closest('.detail-news-item')) e.preventDefault(); });
 
-        // 電腦：滑鼠按住不放
-        listEl.addEventListener('mousedown', function (e) { if (e.button === 0) startPress(e, e.clientX, e.clientY); });
-        listEl.addEventListener('mousemove', cancelTimer);
-        listEl.addEventListener('mouseup', cancelTimer);
-        listEl.addEventListener('mouseleave', cancelTimer);
+        // 電腦：改用右鍵直接開啟同一個「Ask Gemini」快捷選單（不用按住不放）
+        listEl.addEventListener('contextmenu', function (e) {
+            const itemEl = e.target.closest('.detail-news-item');
+            if (!itemEl) return;
+            e.preventDefault();
+            // 若這次是手機長按觸控已經觸發過（部分瀏覽器長按觸控後仍會補發 contextmenu），
+            // 這裡只需要擋掉原生選單，不用再開一次，避免重複跳出
+            if (newsLongPressTriggered) { newsLongPressTriggered = false; return; }
+            openNewsActionPopup(itemEl, e.clientX, e.clientY);
+        });
 
-        // 長按觸發後，這次放開手指/滑鼠所產生的 click 不應該再開啟新聞原文連結
+        // 長按觸發後，這次放開手指所產生的 click 不應該再開啟新聞原文連結
         listEl.addEventListener('click', function (e) {
             if (newsLongPressTriggered) { e.preventDefault(); newsLongPressTriggered = false; }
         });
