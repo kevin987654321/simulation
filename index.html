@@ -567,7 +567,9 @@
         .detail-info-cell { display:flex; flex-direction:column; gap:4px; }
         .detail-info-label { color:#777; }
         .detail-info-value { font-family:monospace; font-weight:bold; font-size:13px; }
-        .detail-news-item { display:flex; flex-direction:column; gap:3px; padding:10px 8px; border-radius:8px; text-decoration:none; color:inherit; border-bottom:1px solid rgba(255,255,255,0.05); transition: background 0.15s; }
+        /* 🩹 攔截 iOS Safari 對 <a> 連結的原生長按預覽（Peek 小卡＋開啟/複製/分享選單），
+           否則會蓋掉我們自訂的長按選單（Ask Gemini）。-webkit-touch-callout:none 專門用來關掉這個行為。 */
+        .detail-news-item { display:flex; flex-direction:column; gap:3px; padding:10px 8px; border-radius:8px; text-decoration:none; color:inherit; border-bottom:1px solid rgba(255,255,255,0.05); transition: background 0.15s; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
         .detail-news-item:last-child { border-bottom:none; }
         .detail-news-item:hover { background:rgba(255,255,255,0.05); }
         .detail-news-title { font-size:13px; color:#eee; line-height:1.4; }
@@ -589,6 +591,10 @@
             padding: 9px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap;
         }
         .news-action-popup button:hover, .news-action-popup button:active { background: rgba(0,212,255,0.12); color: var(--color-acc); }
+        /* 📰 Gemini 提問框上方的「已附上新聞」提示標籤：用提示取代直接把整段 prompt 塞進輸入框 */
+        .news-context-chip { display:flex; align-items:center; gap:6px; background: rgba(0,212,255,0.1); border:1px solid rgba(0,212,255,0.3); border-radius: 8px; padding: 6px 10px; margin-bottom:6px; font-size: 11px; color: #9be8ff; }
+        .news-context-chip span { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .news-context-chip button { background:none; border:none; color:#9be8ff; font-size:15px; cursor:pointer; line-height:1; padding:0 2px; }
         .draggable-card.clickable-card { cursor: pointer; }
         /* 🩹 修復手機版藍色邊框殘留：:hover 在觸控裝置上是由「點一下」模擬觸發，
            且往往要等使用者點別的地方才會解除，導致手指點過的卡片邊框卡住不消失。
@@ -850,8 +856,10 @@
             #mobile-header { display: flex; justify-content: space-between; align-items: center; height: 60px; padding: 0 20px; background: rgba(10, 10, 10, 0.95); border-bottom: 1px solid rgba(255,255,255,0.06); z-index: 50; position: absolute; top: 0; left: 0; width: 100%; }
             .mobile-menu-btn { background: transparent; border: none; color: #fff; font-size: 20px; cursor: pointer; padding: 10px; margin-left: -10px; z-index: 2; }
             .mobile-header-title { position: absolute; left: 50%; transform: translateX(-50%); font-weight: 900; letter-spacing: 3px; font-size: 16px; color: #fff; cursor: pointer; white-space: nowrap; z-index: 1; }
-            /* 個股詳情頁的價格顯示區塊：手機版改為靠左對齊（不再靠右推到最邊，也不再文字置右） */
-            .detail-price-block { margin-left: 0; text-align: left; }
+            /* 個股詳情頁的價格顯示區塊：手機版改為靠左對齊，並強制換行到代號/名稱下方自成一行
+               （flex-basis:100% 是讓 flex-wrap 容器裡的項目強制換行的常見寫法：自己佔滿一整行寬度，
+               後面的項目自然就會被推到下一行） */
+            .detail-price-block { margin-left: 0; text-align: left; flex-basis: 100%; margin-top: 2px; }
             /* ✨ 手機版頂端標題「長按手動同步」：長按後標題文字會被下面這個畫線＋填色的進度動畫取代，
                同步進行中持續循環播放，同步結束後才換回原本的標題文字。線寬刻意加粗許多，
                是因為圖案原本是以 496x496 的 viewBox 畫給 350px 大圖顯示用，縮小到頂端標題這種小尺寸
@@ -1120,6 +1128,11 @@
                     </div>
 
                     <div class="chat-input-area">
+                        <div class="news-context-chip" id="news-context-chip" style="display:none;">
+                            <i class="fa-solid fa-newspaper"></i>
+                            <span id="news-context-chip-text"></span>
+                            <button type="button" onclick="clearPendingNewsContext()" title="移除附加的新聞">&times;</button>
+                        </div>
                         <div class="chat-input-group">
                             <input type="text" id="chat-input" placeholder="問問 Gemini" onkeypress="if(event.key==='Enter') askAI()">
                             <button class="send-btn" id="chat-send-btn" onclick="askAI()"><i class="fa-solid fa-arrow-right-long"></i></button>
@@ -6405,6 +6418,25 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         if (popup) popup.style.display = 'none';
     }
 
+    // 📰 附加在下一次 Gemini 提問上的新聞情境（見 askGeminiAboutNews）：改用「提示」的方式帶入，
+    // 不直接把整段生成好的 prompt 塞進輸入框——輸入框維持空白讓使用者自己輸入問題，
+    // 上方顯示一個可移除的小標籤、placeholder 也會改成提示文字，讓使用者清楚知道「已經附上這則新聞」。
+    let pendingNewsContext = null; // {title, meta, link, ticker}，只作用於「下一次」送出的提問，送出後即清空
+
+    function updateNewsContextChipUI() {
+        const chip = document.getElementById('news-context-chip'), chipText = document.getElementById('news-context-chip-text'), input = document.getElementById('chat-input');
+        if (!chip || !chipText || !input) return;
+        if (pendingNewsContext) {
+            chip.style.display = 'flex';
+            chipText.innerText = `已附上新聞：${pendingNewsContext.title}`;
+            input.placeholder = '針對這則新聞，你想問什麼？';
+        } else {
+            chip.style.display = 'none';
+            input.placeholder = '問問 Gemini';
+        }
+    }
+    function clearPendingNewsContext() { pendingNewsContext = null; updateNewsContextChipUI(); }
+
     function askGeminiAboutNews() {
         if (!pendingNewsForGemini) return;
         const news = pendingNewsForGemini;
@@ -6414,15 +6446,13 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         if (newsTicker && newsTicker !== currentTicker && typeof selectTicker === 'function') selectTicker(newsTicker);
         switchView('view-dashboard', document.querySelectorAll('.menu-item')[0], true);
 
-        const metaLine = news.meta ? `（${news.meta}）` : '';
-        const linkLine = news.link ? `\n連結：${news.link}` : '';
-        const prompt = `幫我分析這則關於 ${newsTicker} 的新聞：\n「${news.title}」${metaLine}${linkLine}\n\n`;
+        pendingNewsContext = { title: news.title, meta: news.meta, link: news.link, ticker: newsTicker };
 
-        // 等 switchView 的換頁／手機滑動動畫大致跑完再聚焦輸入框，避免畫面還在切換時搶焦點或捲動位置跑掉
+        // 等 switchView 的換頁／手機滑動動畫大致跑完再更新提示、聚焦輸入框，避免畫面還在切換時搶焦點或捲動位置跑掉
         setTimeout(() => {
+            updateNewsContextChipUI();
             const input = document.getElementById('chat-input');
             if (!input) return;
-            input.value = prompt;
             input.focus();
             input.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }, 260);
@@ -6454,6 +6484,9 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         listEl.addEventListener('touchmove', cancelTimer, { passive: true });
         listEl.addEventListener('touchend', function (e) { cancelTimer(); if (newsLongPressTriggered) e.preventDefault(); }, { passive: false });
         listEl.addEventListener('touchcancel', cancelTimer, { passive: true });
+        // 🩹 額外保險：部分瀏覽器（尤其 Android）長按連結會觸發原生的 contextmenu（複製連結/在新分頁開啟等選單），
+        // 這裡直接攔掉，統一改用我們自己的長按選單
+        listEl.addEventListener('contextmenu', function (e) { if (e.target.closest('.detail-news-item')) e.preventDefault(); });
 
         // 電腦：滑鼠按住不放
         listEl.addEventListener('mousedown', function (e) { if (e.button === 0) startPress(e, e.clientX, e.clientY); });
@@ -8922,6 +8955,36 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
 
         let key = localStorage.getItem("MY_GEMINI_KEY") || prompt("請輸入 Gemini API Key："); if(!key) return; localStorage.setItem("MY_GEMINI_KEY", key);
 
+        // 📰 若目前附加了新聞情境（見 askGeminiAboutNews）：這次提問改走「新聞專屬」的精簡 prompt，
+        // 只聚焦在新聞內容本身回答，刻意不夾帶帳戶／持股／RSI 等一大堆數據，
+        // 避免 Gemini 講一兩句就岔題去分析帳戶狀況——除非使用者自己在問題裡明確要求要結合帳戶資訊。
+        if (pendingNewsContext) {
+            const news = pendingNewsContext;
+            pendingNewsContext = null;
+            updateNewsContextChipUI();
+
+            const out = document.getElementById("chat-output"), msgId = "ai-" + Date.now();
+            const displayQuestion = `${q} <span style="color:var(--color-acc)">[新聞：${news.title}]</span>`;
+            out.innerHTML += `<br><span style="color:#fff">> ${displayQuestion}</span><br><div id="${msgId}"><span style="color:var(--color-acc)">[GEMINI]</span> <span style="color:#777">分析新聞中...</span></div>`;
+            input.value = ""; out.scrollTop = out.scrollHeight;
+
+            const metaLine = news.meta ? `（${news.meta}）` : '';
+            const linkLine = news.link ? `\n連結：${news.link}` : '';
+            const newsPrompt = `你是一位熟悉市場與產業動態的財經分析師。使用者附上了一則關於 ${news.ticker} 的新聞，請針對這則新聞本身回答使用者的問題。
+
+【重要】除非使用者在問題中明確要求你「結合我的帳戶」「配合我的持股」之類的說法，否則請完全只針對這則新聞本身進行分析與回答，不要主動提及、分析或建議任何關於使用者帳戶、持股、現金、RSI 或其他個人帳務資訊——這次提問的重點是新聞本身，不是帳戶健檢。
+
+【新聞內容】
+「${news.title}」${metaLine}${linkLine}
+
+用簡潔專業的口吻回答（字數約 150-200 字內，直接切入重點）。
+
+使用者問題：${q}`;
+
+            await callGeminiAPI(newsPrompt, msgId, out, key, undefined, undefined, q);
+            return;
+        }
+
         const out = document.getElementById("chat-output"), msgId = "ai-" + Date.now();
         out.innerHTML += `<br><span style="color:#fff">> ${q}</span><br><div id="${msgId}"><span style="color:var(--color-acc)">[GEMINI]</span> <span style="color:#777">分析整體資產與指標中...</span></div>`; input.value = ""; out.scrollTop = out.scrollHeight;
 
@@ -9006,34 +9069,65 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
     let geminiConversationHistory = [];
 
     // 實際呼叫 Gemini API 並將結果渲染到指定訊息節點（一般提問、歷史帳本分析、市場事件分析共用）
-    // historyUserText：要存進對話歷史的「乾淨」使用者文字（不含即時數據），預設等於 fullPrompt 本身
+    // historyUserText：要存進對話歷史的「乾淨」使用者文字（不含即時數據）
     // 回應以「透明漸層淡入」逐段顯示，模擬一般 AI 軟體的輸出體驗（見 typewriterRender）
-    // 🩹 修復（第三輪）：光靠「告訴 Gemini 今天日期＋這是過去」還是不夠——因為就算 Gemini
-    // 接受這是過去的日期，它自己訓練資料的知識截止日期還是更早，導致它「真的沒有」那段期間的
-    // 新聞內容可查，只能誠實回答「無法取得這段期間的新聞報導」。這不是它在鬧脾氣，是真的沒資料。
+    //
+    // 🩹 修復：Gemini API 伺服器端不會自動記憶對話，contents 陣列必須嚴格遵守
+    // user -> model -> user -> model 的接龍格式。流程改為：
+    // 1) 先把「乾淨問題」以 role:"user" 立刻推進全域 geminiConversationHistory；
+    // 2) 深拷貝一份歷史做為 payloadContents，避免任何操作污染到全域歷史；
+    // 3) 把這一輪真正要送出（已內嵌即時數據／系統指令的完整 fullPrompt）取代掉 payloadContents
+    //    最後一筆（也就是剛推入的乾淨問題）——全域歷史裡永遠只留乾淨問題文字，送給 API 的
+    //    這份拷貝才帶著完整數據；
+    // 4) 送出 payloadContents；
+    // 5) 收到回覆後，把 Gemini「這次真的說了什麼」以 role:"model" 存回全域歷史，
+    //    確保下一輪的 contents 能維持嚴格的 user/model 交替格式；
+    // 6) 若 API 呼叫失敗，把步驟 1 推入的 user 發言 pop() 掉，避免留下沒有回覆配對的懸空紀錄，
+    //    導致下一輪歷史出現「連續兩筆 user、中間沒有 model」的錯亂順序。
+    //
+    // 🩹（第三輪）光靠「告訴 Gemini 今天日期＋這是過去」還是不夠——因為就算 Gemini 接受這是過去的日期，
+    // 它自己訓練資料的知識截止日期還是更早，導致它「真的沒有」那段期間的新聞內容可查，只能誠實回答
+    // 「無法取得這段期間的新聞報導」。這不是它在鬧脾氣，是真的沒資料。
     // 解法：改用 Gemini API 原生支援的 Google Search grounding 工具（tools: [{ google_search: {} }]），
     // 讓 Gemini 在回答前「真的去網路上搜尋」該期間的實際新聞、財報、總經事件，而不是單純憑訓練記憶回答。
     async function callGeminiAPI(fullPrompt, msgId, out, key, systemInstructionText, useGoogleSearch, historyUserText) {
+        const cleanText = historyUserText || fullPrompt;
+
+        // 1) 立刻把乾淨問題以 user 身分推入全域歷史——不論這次 API 呼叫成功或失敗，
+        //    這都是「這一輪使用者實際問了什麼」的正確記錄；失敗時會在 catch 內 pop() 掉。
+        geminiConversationHistory.push({ role: 'user', parts: [{ text: cleanText }] });
+
         try {
-            // 🩹 多輪對話：把先前的對話歷史一併附上，讓 Gemini 能接續前面已經聊過的內容
-            const contents = [...geminiConversationHistory, { role: 'user', parts: [{ text: fullPrompt }] }];
-            const bodyObj = { contents };
+            // 2) 深拷貝一份歷史，任何後續操作都只作用在這份拷貝上，不會弄髒全域的 geminiConversationHistory
+            const payloadContents = JSON.parse(JSON.stringify(geminiConversationHistory));
+
+            // 3) 把即時數據／系統提示組裝成的完整 fullPrompt，取代掉拷貝陣列最後一筆（剛推入的乾淨問題）
+            payloadContents[payloadContents.length - 1] = { role: 'user', parts: [{ text: fullPrompt }] };
+
+            const bodyObj = { contents: payloadContents };
             // 預設一律附上「今天真實日期」的系統指令，除非呼叫端明確傳入其他系統指令內容
             bodyObj.system_instruction = { parts: [{ text: systemInstructionText || buildTodaySystemInstruction() }] };
             if (useGoogleSearch) {
                 bodyObj.tools = [{ google_search: {} }]; // 開啟即時網路搜尋，讓回答有真實新聞依據，而非模型憑空推測
             }
+
+            // 4) 送出這份「帶有即時數據」的拷貝
             const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${key}`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(bodyObj) });
             const json = await res.json();
             // 有開搜尋工具時，回覆可能拆成多個 parts（含搜尋過程），這裡把所有文字片段串起來，避免漏字
             const rawReply = (json.candidates[0].content.parts || []).map(p => p.text || '').join('');
-            // 這一輪對話存進歷史，供下一次提問接續上下文；使用者這輪存「乾淨問題」而非完整 fullPrompt
-            geminiConversationHistory.push({ role: 'user', parts: [{ text: historyUserText || fullPrompt }] });
+
+            // 5) 把 Gemini 這次「真的說了什麼」以 model 身分存回全域歷史，維持嚴格的 user/model 交替格式
             geminiConversationHistory.push({ role: 'model', parts: [{ text: rawReply }] });
+
             const msgEl = document.getElementById(msgId);
             msgEl.innerHTML = `<span style="color:var(--color-acc)">[GEMINI]</span> <span id="${msgId}-text" style="color:#ddd"></span>`;
             await typewriterRender(document.getElementById(`${msgId}-text`), rawReply, 50);
-        } catch(e) { document.getElementById(msgId).innerHTML = `<span style="color:var(--color-sell)">連線失敗或 Key 無效</span>`; }
+        } catch(e) {
+            // 6) 呼叫失敗：退回步驟 1 推入的 user 發言，避免歷史陣列留下沒有回覆配對的懸空紀錄
+            geminiConversationHistory.pop();
+            document.getElementById(msgId).innerHTML = `<span style="color:var(--color-sell)">連線失敗或 Key 無效</span>`;
+        }
     }
 
     // ---- 歷史帳本時間範圍選擇器 ----
@@ -9118,7 +9212,7 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         input.value = restoredText || ""; input.focus();
     }
 
-    function confirmLedgerRangeAndSend() {
+    async function confirmLedgerRangeAndSend() {
         const range = getLedgerRangeTimestamps();
         if (!range) { alert("請選擇完整的起訖日期"); return; }
         if (range.startTs > range.endTs) { alert("起始日期不能晚於結束日期"); return; }
@@ -9140,8 +9234,11 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         document.getElementById("chat-input").value = "";
 
         // 「市場事件」與「歷史帳本」不再互斥：'both' 模式下，兩套分析各自以獨立訊息依序送出，讓兩者共存。
+        // 🩹 這裡務必依序 await（不能同時觸發）：callGeminiAPI 會把每一輪的 user/model 對話依序 push 進
+        // 全域的 geminiConversationHistory，若兩邊同時進行，會在還沒收到各自回覆前就搶著 push 使用者發言，
+        // 導致歷史陣列出現「連續兩筆 user、中間沒有 model」的錯亂順序，違反 Gemini API 要求的嚴格交替格式。
         if (mode === 'event' || mode === 'both') {
-            sendMarketEventAnalysisToGemini(key, cleanQuestion, range);
+            await sendMarketEventAnalysisToGemini(key, cleanQuestion, range);
         }
         if (mode === 'ledger' || mode === 'both') {
             let filtered = state.ledger.filter(r => r.timestamp >= range.startTs && r.timestamp <= range.endTs).sort((a, b) => b.timestamp - a.timestamp);
@@ -9150,7 +9247,7 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
             let truncated = false;
             if (filtered.length > MAX_TRADES) { filtered = filtered.slice(0, MAX_TRADES); truncated = true; }
 
-            sendLedgerAnalysisToGemini(key, cleanQuestion, filtered, range, totalMatched, truncated);
+            await sendLedgerAnalysisToGemini(key, cleanQuestion, filtered, range, totalMatched, truncated);
         }
     }
 
@@ -9180,7 +9277,7 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         return lines.join("\n");
     }
 
-    function sendLedgerAnalysisToGemini(key, question, filteredLedger, range, totalMatched, truncated) {
+    async function sendLedgerAnalysisToGemini(key, question, filteredLedger, range, totalMatched, truncated) {
         const out = document.getElementById("chat-output"), msgId = "ai-" + Date.now();
         const displayQuestion = `${question} <span style="color:var(--color-acc)">[歷史帳本 ${range.startVal} ~ ${range.endVal}，共 ${totalMatched} 筆]</span>`;
         out.innerHTML += `<br><span style="color:#fff">> ${displayQuestion}</span><br><div id="${msgId}"><span style="color:var(--color-acc)">[GEMINI]</span> <span style="color:#777">彙整期間內交易紀錄並分析中...</span></div>`; out.scrollTop = out.scrollHeight;
@@ -9188,7 +9285,10 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         const ledgerText = buildLedgerRangeReportText(filteredLedger, range, totalMatched, truncated);
         const fullPrompt = `你是一位講求數據與風險控制的資深華爾街操盤手。請仔細閱讀以下使用者於指定期間內的歷史交易紀錄，針對其操作進行覆盤分析，完整查詢此段時間範圍之情勢後再做回答，用簡潔專業的口吻回答用戶問題（字數約 200 字內）。\n\n${ledgerText}\n\n用戶問題：${question}`;
 
-        callGeminiAPI(fullPrompt, msgId, out, key, undefined, undefined, question);
+        // 🩹 這裡務必 await：callGeminiAPI 內部會依序 push user/model 到全域對話歷史，
+        // 若不等待完成就讓呼叫端（confirmLedgerRangeAndSend 的 'both' 模式）接著送出下一則分析，
+        // 兩邊會同時搶著 push，導致歷史陣列的 user/model 交替順序錯亂
+        await callGeminiAPI(fullPrompt, msgId, out, key, undefined, undefined, question);
     }
 
     // ---- 📰 市場事件：查詢指定標的在指定期間內的價格走勢，交給 Gemini 依其知識推測可能發生的事件 ----
@@ -9345,7 +9445,8 @@ ${summaryText}
 
 用戶問題：${question}`;
 
-        callGeminiAPI(fullPrompt, msgId, out, key, marketEventSystemInstruction, undefined, question);
+        // 🩹 這裡務必 await，理由同 sendLedgerAnalysisToGemini：避免 'both' 模式下兩邊同時 push 對話歷史造成順序錯亂
+        await callGeminiAPI(fullPrompt, msgId, out, key, marketEventSystemInstruction, undefined, question);
     }
 
     // 🚀 手機端極簡玻璃數字鍵盤核心邏輯
