@@ -572,6 +572,23 @@
         .detail-news-item:hover { background:rgba(255,255,255,0.05); }
         .detail-news-title { font-size:13px; color:#eee; line-height:1.4; }
         .detail-news-meta { font-size:11px; color:#777; }
+        /* 個股詳情頁頂端的價格顯示區塊：電腦版靠右對齊（維持原樣），手機版改為靠左對齊（見手機版 media query 覆寫） */
+        .detail-price-block { margin-left: auto; text-align: right; }
+        /* 📰 相關新聞「長按 → Ask Gemini」快捷選單 */
+        .news-action-popup {
+            position: fixed; z-index: 20000; display: none;
+            background: rgba(17,17,17,0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; padding: 6px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5); max-width: 240px;
+            animation: modalPopIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .news-action-popup-title { padding: 6px 10px 4px 10px; font-size: 11px; color: #888; line-height: 1.4; }
+        .news-action-popup button {
+            display: flex; align-items: center; gap: 6px; width: 100%;
+            background: none; border: none; color: #eee; font-size: 12px; font-weight: bold;
+            padding: 9px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap;
+        }
+        .news-action-popup button:hover, .news-action-popup button:active { background: rgba(0,212,255,0.12); color: var(--color-acc); }
         .draggable-card.clickable-card { cursor: pointer; }
         /* 🩹 修復手機版藍色邊框殘留：:hover 在觸控裝置上是由「點一下」模擬觸發，
            且往往要等使用者點別的地方才會解除，導致手指點過的卡片邊框卡住不消失。
@@ -627,6 +644,9 @@
         /* 🔒 啟動 App 時的輸入密碼鎖定畫面：改為黑色背景填滿整個畫面（不使用其他彈窗共用的半透明模糊背景） */
         #boot-lock-overlay { background: #000; backdrop-filter: none; -webkit-backdrop-filter: none; }
         @keyframes modalFadeIn { from { opacity: 0; } to { opacity: 1; } }
+        /* ✨ Gemini 回覆逐漸出現效果：改成一小段一小段地淡入（透明漸層），取代原本逐字蹦出的打字機效果，視覺上更絲滑 */
+        .gemini-fade-chunk { opacity: 0; animation: gemini-fade-chunk-in 0.5s ease forwards; }
+        @keyframes gemini-fade-chunk-in { to { opacity: 1; } }
         @keyframes achvIconPop { 0% { transform: scale(0); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
         /* 🎊 拉炮式彩帶：以訊息卡為噴發源頭，先向外噴射再受重力墜落 */
         @keyframes achvConfettiFall {
@@ -830,6 +850,8 @@
             #mobile-header { display: flex; justify-content: space-between; align-items: center; height: 60px; padding: 0 20px; background: rgba(10, 10, 10, 0.95); border-bottom: 1px solid rgba(255,255,255,0.06); z-index: 50; position: absolute; top: 0; left: 0; width: 100%; }
             .mobile-menu-btn { background: transparent; border: none; color: #fff; font-size: 20px; cursor: pointer; padding: 10px; margin-left: -10px; z-index: 2; }
             .mobile-header-title { position: absolute; left: 50%; transform: translateX(-50%); font-weight: 900; letter-spacing: 3px; font-size: 16px; color: #fff; cursor: pointer; white-space: nowrap; z-index: 1; }
+            /* 個股詳情頁的價格顯示區塊：手機版改為靠左對齊（不再靠右推到最邊，也不再文字置右） */
+            .detail-price-block { margin-left: 0; text-align: left; }
             /* ✨ 手機版頂端標題「長按手動同步」：長按後標題文字會被下面這個畫線＋填色的進度動畫取代，
                同步進行中持續循環播放，同步結束後才換回原本的標題文字。線寬刻意加粗許多，
                是因為圖案原本是以 496x496 的 viewBox 畫給 350px 大圖顯示用，縮小到頂端標題這種小尺寸
@@ -1139,7 +1161,7 @@
                 <span style="font-size:18px; font-weight:900; color:var(--color-acc); letter-spacing:0.5px;" id="detail-ticker-symbol">--</span>
                 <span style="font-size:11px; color:#888;" id="detail-name"></span>
             </div>
-            <div style="margin-left:auto; text-align:right;">
+            <div class="detail-price-block">
                 <div style="font-size:22px; font-weight:bold; font-family:monospace;" id="detail-price-value">--</div>
                 <div style="font-size:12px; font-family:monospace;" id="detail-price-change"></div>
             </div>
@@ -1167,6 +1189,12 @@
             <div id="detail-news-list" style="display:flex; flex-direction:column; gap:2px;"></div>
         </div>
     </main>
+
+    <!-- 📰 相關新聞長按快捷選單：長按單則新聞後顯示，點擊「Ask Gemini」會帶著這則新聞跳轉到 Gemini 提問框 -->
+    <div class="news-action-popup" id="news-action-popup">
+        <div class="news-action-popup-title" id="news-action-popup-title"></div>
+        <button type="button" onclick="askGeminiAboutNews()"><img src="gemini.png" width="12" height="12"> Ask Gemini</button>
+    </div>
 
     <main id="view-holdings" class="view-section">
         <div id="holdings-subview-stock">
@@ -6332,13 +6360,120 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
             const dateStr = !isNaN(n.pubTs) ? new Date(n.pubTs).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' }) : '';
             const metaLine = [n.source, dateStr].filter(Boolean).join(' · ');
             const href = n.link ? escapeHtml(n.link) : '#';
-            return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="detail-news-item">
+            // 📰 data-* 屬性保留新聞的原始資料，供「長按 → Ask Gemini」功能讀取，不必再從畫面文字反解析
+            return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="detail-news-item" data-news-title="${escapeHtml(n.title)}" data-news-meta="${escapeHtml(metaLine)}" data-news-link="${href}">
                 <div class="detail-news-title">${escapeHtml(n.title)}</div>
                 ${metaLine ? `<div class="detail-news-meta">${escapeHtml(metaLine)}</div>` : ''}
             </a>`;
         }).join('');
     }
     window.loadTickerDetailNews = loadTickerDetailNews;
+
+    /* =========================================
+       📰 相關新聞「長按 → Ask Gemini」
+       長按（手機觸控／電腦滑鼠按住不放）一則新聞，跳出小選單，點擊「Ask Gemini」會：
+       1. 把該新聞所屬的代號設為目前使用中的代號（若不同）
+       2. 跳轉到 Gemini 顧問室
+       3. 把這則新聞的標題／來源／連結預先帶入提問框（不自動送出），讓使用者可以接著輸入想問的問題
+       ========================================= */
+    let newsLongPressTimer = null;
+    let newsLongPressTriggered = false; // 這次按壓是否已被判定為長按（用來擋掉放開後的 click，避免誤開新聞原文）
+    let pendingNewsForGemini = null; // 使用者選定、待帶入 Gemini 提問框的新聞資料
+
+    function openNewsActionPopup(itemEl, clientX, clientY) {
+        const popup = document.getElementById('news-action-popup');
+        if (!popup || !itemEl) return;
+        pendingNewsForGemini = {
+            title: itemEl.dataset.newsTitle || '',
+            meta: itemEl.dataset.newsMeta || '',
+            link: (itemEl.dataset.newsLink && itemEl.dataset.newsLink !== '#') ? itemEl.dataset.newsLink : ''
+        };
+        document.getElementById('news-action-popup-title').innerText = pendingNewsForGemini.title;
+        popup.style.display = 'block';
+        // 定位在按壓點附近，並簡單避免超出畫面邊界
+        const popupWidth = 240, popupHeightEstimate = 100;
+        let left = clientX, top = clientY;
+        if (left + popupWidth > window.innerWidth - 10) left = window.innerWidth - popupWidth - 10;
+        if (left < 10) left = 10;
+        if (top + popupHeightEstimate > window.innerHeight - 10) top = window.innerHeight - popupHeightEstimate - 10;
+        if (top < 10) top = 10;
+        popup.style.left = left + 'px';
+        popup.style.top = top + 'px';
+    }
+    function closeNewsActionPopup() {
+        const popup = document.getElementById('news-action-popup');
+        if (popup) popup.style.display = 'none';
+    }
+
+    function askGeminiAboutNews() {
+        if (!pendingNewsForGemini) return;
+        const news = pendingNewsForGemini;
+        pendingNewsForGemini = null;
+        closeNewsActionPopup();
+        const newsTicker = detailTicker || currentTicker;
+        if (newsTicker && newsTicker !== currentTicker && typeof selectTicker === 'function') selectTicker(newsTicker);
+        switchView('view-dashboard', document.querySelectorAll('.menu-item')[0], true);
+
+        const metaLine = news.meta ? `（${news.meta}）` : '';
+        const linkLine = news.link ? `\n連結：${news.link}` : '';
+        const prompt = `幫我分析這則關於 ${newsTicker} 的新聞：\n「${news.title}」${metaLine}${linkLine}\n\n`;
+
+        // 等 switchView 的換頁／手機滑動動畫大致跑完再聚焦輸入框，避免畫面還在切換時搶焦點或捲動位置跑掉
+        setTimeout(() => {
+            const input = document.getElementById('chat-input');
+            if (!input) return;
+            input.value = prompt;
+            input.focus();
+            input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 260);
+    }
+
+    function setupNewsLongPress() {
+        const listEl = document.getElementById('detail-news-list');
+        if (!listEl) return;
+        const LONG_PRESS_MS = 500;
+
+        function cancelTimer() { clearTimeout(newsLongPressTimer); newsLongPressTimer = null; }
+        function startPress(e, clientX, clientY) {
+            const itemEl = e.target.closest('.detail-news-item');
+            if (!itemEl) return;
+            newsLongPressTriggered = false;
+            cancelTimer();
+            newsLongPressTimer = setTimeout(() => {
+                newsLongPressTriggered = true;
+                if (navigator.vibrate) navigator.vibrate(15);
+                openNewsActionPopup(itemEl, clientX, clientY);
+            }, LONG_PRESS_MS);
+        }
+
+        // 手機：觸控長按
+        listEl.addEventListener('touchstart', function (e) {
+            const t = e.touches[0];
+            startPress(e, t.clientX, t.clientY);
+        }, { passive: true });
+        listEl.addEventListener('touchmove', cancelTimer, { passive: true });
+        listEl.addEventListener('touchend', function (e) { cancelTimer(); if (newsLongPressTriggered) e.preventDefault(); }, { passive: false });
+        listEl.addEventListener('touchcancel', cancelTimer, { passive: true });
+
+        // 電腦：滑鼠按住不放
+        listEl.addEventListener('mousedown', function (e) { if (e.button === 0) startPress(e, e.clientX, e.clientY); });
+        listEl.addEventListener('mousemove', cancelTimer);
+        listEl.addEventListener('mouseup', cancelTimer);
+        listEl.addEventListener('mouseleave', cancelTimer);
+
+        // 長按觸發後，這次放開手指/滑鼠所產生的 click 不應該再開啟新聞原文連結
+        listEl.addEventListener('click', function (e) {
+            if (newsLongPressTriggered) { e.preventDefault(); newsLongPressTriggered = false; }
+        });
+
+        // 點擊選單以外的地方＝取消，關掉快捷選單
+        document.addEventListener('click', function (e) {
+            const popup = document.getElementById('news-action-popup');
+            if (!popup || popup.style.display !== 'block') return;
+            if (!e.target.closest('#news-action-popup') && !e.target.closest('.detail-news-item')) closeNewsActionPopup();
+        });
+    }
+    setupNewsLongPress();
 
     // 🩹 「最近選過」上限固定為 5 筆，最新選取的代號會排到最前面，超過上限則自動移除最舊的
     function addToRecentlySelected(t) { state.recentTickers = [t, ...state.recentTickers.filter(item => item !== t)].slice(0, 5); saveData(); renderRecentTickers(); }
@@ -8648,22 +8783,53 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
     function parseSimpleMarkdown(text) { return text.replace(/\*\*(.*?)\*\*/g, '<strong style="color:#fff">$1</strong>').replace(/^\s*[\-\*]\s+(.*)$/gim, '• $1').replace(/\n/g, '<br>'); }
 
     // ⌨️ 打字機效果：以每秒約 50 個字的速度，將 rawText 逐字顯示於 el（每次更新時同步套用 parseSimpleMarkdown）
-    function typewriterRender(el, rawText, charsPerSec = 50, onTick = null) {
+    // ✨ Gemini 回覆逐漸出現效果（原為打字機逐字顯示，改為柔和的透明漸層淡入）：
+    // 先把完整回覆一次轉成最終的 markdown HTML，再走訪其中的文字節點，把文字拆成一個個小片段，
+    // 各自包一層 <span class="gemini-fade-chunk">，用 CSS animation-delay 依序錯開淡入時機，
+    // 一次性寫入 DOM 後交給 CSS 統一處理淡入節奏（不用 JS 逐格改 innerHTML），動畫更平滑、也更省效能。
+    // 🩹 同時修復「輸出時畫面一直被拉到最底部」的問題：這裡不再由本函式負責捲動，捲動與否完全交回使用者自行操作
+    // （呼叫端若要在「送出新訊息當下」捲到底，請在呼叫本函式之前自行處理，不要放在輸出過程中）。
+    function typewriterRender(el, rawText, charsPerSec = 50, onDone = null) {
         return new Promise(resolve => {
-            const total = rawText.length;
-            if (!el || total === 0) { if (el) el.innerHTML = ''; resolve(); return; }
-            const msPerChar = 1000 / charsPerSec;
-            let startTime = null;
-            function step(ts) {
-                if (startTime === null) startTime = ts;
-                const elapsed = ts - startTime;
-                const charsToShow = Math.min(total, Math.floor(elapsed / msPerChar) + 1);
-                el.innerHTML = parseSimpleMarkdown(rawText.slice(0, charsToShow));
-                if (onTick) onTick();
-                if (charsToShow < total) requestAnimationFrame(step);
-                else resolve();
+            if (!el || !rawText) { if (el) el.innerHTML = ''; if (onDone) onDone(); resolve(); return; }
+            const wrapper = document.createElement('div');
+            wrapper.innerHTML = parseSimpleMarkdown(rawText);
+
+            const CHUNK_CHARS = 3; // 每個淡入片段的字元數：太小片段太多效能差、太大會失去「逐漸浮現」的漸進感
+            const stepMs = (1000 / charsPerSec) * CHUNK_CHARS; // 相鄰片段之間錯開的時間
+            const FADE_MS = 500; // 單一片段本身淡入所需時間，比片段間隔長，讓相鄰片段的淡入互相重疊、銜接更柔順
+            let chunkIndex = 0;
+
+            function wrapTextNode(node) {
+                const text = node.nodeValue;
+                if (!text) return;
+                const frag = document.createDocumentFragment();
+                for (let i = 0; i < text.length; i += CHUNK_CHARS) {
+                    const span = document.createElement('span');
+                    span.className = 'gemini-fade-chunk';
+                    span.style.animationDelay = (chunkIndex * stepMs) + 'ms';
+                    span.textContent = text.slice(i, i + CHUNK_CHARS);
+                    frag.appendChild(span);
+                    chunkIndex++;
+                }
+                node.parentNode.replaceChild(frag, node);
             }
-            requestAnimationFrame(step);
+
+            // 先收集所有文字節點再逐一處理，避免邊走訪邊修改 DOM 樹導致節點被跳過
+            const textNodes = [];
+            (function collect(node) {
+                node.childNodes.forEach(child => {
+                    if (child.nodeType === Node.TEXT_NODE) textNodes.push(child);
+                    else if (child.nodeType === Node.ELEMENT_NODE) collect(child);
+                });
+            })(wrapper);
+            textNodes.forEach(wrapTextNode);
+
+            el.innerHTML = '';
+            while (wrapper.firstChild) el.appendChild(wrapper.firstChild);
+
+            const totalMs = chunkIndex > 0 ? (chunkIndex - 1) * stepMs + FADE_MS : 0;
+            setTimeout(() => { if (onDone) onDone(); resolve(); }, totalMs);
         });
     }
 
@@ -8750,7 +8916,7 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
             const out = document.getElementById("chat-output"), msgId = "ai-" + Date.now();
             out.innerHTML += `<br><span style="color:#fff">> ${q}</span><br><div id="${msgId}"><span style="color:var(--color-acc)">[系統手冊]</span> <span id="${msgId}-text" style="color:#ddd"></span></div>`;
             input.value = ""; out.scrollTop = out.scrollHeight;
-            await typewriterRender(document.getElementById(`${msgId}-text`), USAGE_MANUAL_TEXT, 50, () => { out.scrollTop = out.scrollHeight; });
+            await typewriterRender(document.getElementById(`${msgId}-text`), USAGE_MANUAL_TEXT, 50);
             return;
         }
 
@@ -8819,7 +8985,7 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
 
 用戶問題：${q}`;
 
-        await callGeminiAPI(fullPrompt, msgId, out, key);
+        await callGeminiAPI(fullPrompt, msgId, out, key, undefined, undefined, q);
     }
 
     // 🩹 修復：先前只把「今天日期」寫在使用者 prompt 內文中，Gemini 仍然會因為那段日期
@@ -8833,16 +8999,25 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         return `【系統資訊，非使用者輸入，優先級最高】現在的真實西元日期是 ${todayStr}。這是使用者當下所在的真實世界時間，不是你的知識截止日期，也不是任何假設情境。你的訓練資料可能只涵蓋到較早的某個時間點，但這不代表「現在」還沒到——現在確確實實已經是 ${todayStr}，包含西元2026年在內的日期，只要早於或等於今天，都已經是「已經發生的過去」，並非未來。你絕對不可以因為某個日期、年份（例如 2026 年或其中任何月份）超出你自己訓練資料的知識範圍，就判斷、暗示或回覆使用者「這是未來的日期」、「這個時間點尚未到來」、「無法討論尚未發生的事」之類的話——這種判斷在事實上是錯誤的。若你對某段期間的具體新聞、事件不熟悉，只需誠實告知你的知識可能沒有涵蓋到這段期間、資訊有限，並改以使用者提供的實際數據做合理推測即可，絕不可以「這是未來」為理由拒絕回答。`;
     }
 
-    // 實際呼叫 Gemini API 並將結果渲染到指定訊息節點（一般提問與歷史帳本分析共用）
-    // 回應以打字機效果（約每秒 50 字）逐字顯示，模擬一般 AI 軟體的輸出體驗
+    // 🧠 多輪對話記憶：Gemini 顧問室的完整對話歷史（使用者提問＋模型回覆），讓後續提問能接續前面聊過的內容，
+    // 而不是每次都被當成全新的對話。這裡刻意只保留「乾淨的原始問題」文字（不含每次都重新組裝、
+    // 夾帶大量即時數據的完整 prompt），避免歷史記錄裡塞滿過期的數據快照，讓對話歷史單純聚焦在
+    // 「聊過什麼」，實際數據仍以「這一輪」送出的 fullPrompt 為準、每次都重新帶入最新數值。
+    let geminiConversationHistory = [];
+
+    // 實際呼叫 Gemini API 並將結果渲染到指定訊息節點（一般提問、歷史帳本分析、市場事件分析共用）
+    // historyUserText：要存進對話歷史的「乾淨」使用者文字（不含即時數據），預設等於 fullPrompt 本身
+    // 回應以「透明漸層淡入」逐段顯示，模擬一般 AI 軟體的輸出體驗（見 typewriterRender）
     // 🩹 修復（第三輪）：光靠「告訴 Gemini 今天日期＋這是過去」還是不夠——因為就算 Gemini
     // 接受這是過去的日期，它自己訓練資料的知識截止日期還是更早，導致它「真的沒有」那段期間的
     // 新聞內容可查，只能誠實回答「無法取得這段期間的新聞報導」。這不是它在鬧脾氣，是真的沒資料。
     // 解法：改用 Gemini API 原生支援的 Google Search grounding 工具（tools: [{ google_search: {} }]），
     // 讓 Gemini 在回答前「真的去網路上搜尋」該期間的實際新聞、財報、總經事件，而不是單純憑訓練記憶回答。
-    async function callGeminiAPI(fullPrompt, msgId, out, key, systemInstructionText, useGoogleSearch) {
+    async function callGeminiAPI(fullPrompt, msgId, out, key, systemInstructionText, useGoogleSearch, historyUserText) {
         try {
-            const bodyObj = { contents: [{ parts: [{ text: fullPrompt }] }] };
+            // 🩹 多輪對話：把先前的對話歷史一併附上，讓 Gemini 能接續前面已經聊過的內容
+            const contents = [...geminiConversationHistory, { role: 'user', parts: [{ text: fullPrompt }] }];
+            const bodyObj = { contents };
             // 預設一律附上「今天真實日期」的系統指令，除非呼叫端明確傳入其他系統指令內容
             bodyObj.system_instruction = { parts: [{ text: systemInstructionText || buildTodaySystemInstruction() }] };
             if (useGoogleSearch) {
@@ -8852,10 +9027,13 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
             const json = await res.json();
             // 有開搜尋工具時，回覆可能拆成多個 parts（含搜尋過程），這裡把所有文字片段串起來，避免漏字
             const rawReply = (json.candidates[0].content.parts || []).map(p => p.text || '').join('');
+            // 這一輪對話存進歷史，供下一次提問接續上下文；使用者這輪存「乾淨問題」而非完整 fullPrompt
+            geminiConversationHistory.push({ role: 'user', parts: [{ text: historyUserText || fullPrompt }] });
+            geminiConversationHistory.push({ role: 'model', parts: [{ text: rawReply }] });
             const msgEl = document.getElementById(msgId);
             msgEl.innerHTML = `<span style="color:var(--color-acc)">[GEMINI]</span> <span id="${msgId}-text" style="color:#ddd"></span>`;
-            await typewriterRender(document.getElementById(`${msgId}-text`), rawReply, 50, () => { out.scrollTop = out.scrollHeight; });
-        } catch(e) { document.getElementById(msgId).innerHTML = `<span style="color:var(--color-sell)">連線失敗或 Key 無效</span>`; } out.scrollTop = out.scrollHeight;
+            await typewriterRender(document.getElementById(`${msgId}-text`), rawReply, 50);
+        } catch(e) { document.getElementById(msgId).innerHTML = `<span style="color:var(--color-sell)">連線失敗或 Key 無效</span>`; }
     }
 
     // ---- 歷史帳本時間範圍選擇器 ----
@@ -9010,7 +9188,7 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         const ledgerText = buildLedgerRangeReportText(filteredLedger, range, totalMatched, truncated);
         const fullPrompt = `你是一位講求數據與風險控制的資深華爾街操盤手。請仔細閱讀以下使用者於指定期間內的歷史交易紀錄，針對其操作進行覆盤分析，完整查詢此段時間範圍之情勢後再做回答，用簡潔專業的口吻回答用戶問題（字數約 200 字內）。\n\n${ledgerText}\n\n用戶問題：${question}`;
 
-        callGeminiAPI(fullPrompt, msgId, out, key);
+        callGeminiAPI(fullPrompt, msgId, out, key, undefined, undefined, question);
     }
 
     // ---- 📰 市場事件：查詢指定標的在指定期間內的價格走勢，交給 Gemini 依其知識推測可能發生的事件 ----
@@ -9167,7 +9345,7 @@ ${summaryText}
 
 用戶問題：${question}`;
 
-        callGeminiAPI(fullPrompt, msgId, out, key, marketEventSystemInstruction);
+        callGeminiAPI(fullPrompt, msgId, out, key, marketEventSystemInstruction, undefined, question);
     }
 
     // 🚀 手機端極簡玻璃數字鍵盤核心邏輯
