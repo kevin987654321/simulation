@@ -883,8 +883,6 @@
                     header-sync-draw 2s ease-in-out infinite,
                     header-sync-fill 1s ease-in-out infinite;
             }
-            @keyframes header-sync-draw { to { stroke-dashoffset: 0; } }
-            @keyframes header-sync-fill { to { fill: #fff; stroke: transparent; } }
             .mobile-reload-btn { width: 50px; height: 100%; cursor: pointer; z-index: 2; margin-right: -10px; position: absolute; right: 0; top: 0; }
             
             #sidebar-overlay { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 900; backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); opacity: 0; pointer-events: none; transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
@@ -971,6 +969,15 @@
             backdrop-filter: none !important;
             -webkit-backdrop-filter: none !important;
         }
+
+        /* ✨ 畫線＋填色的進度動畫 keyframes（手機版頂端標題長按同步 / 電腦版左側選單 logo 手動同步共用）：
+           🩹 原本這兩個 @keyframes 定義在手機版專用的 @media (max-width: 768px) 區塊內，導致在該媒體查詢
+           條件不成立的桌面寬度下，這兩個動畫名稱根本沒有被註冊，套用 animation:header-sync-draw/-fill 的
+           元素完全不會動，stroke-dashoffset 會停在初始值（等於整條路徑長度＝完全不繪製），畫面上就變成
+           一片空白——這正是電腦版左側選單 logo 手動同步時「直接變空白」的成因。移到全域（不受任何
+           @media 限制）後，桌面與手機都能正常撥放。 */
+        @keyframes header-sync-draw { to { stroke-dashoffset: 0; } }
+        @keyframes header-sync-fill { to { fill: #fff; stroke: transparent; } }
     </style>
 </head>
 <!-- 🩹 修復手機版載入時頂部出現小範圍霧化漸層殘影的問題（第三次嘗試，改用更保險的做法）：
@@ -990,7 +997,7 @@
 <div id="sidebar-overlay" onclick="toggleSidebar()"></div>
 
 <aside id="sidebar">
-    <div class="glass-title-text" onclick="switchView('view-achievements', null)" style="cursor:pointer;" title="娛樂中心：成就與好友"><img src="logo.png" width="25" height="25"> ACORNTRADE</div>
+    <div class="glass-title-text" onclick="switchView('view-achievements', null)" style="cursor:pointer;" title="娛樂中心：成就與好友"><img id="sidebar-logo-img" src="logo.png" width="25" height="25"> ACORNTRADE</div>
     <div class="menu-item active" id="menu-item-dashboard" data-view="view-dashboard" onclick="switchView('view-dashboard', this)"><span class="nav-line"></span> 指揮操盤中心</div>
     <div class="menu-item mobile-only" data-view="view-mobile-trade" onclick="switchView('view-mobile-trade', this)"><span class="nav-line"></span> 下單櫃檯</div>
     <div class="menu-item" id="menu-item-cards" data-view="view-cards" onclick="switchView('view-cards', this)"><span class="nav-line"></span> 自選資產卡片</div>
@@ -1455,7 +1462,7 @@
             </div>
             <div class="table-responsive" id="ledger-tab-view-ledger">
                 <div id="ledger-filter-bar" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:10px;">
-                    <input type="text" id="ledger-filter-ticker" placeholder="篩選代號 (如 NVDA)" oninput="applyLedgerFilters()" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px 10px; border-radius:6px; font-size:12px; width:140px; box-sizing:border-box;">
+                    <input type="text" id="ledger-filter-ticker" placeholder="篩選代號" oninput="applyLedgerFilters()" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px 10px; border-radius:6px; font-size:12px; width:140px; box-sizing:border-box;">
                     <select id="ledger-filter-action" onchange="applyLedgerFilters()" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px 10px; border-radius:6px; font-size:12px;">
                         <option value="">全部買賣</option>
                         <option value="BUY">買進</option>
@@ -3780,16 +3787,61 @@
     }
 
     // 🖱️ 帳號管理頁的「手動同步」按鈕：不受「自動雲端同步」開關影響，讓使用者隨時可強制推送目前帳號資料
+    // ✨ 同步期間，電腦版左側選單的 logo.png 也會換成跟手機版頂端標題長按同步時一樣的畫線＋填色動畫，
+    // 尺寸維持與原本 logo.png 一致（25x25），同步結束（不論成功或失敗）後換回原本的 <img>。
+    // 🩹 這裡改用 DOM API 直接組出 <svg>／設定「行內樣式」，不依賴外部 CSS 選擇器或字串比對：
+    // 先前用字串取代 class 屬性、外觀完全交給另一條 CSS 規則負責的做法，一旦樣式表載入順序、
+    // 選擇器優先權跟預期不同（例如視窗寬度落在手機版 @media 區間，讓另一條寫死 32px、
+    // 且沒有 fill/stroke 設定的規則覆蓋過去），path 就會退回瀏覽器預設的「純黑色實心填滿」，
+    // 在接近全黑的側邊選單背景上等於完全看不見，變成「logo 直接變空白」。改成行內樣式後，
+    // 顏色／線寬／動畫都直接寫在元素上，優先權高於任何外部樣式表規則，不會再被覆蓋掉。
+    function buildSidebarSyncLogo() {
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = MOBILE_HEADER_SYNC_SVG;
+        const svg = wrapper.firstElementChild;
+        svg.removeAttribute('class');
+        svg.id = 'sidebar-logo-img';
+        svg.style.display = 'block';
+        svg.style.width = '25px';
+        svg.style.height = '25px';
+        svg.style.flexShrink = '0';
+        svg.querySelectorAll('path').forEach(path => {
+            path.removeAttribute('class');
+            path.style.fill = 'transparent';
+            path.style.stroke = '#fff';
+            path.style.strokeWidth = '22';
+            path.style.animation = 'header-sync-draw 2s ease-in-out infinite, header-sync-fill 1s ease-in-out infinite';
+        });
+        return svg;
+    }
     async function manualSyncAccount(accountId) {
         const btn = document.getElementById(`manual-sync-btn-${accountId}`);
         const originalHtml = btn ? btn.innerHTML : null;
         if (btn) { btn.disabled = true; btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 同步中...`; }
+        const sidebarLogoOriginalOuterHTML = (() => {
+            const el = document.getElementById('sidebar-logo-img');
+            if (!el) return null;
+            const originalOuterHTML = el.outerHTML;
+            const svg = buildSidebarSyncLogo();
+            el.replaceWith(svg);
+            svg.querySelectorAll('path').forEach(path => {
+                const len = path.getTotalLength();
+                path.style.strokeDasharray = len;
+                path.style.strokeDashoffset = len;
+            });
+            return originalOuterHTML;
+        })();
         try {
             await cloudSyncAccount(accountId, { silent: false });
         } finally {
             if (btn) { btn.disabled = false; btn.innerHTML = originalHtml; }
+            if (sidebarLogoOriginalOuterHTML) {
+                const cur = document.getElementById('sidebar-logo-img');
+                if (cur) cur.outerHTML = sidebarLogoOriginalOuterHTML;
+            }
         }
     }
+
 
     /* =========================================
        ✨ 手機版頂端標題「長按手動同步」
@@ -7901,10 +7953,10 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
     /* =========================================
        🔍 圖表縮放功能（navChart / mobileChart 共用）
        - 電腦：滑鼠滾輪，以游標所在的時間點為中心縮放；放大後按住 Ctrl 可拖曳平移可視範圍
-       - 手機：雙指縮放（比照原生 pinch 手感）
-       - 手機（單指）：快速點兩下（第二下不放開）後上下滑動來縮放——
-         模仿 Google 地圖的單指縮放手勢，方便單手操作時使用。
-         上滑＝放大、下滑＝縮小。
+       - 手機：雙指縮放（比照原生 pinch 手感）；縮放期間不顯示節點預覽（tooltip／游標圓點），
+         避免手指縮放時畫面同時彈出資料節點造成干擾
+       - 手機（單指）：快速點兩下（第二下不放開），改為拖曳平移可視範圍（不再是縮放）——
+         放開第二下後直接左右滑動即可平移目前的可視時間範圍。
        實作方式：不依賴任何縮放外掛，直接控制 Chart.js 類別座標軸（category scale）
        的 min/max（資料索引範圍）來裁切可視範圍。只調整 X（時間）軸的可視範圍，
        刻意不去改動 Y（數值）軸的上下限——避免縮放時數值軸的刻度數量、位置跳動，
@@ -8030,17 +8082,27 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
             if (panActive) { panActive = false; canvas.style.cursor = ''; }
         });
 
-        // --- 手機：雙指縮放 + 單指「快速二次按壓後上下滑動」縮放 ---
+        // --- 手機：雙指縮放（縮放期間隱藏節點預覽） + 單指「快速二次按壓後按住拖曳」平移 ---
         let pinchActive = false, pinchStartDist = 0, pinchStartRange = null;
-        let dragZoomActive = false, dragStartY = 0, dragStartRange = null;
+        let dragPanActive = false, dragStartX = 0, dragStartRange = null;
         let lastTapTime = 0, lastTapX = 0, lastTapY = 0;
+
+        // 🩹 縮放（雙指 pinch）時不顯示節點預覽：強制關閉 holdToPreviewPlugin 的持有狀態並清空目前的
+        // active elements／tooltip，避免縮放過程中手指移動被誤判成「停在某個資料點上」而彈出節點預覽
+        function suppressNodePreview() {
+            chart._isPointerHolding = false;
+            chart.setActiveElements([]);
+            chart.tooltip.setActiveElements([], { x: 0, y: 0 });
+            chart.update('none');
+        }
 
         canvas.addEventListener('touchstart', function (e) {
             if (e.touches.length === 2) {
-                dragZoomActive = false; // 雙指優先，中止可能正在進行的單指拖曳縮放
+                dragPanActive = false; // 雙指優先，中止可能正在進行的單指拖曳平移
                 pinchActive = true;
                 pinchStartDist = touchDist(e.touches[0], e.touches[1]);
                 pinchStartRange = getChartVisibleRange(chart);
+                suppressNodePreview();
                 e.preventDefault();
                 return;
             }
@@ -8050,9 +8112,9 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
                 const isQuickSecondTap = (now - lastTapTime < 320) &&
                     touchDist({ clientX: lastTapX, clientY: lastTapY }, t) < 40;
                 if (isQuickSecondTap) {
-                    // 這是快速的第二下按壓：視為縮放手勢的開始，攔截這次事件避免觸發 iOS 原生雙擊放大鏡
-                    dragZoomActive = true;
-                    dragStartY = t.clientY;
+                    // 這是快速的第二下按壓（雙擊後按住）：視為拖曳平移手勢的開始，攔截這次事件避免觸發 iOS 原生雙擊放大鏡
+                    dragPanActive = true;
+                    dragStartX = t.clientX;
                     dragStartRange = getChartVisibleRange(chart);
                     e.preventDefault();
                 }
@@ -8062,28 +8124,31 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         canvas.addEventListener('touchmove', function (e) {
             if (pinchActive && e.touches.length === 2) {
                 e.preventDefault();
+                suppressNodePreview(); // 縮放過程中持續保持節點預覽關閉
                 const d = touchDist(e.touches[0], e.touches[1]);
                 if (!d || !pinchStartDist) return;
                 const scaleRatio = d / pinchStartDist; // 手指分開＝放大
                 applyZoomRatio(pinchStartRange, scaleRatio, (pinchStartRange.min + pinchStartRange.max) / 2);
                 return;
             }
-            if (dragZoomActive && e.touches.length === 1) {
+            if (dragPanActive && e.touches.length === 1) {
                 e.preventDefault();
                 const t = e.touches[0];
-                const deltaY = dragStartY - t.clientY; // 手指往上滑為正值
-                // 每上滑 150px 縮放為原本 2 倍（下滑則反向縮小），指數映射讓手感較線性好控制
-                const scaleRatio = Math.pow(2, deltaY / 150);
-                applyZoomRatio(dragStartRange, scaleRatio, (dragStartRange.min + dragStartRange.max) / 2);
+                const rect = canvas.getBoundingClientRect();
+                if (rect.width <= 0) return;
+                const span = dragStartRange.max - dragStartRange.min;
+                const deltaIdx = (t.clientX - dragStartX) / rect.width * span;
+                // 手指往右拖＝畫面內容跟著往右移＝顯示更早的資料，故索引往回退（比照電腦版 Ctrl+拖曳平移）
+                requestVisibleRange(dragStartRange.min - deltaIdx, dragStartRange.max - deltaIdx);
             }
         }, { passive: false });
 
         function onTouchEnd(e) {
             if (e.touches.length < 2) { pinchActive = false; pinchStartDist = 0; pinchStartRange = null; }
             if (e.touches.length === 0) {
-                if (dragZoomActive) {
-                    dragZoomActive = false;
-                    lastTapTime = 0; // 拖曳縮放結束後歸零，避免緊接著的放開被誤判為下一次的「快速二次按壓」
+                if (dragPanActive) {
+                    dragPanActive = false;
+                    lastTapTime = 0; // 拖曳平移結束後歸零，避免緊接著的放開被誤判為下一次的「快速二次按壓」
                 } else if (e.changedTouches && e.changedTouches.length) {
                     const t = e.changedTouches[0];
                     lastTapTime = Date.now();
@@ -8093,7 +8158,7 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
             }
         }
         canvas.addEventListener('touchend', onTouchEnd, { passive: true });
-        canvas.addEventListener('touchcancel', function () { pinchActive = false; dragZoomActive = false; }, { passive: true });
+        canvas.addEventListener('touchcancel', function () { pinchActive = false; dragPanActive = false; }, { passive: true });
     }
 
     attachChartZoomGestures(document.getElementById('navChart'), navChart);
