@@ -340,16 +340,36 @@
         #trade-expand-handle:hover { opacity: 1; color: rgba(255,255,255,0.8); }
         @media (max-width: 768px) { #trade-expand-handle { display: none !important; } }
         /* 🎮 操盤演練：浮動時間控制列＋演練期間鎖定畫面（只留下單區＋這條控制列，
-           隱藏側邊選單／漢堡按鈕／NAV-個股切換鈕，避免使用者中途跑去別頁，跟正式帳號的資料混在一起看） */
+           隱藏側邊選單／漢堡按鈕／NAV-個股切換鈕，避免使用者中途跑去別頁，跟正式帳號的資料混在一起看）
+           🩹 控制列改成「精簡單行」設計（拉桿 + 一列小按鈕，總高度用 --drill-bar-h 這個變數統一控管），
+           並且用 body.drilling .view-section.active { bottom: ... } 直接把下單區可視範圍的「下緣」往上收，
+           讓 flex:1 的圖表區塊自然縮小填滿剩下空間——而不是用 padding-bottom 把內容推出畫面外、
+           變成要多滑一段才看得到下單按鈕（下單區原本的版面設計就是剛好填滿整個畫面高度，沒有多餘空間）。 */
+        :root { --drill-bar-h: 58px; }
         #drill-control-bar {
             display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 19500;
+            height: calc(var(--drill-bar-h) + env(safe-area-inset-bottom));
             background: rgba(10,10,12,0.97); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-            border-top: 1px solid rgba(255,255,255,0.1); padding: 8px 14px calc(8px + env(safe-area-inset-bottom));
-            flex-direction: column; gap: 6px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            flex-direction: column; justify-content: center; gap: 4px;
+            padding: 6px 10px calc(6px + env(safe-area-inset-bottom));
+            box-sizing: border-box;
         }
         body.drilling #drill-control-bar { display: flex; }
         body.drilling #sidebar, body.drilling #sidebar-overlay, body.drilling .mobile-menu-btn, body.drilling .standalone-mode-btn { display: none !important; }
-        body.drilling .view-section.active { padding-bottom: 145px; }
+        body.drilling .view-section.active { bottom: calc(var(--drill-bar-h) + env(safe-area-inset-bottom)); }
+        #drill-time-slider { width: 100%; margin: 0; height: 12px; }
+        .drill-bar-row { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; overflow: hidden; }
+        .drill-exit-btn { background: transparent; border: 1px solid rgba(255,255,255,0.25); color: #fff; width: 24px; height: 24px; border-radius: 6px; cursor: pointer; flex-shrink: 0; font-size: 11px; padding: 0; }
+        .drill-day-label { font-size: 10.5px; color: #999; white-space: nowrap; flex-shrink: 0; }
+        .drill-time-label { font-size: 11.5px; font-weight: bold; color: #fff; font-family: monospace; white-space: nowrap; flex-shrink: 0; }
+        .drill-step-btns { display: flex; gap: 4px; margin-left: auto; flex-shrink: 0; }
+        .drill-step-btns button { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #ddd; font-size: 10.5px; padding: 4px 7px; border-radius: 5px; cursor: pointer; white-space: nowrap; }
+        .drill-nextday-btn { flex-shrink: 0; background: var(--color-acc); border: none; color: #000; padding: 5px 10px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 10.5px; white-space: nowrap; }
+        @media (max-width: 480px) {
+            :root { --drill-bar-h: 54px; }
+            .drill-day-label { display: none; } /* 螢幕太窄時先隱藏天數標籤，保留時間與操作按鈕優先 */
+        }
 
         .header-controls { display: flex; align-items: center; gap: 8px; }
         /* ✨ 圖表按鈕（時間區段選單／模式切換）：預設移除底色與框線，改由 .chart-glow-btn 提供
@@ -911,6 +931,9 @@
             .menu-item.active .nav-line { opacity: 1; }
 
             .view-section { top: 60px; height: calc(100dvh - 60px); padding: 12px; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+            /* 🎮 手機版是用 top+height 決定範圍（不是 inset:0），所以演練期間要縮的是 height，
+               單獨改 bottom 在這裡不會有作用——高度要扣掉的量跟桌機共用同一個 --drill-bar-h 變數 */
+            body.drilling .view-section.active { height: calc(100dvh - 60px - var(--drill-bar-h) - env(safe-area-inset-bottom)); }
 
             /* 📱 手機版換頁滑動動畫：實際位移改用 JS 的 Web Animations API（element.animate）直接播放，
                不透過這裡的 CSS transition 觸發（transition 搭配「先瞬間定位、強制 reflow、再改值」的寫法在部分手機瀏覽器上
@@ -1912,20 +1935,18 @@
      推進到目前模擬時間為止」的真實歷史資料——對其餘所有下單區的程式碼來說，感覺就像現在正是那個
      時間點、那檔股票正在報價一樣。 -->
 <div id="drill-control-bar">
-    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-        <button onclick="confirmExitDrill()" style="background:transparent; border:1px solid rgba(255,255,255,0.25); color:#fff; width:30px; height:30px; border-radius:8px; cursor:pointer; flex-shrink:0;" title="結束演練"><i class="fa-solid fa-xmark"></i></button>
-        <div style="font-weight:bold; font-size:12px; color:var(--color-acc); white-space:nowrap;"><i class="fa-solid fa-graduation-cap"></i> 演練中</div>
-        <div id="drill-day-progress" style="font-size:11px; color:#999; white-space:nowrap;">第 -/- 天</div>
-        <div id="drill-sim-time" style="font-size:12px; font-weight:bold; color:#fff; font-family:monospace; white-space:nowrap; margin-left:auto;">--</div>
-    </div>
-    <input type="range" id="drill-time-slider" min="0" max="0" value="0" style="width:100%; margin:0;" oninput="onDrillTimeSliderInput(this)">
-    <div id="drill-data-note" style="font-size:10px; color:#666;"></div>
-    <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-        <button onclick="drillAdvanceTime(1)" class="qp-btn">+1分</button>
-        <button onclick="drillAdvanceTime(5)" class="qp-btn">+5分</button>
-        <button onclick="drillAdvanceTime(30)" class="qp-btn">+30分</button>
-        <button onclick="drillAdvanceTime(60)" class="qp-btn">+1時</button>
-        <button onclick="drillGoNextDay()" style="margin-left:auto; background:var(--color-acc); border:none; color:#000; padding:7px 16px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:12px;">下一天 <i class="fa-solid fa-forward-step"></i></button>
+    <input type="range" id="drill-time-slider" min="0" max="0" value="0" oninput="onDrillTimeSliderInput(this)" title="演練時間軸（只能往前拖曳，不能拉回過去）">
+    <div class="drill-bar-row">
+        <button onclick="confirmExitDrill()" class="drill-exit-btn" title="結束演練"><i class="fa-solid fa-xmark"></i></button>
+        <span id="drill-day-progress" class="drill-day-label">第-/-天</span>
+        <span id="drill-sim-time" class="drill-time-label">--</span>
+        <div class="drill-step-btns">
+            <button onclick="drillAdvanceTime(1)" title="+1分鐘">+1</button>
+            <button onclick="drillAdvanceTime(5)" title="+5分鐘">+5</button>
+            <button onclick="drillAdvanceTime(30)" title="+30分鐘">+30</button>
+            <button onclick="drillAdvanceTime(60)" title="+1小時">+1H</button>
+        </div>
+        <button onclick="drillGoNextDay()" class="drill-nextday-btn">下一天 <i class="fa-solid fa-forward-step"></i></button>
     </div>
 </div>
 
@@ -3667,11 +3688,21 @@
                 if (!result || !result.timestamp || result.timestamp.length === 0) continue;
                 const q = (result.indicators && result.indicators.quote && result.indicators.quote[0]) || {};
                 const closes = q.close || [], opens = q.open || [], highs = q.high || [], lows = q.low || [];
+                // 🩹 嚴格把回傳的資料裁切在「這一天」的範圍內（p1~p2），不完全信任 Yahoo 一定會照 period1/period2
+                // 老實回覆——實測某些頻率/日期組合，Yahoo 偶爾會回傳超出請求範圍的資料（例如直接給到最新的一批），
+                // 如果不裁切，會讓「當天開盤到收盤」的時間拉桿被拉大到涵蓋這些多出來的資料，
+                // 使用者就可能把拉桿一路拉到接近真實世界的「今天」，而不是被限制在當天的交易時段內。
+                // 日K（'1d'）額外放寬到 ±24 小時：不同交易所時區跟瀏覽器所在時區換算日期邊界時可能有一天的落差，
+                // 但即使放寬也仍然只涵蓋「大約一天」，不會像完全不裁切一樣可能收到橫跨數月的資料。
+                const tolerance = interval === '1d' ? 24 * 3600 * 1000 : 0;
+                const lo = p1 * 1000 - tolerance, hi = p2 * 1000 + tolerance;
                 const candles = [];
                 result.timestamp.forEach((ts, i) => {
                     const c = closes[i];
                     if (c === null || c === undefined) return;
-                    candles.push({ t: new Date(ts * 1000), o: opens[i] ?? c, h: highs[i] ?? c, l: lows[i] ?? c, c });
+                    const tMs = ts * 1000;
+                    if (tMs < lo || tMs >= hi) return;
+                    candles.push({ t: new Date(tMs), o: opens[i] ?? c, h: highs[i] ?? c, l: lows[i] ?? c, c });
                 });
                 if (candles.length === 0) continue;
                 const data = { interval, candles, name: (result.meta && (result.meta.shortName || result.meta.longName)) || symbol };
@@ -3688,19 +3719,21 @@
     // preserveTime = false：換日時使用，模擬時間重設為當天第一筆資料的時間點
     async function loadDrillDay(preserveTime) {
         const dateObj = getDrillCurrentDate();
-        document.getElementById('drill-day-progress').innerText = `第 ${drillMeta.currentDayOffset + 1}/${drillMeta.totalDays} 天`;
         const data = await fetchDrillDayCandles(currentTicker, dateObj);
         drillMeta.todayCandles = data.candles;
         drillMeta.todayInterval = data.interval;
         if (!preserveTime || !drillMeta.simTime) {
             drillMeta.simTime = data.candles.length ? new Date(data.candles[0].t) : new Date(dateObj);
         }
-        const noteEl = document.getElementById('drill-data-note');
+        // 🩹 精簡版控制列拿掉了原本常駐顯示的說明文字列（節省高度），改成放在「第 X/Y 天」標籤的 title
+        // 提示文字裡（滑鼠懸停或手機長按可看到），不影響版面
+        const dayLabelEl = document.getElementById('drill-day-progress');
+        dayLabelEl.innerText = `第${drillMeta.currentDayOffset + 1}/${drillMeta.totalDays}天`;
         if (data.candles.length === 0) {
-            noteEl.innerText = `${fmtDrillDate(dateObj)}：這天沒有交易資料（可能是假日），可直接點「下一天」跳過。`;
+            dayLabelEl.title = `${fmtDrillDate(dateObj)}：這天沒有交易資料（可能是假日），可直接點「下一天」跳過。`;
         } else {
             const intervalLabel = { '1m': '1分鐘', '5m': '5分鐘', '15m': '15分鐘', '30m': '30分鐘', '60m': '60分鐘', '1d': '日' }[data.interval] || data.interval;
-            noteEl.innerText = data.interval === '1d'
+            dayLabelEl.title = data.interval === '1d'
                 ? `${fmtDrillDate(dateObj)}：此日期已無分鐘級歷史資料，改用日K收盤價呈現。`
                 : `${fmtDrillDate(dateObj)}：目前顯示頻率 ${intervalLabel}K（Yahoo Finance 真實歷史資料）`;
         }
@@ -3715,7 +3748,9 @@
         const first = candles[0].t.getTime();
         const last = candles[candles.length - 1].t.getTime();
         slider.min = 0;
-        slider.max = Math.max(1, Math.round((last - first) / 60000));
+        // 🩹 二次防呆：無論資料本身有沒有裁切乾淨，這裡再封頂一次「最多 1500 分鐘」（略多於 24 小時），
+        // 拉桿在任何情況下都不可能被拉到遠超過「一天」的範圍
+        slider.max = Math.max(1, Math.min(1500, Math.round((last - first) / 60000)));
         const elapsed = Math.round((drillMeta.simTime.getTime() - first) / 60000);
         slider.value = Math.max(0, Math.min(Number(slider.max), elapsed));
         document.getElementById('drill-sim-time').innerText = `${fmtDrillDate(drillMeta.simTime)} ${fmtDrillTime(drillMeta.simTime)}`;
@@ -3760,13 +3795,17 @@
     async function finishDrill(status) {
         if (!drillActive) return;
         // 用目前 state（演練用的虛擬帳戶）現有的現金/持股，以最近一次看到的報價（globalPriceCache）結算
+        // 🩹 這裡漏了套用 getCurrencyMultiplier(sym)：外幣計價的股票（例如美股）原本的 price 是「原幣別報價」
+        // （例如 100 美元／股），沒有換算成台幣就直接加總，等於把「100 美元」當成「100 台幣」計算，
+        // 直接讓外幣持股的市值被低估了匯率倍數（約 30 幾倍），才會看起來「手上有一半是外幣就虧損 50%」
+        // ——其實根本不是虧損，是這裡少乘了一次匯率。同時也漏算了「貨幣庫存」（外幣現金）的台幣等值。
         let holdingsVal = 0;
         Object.keys(state.holdings).forEach(sym => {
             const h = state.holdings[sym];
             const price = globalPriceCache[sym] || h.avgPrice;
-            holdingsVal += price * h.shares;
+            holdingsVal += price * h.shares * getCurrencyMultiplier(sym);
         });
-        const finalEquity = state.cash + holdingsVal;
+        const finalEquity = state.cash + getWalletValueTWD() + holdingsVal;
         const returnPct = (finalEquity - drillMeta.startEquity) / drillMeta.startEquity * 100;
         const record = {
             id: 'drill_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
