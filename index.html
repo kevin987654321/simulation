@@ -415,6 +415,26 @@
         }
         .chart-marker-eye-btn-mobile.active { background: transparent; border: none; }
 
+        /* 👁️✨ 小眼睛買賣點標記開關的顯示/隱藏動畫：不要直接用 display 切換造成「憑空出現/消失」，
+           改成「像果凍一樣從側邊滑進來，然後碰撞」——進場先從外側滑入、抵達定位時因為「撞到」而
+           左右擠壓變形（模擬碰撞衝擊），接著像果凍般回彈幾下才靜止；退場則是先被撞縮一下再滑出去。
+           用 JS（animateEyeToggleVisibility）在切換 display 的同時加上這兩個 class 來觸發。 */
+        @keyframes eyeJellySlideIn {
+            0%   { opacity: 0; transform: translateX(26px) scaleX(0.55) scaleY(1.35); }
+            40%  { opacity: 1; transform: translateX(-5px) scaleX(1.3) scaleY(0.75); }
+            58%  { transform: translateX(2px) scaleX(0.88) scaleY(1.12); }
+            75%  { transform: translateX(-1px) scaleX(1.06) scaleY(0.96); }
+            90%  { transform: translateX(0.5px) scaleX(0.98) scaleY(1.02); }
+            100% { opacity: 1; transform: translateX(0) scaleX(1) scaleY(1); }
+        }
+        @keyframes eyeJellySlideOut {
+            0%   { opacity: 1; transform: translateX(0) scaleX(1) scaleY(1); }
+            25%  { transform: translateX(-3px) scaleX(1.18) scaleY(0.88); }
+            100% { opacity: 0; transform: translateX(26px) scaleX(0.55) scaleY(1.35); }
+        }
+        .chart-marker-eye-btn.eye-anim-in, .chart-marker-eye-btn-mobile.eye-anim-in { animation: eyeJellySlideIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+        .chart-marker-eye-btn.eye-anim-out, .chart-marker-eye-btn-mobile.eye-anim-out { animation: eyeJellySlideOut 0.3s ease-in both; }
+
         /* =========================================
            ✨ 主頁圖表按鈕流光細框線（Chart Button Glow FX）
            與 .glass-panel 的流光特效採用完全相同的 mask-composite 技法，
@@ -7314,6 +7334,96 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         else { badge.innerText = '中性區位'; badge.style.background = 'rgba(0,212,255,0.2)'; badge.style.color = 'var(--color-acc)'; }
     }
 
+    // 📐 折線圖固定節點數：不論是哪個時間區間（1D/1W/1M/1Y/All…），折線圖一律固定重新取樣成剛好 100 個節點。
+    // 🩹 這裡刻意不做「內插」：每個時間點都是直接從原始資料裡挑出「最接近的那一筆真實資料」整筆帶過來
+    // （價格、開高低收、時間戳記都原封不動，不是算出來的中間值），確保每個節點都是絕對真實存在過的價格。
+    // 只把「K線／個股走勢圖」的折線模式（LINE）套用這個規則；K線（KLINE）蠟燭圖完全不受影響，
+    // 保留原始抓到的每一根真實K棒，不強制湊成 100 根——見 fetchStockHistoryData／drillRenderChartFromCandles
+    // 呼叫這個函式前的 type==='LINE' 判斷。
+    // 做法：把「第一筆到最後一筆資料的時間範圍」平分成 100 個時間點，每個時間點往左右兩邊比較，
+    // 挑時間上最接近的那一筆真實資料；原始資料筆數不足 100 時（例如 1W 常常只有 5~7 根日K），
+    // 多個時間點會挑到同一筆真實資料而重複——這是「資料本身沒有那麼多真實點」的誠實呈現，
+    // 而不是憑空編造出過去不存在的價格去填滿畫面。
+    // 最後一個節點強制對齊到原始資料裡真正最新的那一筆——以 1D 來說就是「當天到目前為止最新的價格，直到收盤」。
+    function resampleTo100Nodes(timestampsMs, prices, ohlcArr) {
+        const n = timestampsMs.length;
+        if (n === 0) return { prices: [], ohlc: [], timestamps: [] };
+        if (n === 1) return { prices: prices.slice(), ohlc: ohlcArr.slice(), timestamps: timestampsMs.slice() };
+        const TARGET = 100;
+        const startT = timestampsMs[0], endT = timestampsMs[n - 1];
+        const targetTimes = [];
+        for (let i = 0; i < TARGET; i++) targetTimes.push(startT + (endT - startT) * i / (TARGET - 1));
+        const outPrices = [], outOhlc = [], outTimestamps = [];
+        let idx = 0; // 目前比較所在的區間左端點索引：targetT 落在 [timestampsMs[idx], timestampsMs[idx+1]] 之間
+        for (let i = 0; i < TARGET; i++) {
+            const targetT = targetTimes[i];
+            while (idx < n - 2 && timestampsMs[idx + 1] <= targetT) idx++;
+            // 比較左右兩個真實時間點，哪一個離 targetT 比較近，就整筆採用那一筆真實資料（不做內插）
+            let bestIdx = idx;
+            if (idx < n - 1 && Math.abs(timestampsMs[idx + 1] - targetT) < Math.abs(timestampsMs[idx] - targetT)) bestIdx = idx + 1;
+            outPrices.push(prices[bestIdx]);
+            outOhlc.push(ohlcArr[bestIdx]);
+            outTimestamps.push(timestampsMs[bestIdx]); // 用該筆資料「真實」的時間戳，不是平分算出來的假時間點
+        }
+        // 保證最後一個節點必定精準對齊原始資料裡真正最新的那一筆，不受平分取樣時挑選誤差影響
+        outPrices[TARGET - 1] = prices[n - 1];
+        outOhlc[TARGET - 1] = ohlcArr[n - 1];
+        outTimestamps[TARGET - 1] = timestampsMs[n - 1];
+        return { prices: outPrices, ohlc: outOhlc, timestamps: outTimestamps };
+    }
+    // 依時間區間決定圖表下方的標籤格式：1D 只顯示時間，其餘顯示日期（跟原本的格式規則一致）
+    function formatChartLabelForRange(tsMs, range) {
+        const d = new Date(tsMs);
+        return range === '1d'
+            ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+            : `${String(d.getFullYear()).slice(-2)}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    // 📐 折線圖固定要湊滿 100 個「真實」節點，跟 K 線圖完全分開處理：
+    // K 線圖沿用最上面 range/intervalStr 算出來、跟原本一模一樣的組合去抓資料，不做任何額外處理。
+    // 折線圖則不共用這次 fetch——另外用自己的頻率設定（比 K 線當下選的週期更細）獨立打一次 Yahoo API，
+    // 確保即使是「1M」「3M」這種原本一天一根、根本湊不滿 100 根真實資料的短天期，也能抓到足夠密度的
+    // 真實報價，讓「最近鄰」取樣（見 resampleTo100Nodes）真的能挑出 100 個彼此不同的真實價格，
+    // 而不是被迫在少少幾根真實資料裡重複湊數。
+    const LINE_CHART_FETCH_INTERVAL = { '1d': '1m', '5d': '5m', '1mo': '30m', '3mo': '60m', '1y': '1d', '5y': '1wk', 'max': '1wk' };
+    async function fetchLineChartData(ticker, range, seriesKey, animate) {
+        const intervalStr = LINE_CHART_FETCH_INTERVAL[range] || '1d';
+        try {
+            const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=${range}&interval=${intervalStr}`)}`;
+            const res = await fetch(proxyUrl, { cache: "no-store" });
+            const json = await res.json(), result = json.chart.result[0];
+            if (ticker !== currentTicker) return; // 競速保護：等待期間已切換代號，這批回應已過期
+            const timestamps = result.timestamp || [], quote = result.indicators.quote[0];
+            const closes = quote.close || [], opens = quote.open || [], highs = quote.high || [], lows = quote.low || [];
+
+            let arrPrices = [], arrOHLC = [], arrTimestamps = [];
+            for (let i = 0; i < timestamps.length; i++) {
+                if (closes[i] !== null && closes[i] !== undefined) {
+                    arrPrices.push(closes[i]);
+                    let o = opens[i] !== null ? opens[i] : closes[i];
+                    let h = highs[i] !== null ? highs[i] : closes[i];
+                    let l = lows[i] !== null ? lows[i] : closes[i];
+                    arrOHLC.push({ o, h, l, c: closes[i] });
+                    arrTimestamps.push(timestamps[i] * 1000);
+                }
+            }
+            if (arrPrices.length === 0) return;
+
+            const resampled = resampleTo100Nodes(arrTimestamps, arrPrices, arrOHLC);
+            const arrLabels = resampled.timestamps.map(t => formatChartLabelForRange(t, range));
+
+            const isNewSeries = stockHistData._seriesKey !== seriesKey;
+            stockHistData._seriesKey = seriesKey;
+            stockHistData.prices = resampled.prices;
+            stockHistData.labels = arrLabels;
+            stockHistData.ohlc = resampled.ohlc;
+            stockHistData.timestamps = resampled.timestamps;
+            updateRSIDisplay(resampled.prices);
+            if (isNewSeries) { resetChartZoom(navChart); resetChartZoom(mobileChart); }
+            renderAllCharts(animate);
+        } catch (err) {}
+    }
+
     async function fetchStockHistoryData(ticker, animate = true) {
         const type = document.getElementById("cfg-chart-type").value;
         const klineInterval = document.getElementById("cfg-kline-interval").value;
@@ -7341,8 +7451,13 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         // 🎮 演練期間：不打真實 Yahoo API，改用「選定歷史日期為界」重新組出這個 range/interval 的資料，
         // 1D 用當天已模擬揭露到目前時間點的分鐘K；其餘天期（1W/1M/1Y…）一律只抓「模擬今天」以前的歷史資料，
         // 並在最後補上一根用「今天已揭露的分鐘資料」聚合出的即時未完成K，避免任何長天期圖表提早洩漏未來走勢。
-        if (drillActive) { await drillRenderChartFromCandles(ticker, range, intervalStr, seriesKey, animate); return; }
+        if (drillActive) { await drillRenderChartFromCandles(ticker, range, intervalStr, seriesKey, animate, type); return; }
 
+        // 📐 折線圖跟 K 線圖邏輯完全分離：折線圖不用這裡抓到的資料，改成呼叫 fetchLineChartData()
+        // 自己另外用更細的頻率獨立打一次 API，才能湊出 100 個彼此不同的真實節點（見上方函式說明）。
+        if (type === 'LINE') { await fetchLineChartData(ticker, range, seriesKey, animate); return; }
+
+        // 以下是 K 線圖的抓取邏輯，維持原樣、不做任何跟「100 節點」相關的處理
         try {
             const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=${range}&interval=${intervalStr}`)}`;
             const res = await fetch(proxyUrl, { cache: "no-store" }); 
@@ -7414,7 +7529,6 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
             const data = await fetchDrillDayCandles(ticker, simDate);
             const visible = drillMeta.simTime ? data.candles.filter(c => c.t.getTime() <= drillMeta.simTime.getTime()) : [];
             return {
-                labels: visible.map(c => fmtDrillTime(c.t)),
                 prices: visible.map(c => c.c),
                 ohlc: visible.map(c => ({ o: c.o, h: c.h, l: c.l, c: c.c })),
                 timestamps: visible.map(c => c.t.getTime()),
@@ -7423,7 +7537,7 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
 
         // 其餘天期：抓「模擬今天」以前的歷史日/週/月K
         const { p1, p2 } = drillPeriodBoundsForRange(range, simDate);
-        let labels = [], prices = [], ohlc = [], timestamps = [];
+        let prices = [], ohlc = [], timestamps = [];
         try {
             const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?period1=${p1}&period2=${p2}&interval=${intervalStr}`)}`;
             const res = await fetch(proxyUrl, { cache: 'no-store' });
@@ -7435,8 +7549,6 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
                     const c = q.close[i];
                     if (c === null || c === undefined) return;
                     const o = q.open[i] ?? c, h = q.high[i] ?? c, l = q.low[i] ?? c;
-                    const d = new Date(ts * 1000);
-                    labels.push(`${String(d.getFullYear()).slice(-2)}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`);
                     prices.push(c); ohlc.push({ o, h, l, c }); timestamps.push(ts * 1000);
                 });
             }
@@ -7450,17 +7562,22 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
             const closesToday = visibleToday.map(c => c.c);
             const o = visibleToday[0].o, c = closesToday[closesToday.length - 1];
             const h = Math.max(...visibleToday.map(x => x.h)), l = Math.min(...visibleToday.map(x => x.l));
-            const d = simDate;
-            labels.push(`${String(d.getFullYear()).slice(-2)}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`);
             prices.push(c); ohlc.push({ o, h, l, c }); timestamps.push(visibleToday[visibleToday.length - 1].t.getTime());
         }
-        return { labels, prices, ohlc, timestamps };
+        return { prices, ohlc, timestamps };
     }
 
-    async function drillRenderChartFromCandles(ticker, range, intervalStr, seriesKey, animate) {
-        const { labels, prices, ohlc, timestamps } = await drillFetchHistoryForChart(ticker, range, intervalStr);
+    async function drillRenderChartFromCandles(ticker, range, intervalStr, seriesKey, animate, type) {
+        let { prices, ohlc, timestamps } = await drillFetchHistoryForChart(ticker, range, intervalStr);
         if (ticker !== currentTicker || !drillActive) return; // 競速保護
         if (prices.length > 0) {
+            // 📐 固定 100 節點只套用在「折線圖」：K線（KLINE）蠟燭圖完全不受影響，保留每一根真實K棒，
+            // 不強制湊成 100 根，跟正式下單區的規則一致——見 resampleTo100Nodes 說明
+            if (type === 'LINE') {
+                const resampled = resampleTo100Nodes(timestamps, prices, ohlc);
+                prices = resampled.prices; ohlc = resampled.ohlc; timestamps = resampled.timestamps;
+            }
+            const labels = timestamps.map(t => formatChartLabelForRange(t, range));
             const isNewSeries = stockHistData._seriesKey !== seriesKey;
             stockHistData._seriesKey = seriesKey;
             stockHistData.prices = prices;
@@ -8991,6 +9108,33 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
     // chartTradeMarkerInfo[dataIndex] = { buys: [...ledger紀錄], sells: [...ledger紀錄] }，供 tooltip 顯示明細用
     let chartTradeMarkerInfo = {};
 
+    // 👁️✨ 小眼睛開關的顯示/隱藏：不要直接切換 display 造成憑空出現/消失，改成觸發 eyeJellySlideIn/Out
+    // 這兩組 CSS 動畫（滑入＋碰撞回彈／被撞縮再滑出），詳見 CSS 裡對應的 @keyframes 說明
+    function animateEyeToggleVisibility(btn, show) {
+        if (!btn) return;
+        // 🩹 若快速連續切換（退場動畫還沒播完就又要求顯示），先取消上一次的「延遲隱藏」計時器，
+        // 否則等它稍後觸發時會把「這次剛顯示出來」的按鈕又蓋回 display:none
+        if (btn._eyeHideTimer) { clearTimeout(btn._eyeHideTimer); btn._eyeHideTimer = null; }
+        const currentlyVisible = btn.style.display !== 'none';
+        if (show) {
+            if (currentlyVisible && !btn.classList.contains('eye-anim-out')) return; // 已經穩定顯示中，不重複播放
+            btn.style.display = 'flex';
+            btn.classList.remove('eye-anim-out');
+            void btn.offsetWidth; // 強制 reflow，確保剛移除的 class 不會讓瀏覽器誤判動畫沒有變化而跳過重播
+            btn.classList.add('eye-anim-in');
+        } else {
+            if (!currentlyVisible) return; // 已經是隱藏狀態，不重複播放退場動畫
+            btn.classList.remove('eye-anim-in');
+            void btn.offsetWidth;
+            btn.classList.add('eye-anim-out');
+            btn._eyeHideTimer = setTimeout(() => {
+                btn.style.display = 'none';
+                btn.classList.remove('eye-anim-out');
+                btn._eyeHideTimer = null;
+            }, 320);
+        }
+    }
+
     function updateTradeMarkerToggleUI() {
         const btn = document.getElementById('chart-trade-marker-toggle');
         const icon = document.getElementById('chart-trade-marker-icon');
@@ -9135,8 +9279,9 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         }
 
         // 👁️ 歷史買賣點標記開關：僅個股走勢模式下顯示（組合總淨值走勢無個股買賣點可標），位置在對標按鈕下方
+        // 🩹 切換模式（NAV↔個股）時不要直接 display 切換憑空出現/消失，改成果凍滑入碰撞動畫
         const tradeMarkerBtn = document.getElementById('chart-trade-marker-toggle');
-        if (tradeMarkerBtn) tradeMarkerBtn.style.display = showNav ? 'none' : 'flex';
+        animateEyeToggleVisibility(tradeMarkerBtn, !showNav);
 
         // 📊 基準指數對標開關：組合總淨值 / 個股走勢模式皆可使用，按鈕固定在小眼睛上方
         const benchmarkBtn = document.getElementById('benchmark-toggle-btn');
