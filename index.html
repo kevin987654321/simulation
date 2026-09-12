@@ -7340,27 +7340,60 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
     // 只把「K線／個股走勢圖」的折線模式（LINE）套用這個規則；K線（KLINE）蠟燭圖完全不受影響，
     // 保留原始抓到的每一根真實K棒，不強制湊成 100 根——見 fetchStockHistoryData／drillRenderChartFromCandles
     // 呼叫這個函式前的 type==='LINE' 判斷。
-    // 🩹 做法改成「依索引位置平分」而不是「依時間平分」：原本用時間平分時，盤後／隔夜／週末這種完全沒有交易
-    // 的空窗期會被當成跟盤中一樣長的時間平分進去——但一天 24 小時裡只有約 6.5 小時在交易，代表全部節點裡
-    // 有將近七成會被排進「沒有真實資料」的空窗期，只能取空窗期前後最接近的那一筆重複湊數，
-    // 這就是為什麼折線圖會出現一大段一大段的平坦色塊（每一段對應一次隔夜／收盤）。
-    // 改成依「第幾筆真實資料」平分（例如有 390 筆真實資料就固定每隔約 3.9 筆挑一筆）後，
-    // 100 個節點會平均分布在「所有真實成交紀錄」上，不會被完全沒有交易的空窗期占掉大半配額。
-    // 原始資料筆數不足 100 時（例如 1W 常常只有 5~7 根日K），還是會有多個節點挑到同一筆真實資料而重複——
-    // 這是「資料本身沒有那麼多真實點」的誠實呈現，而不是憑空編造出過去不存在的價格去填滿畫面。
+    // 🩹 做法一路調整下來的教訓：
+    //  v1「依時間平分」：盤後／隔夜／週末這種完全沒有交易的空窗期會被當成跟盤中一樣長的時間平分進去，
+    //     一天只有約 6.5 小時在交易，等於快七成節點被塞進空窗期，只能重複湊數，變成一大段一大段的平坦色塊。
+    //  v2「依索引位置平分」（不分天）：解決了空窗期問題，但换成另一個問題——如果 Yahoo 對「不同天」
+    //     實際回傳的真實資料筆數本來就不平均（例如某幾天有缺值被濾掉、當天交易時段還沒走完等等），
+    //     依全體索引平分下去，筆數多的那幾天就會分到多很多節點，筆數少的那幾天分到的節點少很多，
+    //     每天的節點數量就會「亂七八糟」（例如某天 8 個、某天 20 個），寬度看起來完全不對稱。
+    //  v3（這裡）：先按「日期」把資料分組，100 個節點先盡量平均分配給每一個交易日（每天節點數最多只差 1），
+    //     組內再依索引平分——這樣才能同時避免「空窗期洗掉節點」跟「哪天資料多寡不均」這兩個問題，
+    //     讓每個交易日在圖上占的節點數量（寬度）都差不多一致。
+    //     交易日天數本身就超過 100 天時（例如 1Y/5Y 用日K，一天正好一筆），分組就沒有意義，
+    //     直接退回 v2 的整體索引平分即可（等同於「每天固定恰好 1 個節點」的極限情況）。
     // 最後一個節點強制對齊到原始資料裡真正最新的那一筆——以 1D 來說就是「當天到目前為止最新的價格，直到收盤」。
     function resampleTo100Nodes(timestampsMs, prices, ohlcArr) {
         const n = timestampsMs.length;
         if (n === 0) return { prices: [], ohlc: [], timestamps: [] };
         if (n === 1) return { prices: prices.slice(), ohlc: ohlcArr.slice(), timestamps: timestampsMs.slice() };
         const TARGET = 100;
-        const outPrices = [], outOhlc = [], outTimestamps = [];
-        for (let i = 0; i < TARGET; i++) {
-            const idx = Math.min(n - 1, Math.round(i * (n - 1) / (TARGET - 1)));
-            outPrices.push(prices[idx]);
-            outOhlc.push(ohlcArr[idx]);
-            outTimestamps.push(timestampsMs[idx]); // 用該筆資料「真實」的時間戳，不是平分算出來的假時間點
+
+        // 依日期（年-月-日）把連續的資料切成一組一組
+        const dayKeyOf = (t) => { const d = new Date(t); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); };
+        const groups = [];
+        let groupStart = 0, curKey = dayKeyOf(timestampsMs[0]);
+        for (let i = 1; i <= n; i++) {
+            const key = i < n ? dayKeyOf(timestampsMs[i]) : null;
+            if (key !== curKey) { groups.push([groupStart, i - 1]); groupStart = i; curKey = key; }
         }
+
+        const outPrices = [], outOhlc = [], outTimestamps = [];
+        const pickFromRange = (startIdx, endIdx, count) => {
+            const len = endIdx - startIdx + 1;
+            for (let j = 0; j < count; j++) {
+                const offset = count === 1 ? 0 : Math.round(j * (len - 1) / (count - 1));
+                const idx = startIdx + Math.min(len - 1, offset);
+                outPrices.push(prices[idx]);
+                outOhlc.push(ohlcArr[idx]);
+                outTimestamps.push(timestampsMs[idx]);
+            }
+        };
+
+        if (groups.length > 1 && groups.length <= TARGET) {
+            // 交易日數不超過 100 天：每天先分到 base 份，剩下的名額依序多分給前面幾天，讓天與天之間最多只差 1 個節點
+            const base = Math.floor(TARGET / groups.length);
+            let remainder = TARGET - base * groups.length;
+            groups.forEach(([s, e]) => {
+                const quota = base + (remainder > 0 ? 1 : 0);
+                if (remainder > 0) remainder--;
+                pickFromRange(s, e, quota);
+            });
+        } else {
+            // 只有一天，或交易日數已經超過 100 天（例如 1Y/5Y 用日K，分組已經沒有意義）：直接整體依索引平分
+            pickFromRange(0, n - 1, TARGET);
+        }
+
         // 保證最後一個節點必定精準對齊原始資料裡真正最新的那一筆，不受平分取樣時挑選誤差影響
         outPrices[TARGET - 1] = prices[n - 1];
         outOhlc[TARGET - 1] = ohlcArr[n - 1];
