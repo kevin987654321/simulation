@@ -283,7 +283,14 @@
         .dashboard-left-col { display: flex; flex-direction: column; gap: 0; flex: 1; min-height: 0; min-width: 0; }
         #chart-container { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 14px 18px; position: relative; perspective: 1400px; }
         /* 📊 圖表切換翻轉動畫：僅作用於桌面版主圖表容器，翻轉時以底邊為軸心，避免影響其他共用 .chart-wrapper/canvas 的一般樣式 */
-        #chart-container .chart-wrapper { transform-style: preserve-3d; backface-visibility: hidden; -webkit-backface-visibility: hidden; transform-origin: center bottom; will-change: transform; }
+        #chart-container .chart-wrapper { transform-style: preserve-3d; backface-visibility: hidden; -webkit-backface-visibility: hidden; transform-origin: center bottom; will-change: transform; position: relative; }
+        /* 🔍📏 圖表區間比較：漲跌金額／百分比浮動標籤（桌機空白鍵分身、手機兩指按住觸發時顯示） */
+        .chart-interval-label {
+            display: none; position: absolute; top: 6px; z-index: 40; transform: translateX(-50%);
+            background: rgba(10,10,12,0.92); padding: 5px 10px; border-radius: 6px;
+            font-size: 11px; font-weight: bold; line-height: 1.5; text-align: center;
+            white-space: pre-line; pointer-events: none; border: 1px solid rgba(255,255,255,0.15);
+        }
         .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-shrink: 0; }
         
         .chart-wrapper, canvas { flex: 1; min-height: 0; position: relative; -webkit-touch-callout: none !important; -webkit-user-select: none !important; user-select: none !important; touch-action: none !important; }
@@ -1120,7 +1127,7 @@
                     </div>
                     <!-- 📊 對標指數表現摘要列：僅在已選擇對標基準且資料就緒時顯示 -->
                     <div id="benchmark-summary-bar" style="display:none; align-items:center; gap:8px; padding:0 2px 8px 2px; font-size:11px; font-family:monospace; flex-wrap:wrap;"></div>
-                    <div class="chart-wrapper"><canvas id="navChart"></canvas></div>
+                    <div class="chart-wrapper"><canvas id="navChart"></canvas><div id="chart-interval-label" class="chart-interval-label"></div></div>
                 </div>
 
                 <!-- ✨ 與上方圖表卡片之間的分隔線：獨立元件（與首頁上方四個統計區塊之間的分隔線同一套 .glow-line.glow-line-h），
@@ -2268,7 +2275,7 @@
             </span>
             <div class="timeframe-selector" id="m-tf-group" style="padding:2px;"></div>
         </div>
-        <div style="height: 92px; position:relative; width:100%;"><canvas id="mobileStockChart"></canvas></div>
+        <div style="height: 92px; position:relative; width:100%;"><canvas id="mobileStockChart"></canvas><div id="chart-interval-label-mobile" class="chart-interval-label"></div></div>
     </div>
 
     <div>
@@ -8830,10 +8837,14 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
             if (panActive) { panActive = false; canvas.style.cursor = ''; }
         });
 
-        // --- 手機：雙指縮放（縮放期間隱藏節點預覽） + 單指「快速二次按壓後按住拖曳」平移 ---
+        // --- 手機：雙指縮放（縮放期間隱藏節點預覽） + 單指「快速二次按壓後按住拖曳」平移
+        //     + 兩指同時按住原地不動一陣子 → 改成啟用「區間比較」模式（見 chartIntervalSel） ---
         let pinchActive = false, pinchStartDist = 0, pinchStartRange = null;
         let dragPanActive = false, dragStartX = 0, dragStartRange = null;
         let lastTapTime = 0, lastTapX = 0, lastTapY = 0;
+        // 🔍 兩指按住不動偵測：先不馬上判定是縮放還是區間比較，等一小段時間看手指有沒有移動超過容許誤差
+        const INTERVAL_HOLD_MS = 420, INTERVAL_HOLD_TOLERANCE_PX = 14;
+        let holdTimer = null, holdStartTouches = null;
 
         // 🩹 縮放（雙指 pinch）時不顯示節點預覽：強制關閉 holdToPreviewPlugin 的持有狀態並清空目前的
         // active elements／tooltip，避免縮放過程中手指移動被誤判成「停在某個資料點上」而彈出節點預覽
@@ -8844,13 +8855,32 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
             chart.update('none');
         }
 
+        function beginPinchFromCurrentTouches(touches) {
+            pinchActive = true;
+            pinchStartDist = touchDist(touches[0], touches[1]);
+            pinchStartRange = getChartVisibleRange(chart);
+            suppressNodePreview();
+        }
+
         canvas.addEventListener('touchstart', function (e) {
             if (e.touches.length === 2) {
                 dragPanActive = false; // 雙指優先，中止可能正在進行的單指拖曳平移
-                pinchActive = true;
-                pinchStartDist = touchDist(e.touches[0], e.touches[1]);
-                pinchStartRange = getChartVisibleRange(chart);
-                suppressNodePreview();
+                clearTimeout(holdTimer);
+                holdStartTouches = [
+                    { x: e.touches[0].clientX, y: e.touches[0].clientY },
+                    { x: e.touches[1].clientX, y: e.touches[1].clientY },
+                ];
+                // 先不立刻啟動縮放：等 INTERVAL_HOLD_MS 之後，若手指都還停在原地（容許小誤差），
+                // 就改啟用「區間比較」模式；若這段等待期間手指移動過大，會在 touchmove 裡改成一般縮放
+                holdTimer = setTimeout(() => {
+                    holdTimer = null;
+                    if (!holdStartTouches) return; // 已經被 touchend 取消
+                    const i1 = pixelXToDataIndex(chart, canvas, holdStartTouches[0].x);
+                    const i2 = pixelXToDataIndex(chart, canvas, holdStartTouches[1].x);
+                    suppressNodePreview();
+                    startChartIntervalSelection(canvas.id, i1);
+                    updateChartIntervalSelection(canvas.id, i2);
+                }, INTERVAL_HOLD_MS);
                 e.preventDefault();
                 return;
             }
@@ -8870,13 +8900,33 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         }, { passive: false });
 
         canvas.addEventListener('touchmove', function (e) {
-            if (pinchActive && e.touches.length === 2) {
+            if (e.touches.length === 2) {
                 e.preventDefault();
-                suppressNodePreview(); // 縮放過程中持續保持節點預覽關閉
-                const d = touchDist(e.touches[0], e.touches[1]);
-                if (!d || !pinchStartDist) return;
-                const scaleRatio = d / pinchStartDist; // 手指分開＝放大
-                applyZoomRatio(pinchStartRange, scaleRatio, (pinchStartRange.min + pinchStartRange.max) / 2);
+                // 🔍 已經是區間比較模式：用兩指目前位置持續更新區間範圍（不縮放）
+                if (chartIntervalSel.active && chartIntervalSel.canvasId === canvas.id) {
+                    const i1 = pixelXToDataIndex(chart, canvas, e.touches[0].clientX);
+                    const i2 = pixelXToDataIndex(chart, canvas, e.touches[1].clientX);
+                    chartIntervalSel.i1 = i1; // 兩指都可能移動，直接兩端一起更新（不是固定分身＋游標的單邊更新）
+                    updateChartIntervalSelection(canvas.id, i2);
+                    return;
+                }
+                // 還在等待判斷「是不是按住不動」：手指移動超過容許誤差，判定為一般縮放手勢，改走原本的 pinch 邏輯
+                if (holdTimer && holdStartTouches) {
+                    const d0 = Math.hypot(e.touches[0].clientX - holdStartTouches[0].x, e.touches[0].clientY - holdStartTouches[0].y);
+                    const d1 = Math.hypot(e.touches[1].clientX - holdStartTouches[1].x, e.touches[1].clientY - holdStartTouches[1].y);
+                    if (d0 > INTERVAL_HOLD_TOLERANCE_PX || d1 > INTERVAL_HOLD_TOLERANCE_PX) {
+                        clearTimeout(holdTimer); holdTimer = null; holdStartTouches = null;
+                        beginPinchFromCurrentTouches(e.touches); // 用「現在」這一刻的兩指位置當作縮放起點
+                    }
+                    return;
+                }
+                if (pinchActive) {
+                    suppressNodePreview(); // 縮放過程中持續保持節點預覽關閉
+                    const d = touchDist(e.touches[0], e.touches[1]);
+                    if (!d || !pinchStartDist) return;
+                    const scaleRatio = d / pinchStartDist; // 手指分開＝放大
+                    applyZoomRatio(pinchStartRange, scaleRatio, (pinchStartRange.min + pinchStartRange.max) / 2);
+                }
                 return;
             }
             if (dragPanActive && e.touches.length === 1) {
@@ -8892,7 +8942,11 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         }, { passive: false });
 
         function onTouchEnd(e) {
-            if (e.touches.length < 2) { pinchActive = false; pinchStartDist = 0; pinchStartRange = null; }
+            if (e.touches.length < 2) {
+                pinchActive = false; pinchStartDist = 0; pinchStartRange = null;
+                clearTimeout(holdTimer); holdTimer = null; holdStartTouches = null;
+                if (chartIntervalSel.active && chartIntervalSel.canvasId === canvas.id) endChartIntervalSelection();
+            }
             if (e.touches.length === 0) {
                 if (dragPanActive) {
                     dragPanActive = false;
@@ -8906,7 +8960,42 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
             }
         }
         canvas.addEventListener('touchend', onTouchEnd, { passive: true });
-        canvas.addEventListener('touchcancel', function () { pinchActive = false; dragPanActive = false; }, { passive: true });
+        canvas.addEventListener('touchcancel', function () {
+            pinchActive = false; dragPanActive = false;
+            clearTimeout(holdTimer); holdTimer = null; holdStartTouches = null;
+            if (chartIntervalSel.active && chartIntervalSel.canvasId === canvas.id) endChartIntervalSelection();
+        }, { passive: true });
+
+        // --- 電腦：游標停在圖表上時按住空白鍵，在游標所在位置建立一個「分身」（放開消失），
+        //     分身固定不動、游標本體持續移動，兩者之間形成區間比較 ---
+        let isHovering = false, hoverIndex = null;
+        canvas.addEventListener('mouseenter', function () { isHovering = true; });
+        canvas.addEventListener('mouseleave', function () {
+            isHovering = false;
+            if (chartIntervalSel.active && chartIntervalSel.canvasId === canvas.id && !chartIntervalSel._spaceHeld) endChartIntervalSelection();
+        });
+        canvas.addEventListener('mousemove', function (e) {
+            hoverIndex = pixelXToDataIndex(chart, canvas, e.clientX);
+            if (chartIntervalSel.active && chartIntervalSel.canvasId === canvas.id && chartIntervalSel._spaceHeld) {
+                updateChartIntervalSelection(canvas.id, hoverIndex);
+            }
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.code !== 'Space' || e.repeat) return;
+            if (document.activeElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return; // 避免跟表單輸入的空白鍵衝突
+            if (!isHovering || hoverIndex === null) return;
+            if (chartIntervalSel.active) return; // 已經在其他圖表上啟用中，不重複啟動
+            e.preventDefault(); // 避免頁面被空白鍵捲動
+            chartIntervalSel._spaceHeld = true;
+            startChartIntervalSelection(canvas.id, hoverIndex);
+        });
+        document.addEventListener('keyup', function (e) {
+            if (e.code !== 'Space') return;
+            if (chartIntervalSel.active && chartIntervalSel.canvasId === canvas.id && chartIntervalSel._spaceHeld) {
+                chartIntervalSel._spaceHeld = false;
+                endChartIntervalSelection();
+            }
+        });
     }
 
     attachChartZoomGestures(document.getElementById('navChart'), navChart);
@@ -9135,20 +9224,124 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     }
 
-    function getStockDatasets(data, showNodes, densityVal) {
+    // 🔍📏 圖表區間比較工具：桌機在圖表上按住游標時按空白鍵、在游標處建立一個「分身」（放開消失），
+    // 分身與游標本體之間形成一個區間；手機則是兩指同時按住原地不動一陣子後啟用，改用兩指位置決定區間。
+    // 顯示區間漲跌金額與百分比，區間外的圖表壓暗；折線圖的區間內另外依區間自己的漲跌獨立判色，
+    // K 線圖的區間內維持每根K棒原本自己的紅綠（不重新判色），僅套用「區間外壓暗」與顯示漲跌幅度。
+    let chartIntervalSel = { active: false, canvasId: null, i1: null, i2: null };
+
+    function pixelXToDataIndex(chart, canvas, clientX) {
+        const rect = canvas.getBoundingClientRect();
+        let idx = null;
+        try {
+            const xScale = chart.scales && chart.scales.x;
+            if (xScale && typeof xScale.getValueForPixel === 'function') {
+                const v = xScale.getValueForPixel(clientX - rect.left);
+                if (typeof v === 'number' && !isNaN(v)) idx = v;
+            }
+        } catch (e) {}
+        if (idx === null) return null;
+        const totalLen = (chart.data.labels || []).length;
+        if (totalLen === 0) return null;
+        return Math.max(0, Math.min(totalLen - 1, Math.round(idx)));
+    }
+
+    // 🩹 拖曳過程（滑鼠移動／手指移動）會非常頻繁地觸發 updateChartIntervalSelection，若每次都立刻
+    // renderAllCharts 容易造成明顯延遲；用 requestAnimationFrame 節流，每個影格最多重繪一次
+    let intervalRenderRafId = null;
+    function scheduleIntervalRender() {
+        if (intervalRenderRafId) return;
+        intervalRenderRafId = requestAnimationFrame(() => {
+            intervalRenderRafId = null;
+            renderAllCharts(false);
+            updateChartIntervalLabel();
+        });
+    }
+
+    function startChartIntervalSelection(canvasId, initialIndex) {
+        if (initialIndex === null) return;
+        chartIntervalSel.active = true;
+        chartIntervalSel.canvasId = canvasId;
+        chartIntervalSel.i1 = initialIndex;
+        chartIntervalSel.i2 = initialIndex;
+        renderAllCharts(false);
+        updateChartIntervalLabel();
+    }
+    function updateChartIntervalSelection(canvasId, newIndex) {
+        if (!chartIntervalSel.active || chartIntervalSel.canvasId !== canvasId || newIndex === null) return;
+        if (chartIntervalSel.i2 === newIndex) return;
+        chartIntervalSel.i2 = newIndex;
+        scheduleIntervalRender();
+    }
+    function endChartIntervalSelection() {
+        if (!chartIntervalSel.active) return;
+        if (intervalRenderRafId) { cancelAnimationFrame(intervalRenderRafId); intervalRenderRafId = null; }
+        chartIntervalSel.active = false;
+        chartIntervalSel.canvasId = null;
+        chartIntervalSel.i1 = null;
+        chartIntervalSel.i2 = null;
+        hideChartIntervalLabel();
+        renderAllCharts(false);
+    }
+
+    // 依目前區間兩端的索引，算出漲跌金額／百分比，更新對應圖表（桌機／手機各自獨立）的浮動標籤位置與內容
+    function updateChartIntervalLabel() {
+        if (!chartIntervalSel.active) return;
+        const isMobileChart = chartIntervalSel.canvasId === 'mobileStockChart';
+        const chart = isMobileChart ? mobileChart : navChart;
+        const canvas = document.getElementById(chartIntervalSel.canvasId);
+        const labelEl = document.getElementById(isMobileChart ? 'chart-interval-label-mobile' : 'chart-interval-label');
+        if (!chart || !canvas || !labelEl) return;
+        const prices = stockHistData.prices || [];
+        const i1 = chartIntervalSel.i1, i2 = chartIntervalSel.i2;
+        if (i1 === null || i2 === null || !prices.length || i1 >= prices.length || i2 >= prices.length) { labelEl.style.display = 'none'; return; }
+        const loIdx = Math.min(i1, i2), hiIdx = Math.max(i1, i2);
+        const startPrice = prices[loIdx], endPrice = prices[hiIdx];
+        const delta = endPrice - startPrice;
+        const pct = startPrice !== 0 ? (delta / startPrice) * 100 : 0;
+        labelEl.innerText = `${delta >= 0 ? '+' : ''}${delta.toFixed(2)}\n${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
+        const rootStyle = getComputedStyle(document.documentElement);
+        labelEl.style.color = delta >= 0 ? (rootStyle.getPropertyValue('--color-up').trim() || '#00ffaa') : (rootStyle.getPropertyValue('--color-down').trim() || '#ff4560');
+        try {
+            const xPix1 = chart.scales.x.getPixelForValue(i1), xPix2 = chart.scales.x.getPixelForValue(i2);
+            labelEl.style.left = `${(xPix1 + xPix2) / 2}px`;
+            labelEl.style.display = 'block';
+        } catch (e) { labelEl.style.display = 'none'; }
+    }
+    function hideChartIntervalLabel() {
+        const a = document.getElementById('chart-interval-label'), b = document.getElementById('chart-interval-label-mobile');
+        if (a) a.style.display = 'none';
+        if (b) b.style.display = 'none';
+    }
+
+    function getStockDatasets(data, showNodes, densityVal, canvasId) {
         const chartType = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
-        
+        // 顏色改讀取即時的 --color-up / --color-down（僅代表漲跌方向的專用變數），
+        // 讓「紅綠反轉」設定能連動走勢圖配色，但不影響其他用途的紅／綠色
+        const rootStyle = getComputedStyle(document.documentElement);
+        const upHex = rootStyle.getPropertyValue('--color-up').trim() || '#00ffaa';
+        const downHex = rootStyle.getPropertyValue('--color-down').trim() || '#ff4560';
+
+        // 🔍 是否有作用中的區間比較，且正是這張圖表
+        const sel = (chartIntervalSel.active && canvasId && chartIntervalSel.canvasId === canvasId && chartIntervalSel.i1 !== null && chartIntervalSel.i2 !== null) ? chartIntervalSel : null;
+        const selMin = sel ? Math.min(sel.i1, sel.i2) : null;
+        const selMax = sel ? Math.max(sel.i1, sel.i2) : null;
+        const DIM_ALPHA = 0.18; // 區間外壓暗透明度
+
         if (chartType === 'KLINE') {
-            // 顏色改讀取即時的 --color-up / --color-down（僅代表漲跌方向的專用變數），
-            // 讓「紅綠反轉」設定能連動 K 線配色，但不影響其他用途的紅／綠色
-            const rootStyle = getComputedStyle(document.documentElement);
-            const upHex = rootStyle.getPropertyValue('--color-up').trim() || '#00ffaa';
-            const downHex = rootStyle.getPropertyValue('--color-down').trim() || '#ff4560';
             const upSolid = hexToRgba(upHex, 0.9);
             const downSolid = hexToRgba(downHex, 0.9);
 
-            const colors = data.ohlc.map(d => d.c >= d.o ? upSolid : downSolid);
-            const borderColors = data.ohlc.map(d => d.c >= d.o ? upHex : downHex);
+            // K 線圖：區間內維持每根K棒原本自己的紅綠（不套用區間自己的漲跌判色），區間外整體壓暗
+            const colors = data.ohlc.map((d, i) => {
+                const inRange = !sel || (i >= selMin && i <= selMax);
+                return inRange ? (d.c >= d.o ? upSolid : downSolid) : hexToRgba(d.c >= d.o ? upHex : downHex, DIM_ALPHA);
+            });
+            const borderColors = data.ohlc.map((d, i) => {
+                const inRange = !sel || (i >= selMin && i <= selMax);
+                const hex = d.c >= d.o ? upHex : downHex;
+                return inRange ? hex : hexToRgba(hex, DIM_ALPHA + 0.15);
+            });
             const dataBody = data.ohlc.map(d => {
                 let o = d.o, c = d.c;
                 if(Math.abs(o - c) < 0.0001) c = o + 0.01; 
@@ -9161,7 +9354,31 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
                 { label: 'Wick', type: 'bar', data: dataWick, backgroundColor: borderColors, barThickness: 2, grouped: false, order: 1 } 
             ];
         } else {
-            return [{ label: 'Stock', type: 'line', data: data.prices, borderColor: '#00ffaa', backgroundColor: 'rgba(0, 255, 170, 0.05)', borderWidth: 1.5, tension: 0.2, fill: true, pointRadius: computePointRadiusArray(data.prices.length, showNodes, densityVal) }];
+            // 折線圖：整條線先依「這次選定時間範圍」頭尾的漲跌決定主色（取代原本寫死的固定綠色），
+            // 若有作用中的區間比較，區間內的線段改成依「區間自己」的漲跌獨立判色，區間外壓暗
+            const overallUp = data.prices.length > 1 ? data.prices[data.prices.length - 1] >= data.prices[0] : true;
+            const mainColor = overallUp ? upHex : downHex;
+            const mainFill = hexToRgba(mainColor, 0.05);
+
+            let segmentStyle;
+            if (sel) {
+                const intervalUp = selMax > selMin ? data.prices[selMax] >= data.prices[selMin] : overallUp;
+                const intervalColor = intervalUp ? upHex : downHex;
+                const dimColor = hexToRgba(mainColor, DIM_ALPHA + 0.25);
+                const dimFill = hexToRgba(mainColor, 0.02);
+                segmentStyle = {
+                    borderColor: (ctx) => (ctx.p0DataIndex >= selMin && ctx.p1DataIndex <= selMax) ? intervalColor : dimColor,
+                    backgroundColor: (ctx) => (ctx.p0DataIndex >= selMin && ctx.p1DataIndex <= selMax) ? hexToRgba(intervalColor, 0.12) : dimFill,
+                };
+            }
+
+            return [{
+                label: 'Stock', type: 'line', data: data.prices,
+                borderColor: mainColor, backgroundColor: mainFill,
+                borderWidth: 1.5, tension: 0.2, fill: true,
+                pointRadius: computePointRadiusArray(data.prices.length, showNodes, densityVal),
+                segment: segmentStyle,
+            }];
         }
     }
 
@@ -9454,7 +9671,7 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
                 document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:${getMarketStateColor()}" title="${getMarketStateLabel()}"></i> <span class="hide-on-mobile" style="margin-left:4px;">${currentTicker}</span> <span class="hide-on-mobile">${titlePrefix}</span>`;
                 navChart.data.labels = stockHistData.labels;
                 const tradeMarkerDatasets = buildTradeMarkerDatasets(stockHistData);
-                applyChartDatasets(navChart, getStockDatasets(stockHistData, showNodes, densityVal).concat(tradeMarkerDatasets));
+                applyChartDatasets(navChart, getStockDatasets(stockHistData, showNodes, densityVal, 'navChart').concat(tradeMarkerDatasets));
             }
         }
         
@@ -9487,7 +9704,7 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
                 return Math.round(value);
             };
             const mTradeMarkerDatasets = buildTradeMarkerDatasets(stockHistData);
-            applyChartDatasets(mobileChart, getStockDatasets(stockHistData, showNodes, mDensity).concat(mTradeMarkerDatasets));
+            applyChartDatasets(mobileChart, getStockDatasets(stockHistData, showNodes, mDensity, 'mobileStockChart').concat(mTradeMarkerDatasets));
         }
         
 
