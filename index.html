@@ -7335,35 +7335,31 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
     }
 
     // 📐 折線圖固定節點數：不論是哪個時間區間（1D/1W/1M/1Y/All…），折線圖一律固定重新取樣成剛好 100 個節點。
-    // 🩹 這裡刻意不做「內插」：每個時間點都是直接從原始資料裡挑出「最接近的那一筆真實資料」整筆帶過來
+    // 🩹 這裡刻意不做「內插」：每個節點都是直接從原始資料裡挑出一筆真實資料整筆帶過來
     // （價格、開高低收、時間戳記都原封不動，不是算出來的中間值），確保每個節點都是絕對真實存在過的價格。
     // 只把「K線／個股走勢圖」的折線模式（LINE）套用這個規則；K線（KLINE）蠟燭圖完全不受影響，
     // 保留原始抓到的每一根真實K棒，不強制湊成 100 根——見 fetchStockHistoryData／drillRenderChartFromCandles
     // 呼叫這個函式前的 type==='LINE' 判斷。
-    // 做法：把「第一筆到最後一筆資料的時間範圍」平分成 100 個時間點，每個時間點往左右兩邊比較，
-    // 挑時間上最接近的那一筆真實資料；原始資料筆數不足 100 時（例如 1W 常常只有 5~7 根日K），
-    // 多個時間點會挑到同一筆真實資料而重複——這是「資料本身沒有那麼多真實點」的誠實呈現，
-    // 而不是憑空編造出過去不存在的價格去填滿畫面。
+    // 🩹 做法改成「依索引位置平分」而不是「依時間平分」：原本用時間平分時，盤後／隔夜／週末這種完全沒有交易
+    // 的空窗期會被當成跟盤中一樣長的時間平分進去——但一天 24 小時裡只有約 6.5 小時在交易，代表全部節點裡
+    // 有將近七成會被排進「沒有真實資料」的空窗期，只能取空窗期前後最接近的那一筆重複湊數，
+    // 這就是為什麼折線圖會出現一大段一大段的平坦色塊（每一段對應一次隔夜／收盤）。
+    // 改成依「第幾筆真實資料」平分（例如有 390 筆真實資料就固定每隔約 3.9 筆挑一筆）後，
+    // 100 個節點會平均分布在「所有真實成交紀錄」上，不會被完全沒有交易的空窗期占掉大半配額。
+    // 原始資料筆數不足 100 時（例如 1W 常常只有 5~7 根日K），還是會有多個節點挑到同一筆真實資料而重複——
+    // 這是「資料本身沒有那麼多真實點」的誠實呈現，而不是憑空編造出過去不存在的價格去填滿畫面。
     // 最後一個節點強制對齊到原始資料裡真正最新的那一筆——以 1D 來說就是「當天到目前為止最新的價格，直到收盤」。
     function resampleTo100Nodes(timestampsMs, prices, ohlcArr) {
         const n = timestampsMs.length;
         if (n === 0) return { prices: [], ohlc: [], timestamps: [] };
         if (n === 1) return { prices: prices.slice(), ohlc: ohlcArr.slice(), timestamps: timestampsMs.slice() };
         const TARGET = 100;
-        const startT = timestampsMs[0], endT = timestampsMs[n - 1];
-        const targetTimes = [];
-        for (let i = 0; i < TARGET; i++) targetTimes.push(startT + (endT - startT) * i / (TARGET - 1));
         const outPrices = [], outOhlc = [], outTimestamps = [];
-        let idx = 0; // 目前比較所在的區間左端點索引：targetT 落在 [timestampsMs[idx], timestampsMs[idx+1]] 之間
         for (let i = 0; i < TARGET; i++) {
-            const targetT = targetTimes[i];
-            while (idx < n - 2 && timestampsMs[idx + 1] <= targetT) idx++;
-            // 比較左右兩個真實時間點，哪一個離 targetT 比較近，就整筆採用那一筆真實資料（不做內插）
-            let bestIdx = idx;
-            if (idx < n - 1 && Math.abs(timestampsMs[idx + 1] - targetT) < Math.abs(timestampsMs[idx] - targetT)) bestIdx = idx + 1;
-            outPrices.push(prices[bestIdx]);
-            outOhlc.push(ohlcArr[bestIdx]);
-            outTimestamps.push(timestampsMs[bestIdx]); // 用該筆資料「真實」的時間戳，不是平分算出來的假時間點
+            const idx = Math.min(n - 1, Math.round(i * (n - 1) / (TARGET - 1)));
+            outPrices.push(prices[idx]);
+            outOhlc.push(ohlcArr[idx]);
+            outTimestamps.push(timestampsMs[idx]); // 用該筆資料「真實」的時間戳，不是平分算出來的假時間點
         }
         // 保證最後一個節點必定精準對齊原始資料裡真正最新的那一筆，不受平分取樣時挑選誤差影響
         outPrices[TARGET - 1] = prices[n - 1];
@@ -7381,47 +7377,79 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
 
     // 📐 折線圖固定要湊滿 100 個「真實」節點，跟 K 線圖完全分開處理：
     // K 線圖沿用最上面 range/intervalStr 算出來、跟原本一模一樣的組合去抓資料，不做任何額外處理。
-    // 折線圖則不共用這次 fetch——另外用自己的頻率設定（比 K 線當下選的週期更細）獨立打一次 Yahoo API，
-    // 確保即使是「1M」「3M」這種原本一天一根、根本湊不滿 100 根真實資料的短天期，也能抓到足夠密度的
-    // 真實報價，讓「最近鄰」取樣（見 resampleTo100Nodes）真的能挑出 100 個彼此不同的真實價格，
-    // 而不是被迫在少少幾根真實資料裡重複湊數。
-    const LINE_CHART_FETCH_INTERVAL = { '1d': '1m', '5d': '5m', '1mo': '30m', '3mo': '60m', '1y': '1d', '5y': '1wk', 'max': '1wk' };
+    // 折線圖則不共用這次 fetch——另外用自己的頻率設定獨立打 Yahoo API，而且不只試一種頻率：
+    // 🩹 同一檔股票在同一個頻率下，Yahoo 實際回傳的「有效」資料點常常比理論值少很多（開高低收有缺值、
+    // 盤前盤後被濾掉、該頻率的資料保留天數不夠長等等原因都可能發生，光憑經驗猜一個頻率不夠可靠）。
+    // 所以改成「依序多試幾種頻率，哪個抓到的真實資料點最多就用哪個」，一旦某個頻率就已經湊到 100 筆以上
+    // 真實資料就提早停止，避免每次都要試完整條頻率鏈；抓到的真實資料越多，之後「最近鄰」取樣（見
+    // resampleTo100Nodes）挑出來的 100 個節點就越不容易重複，平坦的階梯感也會跟著大幅減少。
+    const LINE_CHART_INTERVAL_CHAIN = {
+        '1d':  ['1m', '2m', '5m'],
+        '5d':  ['1m', '2m', '5m', '15m'],
+        '1mo': ['5m', '15m', '30m', '60m'],
+        '3mo': ['30m', '60m', '1d'],
+        '1y':  ['60m', '1d'],
+        '5y':  ['1d', '1wk'],
+        'max': ['1wk', '1mo'],
+    };
+    async function fetchLineChartRaw(ticker, range, intervalStr) {
+        const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=${range}&interval=${intervalStr}`)}`;
+        const res = await fetch(proxyUrl, { cache: "no-store" });
+        const json = await res.json();
+        const result = json && json.chart && json.chart.result && json.chart.result[0];
+        if (!result || !result.timestamp) return { prices: [], ohlc: [], timestamps: [] };
+        const timestamps = result.timestamp, quote = result.indicators.quote[0];
+        const closes = quote.close || [], opens = quote.open || [], highs = quote.high || [], lows = quote.low || [];
+        let prices = [], ohlc = [], ts = [];
+        for (let i = 0; i < timestamps.length; i++) {
+            if (closes[i] === null || closes[i] === undefined) continue;
+            prices.push(closes[i]);
+            ohlc.push({ o: opens[i] ?? closes[i], h: highs[i] ?? closes[i], l: lows[i] ?? closes[i], c: closes[i] });
+            ts.push(timestamps[i] * 1000);
+        }
+        return { prices, ohlc, timestamps: ts };
+    }
+    // 🩹 記住每個「代號＋時間區間」組合最後一次找到、資料最密的那個頻率：
+    // fetchStockHistoryData 每 8 秒的報價輪詢都會重新呼叫這裡，如果每次都重新把整條頻率鏈試一遍，
+    // 等於把原本 1 次的 API 請求變成最多 4 次，且每 8 秒重複發生——不但沒必要，也容易踩到 Yahoo／代理的
+    // 流量限制而讓某些頻率請求失敗。改成只有第一次遇到「新的代號＋時間區間組合」才試整條鏈找出最佳頻率，
+    // 之後同一組合的後續刷新只用已經驗證過的那個頻率打一次 API。
+    const lineChartBestIntervalCache = {};
     async function fetchLineChartData(ticker, range, seriesKey, animate) {
-        const intervalStr = LINE_CHART_FETCH_INTERVAL[range] || '1d';
-        try {
-            const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=${range}&interval=${intervalStr}`)}`;
-            const res = await fetch(proxyUrl, { cache: "no-store" });
-            const json = await res.json(), result = json.chart.result[0];
-            if (ticker !== currentTicker) return; // 競速保護：等待期間已切換代號，這批回應已過期
-            const timestamps = result.timestamp || [], quote = result.indicators.quote[0];
-            const closes = quote.close || [], opens = quote.open || [], highs = quote.high || [], lows = quote.low || [];
+        const cacheKey = `${ticker}|${range}`;
+        const chain = LINE_CHART_INTERVAL_CHAIN[range] || ['1d'];
+        let best = { prices: [], ohlc: [], timestamps: [] };
+        const knownGoodInterval = lineChartBestIntervalCache[cacheKey];
 
-            let arrPrices = [], arrOHLC = [], arrTimestamps = [];
-            for (let i = 0; i < timestamps.length; i++) {
-                if (closes[i] !== null && closes[i] !== undefined) {
-                    arrPrices.push(closes[i]);
-                    let o = opens[i] !== null ? opens[i] : closes[i];
-                    let h = highs[i] !== null ? highs[i] : closes[i];
-                    let l = lows[i] !== null ? lows[i] : closes[i];
-                    arrOHLC.push({ o, h, l, c: closes[i] });
-                    arrTimestamps.push(timestamps[i] * 1000);
-                }
+        if (knownGoodInterval) {
+            try { best = await fetchLineChartRaw(ticker, range, knownGoodInterval); } catch (e) {}
+            if (ticker !== currentTicker) return;
+        }
+        if (best.prices.length < 100) {
+            for (const interval of chain) {
+                if (interval === knownGoodInterval) continue; // 剛剛已經試過這個頻率了
+                try {
+                    const data = await fetchLineChartRaw(ticker, range, interval);
+                    if (ticker !== currentTicker) return; // 競速保護：等待期間已切換代號，這批（含之後還沒抓完的）都作廢
+                    if (data.prices.length > best.prices.length) { best = data; lineChartBestIntervalCache[cacheKey] = interval; }
+                    if (best.prices.length >= 100) break; // 已經湊到至少 100 筆真實資料，不用再多試更細的頻率
+                } catch (e) { /* 這個頻率抓不到或抓失敗，換下一個試試看 */ }
             }
-            if (arrPrices.length === 0) return;
+        }
+        if (best.prices.length === 0) return;
 
-            const resampled = resampleTo100Nodes(arrTimestamps, arrPrices, arrOHLC);
-            const arrLabels = resampled.timestamps.map(t => formatChartLabelForRange(t, range));
+        const resampled = resampleTo100Nodes(best.timestamps, best.prices, best.ohlc);
+        const arrLabels = resampled.timestamps.map(t => formatChartLabelForRange(t, range));
 
-            const isNewSeries = stockHistData._seriesKey !== seriesKey;
-            stockHistData._seriesKey = seriesKey;
-            stockHistData.prices = resampled.prices;
-            stockHistData.labels = arrLabels;
-            stockHistData.ohlc = resampled.ohlc;
-            stockHistData.timestamps = resampled.timestamps;
-            updateRSIDisplay(resampled.prices);
-            if (isNewSeries) { resetChartZoom(navChart); resetChartZoom(mobileChart); }
-            renderAllCharts(animate);
-        } catch (err) {}
+        const isNewSeries = stockHistData._seriesKey !== seriesKey;
+        stockHistData._seriesKey = seriesKey;
+        stockHistData.prices = resampled.prices;
+        stockHistData.labels = arrLabels;
+        stockHistData.ohlc = resampled.ohlc;
+        stockHistData.timestamps = resampled.timestamps;
+        updateRSIDisplay(resampled.prices);
+        if (isNewSeries) { resetChartZoom(navChart); resetChartZoom(mobileChart); }
+        renderAllCharts(animate);
     }
 
     async function fetchStockHistoryData(ticker, animate = true) {
