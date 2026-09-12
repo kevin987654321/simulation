@@ -283,7 +283,14 @@
         .dashboard-left-col { display: flex; flex-direction: column; gap: 0; flex: 1; min-height: 0; min-width: 0; }
         #chart-container { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 14px 18px; position: relative; perspective: 1400px; }
         /* 📊 圖表切換翻轉動畫：僅作用於桌面版主圖表容器，翻轉時以底邊為軸心，避免影響其他共用 .chart-wrapper/canvas 的一般樣式 */
-        #chart-container .chart-wrapper { transform-style: preserve-3d; backface-visibility: hidden; -webkit-backface-visibility: hidden; transform-origin: center bottom; will-change: transform; }
+        #chart-container .chart-wrapper { transform-style: preserve-3d; backface-visibility: hidden; -webkit-backface-visibility: hidden; transform-origin: center bottom; will-change: transform; position: relative; }
+        /* 🔍📏 圖表區間比較：漲跌金額／百分比浮動標籤（桌機空白鍵分身、手機兩指按住觸發時顯示） */
+        .chart-interval-label {
+            display: none; position: absolute; top: 6px; z-index: 40; transform: translateX(-50%);
+            background: rgba(10,10,12,0.92); padding: 5px 10px; border-radius: 6px;
+            font-size: 11px; font-weight: bold; line-height: 1.5; text-align: center;
+            white-space: pre-line; pointer-events: none; border: 1px solid rgba(255,255,255,0.15);
+        }
         .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-shrink: 0; }
         
         .chart-wrapper, canvas { flex: 1; min-height: 0; position: relative; -webkit-touch-callout: none !important; -webkit-user-select: none !important; user-select: none !important; touch-action: none !important; }
@@ -339,6 +346,37 @@
         body.trade-col-collapsed #trade-expand-handle { display: flex; }
         #trade-expand-handle:hover { opacity: 1; color: rgba(255,255,255,0.8); }
         @media (max-width: 768px) { #trade-expand-handle { display: none !important; } }
+        /* 🎮 操盤演練：浮動時間控制列＋演練期間鎖定畫面（只留下單區＋這條控制列，
+           隱藏側邊選單／漢堡按鈕／NAV-個股切換鈕，避免使用者中途跑去別頁，跟正式帳號的資料混在一起看）
+           🩹 控制列改成「精簡單行」設計（拉桿 + 一列小按鈕，總高度用 --drill-bar-h 這個變數統一控管），
+           並且用 body.drilling .view-section.active { bottom: ... } 直接把下單區可視範圍的「下緣」往上收，
+           讓 flex:1 的圖表區塊自然縮小填滿剩下空間——而不是用 padding-bottom 把內容推出畫面外、
+           變成要多滑一段才看得到下單按鈕（下單區原本的版面設計就是剛好填滿整個畫面高度，沒有多餘空間）。 */
+        :root { --drill-bar-h: 58px; }
+        #drill-control-bar {
+            display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 19500;
+            height: calc(var(--drill-bar-h) + env(safe-area-inset-bottom));
+            background: rgba(10,10,12,0.97); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+            border-top: 1px solid rgba(255,255,255,0.1);
+            flex-direction: column; justify-content: center; gap: 4px;
+            padding: 6px 10px calc(6px + env(safe-area-inset-bottom));
+            box-sizing: border-box;
+        }
+        body.drilling #drill-control-bar { display: flex; }
+        body.drilling #sidebar, body.drilling #sidebar-overlay, body.drilling .mobile-menu-btn, body.drilling .standalone-mode-btn { display: none !important; }
+        body.drilling .view-section.active { bottom: calc(var(--drill-bar-h) + env(safe-area-inset-bottom)); }
+        #drill-time-slider { width: 100%; margin: 0; height: 12px; }
+        .drill-bar-row { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; overflow: hidden; }
+        .drill-exit-btn { background: transparent; border: 1px solid rgba(255,255,255,0.25); color: #fff; width: 24px; height: 24px; border-radius: 6px; cursor: pointer; flex-shrink: 0; font-size: 11px; padding: 0; }
+        .drill-day-label { font-size: 10.5px; color: #999; white-space: nowrap; flex-shrink: 0; }
+        .drill-time-label { font-size: 11.5px; font-weight: bold; color: #fff; font-family: monospace; white-space: nowrap; flex-shrink: 0; }
+        .drill-step-btns { display: flex; gap: 4px; margin-left: auto; flex-shrink: 0; }
+        .drill-step-btns button { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #ddd; font-size: 10.5px; padding: 4px 7px; border-radius: 5px; cursor: pointer; white-space: nowrap; }
+        .drill-nextday-btn { flex-shrink: 0; background: var(--color-acc); border: none; color: #000; padding: 5px 10px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 10.5px; white-space: nowrap; }
+        @media (max-width: 480px) {
+            :root { --drill-bar-h: 54px; }
+            .drill-day-label { display: none; } /* 螢幕太窄時先隱藏天數標籤，保留時間與操作按鈕優先 */
+        }
 
         .header-controls { display: flex; align-items: center; gap: 8px; }
         /* ✨ 圖表按鈕（時間區段選單／模式切換）：預設移除底色與框線，改由 .chart-glow-btn 提供
@@ -383,6 +421,26 @@
             .chart-marker-eye-btn-mobile:hover { background: rgba(255,255,255,0.1); }
         }
         .chart-marker-eye-btn-mobile.active { background: transparent; border: none; }
+
+        /* 👁️✨ 小眼睛買賣點標記開關的顯示/隱藏動畫：不要直接用 display 切換造成「憑空出現/消失」，
+           改成「像果凍一樣從側邊滑進來，然後碰撞」——進場先從外側滑入、抵達定位時因為「撞到」而
+           左右擠壓變形（模擬碰撞衝擊），接著像果凍般回彈幾下才靜止；退場則是先被撞縮一下再滑出去。
+           用 JS（animateEyeToggleVisibility）在切換 display 的同時加上這兩個 class 來觸發。 */
+        @keyframes eyeJellySlideIn {
+            0%   { opacity: 0; transform: translateX(26px) scaleX(0.55) scaleY(1.35); }
+            40%  { opacity: 1; transform: translateX(-5px) scaleX(1.3) scaleY(0.75); }
+            58%  { transform: translateX(2px) scaleX(0.88) scaleY(1.12); }
+            75%  { transform: translateX(-1px) scaleX(1.06) scaleY(0.96); }
+            90%  { transform: translateX(0.5px) scaleX(0.98) scaleY(1.02); }
+            100% { opacity: 1; transform: translateX(0) scaleX(1) scaleY(1); }
+        }
+        @keyframes eyeJellySlideOut {
+            0%   { opacity: 1; transform: translateX(0) scaleX(1) scaleY(1); }
+            25%  { transform: translateX(-3px) scaleX(1.18) scaleY(0.88); }
+            100% { opacity: 0; transform: translateX(26px) scaleX(0.55) scaleY(1.35); }
+        }
+        .chart-marker-eye-btn.eye-anim-in, .chart-marker-eye-btn-mobile.eye-anim-in { animation: eyeJellySlideIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+        .chart-marker-eye-btn.eye-anim-out, .chart-marker-eye-btn-mobile.eye-anim-out { animation: eyeJellySlideOut 0.3s ease-in both; }
 
         /* =========================================
            ✨ 主頁圖表按鈕流光細框線（Chart Button Glow FX）
@@ -883,8 +941,6 @@
                     header-sync-draw 2s ease-in-out infinite,
                     header-sync-fill 1s ease-in-out infinite;
             }
-            @keyframes header-sync-draw { to { stroke-dashoffset: 0; } }
-            @keyframes header-sync-fill { to { fill: #fff; stroke: transparent; } }
             .mobile-reload-btn { width: 50px; height: 100%; cursor: pointer; z-index: 2; margin-right: -10px; position: absolute; right: 0; top: 0; }
             
             #sidebar-overlay { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 900; backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); opacity: 0; pointer-events: none; transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
@@ -902,6 +958,9 @@
             .menu-item.active .nav-line { opacity: 1; }
 
             .view-section { top: 60px; height: calc(100dvh - 60px); padding: 12px; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+            /* 🎮 手機版是用 top+height 決定範圍（不是 inset:0），所以演練期間要縮的是 height，
+               單獨改 bottom 在這裡不會有作用——高度要扣掉的量跟桌機共用同一個 --drill-bar-h 變數 */
+            body.drilling .view-section.active { height: calc(100dvh - 60px - var(--drill-bar-h) - env(safe-area-inset-bottom)); }
 
             /* 📱 手機版換頁滑動動畫：實際位移改用 JS 的 Web Animations API（element.animate）直接播放，
                不透過這裡的 CSS transition 觸發（transition 搭配「先瞬間定位、強制 reflow、再改值」的寫法在部分手機瀏覽器上
@@ -971,6 +1030,15 @@
             backdrop-filter: none !important;
             -webkit-backdrop-filter: none !important;
         }
+
+        /* ✨ 畫線＋填色的進度動畫 keyframes（手機版頂端標題長按同步 / 電腦版左側選單 logo 手動同步共用）：
+           🩹 原本這兩個 @keyframes 定義在手機版專用的 @media (max-width: 768px) 區塊內，導致在該媒體查詢
+           條件不成立的桌面寬度下，這兩個動畫名稱根本沒有被註冊，套用 animation:header-sync-draw/-fill 的
+           元素完全不會動，stroke-dashoffset 會停在初始值（等於整條路徑長度＝完全不繪製），畫面上就變成
+           一片空白——這正是電腦版左側選單 logo 手動同步時「直接變空白」的成因。移到全域（不受任何
+           @media 限制）後，桌面與手機都能正常撥放。 */
+        @keyframes header-sync-draw { to { stroke-dashoffset: 0; } }
+        @keyframes header-sync-fill { to { fill: #fff; stroke: transparent; } }
     </style>
 </head>
 <!-- 🩹 修復手機版載入時頂部出現小範圍霧化漸層殘影的問題（第三次嘗試，改用更保險的做法）：
@@ -990,7 +1058,7 @@
 <div id="sidebar-overlay" onclick="toggleSidebar()"></div>
 
 <aside id="sidebar">
-    <div class="glass-title-text" onclick="switchView('view-achievements', null)" style="cursor:pointer;" title="娛樂中心：成就與好友"><img src="logo.png" width="25" height="25"> ACORNTRADE</div>
+    <div class="glass-title-text" onclick="switchView('view-achievements', null)" style="cursor:pointer;" title="娛樂中心：成就與好友"><img id="sidebar-logo-img" src="logo.png" width="25" height="25"> ACORNTRADE</div>
     <div class="menu-item active" id="menu-item-dashboard" data-view="view-dashboard" onclick="switchView('view-dashboard', this)"><span class="nav-line"></span> 指揮操盤中心</div>
     <div class="menu-item mobile-only" data-view="view-mobile-trade" onclick="switchView('view-mobile-trade', this)"><span class="nav-line"></span> 下單櫃檯</div>
     <div class="menu-item" id="menu-item-cards" data-view="view-cards" onclick="switchView('view-cards', this)"><span class="nav-line"></span> 自選資產卡片</div>
@@ -1059,7 +1127,7 @@
                     </div>
                     <!-- 📊 對標指數表現摘要列：僅在已選擇對標基準且資料就緒時顯示 -->
                     <div id="benchmark-summary-bar" style="display:none; align-items:center; gap:8px; padding:0 2px 8px 2px; font-size:11px; font-family:monospace; flex-wrap:wrap;"></div>
-                    <div class="chart-wrapper"><canvas id="navChart"></canvas></div>
+                    <div class="chart-wrapper"><canvas id="navChart"></canvas><div id="chart-interval-label" class="chart-interval-label"></div></div>
                 </div>
 
                 <!-- ✨ 與上方圖表卡片之間的分隔線：獨立元件（與首頁上方四個統計區塊之間的分隔線同一套 .glow-line.glow-line-h），
@@ -1797,6 +1865,7 @@
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px; padding:0 4px;">
             <div class="ent-tab-btn active" id="ent-tab-btn-achv" onclick="switchEntTab('achv')"><i class="fa-solid fa-trophy"></i> 成就</div>
             <div class="ent-tab-btn" id="ent-tab-btn-friends" onclick="switchEntTab('friends')"><i class="fa-solid fa-user-group"></i> 好友</div>
+            <div class="ent-tab-btn" id="ent-tab-btn-drill" onclick="switchEntTab('drill')"><i class="fa-solid fa-graduation-cap"></i> 演練</div>
         </div>
 
         <div id="ent-tab-achv">
@@ -1820,6 +1889,43 @@
             </div>
             <div style="font-size:11px; color:#777; margin:0 4px 12px;">輸入對方的「登入碼」(Account ID) 即可新增好友，可查看對方的成就展示櫃、資產估值及勝率。此功能需該帳號已啟用雲端同步。</div>
             <div id="friends-list-container" style="max-width:750px; margin:0 auto; width:100%; display:flex; flex-direction:column; gap:10px;"></div>
+        </div>
+
+        <div id="ent-tab-drill" style="display:none;">
+            <div style="max-width:750px; margin:0 auto; width:100%;">
+                <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px; padding:0 4px;">
+                    <i class="fa-solid fa-graduation-cap" style="color:var(--color-acc); font-size:18px;"></i>
+                    <span style="font-size:16px; font-weight:bold;">操盤演練</span>
+                </div>
+                <div style="font-size:11px; color:#777; margin:0 4px 14px;">選擇一段歷史時間範圍，從第一天開盤開始、以 100 萬虛擬現金重新來過。時間只能往前推進、不能回溯，走勢會照真實歷史行情逐步揭露，看你能不能打敗大盤。</div>
+
+                <div class="glass-panel" style="padding:16px; margin-bottom:16px;">
+                    <div style="font-weight:bold; font-size:13px; margin-bottom:12px;"><i class="fa-solid fa-calendar-days" style="color:var(--color-acc);"></i> 新的演練</div>
+                    <div style="display:flex; flex-direction:column; gap:10px;">
+                        <div>
+                            <div style="font-size:11px; color:#888; margin-bottom:4px;">起始日期</div>
+                            <input type="date" id="drill-setup-start-date" class="modal-input" style="margin:0;">
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <div class="ent-tab-btn active" id="drill-mode-btn-days" onclick="setDrillSetupMode('days')" style="font-size:11px; padding:6px 10px;">依天數</div>
+                            <div class="ent-tab-btn" id="drill-mode-btn-end" onclick="setDrillSetupMode('end')" style="font-size:11px; padding:6px 10px;">依結束日期</div>
+                        </div>
+                        <div id="drill-setup-days-row">
+                            <div style="font-size:11px; color:#888; margin-bottom:4px;">演練天數（交易日曆天數，含假日）</div>
+                            <input type="number" id="drill-setup-days" class="modal-input" value="30" min="1" max="3650" style="margin:0;">
+                        </div>
+                        <div id="drill-setup-end-row" style="display:none;">
+                            <div style="font-size:11px; color:#888; margin-bottom:4px;">結束日期</div>
+                            <input type="date" id="drill-setup-end-date" class="modal-input" style="margin:0;">
+                        </div>
+                        <div id="drill-setup-error" style="display:none; color:var(--color-sell); font-size:11px;"><i class="fa-solid fa-triangle-exclamation"></i> <span id="drill-setup-error-text"></span></div>
+                        <button onclick="startPracticeDrill()" style="background:var(--color-acc); border:none; color:#000; padding:11px; border-radius:8px; font-weight:bold; font-size:13px; cursor:pointer; margin-top:4px;"><i class="fa-solid fa-play"></i> 開始演練（100 萬現金）</button>
+                    </div>
+                </div>
+
+                <div style="font-weight:bold; font-size:13px; margin:0 4px 8px;"><i class="fa-solid fa-clock-rotate-left" style="color:#888;"></i> 演練紀錄</div>
+                <div id="drill-history-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+            </div>
         </div>
     </main>
 </div>
@@ -1845,6 +1951,38 @@
         <div style="font-size:12px; color:#999; margin-bottom:8px;">成就 <span id="friend-detail-achv-count" style="color:#666;"></span></div>
         <div id="friend-detail-achv-list" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(70px, 1fr)); gap:8px; max-height:260px; overflow-y:auto;"></div>
         <button onclick="removeFriend()" style="margin-top:14px; width:100%; background:rgba(255,69,96,0.1); border:1px solid rgba(255,69,96,0.4); color:var(--color-sell); padding:8px; border-radius:6px; font-weight:bold; cursor:pointer;">移除好友</button>
+    </div>
+</div>
+
+<!-- 🎮 操盤演練：時間控制列（浮動在畫面下方）。
+     下單／圖表／持股／現金全部直接沿用「真正的下單區」（view-dashboard / view-mobile-trade）本人，
+     不另外重做一份介面——原本有的縮放手勢、K線/折線切換、限價單、快速比例、買賣閃爍動畫…全部原封不動。
+     做法是：把全域 state 換成這次演練專用的虛擬帳戶（100 萬現金、空持股），並把 fetchRealPrice／
+     fetchStockHistoryData 這兩個原本會打真實報價 API 的函式，在演練期間導向讀取「選定歷史日期裡、
+     推進到目前模擬時間為止」的真實歷史資料——對其餘所有下單區的程式碼來說，感覺就像現在正是那個
+     時間點、那檔股票正在報價一樣。 -->
+<div id="drill-control-bar">
+    <input type="range" id="drill-time-slider" min="0" max="0" value="0" oninput="onDrillTimeSliderInput(this)" title="演練時間軸（只能往前拖曳，不能拉回過去）">
+    <div class="drill-bar-row">
+        <button onclick="confirmExitDrill()" class="drill-exit-btn" title="結束演練"><i class="fa-solid fa-xmark"></i></button>
+        <span id="drill-day-progress" class="drill-day-label">第-/-天</span>
+        <span id="drill-sim-time" class="drill-time-label">--</span>
+        <div class="drill-step-btns">
+            <button onclick="drillAdvanceTime(1)" title="+1分鐘">+1</button>
+            <button onclick="drillAdvanceTime(5)" title="+5分鐘">+5</button>
+            <button onclick="drillAdvanceTime(30)" title="+30分鐘">+30</button>
+            <button onclick="drillAdvanceTime(60)" title="+1小時">+1H</button>
+        </div>
+        <button onclick="drillGoNextDay()" class="drill-nextday-btn">下一天 <i class="fa-solid fa-forward-step"></i></button>
+    </div>
+</div>
+
+<!-- 🏁 演練結束總結彈窗 -->
+<div id="drill-summary-overlay" class="modal-overlay" style="z-index:26000;">
+    <div class="glass-panel modal-box" style="max-width:360px; text-align:center;">
+        <div style="font-size:15px; font-weight:bold; margin-bottom:4px;"><i class="fa-solid fa-flag-checkered" style="color:var(--color-acc);"></i> 演練結束</div>
+        <div id="drill-summary-body" style="font-size:12.5px; color:#aaa; text-align:left; line-height:1.9; margin-top:8px;"></div>
+        <button onclick="closeDrillSummary()" style="margin-top:14px; width:100%; background:var(--color-acc); color:#000; border:none; padding:10px; border-radius:8px; font-weight:bold; cursor:pointer;">完成</button>
     </div>
 </div>
 
@@ -2137,7 +2275,7 @@
             </span>
             <div class="timeframe-selector" id="m-tf-group" style="padding:2px;"></div>
         </div>
-        <div style="height: 92px; position:relative; width:100%;"><canvas id="mobileStockChart"></canvas></div>
+        <div style="height: 92px; position:relative; width:100%;"><canvas id="mobileStockChart"></canvas><div id="chart-interval-label-mobile" class="chart-interval-label"></div></div>
     </div>
 
     <div>
@@ -3294,6 +3432,7 @@
     // ============================================================
     function toggleAchvShowcase(id) {
         state.achvShowcase = state.achvShowcase || [];
+        state.practiceDrills = state.practiceDrills || [];
         const idx = state.achvShowcase.indexOf(id);
         if (idx >= 0) {
             state.achvShowcase.splice(idx, 1);
@@ -3395,9 +3534,353 @@
     function switchEntTab(tab) {
         document.getElementById('ent-tab-btn-achv').classList.toggle('active', tab === 'achv');
         document.getElementById('ent-tab-btn-friends').classList.toggle('active', tab === 'friends');
+        document.getElementById('ent-tab-btn-drill').classList.toggle('active', tab === 'drill');
         document.getElementById('ent-tab-achv').style.display = tab === 'achv' ? 'block' : 'none';
         document.getElementById('ent-tab-friends').style.display = tab === 'friends' ? 'block' : 'none';
+        document.getElementById('ent-tab-drill').style.display = tab === 'drill' ? 'block' : 'none';
         if (tab === 'friends') renderFriendsList();
+        if (tab === 'drill') renderDrillTab();
+    }
+
+    // ============================================================
+    // 🎮 操盤演練（歷史行情重播訓練）
+    // 不重做一份下單介面：直接沿用「真正的下單區」（view-dashboard／view-mobile-trade，
+    // 含圖表縮放手勢、K線/折線切換、限價單、快速比例、買賣成功動畫…全部原封不動），
+    // 做法是把全域的 state／currentTicker 換成這次演練專用的虛擬帳戶（100 萬現金、空持股），
+    // 並且把原本會打「真實、現在」報價 API 的兩個函式 fetchRealPrice() / fetchStockHistoryData()，
+    // 在演練期間（drillActive）導向讀取「選定歷史日期，推進到目前模擬時間為止」的真實歷史資料——
+    // 對下單區其餘所有程式碼（executeTrade、updateAllViews、圖表渲染、閃爍動畫…）來說，
+    // 感覺就像現在正是那個時間點、那檔股票正在報價一樣，完全不需要另外重寫。
+    // 演練「結束」（走完全部天數）或使用者主動離開時，才把這次的結果存成一筆紀錄寫進
+    // state.practiceDrills（這是正式帳號 state 的欄位，隨帳號一起存本機／同步雲端）。
+    // 時間只能往前推進：時間輪盤／快轉按鈕／換日，都只允許往未來方向移動，沒有回溯操作。
+    // 🩹 已知限制：
+    //  1. drillMeta 只存在於記憶體中，重新整理頁面或離開分頁會遺失進行中的演練
+    //     （已存檔的紀錄不受影響）——需求是「結束後存紀錄」，沒有要求中途要能跨重整續玩。
+    //  2. 演練期間鎖定畫面只留下單區＋時間控制列（隱藏側邊選單），避免跑去卡片/帳本等其他頁面，
+    //     跟正式帳號的真實資料混在一起看；NAV／個股走勢切換鈕在演練期間也先鎖定在「個股」模式，
+    //     因為 NAV（帳戶淨值）歷史是跟著真實牆上時鐘記錄的，混進模擬時間軸裡會對不齊。
+    //  3. 限價單／停損停利／定期定額這些「背景輪詢自動觸發」的功能，畫面與送出委託都正常可用，
+    //     但因為背景的 8 秒報價輪詢在演練期間是暫停的（改由時間控制列手動推進），
+    //     不會自動幫你「在背景」成交，需要親自把時間推進到那個價位附近再手動下單。
+    // ============================================================
+    let drillActive = false;      // 是否正在演練中
+    let realState = null;         // 進入演練前，正式帳號 state 的備份
+    let realCurrentTicker = null; // 進入演練前，正式選定的代號備份
+    let realDesktopChartMode = null;
+    let drillMeta = null;         // 這次演練的模擬時鐘／天數／歷史資料快取（不是帳戶資料，帳戶資料就在被換掉的 state 裡）
+
+    function getDrillHistory() { return state.practiceDrills || []; }
+
+    function setDrillSetupMode(mode) {
+        document.getElementById('drill-mode-btn-days').classList.toggle('active', mode === 'days');
+        document.getElementById('drill-mode-btn-end').classList.toggle('active', mode === 'end');
+        document.getElementById('drill-setup-days-row').style.display = mode === 'days' ? 'block' : 'none';
+        document.getElementById('drill-setup-end-row').style.display = mode === 'end' ? 'block' : 'none';
+    }
+
+    function renderDrillTab() {
+        const startInput = document.getElementById('drill-setup-start-date');
+        // 起始日期預設抓「60 天前」，減少每次都要手動挑日期的麻煩；已經選過就不覆蓋
+        if (startInput && !startInput.value) {
+            const d = new Date(); d.setDate(d.getDate() - 60);
+            startInput.value = fmtDrillDate(d);
+        }
+        renderDrillHistory();
+    }
+
+    function renderDrillHistory() {
+        const container = document.getElementById('drill-history-list');
+        if (!container) return;
+        const list = getDrillHistory();
+        if (list.length === 0) { container.innerHTML = '<div style="font-size:11.5px; color:#666; padding:8px 4px;">還沒有任何演練紀錄</div>'; return; }
+        container.innerHTML = list.slice().reverse().map(rec => {
+            const pnlColor = rec.returnPct >= 0 ? 'var(--color-buy)' : 'var(--color-sell)';
+            const statusLabel = rec.status === 'completed' ? '已完成' : '中途結束';
+            return `<div class="glass-panel" style="padding:12px; display:flex; align-items:center; gap:12px;">
+                <div style="flex:1; min-width:0;">
+                    <div style="font-size:12.5px; font-weight:bold;">${rec.startDate} → ${rec.endDate} <span style="font-size:10.5px; color:#777; font-weight:normal;">(${rec.days} 天・${statusLabel})</span></div>
+                    <div style="font-size:11px; color:#888; margin-top:3px;">最終資產 $${Math.floor(rec.finalEquity).toLocaleString()}　<span style="color:${pnlColor}; font-weight:bold;">${rec.returnPct >= 0 ? '+' : ''}${rec.returnPct.toFixed(2)}%</span>　交易 ${rec.tradeCount} 筆</div>
+                </div>
+                <button onclick="deleteDrillRecord('${rec.id}')" style="background:transparent; border:1px solid rgba(255,69,96,0.3); color:var(--color-sell); width:32px; height:32px; border-radius:6px; cursor:pointer; flex-shrink:0;"><i class="fa-solid fa-trash"></i></button>
+            </div>`;
+        }).join('');
+    }
+
+    function deleteDrillRecord(id) {
+        if (!confirm('確定要刪除這筆演練紀錄嗎？')) return;
+        state.practiceDrills = getDrillHistory().filter(r => r.id !== id);
+        saveData();
+        renderDrillHistory();
+    }
+
+    function fmtDrillDate(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+    function fmtDrillTime(d) { return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; }
+    function getDrillCurrentDate() {
+        const d = new Date(drillMeta.startDateStr + 'T00:00:00');
+        d.setDate(d.getDate() + drillMeta.currentDayOffset);
+        return d;
+    }
+
+    // --- 開始演練 ---
+    async function startPracticeDrill() {
+        const errEl = document.getElementById('drill-setup-error');
+        const errText = document.getElementById('drill-setup-error-text');
+        errEl.style.display = 'none';
+        const startVal = document.getElementById('drill-setup-start-date').value;
+        if (!startVal) { errText.innerText = '請選擇起始日期'; errEl.style.display = 'block'; return; }
+        const startDate = new Date(startVal + 'T00:00:00');
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        if (startDate > today) { errText.innerText = '起始日期不能晚於今天'; errEl.style.display = 'block'; return; }
+
+        const isDaysMode = document.getElementById('drill-mode-btn-days').classList.contains('active');
+        let endDate;
+        if (isDaysMode) {
+            const days = parseInt(document.getElementById('drill-setup-days').value, 10);
+            if (!days || days < 1) { errText.innerText = '請輸入有效的天數'; errEl.style.display = 'block'; return; }
+            endDate = new Date(startDate); endDate.setDate(endDate.getDate() + days - 1);
+        } else {
+            const endVal = document.getElementById('drill-setup-end-date').value;
+            if (!endVal) { errText.innerText = '請選擇結束日期'; errEl.style.display = 'block'; return; }
+            endDate = new Date(endVal + 'T00:00:00');
+            if (endDate < startDate) { errText.innerText = '結束日期不能早於起始日期'; errEl.style.display = 'block'; return; }
+        }
+        if (endDate > today) endDate = today; // 不能演練到還沒發生的未來，超過今天的部分自動裁切
+
+        // 💾 備份正式帳號的 state／currentTicker／NAV顯示模式，演練結束後要原封不動換回來
+        realState = state;
+        realCurrentTicker = currentTicker;
+        realDesktopChartMode = desktopChartMode;
+
+        const defaultSymbol = (realState.cardTickers && realState.cardTickers[0]) || realCurrentTicker || 'NVDA';
+
+        // 🎮 這次演練專用的虛擬帳戶：形狀跟正式帳號的 state 完全一致，
+        // 所以 executeTrade／updateAllViews／renderLedgerTable…等下單區既有函式完全不用改就能直接用
+        state = {
+            cash: 1000000, wallet: {}, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0,
+            splits: [], lastSplitCheck: 0, lastModified: 0,
+            recentTickers: [defaultSymbol],
+            cardTickers: (realState.cardTickers || []).slice(),
+            navHistory: { timestamps: [], labels: [], data: [] },
+            stopLoss: { enabled: false, percent: 10 },
+            limitOrders: [], conditionalOrders: [], dcaPlans: [],
+            lastActiveAt: 0, cardTags: {}, dripEnabled: false,
+            unlockedAchievements: [], friends: [], achvShowcase: [], practiceDrills: [],
+        };
+        currentTicker = defaultSymbol;
+        desktopChartMode = 'STOCK'; // 演練期間鎖定顯示個股走勢（NAV 帳戶淨值歷史跟著真實時鐘記錄，混進模擬時間軸會對不齊）
+
+        drillMeta = {
+            startDateStr: fmtDrillDate(startDate),
+            endDateStr: fmtDrillDate(endDate),
+            totalDays: Math.round((endDate - startDate) / 86400000) + 1,
+            currentDayOffset: 0,
+            simTime: null,       // 目前模擬時間（Date），載入第一天資料後才會決定
+            todayCandles: [],    // 目前代號、目前模擬日的完整候選K棒（依 simTime 決定要揭露到哪一筆）
+            dayCandles: {},      // 快取：`${symbol}|${dateStr}` -> { interval, candles, name }
+            startEquity: 1000000,
+            symbolCount: (realState.cardTickers || []).length,
+        };
+        drillActive = true;
+        document.body.classList.add('drilling');
+
+        // 🩹 一定要先把第一天的資料載入、把 drillMeta.simTime 設定好，才能切換畫面／觸發任何報價或圖表抓取——
+        // 順序反過來的話，畫面一進來的瞬間 simTime 還是 null，會被上面加的保護判斷成「今天還沒開始」而空白，
+        // 但更早的版本沒有那層保護時，則是會反過來被誤判成「顯示整天」而洩漏未來走勢，兩種錯法都不要。
+        await loadDrillDay(false);
+
+        // 🖥️ 切到跟正式下單一模一樣的畫面（桌機 view-dashboard／手機 view-mobile-trade）
+        const isMobile = window.innerWidth <= 768;
+        switchView(isMobile ? 'view-mobile-trade' : 'view-dashboard', null);
+
+        selectTicker(currentTicker); // 重新走一次「選定代號」的既有流程（含清空報價、抓歷史圖，這裡會被導向演練資料）
+    }
+
+    // 依 interval 由細到粗依序嘗試：越久遠的日期，分鐘級資料 Yahoo 通常已經沒有保留，
+    // 第一個抓得到「這一天」資料的頻率就採用
+    const DRILL_INTERVAL_CHAIN = ['1m', '5m', '15m', '30m', '60m', '1d'];
+    async function fetchDrillDayCandles(symbol, dateObj) {
+        const key = `${symbol}|${fmtDrillDate(dateObj)}`;
+        if (drillMeta.dayCandles[key]) return drillMeta.dayCandles[key];
+        const dayStart = new Date(dateObj); dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
+        const p1 = Math.floor(dayStart.getTime() / 1000);
+        const p2 = Math.floor(dayEnd.getTime() / 1000);
+        for (const interval of DRILL_INTERVAL_CHAIN) {
+            try {
+                const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?period1=${p1}&period2=${p2}&interval=${interval}`)}`;
+                const res = await fetch(proxyUrl, { cache: 'no-store' });
+                const json = await res.json();
+                const result = json && json.chart && json.chart.result && json.chart.result[0];
+                if (!result || !result.timestamp || result.timestamp.length === 0) continue;
+                const q = (result.indicators && result.indicators.quote && result.indicators.quote[0]) || {};
+                const closes = q.close || [], opens = q.open || [], highs = q.high || [], lows = q.low || [];
+                // 🩹 嚴格把回傳的資料裁切在「這一天」的範圍內（p1~p2），不完全信任 Yahoo 一定會照 period1/period2
+                // 老實回覆——實測某些頻率/日期組合，Yahoo 偶爾會回傳超出請求範圍的資料（例如直接給到最新的一批），
+                // 如果不裁切，會讓「當天開盤到收盤」的時間拉桿被拉大到涵蓋這些多出來的資料，
+                // 使用者就可能把拉桿一路拉到接近真實世界的「今天」，而不是被限制在當天的交易時段內。
+                // 日K（'1d'）額外放寬到 ±24 小時：不同交易所時區跟瀏覽器所在時區換算日期邊界時可能有一天的落差，
+                // 但即使放寬也仍然只涵蓋「大約一天」，不會像完全不裁切一樣可能收到橫跨數月的資料。
+                const tolerance = interval === '1d' ? 24 * 3600 * 1000 : 0;
+                const lo = p1 * 1000 - tolerance, hi = p2 * 1000 + tolerance;
+                const candles = [];
+                result.timestamp.forEach((ts, i) => {
+                    const c = closes[i];
+                    if (c === null || c === undefined) return;
+                    const tMs = ts * 1000;
+                    if (tMs < lo || tMs >= hi) return;
+                    candles.push({ t: new Date(tMs), o: opens[i] ?? c, h: highs[i] ?? c, l: lows[i] ?? c, c });
+                });
+                if (candles.length === 0) continue;
+                const data = { interval, candles, name: (result.meta && (result.meta.shortName || result.meta.longName)) || symbol };
+                drillMeta.dayCandles[key] = data;
+                return data;
+            } catch (e) { /* 這個頻率抓不到，換下一個更粗的頻率再試 */ }
+        }
+        const empty = { interval: null, candles: [], name: symbol };
+        drillMeta.dayCandles[key] = empty;
+        return empty;
+    }
+
+    // preserveTime = true：換股時使用，維持目前的模擬時間點不變，只換走勢圖顯示的股票
+    // preserveTime = false：換日時使用，模擬時間重設為當天第一筆資料的時間點
+    async function loadDrillDay(preserveTime) {
+        const dateObj = getDrillCurrentDate();
+        const data = await fetchDrillDayCandles(currentTicker, dateObj);
+        drillMeta.todayCandles = data.candles;
+        drillMeta.todayInterval = data.interval;
+        if (!preserveTime || !drillMeta.simTime) {
+            drillMeta.simTime = data.candles.length ? new Date(data.candles[0].t) : new Date(dateObj);
+        }
+        // 🩹 精簡版控制列拿掉了原本常駐顯示的說明文字列（節省高度），改成放在「第 X/Y 天」標籤的 title
+        // 提示文字裡（滑鼠懸停或手機長按可看到），不影響版面
+        const dayLabelEl = document.getElementById('drill-day-progress');
+        dayLabelEl.innerText = `第${drillMeta.currentDayOffset + 1}/${drillMeta.totalDays}天`;
+        if (data.candles.length === 0) {
+            dayLabelEl.title = `${fmtDrillDate(dateObj)}：這天沒有交易資料（可能是假日），可直接點「下一天」跳過。`;
+        } else {
+            const intervalLabel = { '1m': '1分鐘', '5m': '5分鐘', '15m': '15分鐘', '30m': '30分鐘', '60m': '60分鐘', '1d': '日' }[data.interval] || data.interval;
+            dayLabelEl.title = data.interval === '1d'
+                ? `${fmtDrillDate(dateObj)}：此日期已無分鐘級歷史資料，改用日K收盤價呈現。`
+                : `${fmtDrillDate(dateObj)}：目前顯示頻率 ${intervalLabel}K（Yahoo Finance 真實歷史資料）`;
+        }
+        setupDrillTimeSlider();
+    }
+
+    function setupDrillTimeSlider() {
+        const slider = document.getElementById('drill-time-slider');
+        const candles = drillMeta.todayCandles;
+        if (!candles.length) { slider.min = 0; slider.max = 0; slider.value = 0; slider.disabled = true; return; }
+        slider.disabled = false;
+        const first = candles[0].t.getTime();
+        const last = candles[candles.length - 1].t.getTime();
+        slider.min = 0;
+        // 🩹 二次防呆：無論資料本身有沒有裁切乾淨，這裡再封頂一次「最多 1500 分鐘」（略多於 24 小時），
+        // 拉桿在任何情況下都不可能被拉到遠超過「一天」的範圍
+        slider.max = Math.max(1, Math.min(1500, Math.round((last - first) / 60000)));
+        const elapsed = Math.round((drillMeta.simTime.getTime() - first) / 60000);
+        slider.value = Math.max(0, Math.min(Number(slider.max), elapsed));
+        document.getElementById('drill-sim-time').innerText = `${fmtDrillDate(drillMeta.simTime)} ${fmtDrillTime(drillMeta.simTime)}`;
+    }
+
+    // 🚫 不可回溯：拖曳輪盤時若新位置比目前位置更早，直接彈回目前位置，不接受這次拖曳
+    function onDrillTimeSliderInput(el) {
+        const candles = drillMeta.todayCandles;
+        if (!candles.length) return;
+        const first = candles[0].t.getTime();
+        const newVal = parseInt(el.value, 10);
+        const currentElapsed = Math.round((drillMeta.simTime.getTime() - first) / 60000);
+        if (newVal < currentElapsed) { el.value = currentElapsed; return; }
+        drillMeta.simTime = new Date(first + newVal * 60000);
+        drillTick();
+    }
+
+    function drillAdvanceTime(minutes) {
+        if (!drillActive || !drillMeta.todayCandles.length) return;
+        const last = drillMeta.todayCandles[drillMeta.todayCandles.length - 1].t.getTime();
+        drillMeta.simTime = new Date(Math.min(drillMeta.simTime.getTime() + minutes * 60000, last));
+        setupDrillTimeSlider();
+        drillTick();
+    }
+
+    async function drillGoNextDay() {
+        if (!drillActive) return;
+        if (drillMeta.currentDayOffset + 1 >= drillMeta.totalDays) { await finishDrill('completed'); return; }
+        drillMeta.currentDayOffset += 1;
+        await loadDrillDay(false);
+        drillTick();
+    }
+
+    // 時間往前推進後，重新跑一次「報價 + 圖表」流程——直接沿用既有的 fetchRealPrice / fetchStockHistoryData，
+    // 這兩個函式內部已經加了 drillActive 判斷，會自動改讀模擬資料而不是打真實 API
+    function drillTick() {
+        fetchRealPrice(currentTicker);
+        fetchStockHistoryData(currentTicker, false);
+    }
+
+    // status: 'completed'（照計畫走完全部天數）／'aborted'（使用者中途按結束離開）
+    async function finishDrill(status) {
+        if (!drillActive) return;
+        // 用目前 state（演練用的虛擬帳戶）現有的現金/持股，以最近一次看到的報價（globalPriceCache）結算
+        // 🩹 這裡漏了套用 getCurrencyMultiplier(sym)：外幣計價的股票（例如美股）原本的 price 是「原幣別報價」
+        // （例如 100 美元／股），沒有換算成台幣就直接加總，等於把「100 美元」當成「100 台幣」計算，
+        // 直接讓外幣持股的市值被低估了匯率倍數（約 30 幾倍），才會看起來「手上有一半是外幣就虧損 50%」
+        // ——其實根本不是虧損，是這裡少乘了一次匯率。同時也漏算了「貨幣庫存」（外幣現金）的台幣等值。
+        let holdingsVal = 0;
+        Object.keys(state.holdings).forEach(sym => {
+            const h = state.holdings[sym];
+            const price = globalPriceCache[sym] || h.avgPrice;
+            holdingsVal += price * h.shares * getCurrencyMultiplier(sym);
+        });
+        const finalEquity = state.cash + getWalletValueTWD() + holdingsVal;
+        const returnPct = (finalEquity - drillMeta.startEquity) / drillMeta.startEquity * 100;
+        const record = {
+            id: 'drill_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+            startDate: drillMeta.startDateStr,
+            endDate: drillMeta.endDateStr,
+            days: drillMeta.totalDays,
+            status,
+            finalCash: state.cash,
+            finalHoldingsValue: holdingsVal,
+            finalEquity,
+            returnPct,
+            tradeCount: state.ledger.length,
+            createdAt: Date.now(),
+        };
+
+        // 🔄 換回正式帳號的 state／currentTicker／NAV顯示模式，並把紀錄寫進「正式帳號」的 practiceDrills
+        state = realState;
+        currentTicker = realCurrentTicker;
+        desktopChartMode = realDesktopChartMode;
+        state.practiceDrills = state.practiceDrills || [];
+        state.practiceDrills.push(record);
+
+        drillActive = false;
+        document.body.classList.remove('drilling');
+        drillMeta = null;
+        realState = null; realCurrentTicker = null;
+
+        saveData(); // 這裡的 state 已經換回正式帳號了，會正常持久化＋雲端同步＋成就檢查
+        selectTicker(currentTicker); // 回到演練前選定的代號，重新抓一次真實現在的報價／圖表
+        fetchAllCardsData();
+
+        switchView('view-achievements', document.getElementById('menu-item-achievements'));
+        switchEntTab('drill');
+
+        document.getElementById('drill-summary-body').innerHTML = `
+            <div>期間：${record.startDate} → ${record.endDate}（${record.days} 天）</div>
+            <div>最終資產：$${Math.floor(record.finalEquity).toLocaleString()}</div>
+            <div>報酬率：<span style="color:${returnPct >= 0 ? 'var(--color-buy)' : 'var(--color-sell)'}; font-weight:bold;">${returnPct >= 0 ? '+' : ''}${returnPct.toFixed(2)}%</span></div>
+            <div>交易次數：${record.tradeCount}</div>
+        `;
+        document.getElementById('drill-summary-overlay').style.display = 'flex';
+    }
+
+    function closeDrillSummary() { document.getElementById('drill-summary-overlay').style.display = 'none'; }
+
+    function confirmExitDrill() {
+        if (!drillActive) return;
+        if (confirm('確定要結束演練嗎？目前的結果會被記錄下來，無法回到演練中繼續。')) finishDrill('aborted');
     }
 
     // ============================================================
@@ -3651,7 +4134,7 @@
     Chart.register(smoothCrosshairPlugin);
 
     const DATA_KEY = "ACORNTRADE_MANUAL_DATA";
-    let state = { cash: 1000000, wallet: {}, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, limitOrders: [], conditionalOrders: [], dcaPlans: [], lastActiveAt: 0, cardTags: {}, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] };
+    let state = { cash: 1000000, wallet: {}, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW", "TSLA"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, limitOrders: [], conditionalOrders: [], dcaPlans: [], lastActiveAt: 0, cardTags: {}, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [], practiceDrills: [] };
     let stopLossAlertShown = false; // 避免同一次觸發反覆彈出警示，虧損回復到門檻之上才會重置
     let currentTicker = localStorage.getItem('LAST_SELECTED_TICKER') || "NVDA";
 
@@ -3780,16 +4263,61 @@
     }
 
     // 🖱️ 帳號管理頁的「手動同步」按鈕：不受「自動雲端同步」開關影響，讓使用者隨時可強制推送目前帳號資料
+    // ✨ 同步期間，電腦版左側選單的 logo.png 也會換成跟手機版頂端標題長按同步時一樣的畫線＋填色動畫，
+    // 尺寸維持與原本 logo.png 一致（25x25），同步結束（不論成功或失敗）後換回原本的 <img>。
+    // 🩹 這裡改用 DOM API 直接組出 <svg>／設定「行內樣式」，不依賴外部 CSS 選擇器或字串比對：
+    // 先前用字串取代 class 屬性、外觀完全交給另一條 CSS 規則負責的做法，一旦樣式表載入順序、
+    // 選擇器優先權跟預期不同（例如視窗寬度落在手機版 @media 區間，讓另一條寫死 32px、
+    // 且沒有 fill/stroke 設定的規則覆蓋過去），path 就會退回瀏覽器預設的「純黑色實心填滿」，
+    // 在接近全黑的側邊選單背景上等於完全看不見，變成「logo 直接變空白」。改成行內樣式後，
+    // 顏色／線寬／動畫都直接寫在元素上，優先權高於任何外部樣式表規則，不會再被覆蓋掉。
+    function buildSidebarSyncLogo() {
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = MOBILE_HEADER_SYNC_SVG;
+        const svg = wrapper.firstElementChild;
+        svg.removeAttribute('class');
+        svg.id = 'sidebar-logo-img';
+        svg.style.display = 'block';
+        svg.style.width = '25px';
+        svg.style.height = '25px';
+        svg.style.flexShrink = '0';
+        svg.querySelectorAll('path').forEach(path => {
+            path.removeAttribute('class');
+            path.style.fill = 'transparent';
+            path.style.stroke = '#fff';
+            path.style.strokeWidth = '22';
+            path.style.animation = 'header-sync-draw 2s ease-in-out infinite, header-sync-fill 1s ease-in-out infinite';
+        });
+        return svg;
+    }
     async function manualSyncAccount(accountId) {
         const btn = document.getElementById(`manual-sync-btn-${accountId}`);
         const originalHtml = btn ? btn.innerHTML : null;
         if (btn) { btn.disabled = true; btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 同步中...`; }
+        const sidebarLogoOriginalOuterHTML = (() => {
+            const el = document.getElementById('sidebar-logo-img');
+            if (!el) return null;
+            const originalOuterHTML = el.outerHTML;
+            const svg = buildSidebarSyncLogo();
+            el.replaceWith(svg);
+            svg.querySelectorAll('path').forEach(path => {
+                const len = path.getTotalLength();
+                path.style.strokeDasharray = len;
+                path.style.strokeDashoffset = len;
+            });
+            return originalOuterHTML;
+        })();
         try {
             await cloudSyncAccount(accountId, { silent: false });
         } finally {
             if (btn) { btn.disabled = false; btn.innerHTML = originalHtml; }
+            if (sidebarLogoOriginalOuterHTML) {
+                const cur = document.getElementById('sidebar-logo-img');
+                if (cur) cur.outerHTML = sidebarLogoOriginalOuterHTML;
+            }
         }
     }
+
 
     /* =========================================
        ✨ 手機版頂端標題「長按手動同步」
@@ -5032,6 +5560,7 @@
                 // 而非過去綁定在整台裝置共用的 localStorage 鍵值，確保換帳號、換裝置登入同一帳號時好友清單一致
                 state.friends = state.friends || [];
                 state.achvShowcase = state.achvShowcase || [];
+        state.practiceDrills = state.practiceDrills || [];
                 state.ledger.forEach(r => {
                     if (!r.timestamp) {
                         let d = new Date(), parts = r.time ? r.time.split(':') : [];
@@ -5042,7 +5571,7 @@
                 if (!state.navHistory || !state.navHistory.timestamps || state.navHistory.timestamps.length === 0) { rebuildNavHistoryFromLedger(); }
             } catch(e) {} 
         } else {
-            state = { cash: 1000000, wallet: {}, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, limitOrders: [], conditionalOrders: [], dcaPlans: [], lastActiveAt: 0, cardTags: {}, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] };
+            state = { cash: 1000000, wallet: {}, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: 0, recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, limitOrders: [], conditionalOrders: [], dcaPlans: [], lastActiveAt: 0, cardTags: {}, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [], practiceDrills: [] };
             rebuildNavHistoryFromLedger(); saveData();
         }
         stopLossAlertShown = false;
@@ -5130,8 +5659,10 @@
     // 🩹 修復：state.cash 長期經過多次浮點數加減（交易、股息、DRIP 再投資等）後，
     // 可能因 IEEE754 浮點誤差累積出如 999999.9999999998 這類極小殘值。
     // 在集中的存檔入口統一四捨五入到小數點後 2 位，修正內部數值、不影響任何顯示或操作行為。
-    function saveData() { if (typeof state.cash === 'number') state.cash = Math.round(state.cash * 100) / 100; persistAccountState(getActiveAccount().storageKey, state); updateAllViews(true); renderCards(); scheduleCloudSync(); checkAchievements(); }
-    async function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { const storageKey = getActiveAccount().storageKey; localStorage.removeItem(storageKey); await idbDeleteLedger(storageKey); state = { cash: 1000000, wallet: {}, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: Date.now(), recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, limitOrders: [], conditionalOrders: [], dcaPlans: [], lastActiveAt: 0, cardTags: {}, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [] }; await initData(); fetchStockHistoryData(currentTicker, true); } }
+    // 🎮 演練期間 state 已經被換成虛擬帳戶，saveData 只刷新畫面、不寫入本機／雲端、不觸發成就判定
+    // （成就只認正式帳號的真實交易；drillActive 時的 saveData 呼叫大多來自 executeTrade 下單後）
+    function saveData() { if (typeof state.cash === 'number') state.cash = Math.round(state.cash * 100) / 100; if (drillActive) { updateAllViews(true); return; } persistAccountState(getActiveAccount().storageKey, state); updateAllViews(true); renderCards(); scheduleCloudSync(); checkAchievements(); }
+    async function resetAccount() { if(confirm("確定還原為 100 萬起始金額？")) { const storageKey = getActiveAccount().storageKey; localStorage.removeItem(storageKey); await idbDeleteLedger(storageKey); state = { cash: 1000000, wallet: {}, holdings: {}, ledger: [], dividends: [], lastDividendCheck: 0, splits: [], lastSplitCheck: 0, lastModified: Date.now(), recentTickers: ["NVDA", "2330.TW"], cardTickers: ["NVDA", "2330.TW"], navHistory: { timestamps: [], labels: [], data: [] }, stopLoss: { enabled: false, percent: 10 }, limitOrders: [], conditionalOrders: [], dcaPlans: [], lastActiveAt: 0, cardTags: {}, dripEnabled: false, unlockedAchievements: [], friends: [], achvShowcase: [], practiceDrills: [] }; await initData(); fetchStockHistoryData(currentTicker, true); } }
 
     function exportData() {
         const dataStr = JSON.stringify(state, null, 2), blob = new Blob([dataStr], { type: "application/json" }), url = URL.createObjectURL(blob), a = document.createElement("a");
@@ -5146,7 +5677,7 @@
             try {
                 const importedState = JSON.parse(e.target.result);
                 if (importedState && typeof importedState.cash === 'number') {
-                    state = importedState; state.cardTickers = state.cardTickers || []; state.recentTickers = state.recentTickers || []; state.holdings = state.holdings || {}; state.wallet = state.wallet || {}; state.ledger = state.ledger || []; state.dividends = state.dividends || []; state.lastDividendCheck = state.lastDividendCheck || 0; state.splits = state.splits || []; state.lastSplitCheck = state.lastSplitCheck || 0; state.lastModified = Date.now(); state.stopLoss = state.stopLoss || { enabled: false, percent: 10 }; state.limitOrders = state.limitOrders || []; state.conditionalOrders = state.conditionalOrders || []; state.dcaPlans = state.dcaPlans || []; state.lastActiveAt = state.lastActiveAt || 0; state.cardTags = state.cardTags || {}; state.dripEnabled = !!state.dripEnabled; state.unlockedAchievements = state.unlockedAchievements || []; state.friends = state.friends || []; state.achvShowcase = state.achvShowcase || [];
+                    state = importedState; state.cardTickers = state.cardTickers || []; state.recentTickers = state.recentTickers || []; state.holdings = state.holdings || {}; state.wallet = state.wallet || {}; state.ledger = state.ledger || []; state.dividends = state.dividends || []; state.lastDividendCheck = state.lastDividendCheck || 0; state.splits = state.splits || []; state.lastSplitCheck = state.lastSplitCheck || 0; state.lastModified = Date.now(); state.stopLoss = state.stopLoss || { enabled: false, percent: 10 }; state.limitOrders = state.limitOrders || []; state.conditionalOrders = state.conditionalOrders || []; state.dcaPlans = state.dcaPlans || []; state.lastActiveAt = state.lastActiveAt || 0; state.cardTags = state.cardTags || {}; state.dripEnabled = !!state.dripEnabled; state.unlockedAchievements = state.unlockedAchievements || []; state.friends = state.friends || []; state.achvShowcase = state.achvShowcase || []; state.practiceDrills = state.practiceDrills || [];
                     state.ledger.forEach(r => {
                         if (!r.timestamp) {
                             let d = new Date(), parts = r.time ? r.time.split(':') : [];
@@ -6722,6 +7253,8 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         el.classList.add(newPrice > oldPrice ? "price-flash-up" : "price-flash-down");
     }
     async function fetchRealPrice(ticker) {
+        // 🎮 演練期間：不打真實報價 API，改讀「選定歷史日期＋目前模擬時間」的模擬報價
+        if (drillActive) { await drillSimulateRealPrice(ticker); return; }
         let fetchSucceeded = false;
         try {
             const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}`)}`;
@@ -6759,6 +7292,35 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         }
     }
 
+    // 🎮 演練專用：讀取「選定歷史日期，推進到目前模擬時間為止」的模擬報價，
+    // 寫回跟真實報價完全一樣的全域變數（currentRealPrice / globalPriceCache / lastFlashedPrice…），
+    // 並沿用同一個 flashPriceBlock 漲跌閃爍動畫，所以下單區其餘程式碼完全不用區分「真實」還是「模擬」。
+    async function drillSimulateRealPrice(ticker) {
+        const dateObj = getDrillCurrentDate();
+        const data = await fetchDrillDayCandles(ticker, dateObj);
+        if (ticker !== currentTicker || !drillActive) return; // 競速保護：等待期間可能已切換代號或已離開演練
+        drillMeta.todayCandles = data.candles;
+        drillMeta.todayInterval = data.interval;
+        // 🩹 不在這裡「順手」把 simTime 初始化成當天第一筆——那個時機只交給 loadDrillDay() 統一負責，
+        // 避免這裡跟 fetchStockHistoryData 的圖表渲染路徑互搶著初始化，造成競速下偶爾整天資料被提早看光。
+        // 在 loadDrillDay() 設好 simTime 之前，這裡先不顯示任何報價。
+        if (!drillMeta.simTime) { document.getElementById("trade-price-display").innerHTML = `<span style="font-size:14px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> 報價連線中...</span>`; return; }
+        setupDrillTimeSlider();
+        const visible = data.candles.filter(c => c.t.getTime() <= drillMeta.simTime.getTime());
+        const price = visible.length ? visible[visible.length - 1].c : null;
+        if (price !== null) {
+            flashPriceBlock(price, lastFlashedPrice);
+            lastFlashedPrice = price;
+            currentRealPrice = price; globalPriceCache[ticker] = price; isPriceLoading = false; currentMarketState = 'REGULAR';
+            priceFetchFailCount = 0;
+            document.getElementById("trade-price-display").innerHTML = `$ ${price.toFixed(2)} <span style="font-size:12px; font-weight:400; color:#888;">${getCurrencyForTicker(ticker)}</span>`;
+            document.getElementById("ai-current-ticker").innerText = currentTicker; validateSharesInput();
+        } else {
+            document.getElementById("trade-price-display").innerHTML = `<span style="font-size:13px; color:var(--color-warn);"><i class="fa-solid fa-moon"></i> 當天無報價（休市）</span>`;
+        }
+        updateAllViews(false);
+    }
+
     function calculateRSI(prices, period = 14) {
         if (!prices || prices.length <= period) return null; let gains = 0, losses = 0;
         for (let i = 1; i <= period; i++) { const diff = prices[i] - prices[i - 1]; if (diff >= 0) gains += diff; else losses -= diff; }
@@ -6777,6 +7339,157 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         if (rsi >= 70) { badge.innerText = '超買區 (偏熱)'; badge.style.background = 'rgba(255,69,96,0.2)'; badge.style.color = 'var(--color-sell)'; }
         else if (rsi <= 30) { badge.innerText = '超賣區 (偏跌)'; badge.style.background = 'rgba(0,255,170,0.2)'; badge.style.color = 'var(--color-buy)'; }
         else { badge.innerText = '中性區位'; badge.style.background = 'rgba(0,212,255,0.2)'; badge.style.color = 'var(--color-acc)'; }
+    }
+
+    // 📐 折線圖固定節點數：不論是哪個時間區間（1D/1W/1M/1Y/All…），折線圖一律固定重新取樣成剛好 100 個節點。
+    // 🩹 這裡刻意不做「內插」：每個節點都是直接從原始資料裡挑出一筆真實資料整筆帶過來
+    // （價格、開高低收、時間戳記都原封不動，不是算出來的中間值），確保每個節點都是絕對真實存在過的價格。
+    // 只把「K線／個股走勢圖」的折線模式（LINE）套用這個規則；K線（KLINE）蠟燭圖完全不受影響，
+    // 保留原始抓到的每一根真實K棒，不強制湊成 100 根——見 fetchStockHistoryData／drillRenderChartFromCandles
+    // 呼叫這個函式前的 type==='LINE' 判斷。
+    // 🩹 做法一路調整下來的教訓：
+    //  v1「依時間平分」：盤後／隔夜／週末這種完全沒有交易的空窗期會被當成跟盤中一樣長的時間平分進去，
+    //     一天只有約 6.5 小時在交易，等於快七成節點被塞進空窗期，只能重複湊數，變成一大段一大段的平坦色塊。
+    //  v2「依索引位置平分」（不分天）：解決了空窗期問題，但换成另一個問題——如果 Yahoo 對「不同天」
+    //     實際回傳的真實資料筆數本來就不平均（例如某幾天有缺值被濾掉、當天交易時段還沒走完等等），
+    //     依全體索引平分下去，筆數多的那幾天就會分到多很多節點，筆數少的那幾天分到的節點少很多，
+    //     每天的節點數量就會「亂七八糟」（例如某天 8 個、某天 20 個），寬度看起來完全不對稱。
+    //  v3（這裡）：先按「日期」把資料分組，100 個節點先盡量平均分配給每一個交易日（每天節點數最多只差 1），
+    //     組內再依索引平分——這樣才能同時避免「空窗期洗掉節點」跟「哪天資料多寡不均」這兩個問題，
+    //     讓每個交易日在圖上占的節點數量（寬度）都差不多一致。
+    //     交易日天數本身就超過 100 天時（例如 1Y/5Y 用日K，一天正好一筆），分組就沒有意義，
+    //     直接退回 v2 的整體索引平分即可（等同於「每天固定恰好 1 個節點」的極限情況）。
+    // 最後一個節點強制對齊到原始資料裡真正最新的那一筆——以 1D 來說就是「當天到目前為止最新的價格，直到收盤」。
+    function resampleTo100Nodes(timestampsMs, prices, ohlcArr) {
+        const n = timestampsMs.length;
+        if (n === 0) return { prices: [], ohlc: [], timestamps: [] };
+        if (n === 1) return { prices: prices.slice(), ohlc: ohlcArr.slice(), timestamps: timestampsMs.slice() };
+        const TARGET = 100;
+
+        // 依日期（年-月-日）把連續的資料切成一組一組
+        const dayKeyOf = (t) => { const d = new Date(t); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); };
+        const groups = [];
+        let groupStart = 0, curKey = dayKeyOf(timestampsMs[0]);
+        for (let i = 1; i <= n; i++) {
+            const key = i < n ? dayKeyOf(timestampsMs[i]) : null;
+            if (key !== curKey) { groups.push([groupStart, i - 1]); groupStart = i; curKey = key; }
+        }
+
+        const outPrices = [], outOhlc = [], outTimestamps = [];
+        const pickFromRange = (startIdx, endIdx, count) => {
+            const len = endIdx - startIdx + 1;
+            for (let j = 0; j < count; j++) {
+                const offset = count === 1 ? 0 : Math.round(j * (len - 1) / (count - 1));
+                const idx = startIdx + Math.min(len - 1, offset);
+                outPrices.push(prices[idx]);
+                outOhlc.push(ohlcArr[idx]);
+                outTimestamps.push(timestampsMs[idx]);
+            }
+        };
+
+        if (groups.length > 1 && groups.length <= TARGET) {
+            // 交易日數不超過 100 天：每天先分到 base 份，剩下的名額依序多分給前面幾天，讓天與天之間最多只差 1 個節點
+            const base = Math.floor(TARGET / groups.length);
+            let remainder = TARGET - base * groups.length;
+            groups.forEach(([s, e]) => {
+                const quota = base + (remainder > 0 ? 1 : 0);
+                if (remainder > 0) remainder--;
+                pickFromRange(s, e, quota);
+            });
+        } else {
+            // 只有一天，或交易日數已經超過 100 天（例如 1Y/5Y 用日K，分組已經沒有意義）：直接整體依索引平分
+            pickFromRange(0, n - 1, TARGET);
+        }
+
+        // 保證最後一個節點必定精準對齊原始資料裡真正最新的那一筆，不受平分取樣時挑選誤差影響
+        outPrices[TARGET - 1] = prices[n - 1];
+        outOhlc[TARGET - 1] = ohlcArr[n - 1];
+        outTimestamps[TARGET - 1] = timestampsMs[n - 1];
+        return { prices: outPrices, ohlc: outOhlc, timestamps: outTimestamps };
+    }
+    // 依時間區間決定圖表下方的標籤格式：1D 只顯示時間，其餘顯示日期（跟原本的格式規則一致）
+    function formatChartLabelForRange(tsMs, range) {
+        const d = new Date(tsMs);
+        return range === '1d'
+            ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+            : `${String(d.getFullYear()).slice(-2)}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    // 📐 折線圖固定要湊滿 100 個「真實」節點，跟 K 線圖完全分開處理：
+    // K 線圖沿用最上面 range/intervalStr 算出來、跟原本一模一樣的組合去抓資料，不做任何額外處理。
+    // 折線圖則不共用這次 fetch——另外用自己的頻率設定獨立打 Yahoo API，而且不只試一種頻率：
+    // 🩹 同一檔股票在同一個頻率下，Yahoo 實際回傳的「有效」資料點常常比理論值少很多（開高低收有缺值、
+    // 盤前盤後被濾掉、該頻率的資料保留天數不夠長等等原因都可能發生，光憑經驗猜一個頻率不夠可靠）。
+    // 所以改成「依序多試幾種頻率，哪個抓到的真實資料點最多就用哪個」，一旦某個頻率就已經湊到 100 筆以上
+    // 真實資料就提早停止，避免每次都要試完整條頻率鏈；抓到的真實資料越多，之後「最近鄰」取樣（見
+    // resampleTo100Nodes）挑出來的 100 個節點就越不容易重複，平坦的階梯感也會跟著大幅減少。
+    const LINE_CHART_INTERVAL_CHAIN = {
+        '1d':  ['1m', '2m', '5m'],
+        '5d':  ['1m', '2m', '5m', '15m'],
+        '1mo': ['5m', '15m', '30m', '60m'],
+        '3mo': ['30m', '60m', '1d'],
+        '1y':  ['60m', '1d'],
+        '5y':  ['1d', '1wk'],
+        'max': ['1wk', '1mo'],
+    };
+    async function fetchLineChartRaw(ticker, range, intervalStr) {
+        const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=${range}&interval=${intervalStr}`)}`;
+        const res = await fetch(proxyUrl, { cache: "no-store" });
+        const json = await res.json();
+        const result = json && json.chart && json.chart.result && json.chart.result[0];
+        if (!result || !result.timestamp) return { prices: [], ohlc: [], timestamps: [] };
+        const timestamps = result.timestamp, quote = result.indicators.quote[0];
+        const closes = quote.close || [], opens = quote.open || [], highs = quote.high || [], lows = quote.low || [];
+        let prices = [], ohlc = [], ts = [];
+        for (let i = 0; i < timestamps.length; i++) {
+            if (closes[i] === null || closes[i] === undefined) continue;
+            prices.push(closes[i]);
+            ohlc.push({ o: opens[i] ?? closes[i], h: highs[i] ?? closes[i], l: lows[i] ?? closes[i], c: closes[i] });
+            ts.push(timestamps[i] * 1000);
+        }
+        return { prices, ohlc, timestamps: ts };
+    }
+    // 🩹 記住每個「代號＋時間區間」組合最後一次找到、資料最密的那個頻率：
+    // fetchStockHistoryData 每 8 秒的報價輪詢都會重新呼叫這裡，如果每次都重新把整條頻率鏈試一遍，
+    // 等於把原本 1 次的 API 請求變成最多 4 次，且每 8 秒重複發生——不但沒必要，也容易踩到 Yahoo／代理的
+    // 流量限制而讓某些頻率請求失敗。改成只有第一次遇到「新的代號＋時間區間組合」才試整條鏈找出最佳頻率，
+    // 之後同一組合的後續刷新只用已經驗證過的那個頻率打一次 API。
+    const lineChartBestIntervalCache = {};
+    async function fetchLineChartData(ticker, range, seriesKey, animate) {
+        const cacheKey = `${ticker}|${range}`;
+        const chain = LINE_CHART_INTERVAL_CHAIN[range] || ['1d'];
+        let best = { prices: [], ohlc: [], timestamps: [] };
+        const knownGoodInterval = lineChartBestIntervalCache[cacheKey];
+
+        if (knownGoodInterval) {
+            try { best = await fetchLineChartRaw(ticker, range, knownGoodInterval); } catch (e) {}
+            if (ticker !== currentTicker) return;
+        }
+        if (best.prices.length < 100) {
+            for (const interval of chain) {
+                if (interval === knownGoodInterval) continue; // 剛剛已經試過這個頻率了
+                try {
+                    const data = await fetchLineChartRaw(ticker, range, interval);
+                    if (ticker !== currentTicker) return; // 競速保護：等待期間已切換代號，這批（含之後還沒抓完的）都作廢
+                    if (data.prices.length > best.prices.length) { best = data; lineChartBestIntervalCache[cacheKey] = interval; }
+                    if (best.prices.length >= 100) break; // 已經湊到至少 100 筆真實資料，不用再多試更細的頻率
+                } catch (e) { /* 這個頻率抓不到或抓失敗，換下一個試試看 */ }
+            }
+        }
+        if (best.prices.length === 0) return;
+
+        const resampled = resampleTo100Nodes(best.timestamps, best.prices, best.ohlc);
+        const arrLabels = resampled.timestamps.map(t => formatChartLabelForRange(t, range));
+
+        const isNewSeries = stockHistData._seriesKey !== seriesKey;
+        stockHistData._seriesKey = seriesKey;
+        stockHistData.prices = resampled.prices;
+        stockHistData.labels = arrLabels;
+        stockHistData.ohlc = resampled.ohlc;
+        stockHistData.timestamps = resampled.timestamps;
+        updateRSIDisplay(resampled.prices);
+        if (isNewSeries) { resetChartZoom(navChart); resetChartZoom(mobileChart); }
+        renderAllCharts(animate);
     }
 
     async function fetchStockHistoryData(ticker, animate = true) {
@@ -6803,6 +7516,16 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         // 只有代號、時間區間、K線週期、NAV/個股模式真的改變（使用者主動切換）時才需要重置縮放。
         const seriesKey = `${ticker}|${range}|${intervalStr}|${isNav ? 'NAV' : 'STOCK'}`;
 
+        // 🎮 演練期間：不打真實 Yahoo API，改用「選定歷史日期為界」重新組出這個 range/interval 的資料，
+        // 1D 用當天已模擬揭露到目前時間點的分鐘K；其餘天期（1W/1M/1Y…）一律只抓「模擬今天」以前的歷史資料，
+        // 並在最後補上一根用「今天已揭露的分鐘資料」聚合出的即時未完成K，避免任何長天期圖表提早洩漏未來走勢。
+        if (drillActive) { await drillRenderChartFromCandles(ticker, range, intervalStr, seriesKey, animate, type); return; }
+
+        // 📐 折線圖跟 K 線圖邏輯完全分離：折線圖不用這裡抓到的資料，改成呼叫 fetchLineChartData()
+        // 自己另外用更細的頻率獨立打一次 API，才能湊出 100 個彼此不同的真實節點（見上方函式說明）。
+        if (type === 'LINE') { await fetchLineChartData(ticker, range, seriesKey, animate); return; }
+
+        // 以下是 K 線圖的抓取邏輯，維持原樣、不做任何跟「100 節點」相關的處理
         try {
             const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=${range}&interval=${intervalStr}`)}`;
             const res = await fetch(proxyUrl, { cache: "no-store" }); 
@@ -6851,6 +7574,88 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
                 renderAllCharts(animate); 
             }
         } catch(err) {}
+    }
+
+    // 演練「1W/1M/3M/6M/1Y/2Y/5Y/All」等長天期圖表：把 Yahoo 的 range= 相對「現在」語意，
+    // 改成明確的 period1/period2，邊界訂在「模擬今天」的 00:00（不含今天，今天的走勢改用當天已揭露的
+    // 模擬分鐘資料另外聚合接上去，見 drillFetchHistoryForChart），避免不小心把模擬未來的走勢提早畫出來。
+    const DRILL_RANGE_LOOKBACK_DAYS = { '5d': 12, '1mo': 35, '3mo': 100, '6mo': 200, '1y': 400, '2y': 760, '5y': 1900, 'max': 8000 };
+    function drillPeriodBoundsForRange(range, simDate) {
+        const end = new Date(simDate); end.setHours(0, 0, 0, 0);
+        const start = new Date(end);
+        start.setDate(start.getDate() - (DRILL_RANGE_LOOKBACK_DAYS[range] || 400));
+        return { p1: Math.floor(start.getTime() / 1000), p2: Math.floor(end.getTime() / 1000) };
+    }
+
+    async function drillFetchHistoryForChart(ticker, range, intervalStr) {
+        const simDate = getDrillCurrentDate();
+
+        if (range === '1d') {
+            // 當天走勢：直接用「目前模擬時間」已揭露的分鐘K（不論實際抓到的是哪個頻率）
+            // 🩹 simTime 尚未被 loadDrillDay() 設定前（開始演練/換日的極短暫瞬間），一律視為「還沒揭露任何資料」，
+            // 絕對不能因為 simTime 是 null 就退回顯示「整天」——那等於提前洩漏當天全部走勢。
+            const data = await fetchDrillDayCandles(ticker, simDate);
+            const visible = drillMeta.simTime ? data.candles.filter(c => c.t.getTime() <= drillMeta.simTime.getTime()) : [];
+            return {
+                prices: visible.map(c => c.c),
+                ohlc: visible.map(c => ({ o: c.o, h: c.h, l: c.l, c: c.c })),
+                timestamps: visible.map(c => c.t.getTime()),
+            };
+        }
+
+        // 其餘天期：抓「模擬今天」以前的歷史日/週/月K
+        const { p1, p2 } = drillPeriodBoundsForRange(range, simDate);
+        let prices = [], ohlc = [], timestamps = [];
+        try {
+            const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?period1=${p1}&period2=${p2}&interval=${intervalStr}`)}`;
+            const res = await fetch(proxyUrl, { cache: 'no-store' });
+            const json = await res.json();
+            const result = json && json.chart && json.chart.result && json.chart.result[0];
+            if (result && result.timestamp) {
+                const q = result.indicators.quote[0];
+                result.timestamp.forEach((ts, i) => {
+                    const c = q.close[i];
+                    if (c === null || c === undefined) return;
+                    const o = q.open[i] ?? c, h = q.high[i] ?? c, l = q.low[i] ?? c;
+                    prices.push(c); ohlc.push({ o, h, l, c }); timestamps.push(ts * 1000);
+                });
+            }
+        } catch (e) { /* 抓不到歷史資料就只顯示「今天」這一根 */ }
+
+        // 補上「模擬今天」這一根：用當天已揭露的模擬分鐘資料聚合成一根尚未走完的K棒
+        // 🩹 同上，simTime 未設定前一律視為「今天還沒開始」，不補這一根，避免洩漏未來
+        const todayData = await fetchDrillDayCandles(ticker, simDate);
+        const visibleToday = drillMeta.simTime ? todayData.candles.filter(c => c.t.getTime() <= drillMeta.simTime.getTime()) : [];
+        if (visibleToday.length) {
+            const closesToday = visibleToday.map(c => c.c);
+            const o = visibleToday[0].o, c = closesToday[closesToday.length - 1];
+            const h = Math.max(...visibleToday.map(x => x.h)), l = Math.min(...visibleToday.map(x => x.l));
+            prices.push(c); ohlc.push({ o, h, l, c }); timestamps.push(visibleToday[visibleToday.length - 1].t.getTime());
+        }
+        return { prices, ohlc, timestamps };
+    }
+
+    async function drillRenderChartFromCandles(ticker, range, intervalStr, seriesKey, animate, type) {
+        let { prices, ohlc, timestamps } = await drillFetchHistoryForChart(ticker, range, intervalStr);
+        if (ticker !== currentTicker || !drillActive) return; // 競速保護
+        if (prices.length > 0) {
+            // 📐 固定 100 節點只套用在「折線圖」：K線（KLINE）蠟燭圖完全不受影響，保留每一根真實K棒，
+            // 不強制湊成 100 根，跟正式下單區的規則一致——見 resampleTo100Nodes 說明
+            if (type === 'LINE') {
+                const resampled = resampleTo100Nodes(timestamps, prices, ohlc);
+                prices = resampled.prices; ohlc = resampled.ohlc; timestamps = resampled.timestamps;
+            }
+            const labels = timestamps.map(t => formatChartLabelForRange(t, range));
+            const isNewSeries = stockHistData._seriesKey !== seriesKey;
+            stockHistData._seriesKey = seriesKey;
+            stockHistData.prices = prices;
+            stockHistData.labels = labels;
+            stockHistData.ohlc = ohlc;
+            stockHistData.timestamps = timestamps;
+            updateRSIDisplay(prices);
+            if (isNewSeries) { resetChartZoom(navChart); resetChartZoom(mobileChart); }
+            renderAllCharts(animate);
+        }
     }
 
     function setTradeMode(mode) {
@@ -6981,7 +7786,9 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         const origFee = origSubtotal * feeRate;
         const origTax = mode === 'SELL' ? origSubtotal * taxRate : 0;
         const twdTotalSpend = (origSubtotal + origFee) * rate, twdTotalGet = (origSubtotal - origFee - origTax) * rate, twdFee = origFee * rate, twdTax = origTax * rate;
-        const timestamp = Date.now(), tradeTime = getFullFormattedTimeFromDate(timestamp);
+        // 🎮 演練期間：帳本時間戳記用「模擬時間」而非真實現在，讓交易紀錄跟走勢圖的時間軸對得起來
+        const timestamp = (drillActive && drillMeta && drillMeta.simTime) ? drillMeta.simTime.getTime() : Date.now();
+        const tradeTime = getFullFormattedTimeFromDate(timestamp);
 
         if (mode === 'BUY') {
             const curr = getCurrencyForTicker(ticker), nativeCost = origSubtotal + origFee;
@@ -7901,10 +8708,10 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
     /* =========================================
        🔍 圖表縮放功能（navChart / mobileChart 共用）
        - 電腦：滑鼠滾輪，以游標所在的時間點為中心縮放；放大後按住 Ctrl 可拖曳平移可視範圍
-       - 手機：雙指縮放（比照原生 pinch 手感）
-       - 手機（單指）：快速點兩下（第二下不放開）後上下滑動來縮放——
-         模仿 Google 地圖的單指縮放手勢，方便單手操作時使用。
-         上滑＝放大、下滑＝縮小。
+       - 手機：雙指縮放（比照原生 pinch 手感）；縮放期間不顯示節點預覽（tooltip／游標圓點），
+         避免手指縮放時畫面同時彈出資料節點造成干擾
+       - 手機（單指）：快速點兩下（第二下不放開），改為拖曳平移可視範圍（不再是縮放）——
+         放開第二下後直接左右滑動即可平移目前的可視時間範圍。
        實作方式：不依賴任何縮放外掛，直接控制 Chart.js 類別座標軸（category scale）
        的 min/max（資料索引範圍）來裁切可視範圍。只調整 X（時間）軸的可視範圍，
        刻意不去改動 Y（數值）軸的上下限——避免縮放時數值軸的刻度數量、位置跳動，
@@ -8030,17 +8837,50 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
             if (panActive) { panActive = false; canvas.style.cursor = ''; }
         });
 
-        // --- 手機：雙指縮放 + 單指「快速二次按壓後上下滑動」縮放 ---
+        // --- 手機：雙指縮放（縮放期間隱藏節點預覽） + 單指「快速二次按壓後按住拖曳」平移
+        //     + 兩指同時按住原地不動一陣子 → 改成啟用「區間比較」模式（見 chartIntervalSel） ---
         let pinchActive = false, pinchStartDist = 0, pinchStartRange = null;
-        let dragZoomActive = false, dragStartY = 0, dragStartRange = null;
+        let dragPanActive = false, dragStartX = 0, dragStartRange = null;
         let lastTapTime = 0, lastTapX = 0, lastTapY = 0;
+        // 🔍 兩指按住不動偵測：先不馬上判定是縮放還是區間比較，等一小段時間看手指有沒有移動超過容許誤差
+        const INTERVAL_HOLD_MS = 420, INTERVAL_HOLD_TOLERANCE_PX = 14;
+        let holdTimer = null, holdStartTouches = null;
+
+        // 🩹 縮放（雙指 pinch）時不顯示節點預覽：強制關閉 holdToPreviewPlugin 的持有狀態並清空目前的
+        // active elements／tooltip，避免縮放過程中手指移動被誤判成「停在某個資料點上」而彈出節點預覽
+        function suppressNodePreview() {
+            chart._isPointerHolding = false;
+            chart.setActiveElements([]);
+            chart.tooltip.setActiveElements([], { x: 0, y: 0 });
+            chart.update('none');
+        }
+
+        function beginPinchFromCurrentTouches(touches) {
+            pinchActive = true;
+            pinchStartDist = touchDist(touches[0], touches[1]);
+            pinchStartRange = getChartVisibleRange(chart);
+            suppressNodePreview();
+        }
 
         canvas.addEventListener('touchstart', function (e) {
             if (e.touches.length === 2) {
-                dragZoomActive = false; // 雙指優先，中止可能正在進行的單指拖曳縮放
-                pinchActive = true;
-                pinchStartDist = touchDist(e.touches[0], e.touches[1]);
-                pinchStartRange = getChartVisibleRange(chart);
+                dragPanActive = false; // 雙指優先，中止可能正在進行的單指拖曳平移
+                clearTimeout(holdTimer);
+                holdStartTouches = [
+                    { x: e.touches[0].clientX, y: e.touches[0].clientY },
+                    { x: e.touches[1].clientX, y: e.touches[1].clientY },
+                ];
+                // 先不立刻啟動縮放：等 INTERVAL_HOLD_MS 之後，若手指都還停在原地（容許小誤差），
+                // 就改啟用「區間比較」模式；若這段等待期間手指移動過大，會在 touchmove 裡改成一般縮放
+                holdTimer = setTimeout(() => {
+                    holdTimer = null;
+                    if (!holdStartTouches) return; // 已經被 touchend 取消
+                    const i1 = pixelXToDataIndex(chart, canvas, holdStartTouches[0].x);
+                    const i2 = pixelXToDataIndex(chart, canvas, holdStartTouches[1].x);
+                    suppressNodePreview();
+                    startChartIntervalSelection(canvas.id, i1);
+                    updateChartIntervalSelection(canvas.id, i2);
+                }, INTERVAL_HOLD_MS);
                 e.preventDefault();
                 return;
             }
@@ -8050,9 +8890,9 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
                 const isQuickSecondTap = (now - lastTapTime < 320) &&
                     touchDist({ clientX: lastTapX, clientY: lastTapY }, t) < 40;
                 if (isQuickSecondTap) {
-                    // 這是快速的第二下按壓：視為縮放手勢的開始，攔截這次事件避免觸發 iOS 原生雙擊放大鏡
-                    dragZoomActive = true;
-                    dragStartY = t.clientY;
+                    // 這是快速的第二下按壓（雙擊後按住）：視為拖曳平移手勢的開始，攔截這次事件避免觸發 iOS 原生雙擊放大鏡
+                    dragPanActive = true;
+                    dragStartX = t.clientX;
                     dragStartRange = getChartVisibleRange(chart);
                     e.preventDefault();
                 }
@@ -8060,30 +8900,57 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         }, { passive: false });
 
         canvas.addEventListener('touchmove', function (e) {
-            if (pinchActive && e.touches.length === 2) {
+            if (e.touches.length === 2) {
                 e.preventDefault();
-                const d = touchDist(e.touches[0], e.touches[1]);
-                if (!d || !pinchStartDist) return;
-                const scaleRatio = d / pinchStartDist; // 手指分開＝放大
-                applyZoomRatio(pinchStartRange, scaleRatio, (pinchStartRange.min + pinchStartRange.max) / 2);
+                // 🔍 已經是區間比較模式：用兩指目前位置持續更新區間範圍（不縮放）
+                if (chartIntervalSel.active && chartIntervalSel.canvasId === canvas.id) {
+                    const i1 = pixelXToDataIndex(chart, canvas, e.touches[0].clientX);
+                    const i2 = pixelXToDataIndex(chart, canvas, e.touches[1].clientX);
+                    chartIntervalSel.i1 = i1; // 兩指都可能移動，直接兩端一起更新（不是固定分身＋游標的單邊更新）
+                    updateChartIntervalSelection(canvas.id, i2);
+                    return;
+                }
+                // 還在等待判斷「是不是按住不動」：手指移動超過容許誤差，判定為一般縮放手勢，改走原本的 pinch 邏輯
+                if (holdTimer && holdStartTouches) {
+                    const d0 = Math.hypot(e.touches[0].clientX - holdStartTouches[0].x, e.touches[0].clientY - holdStartTouches[0].y);
+                    const d1 = Math.hypot(e.touches[1].clientX - holdStartTouches[1].x, e.touches[1].clientY - holdStartTouches[1].y);
+                    if (d0 > INTERVAL_HOLD_TOLERANCE_PX || d1 > INTERVAL_HOLD_TOLERANCE_PX) {
+                        clearTimeout(holdTimer); holdTimer = null; holdStartTouches = null;
+                        beginPinchFromCurrentTouches(e.touches); // 用「現在」這一刻的兩指位置當作縮放起點
+                    }
+                    return;
+                }
+                if (pinchActive) {
+                    suppressNodePreview(); // 縮放過程中持續保持節點預覽關閉
+                    const d = touchDist(e.touches[0], e.touches[1]);
+                    if (!d || !pinchStartDist) return;
+                    const scaleRatio = d / pinchStartDist; // 手指分開＝放大
+                    applyZoomRatio(pinchStartRange, scaleRatio, (pinchStartRange.min + pinchStartRange.max) / 2);
+                }
                 return;
             }
-            if (dragZoomActive && e.touches.length === 1) {
+            if (dragPanActive && e.touches.length === 1) {
                 e.preventDefault();
                 const t = e.touches[0];
-                const deltaY = dragStartY - t.clientY; // 手指往上滑為正值
-                // 每上滑 150px 縮放為原本 2 倍（下滑則反向縮小），指數映射讓手感較線性好控制
-                const scaleRatio = Math.pow(2, deltaY / 150);
-                applyZoomRatio(dragStartRange, scaleRatio, (dragStartRange.min + dragStartRange.max) / 2);
+                const rect = canvas.getBoundingClientRect();
+                if (rect.width <= 0) return;
+                const span = dragStartRange.max - dragStartRange.min;
+                const deltaIdx = (t.clientX - dragStartX) / rect.width * span;
+                // 手指往右拖＝畫面內容跟著往右移＝顯示更早的資料，故索引往回退（比照電腦版 Ctrl+拖曳平移）
+                requestVisibleRange(dragStartRange.min - deltaIdx, dragStartRange.max - deltaIdx);
             }
         }, { passive: false });
 
         function onTouchEnd(e) {
-            if (e.touches.length < 2) { pinchActive = false; pinchStartDist = 0; pinchStartRange = null; }
+            if (e.touches.length < 2) {
+                pinchActive = false; pinchStartDist = 0; pinchStartRange = null;
+                clearTimeout(holdTimer); holdTimer = null; holdStartTouches = null;
+                if (chartIntervalSel.active && chartIntervalSel.canvasId === canvas.id) endChartIntervalSelection();
+            }
             if (e.touches.length === 0) {
-                if (dragZoomActive) {
-                    dragZoomActive = false;
-                    lastTapTime = 0; // 拖曳縮放結束後歸零，避免緊接著的放開被誤判為下一次的「快速二次按壓」
+                if (dragPanActive) {
+                    dragPanActive = false;
+                    lastTapTime = 0; // 拖曳平移結束後歸零，避免緊接著的放開被誤判為下一次的「快速二次按壓」
                 } else if (e.changedTouches && e.changedTouches.length) {
                     const t = e.changedTouches[0];
                     lastTapTime = Date.now();
@@ -8093,7 +8960,42 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
             }
         }
         canvas.addEventListener('touchend', onTouchEnd, { passive: true });
-        canvas.addEventListener('touchcancel', function () { pinchActive = false; dragZoomActive = false; }, { passive: true });
+        canvas.addEventListener('touchcancel', function () {
+            pinchActive = false; dragPanActive = false;
+            clearTimeout(holdTimer); holdTimer = null; holdStartTouches = null;
+            if (chartIntervalSel.active && chartIntervalSel.canvasId === canvas.id) endChartIntervalSelection();
+        }, { passive: true });
+
+        // --- 電腦：游標停在圖表上時按住空白鍵，在游標所在位置建立一個「分身」（放開消失），
+        //     分身固定不動、游標本體持續移動，兩者之間形成區間比較 ---
+        let isHovering = false, hoverIndex = null;
+        canvas.addEventListener('mouseenter', function () { isHovering = true; });
+        canvas.addEventListener('mouseleave', function () {
+            isHovering = false;
+            if (chartIntervalSel.active && chartIntervalSel.canvasId === canvas.id && !chartIntervalSel._spaceHeld) endChartIntervalSelection();
+        });
+        canvas.addEventListener('mousemove', function (e) {
+            hoverIndex = pixelXToDataIndex(chart, canvas, e.clientX);
+            if (chartIntervalSel.active && chartIntervalSel.canvasId === canvas.id && chartIntervalSel._spaceHeld) {
+                updateChartIntervalSelection(canvas.id, hoverIndex);
+            }
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.code !== 'Space' || e.repeat) return;
+            if (document.activeElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return; // 避免跟表單輸入的空白鍵衝突
+            if (!isHovering || hoverIndex === null) return;
+            if (chartIntervalSel.active) return; // 已經在其他圖表上啟用中，不重複啟動
+            e.preventDefault(); // 避免頁面被空白鍵捲動
+            chartIntervalSel._spaceHeld = true;
+            startChartIntervalSelection(canvas.id, hoverIndex);
+        });
+        document.addEventListener('keyup', function (e) {
+            if (e.code !== 'Space') return;
+            if (chartIntervalSel.active && chartIntervalSel.canvasId === canvas.id && chartIntervalSel._spaceHeld) {
+                chartIntervalSel._spaceHeld = false;
+                endChartIntervalSelection();
+            }
+        });
     }
 
     attachChartZoomGestures(document.getElementById('navChart'), navChart);
@@ -8175,6 +9077,9 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
     // 資料就緒後「新圖表」再從相同的下方位置翻轉回正面，與切換按鈕的圖示旋轉同步完成整個替換過程
     async function toggleDesktopChartMode() {
         if (isChartFlipping) return;
+        // 🎮 演練期間鎖定在「個股」模式：NAV（帳戶淨值）歷史是跟著真實牆上時鐘記錄的，
+        // 混進演練的模擬時間軸會對不齊，故停用切換（按鈕本身也已在演練期間隱藏，見 body.drilling CSS）
+        if (drillActive) return;
         isChartFlipping = true;
 
         const wrapper = document.querySelector('#chart-container .chart-wrapper');
@@ -8319,20 +9224,124 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     }
 
-    function getStockDatasets(data, showNodes, densityVal) {
+    // 🔍📏 圖表區間比較工具：桌機在圖表上按住游標時按空白鍵、在游標處建立一個「分身」（放開消失），
+    // 分身與游標本體之間形成一個區間；手機則是兩指同時按住原地不動一陣子後啟用，改用兩指位置決定區間。
+    // 顯示區間漲跌金額與百分比，區間外的圖表壓暗；折線圖的區間內另外依區間自己的漲跌獨立判色，
+    // K 線圖的區間內維持每根K棒原本自己的紅綠（不重新判色），僅套用「區間外壓暗」與顯示漲跌幅度。
+    let chartIntervalSel = { active: false, canvasId: null, i1: null, i2: null };
+
+    function pixelXToDataIndex(chart, canvas, clientX) {
+        const rect = canvas.getBoundingClientRect();
+        let idx = null;
+        try {
+            const xScale = chart.scales && chart.scales.x;
+            if (xScale && typeof xScale.getValueForPixel === 'function') {
+                const v = xScale.getValueForPixel(clientX - rect.left);
+                if (typeof v === 'number' && !isNaN(v)) idx = v;
+            }
+        } catch (e) {}
+        if (idx === null) return null;
+        const totalLen = (chart.data.labels || []).length;
+        if (totalLen === 0) return null;
+        return Math.max(0, Math.min(totalLen - 1, Math.round(idx)));
+    }
+
+    // 🩹 拖曳過程（滑鼠移動／手指移動）會非常頻繁地觸發 updateChartIntervalSelection，若每次都立刻
+    // renderAllCharts 容易造成明顯延遲；用 requestAnimationFrame 節流，每個影格最多重繪一次
+    let intervalRenderRafId = null;
+    function scheduleIntervalRender() {
+        if (intervalRenderRafId) return;
+        intervalRenderRafId = requestAnimationFrame(() => {
+            intervalRenderRafId = null;
+            renderAllCharts(false);
+            updateChartIntervalLabel();
+        });
+    }
+
+    function startChartIntervalSelection(canvasId, initialIndex) {
+        if (initialIndex === null) return;
+        chartIntervalSel.active = true;
+        chartIntervalSel.canvasId = canvasId;
+        chartIntervalSel.i1 = initialIndex;
+        chartIntervalSel.i2 = initialIndex;
+        renderAllCharts(false);
+        updateChartIntervalLabel();
+    }
+    function updateChartIntervalSelection(canvasId, newIndex) {
+        if (!chartIntervalSel.active || chartIntervalSel.canvasId !== canvasId || newIndex === null) return;
+        if (chartIntervalSel.i2 === newIndex) return;
+        chartIntervalSel.i2 = newIndex;
+        scheduleIntervalRender();
+    }
+    function endChartIntervalSelection() {
+        if (!chartIntervalSel.active) return;
+        if (intervalRenderRafId) { cancelAnimationFrame(intervalRenderRafId); intervalRenderRafId = null; }
+        chartIntervalSel.active = false;
+        chartIntervalSel.canvasId = null;
+        chartIntervalSel.i1 = null;
+        chartIntervalSel.i2 = null;
+        hideChartIntervalLabel();
+        renderAllCharts(false);
+    }
+
+    // 依目前區間兩端的索引，算出漲跌金額／百分比，更新對應圖表（桌機／手機各自獨立）的浮動標籤位置與內容
+    function updateChartIntervalLabel() {
+        if (!chartIntervalSel.active) return;
+        const isMobileChart = chartIntervalSel.canvasId === 'mobileStockChart';
+        const chart = isMobileChart ? mobileChart : navChart;
+        const canvas = document.getElementById(chartIntervalSel.canvasId);
+        const labelEl = document.getElementById(isMobileChart ? 'chart-interval-label-mobile' : 'chart-interval-label');
+        if (!chart || !canvas || !labelEl) return;
+        const prices = stockHistData.prices || [];
+        const i1 = chartIntervalSel.i1, i2 = chartIntervalSel.i2;
+        if (i1 === null || i2 === null || !prices.length || i1 >= prices.length || i2 >= prices.length) { labelEl.style.display = 'none'; return; }
+        const loIdx = Math.min(i1, i2), hiIdx = Math.max(i1, i2);
+        const startPrice = prices[loIdx], endPrice = prices[hiIdx];
+        const delta = endPrice - startPrice;
+        const pct = startPrice !== 0 ? (delta / startPrice) * 100 : 0;
+        labelEl.innerText = `${delta >= 0 ? '+' : ''}${delta.toFixed(2)}\n${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
+        const rootStyle = getComputedStyle(document.documentElement);
+        labelEl.style.color = delta >= 0 ? (rootStyle.getPropertyValue('--color-up').trim() || '#00ffaa') : (rootStyle.getPropertyValue('--color-down').trim() || '#ff4560');
+        try {
+            const xPix1 = chart.scales.x.getPixelForValue(i1), xPix2 = chart.scales.x.getPixelForValue(i2);
+            labelEl.style.left = `${(xPix1 + xPix2) / 2}px`;
+            labelEl.style.display = 'block';
+        } catch (e) { labelEl.style.display = 'none'; }
+    }
+    function hideChartIntervalLabel() {
+        const a = document.getElementById('chart-interval-label'), b = document.getElementById('chart-interval-label-mobile');
+        if (a) a.style.display = 'none';
+        if (b) b.style.display = 'none';
+    }
+
+    function getStockDatasets(data, showNodes, densityVal, canvasId) {
         const chartType = document.getElementById("cfg-chart-type") ? document.getElementById("cfg-chart-type").value : 'KLINE';
-        
+        // 顏色改讀取即時的 --color-up / --color-down（僅代表漲跌方向的專用變數），
+        // 讓「紅綠反轉」設定能連動走勢圖配色，但不影響其他用途的紅／綠色
+        const rootStyle = getComputedStyle(document.documentElement);
+        const upHex = rootStyle.getPropertyValue('--color-up').trim() || '#00ffaa';
+        const downHex = rootStyle.getPropertyValue('--color-down').trim() || '#ff4560';
+
+        // 🔍 是否有作用中的區間比較，且正是這張圖表
+        const sel = (chartIntervalSel.active && canvasId && chartIntervalSel.canvasId === canvasId && chartIntervalSel.i1 !== null && chartIntervalSel.i2 !== null) ? chartIntervalSel : null;
+        const selMin = sel ? Math.min(sel.i1, sel.i2) : null;
+        const selMax = sel ? Math.max(sel.i1, sel.i2) : null;
+        const DIM_ALPHA = 0.18; // 區間外壓暗透明度
+
         if (chartType === 'KLINE') {
-            // 顏色改讀取即時的 --color-up / --color-down（僅代表漲跌方向的專用變數），
-            // 讓「紅綠反轉」設定能連動 K 線配色，但不影響其他用途的紅／綠色
-            const rootStyle = getComputedStyle(document.documentElement);
-            const upHex = rootStyle.getPropertyValue('--color-up').trim() || '#00ffaa';
-            const downHex = rootStyle.getPropertyValue('--color-down').trim() || '#ff4560';
             const upSolid = hexToRgba(upHex, 0.9);
             const downSolid = hexToRgba(downHex, 0.9);
 
-            const colors = data.ohlc.map(d => d.c >= d.o ? upSolid : downSolid);
-            const borderColors = data.ohlc.map(d => d.c >= d.o ? upHex : downHex);
+            // K 線圖：區間內維持每根K棒原本自己的紅綠（不套用區間自己的漲跌判色），區間外整體壓暗
+            const colors = data.ohlc.map((d, i) => {
+                const inRange = !sel || (i >= selMin && i <= selMax);
+                return inRange ? (d.c >= d.o ? upSolid : downSolid) : hexToRgba(d.c >= d.o ? upHex : downHex, DIM_ALPHA);
+            });
+            const borderColors = data.ohlc.map((d, i) => {
+                const inRange = !sel || (i >= selMin && i <= selMax);
+                const hex = d.c >= d.o ? upHex : downHex;
+                return inRange ? hex : hexToRgba(hex, DIM_ALPHA + 0.15);
+            });
             const dataBody = data.ohlc.map(d => {
                 let o = d.o, c = d.c;
                 if(Math.abs(o - c) < 0.0001) c = o + 0.01; 
@@ -8345,13 +9354,64 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
                 { label: 'Wick', type: 'bar', data: dataWick, backgroundColor: borderColors, barThickness: 2, grouped: false, order: 1 } 
             ];
         } else {
-            return [{ label: 'Stock', type: 'line', data: data.prices, borderColor: '#00ffaa', backgroundColor: 'rgba(0, 255, 170, 0.05)', borderWidth: 1.5, tension: 0.2, fill: true, pointRadius: computePointRadiusArray(data.prices.length, showNodes, densityVal) }];
+            // 折線圖：整條線先依「這次選定時間範圍」頭尾的漲跌決定主色（取代原本寫死的固定綠色），
+            // 若有作用中的區間比較，區間內的線段改成依「區間自己」的漲跌獨立判色，區間外壓暗
+            const overallUp = data.prices.length > 1 ? data.prices[data.prices.length - 1] >= data.prices[0] : true;
+            const mainColor = overallUp ? upHex : downHex;
+            const mainFill = hexToRgba(mainColor, 0.05);
+
+            let segmentStyle;
+            if (sel) {
+                const intervalUp = selMax > selMin ? data.prices[selMax] >= data.prices[selMin] : overallUp;
+                const intervalColor = intervalUp ? upHex : downHex;
+                const dimColor = hexToRgba(mainColor, DIM_ALPHA + 0.25);
+                const dimFill = hexToRgba(mainColor, 0.02);
+                segmentStyle = {
+                    borderColor: (ctx) => (ctx.p0DataIndex >= selMin && ctx.p1DataIndex <= selMax) ? intervalColor : dimColor,
+                    backgroundColor: (ctx) => (ctx.p0DataIndex >= selMin && ctx.p1DataIndex <= selMax) ? hexToRgba(intervalColor, 0.12) : dimFill,
+                };
+            }
+
+            return [{
+                label: 'Stock', type: 'line', data: data.prices,
+                borderColor: mainColor, backgroundColor: mainFill,
+                borderWidth: 1.5, tension: 0.2, fill: true,
+                pointRadius: computePointRadiusArray(data.prices.length, showNodes, densityVal),
+                segment: segmentStyle,
+            }];
         }
     }
 
     // 👁️ 個股走勢圖：歷史買賣點標記
     // chartTradeMarkerInfo[dataIndex] = { buys: [...ledger紀錄], sells: [...ledger紀錄] }，供 tooltip 顯示明細用
     let chartTradeMarkerInfo = {};
+
+    // 👁️✨ 小眼睛開關的顯示/隱藏：不要直接切換 display 造成憑空出現/消失，改成觸發 eyeJellySlideIn/Out
+    // 這兩組 CSS 動畫（滑入＋碰撞回彈／被撞縮再滑出），詳見 CSS 裡對應的 @keyframes 說明
+    function animateEyeToggleVisibility(btn, show) {
+        if (!btn) return;
+        // 🩹 若快速連續切換（退場動畫還沒播完就又要求顯示），先取消上一次的「延遲隱藏」計時器，
+        // 否則等它稍後觸發時會把「這次剛顯示出來」的按鈕又蓋回 display:none
+        if (btn._eyeHideTimer) { clearTimeout(btn._eyeHideTimer); btn._eyeHideTimer = null; }
+        const currentlyVisible = btn.style.display !== 'none';
+        if (show) {
+            if (currentlyVisible && !btn.classList.contains('eye-anim-out')) return; // 已經穩定顯示中，不重複播放
+            btn.style.display = 'flex';
+            btn.classList.remove('eye-anim-out');
+            void btn.offsetWidth; // 強制 reflow，確保剛移除的 class 不會讓瀏覽器誤判動畫沒有變化而跳過重播
+            btn.classList.add('eye-anim-in');
+        } else {
+            if (!currentlyVisible) return; // 已經是隱藏狀態，不重複播放退場動畫
+            btn.classList.remove('eye-anim-in');
+            void btn.offsetWidth;
+            btn.classList.add('eye-anim-out');
+            btn._eyeHideTimer = setTimeout(() => {
+                btn.style.display = 'none';
+                btn.classList.remove('eye-anim-out');
+                btn._eyeHideTimer = null;
+            }, 320);
+        }
+    }
 
     function updateTradeMarkerToggleUI() {
         const btn = document.getElementById('chart-trade-marker-toggle');
@@ -8497,8 +9557,9 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         }
 
         // 👁️ 歷史買賣點標記開關：僅個股走勢模式下顯示（組合總淨值走勢無個股買賣點可標），位置在對標按鈕下方
+        // 🩹 切換模式（NAV↔個股）時不要直接 display 切換憑空出現/消失，改成果凍滑入碰撞動畫
         const tradeMarkerBtn = document.getElementById('chart-trade-marker-toggle');
-        if (tradeMarkerBtn) tradeMarkerBtn.style.display = showNav ? 'none' : 'flex';
+        animateEyeToggleVisibility(tradeMarkerBtn, !showNav);
 
         // 📊 基準指數對標開關：組合總淨值 / 個股走勢模式皆可使用，按鈕固定在小眼睛上方
         const benchmarkBtn = document.getElementById('benchmark-toggle-btn');
@@ -8610,7 +9671,7 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
                 document.getElementById("main-chart-title").innerHTML = `<i class="fa-solid fa-chart-line" style="color:${getMarketStateColor()}" title="${getMarketStateLabel()}"></i> <span class="hide-on-mobile" style="margin-left:4px;">${currentTicker}</span> <span class="hide-on-mobile">${titlePrefix}</span>`;
                 navChart.data.labels = stockHistData.labels;
                 const tradeMarkerDatasets = buildTradeMarkerDatasets(stockHistData);
-                applyChartDatasets(navChart, getStockDatasets(stockHistData, showNodes, densityVal).concat(tradeMarkerDatasets));
+                applyChartDatasets(navChart, getStockDatasets(stockHistData, showNodes, densityVal, 'navChart').concat(tradeMarkerDatasets));
             }
         }
         
@@ -8643,7 +9704,7 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
                 return Math.round(value);
             };
             const mTradeMarkerDatasets = buildTradeMarkerDatasets(stockHistData);
-            applyChartDatasets(mobileChart, getStockDatasets(stockHistData, showNodes, mDensity).concat(mTradeMarkerDatasets));
+            applyChartDatasets(mobileChart, getStockDatasets(stockHistData, showNodes, mDensity, 'mobileStockChart').concat(mTradeMarkerDatasets));
         }
         
 
@@ -9856,6 +10917,7 @@ ${summaryText}
             cloudState.unlockedAchievements = cloudState.unlockedAchievements || [];
             cloudState.friends = cloudState.friends || [];
             cloudState.achvShowcase = cloudState.achvShowcase || [];
+            cloudState.practiceDrills = cloudState.practiceDrills || [];
 
             state = cloudState;
             persistAccountState(active.storageKey, state);
@@ -9905,6 +10967,9 @@ ${summaryText}
         if (selectedBenchmark) fetchBenchmarkHistoryData();
 
         setInterval(async () => {
+            // 🎮 演練期間暫停真實報價輪詢：畫面改由使用者手動推進的模擬時鐘驅動（見 drillTick），
+            // 避免這裡的即時真實報價把演練虛擬帳戶的畫面蓋回真實現在的行情
+            if (drillActive) return;
             await fetchAllQuotesBatched();
             updateLiveNavNode();
             
