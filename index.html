@@ -287,9 +287,11 @@
         /* 🔍📏 圖表區間比較：漲跌金額／百分比浮動標籤（桌機空白鍵分身、手機兩指按住觸發時顯示） */
         .chart-interval-label {
             display: none; position: absolute; top: 6px; z-index: 40; transform: translateX(-50%);
-            background: rgba(10,10,12,0.92); padding: 5px 10px; border-radius: 6px;
+            background: rgba(18, 18, 18, 0.45); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+            padding: 5px 10px; border-radius: 8px;
             font-size: 11px; font-weight: bold; line-height: 1.5; text-align: center;
-            white-space: pre-line; pointer-events: none; border: 1px solid rgba(255,255,255,0.15);
+            white-space: pre-line; pointer-events: none; border: 1px solid rgba(255,255,255,0.12);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.4);
         }
         .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-shrink: 0; }
         
@@ -386,6 +388,13 @@
         .tf-btn { position: relative; z-index: 2; background: transparent; border: none; color: #666; padding: 4px 11px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; transition: color 0.2s; }
         .tf-btn.active { color: #fff; }
         
+        /* 🩹 修復：滑鼠點擊這些圖表工具列按鈕後，按鈕會保持「已聚焦」狀態，瀏覽器預設會一直顯示跟按 Tab
+           鍵切換焦點時一樣的白色外框，直到再點別的地方才消失——用滑鼠點擊不需要這個視覺提示（不像鍵盤
+           操作需要外框告訴使用者「現在焦點在哪」），改用 :focus-visible 只在真正用鍵盤 Tab 切換過來時才顯示，
+           滑鼠點擊觸發的一般 :focus 則不顯示外框。 */
+        .tf-btn:focus, .standalone-mode-btn:focus, .chart-marker-eye-btn:focus { outline: none; }
+        .tf-btn:focus-visible, .standalone-mode-btn:focus-visible, .chart-marker-eye-btn:focus-visible { outline: 2px solid var(--color-acc); outline-offset: 2px; }
+
         .standalone-mode-btn { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: transparent; border: 1px solid transparent; color: #aaa; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1); -webkit-tap-highlight-color: transparent; }
         /* 🩹 修復：手機觸控沒有真正的「滑鼠移開」事件，:hover 套用後會像殘留底色一樣卡住不消失，
            因此 hover 樣式只在「真的有滑鼠且為精準指標」的裝置上套用；觸控裝置改用 :active 做按下瞬間的回饋，
@@ -8903,11 +8912,14 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
             if (e.touches.length === 2) {
                 e.preventDefault();
                 // 🔍 已經是區間比較模式：用兩指目前位置持續更新區間範圍（不縮放）
+                // 🩹 這裡原本只有 i2 走「有改變才重繪＋節流」的正規路徑，i1 卻是直接改變數、完全繞過重繪判斷——
+                // 兩指的觸控順序（touches[0]/[1]）在整個手勢過程中是固定的（由誰先按下決定，不是誰在左邊），
+                // 導致固定被指定為 i1 的那一指移動時完全不會觸發重繪，只有恰好另一指也跟著微幅晃動時才會連帶更新，
+                // 造成兩個邊界一邊順暢、一邊卡頓的不對稱現象。改成兩指共用同一個「有任一邊改變就重繪」的函式。
                 if (chartIntervalSel.active && chartIntervalSel.canvasId === canvas.id) {
                     const i1 = pixelXToDataIndex(chart, canvas, e.touches[0].clientX);
                     const i2 = pixelXToDataIndex(chart, canvas, e.touches[1].clientX);
-                    chartIntervalSel.i1 = i1; // 兩指都可能移動，直接兩端一起更新（不是固定分身＋游標的單邊更新）
-                    updateChartIntervalSelection(canvas.id, i2);
+                    updateChartIntervalSelectionBoth(canvas.id, i1, i2);
                     return;
                 }
                 // 還在等待判斷「是不是按住不動」：手指移動超過容許誤差，判定為一般縮放手勢，改走原本的 pinch 邏輯
@@ -8986,6 +8998,15 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
             if (!isHovering || hoverIndex === null) return;
             if (chartIntervalSel.active) return; // 已經在其他圖表上啟用中，不重複啟動
             e.preventDefault(); // 避免頁面被空白鍵捲動
+            // 🩹 修復：如果先前用滑鼠點過時間區段／圖表切換等按鈕，那個按鈕點擊後會保持「已聚焦」
+            // （只是套用 :focus-visible 後平常不會顯示外框）；但只要之後「有任何鍵盤事件」發生，
+            // 瀏覽器就會重新判定目前聚焦的元素該不該顯示外框，判定結果通常是「有鍵盤操作了，應該顯示」，
+            // 於是這裡按下的空白鍵——即使呼叫了 preventDefault() 阻止它原本「點擊目前聚焦按鈕」的預設行為——
+            // 仍會讓那個按鈕冒出白色外框。並不是空白鍵本身的預設行為造成的，是瀏覽器對 :focus-visible
+            // 的重新判定，preventDefault 對此無效，唯一辦法是主動把焦點從那個按鈕上移開。
+            if (document.activeElement && document.activeElement !== document.body && typeof document.activeElement.blur === 'function') {
+                document.activeElement.blur();
+            }
             chartIntervalSel._spaceHeld = true;
             startChartIntervalSelection(canvas.id, hoverIndex);
         });
@@ -9273,6 +9294,16 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         chartIntervalSel.i2 = newIndex;
         scheduleIntervalRender();
     }
+    // 📱 手機兩指版本：兩指都可能同時移動，用這個函式取代上面單邊（僅 i2）的版本，
+    // 只要「任一邊」的索引真的改變了就重繪，兩指的更新路徑完全對稱，不會有一邊卡頓的問題
+    function updateChartIntervalSelectionBoth(canvasId, newI1, newI2) {
+        if (!chartIntervalSel.active || chartIntervalSel.canvasId !== canvasId) return;
+        if (newI1 === null || newI2 === null) return;
+        if (chartIntervalSel.i1 === newI1 && chartIntervalSel.i2 === newI2) return;
+        chartIntervalSel.i1 = newI1;
+        chartIntervalSel.i2 = newI2;
+        scheduleIntervalRender();
+    }
     function endChartIntervalSelection() {
         if (!chartIntervalSel.active) return;
         if (intervalRenderRafId) { cancelAnimationFrame(intervalRenderRafId); intervalRenderRafId = null; }
@@ -9355,12 +9386,18 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
             ];
         } else {
             // 折線圖：整條線先依「這次選定時間範圍」頭尾的漲跌決定主色（取代原本寫死的固定綠色），
-            // 若有作用中的區間比較，區間內的線段改成依「區間自己」的漲跌獨立判色，區間外壓暗
+            // 若有作用中的區間比較，區間內的線段改成依「區間自己」的漲跌獨立判色，區間外壓暗。
+            // 🩹 游標所在位置實際顯示的那個小圓點，是 Chart.js 滑鼠互動時自動畫出來的「作用中的點」
+            // （由 pointHover 系列屬性控制），不是資料集本身的 pointBackgroundColor／pointRadius 陣列
+            // （那個陣列只決定「平常沒有互動時，哪些點要固定顯示」，跟游標互動時顯示的高亮點是兩回事）。
+            // 之前誤改到後者、還連帶把點的大小/白色外框形狀也一起改掉了；這裡改回原本單純的
+            // pointRadius 陣列（形狀完全復原），只針對 pointHoverBackgroundColor／pointHoverBorderColor
+            // 這兩個「游標互動時的顏色」做調整——有作用中的區間時顯示區間自己的漲跌色，否則就跟整體同色。
             const overallUp = data.prices.length > 1 ? data.prices[data.prices.length - 1] >= data.prices[0] : true;
             const mainColor = overallUp ? upHex : downHex;
             const mainFill = hexToRgba(mainColor, 0.05);
 
-            let segmentStyle;
+            let segmentStyle, hoverColor = mainColor;
             if (sel) {
                 const intervalUp = selMax > selMin ? data.prices[selMax] >= data.prices[selMin] : overallUp;
                 const intervalColor = intervalUp ? upHex : downHex;
@@ -9370,6 +9407,7 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
                     borderColor: (ctx) => (ctx.p0DataIndex >= selMin && ctx.p1DataIndex <= selMax) ? intervalColor : dimColor,
                     backgroundColor: (ctx) => (ctx.p0DataIndex >= selMin && ctx.p1DataIndex <= selMax) ? hexToRgba(intervalColor, 0.12) : dimFill,
                 };
+                hoverColor = intervalColor;
             }
 
             return [{
@@ -9377,6 +9415,8 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
                 borderColor: mainColor, backgroundColor: mainFill,
                 borderWidth: 1.5, tension: 0.2, fill: true,
                 pointRadius: computePointRadiusArray(data.prices.length, showNodes, densityVal),
+                pointHoverBackgroundColor: hoverColor,
+                pointHoverBorderColor: hoverColor,
                 segment: segmentStyle,
             }];
         }
