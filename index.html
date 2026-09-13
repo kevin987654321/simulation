@@ -100,17 +100,8 @@
             font-family: "Inter", "Microsoft JhengHei", sans-serif;
             margin: 0; padding: 0; height: 100dvh; width: 100vw;
             overflow: hidden; overscroll-behavior: none; display: flex;
-        }
-
-        /* 🩹 修復「加入主畫面」（iOS 獨立模式）啟動時，頂部出現一大段空白、選單被往下推太多的排版問題：
-           這行原本連 html 一起寫成 `html, body { padding-top: env(safe-area-inset-top); }`，
-           但 <body> 是包在 <html> 裡面的，兩個元素都套用同一份安全區留白，會疊加算兩次
-           （html 的內容區先被自己的 padding-top 往下推一次，body 又在裡面被自己的 padding-top 再推一次）。
-           在一般 Safari 分頁裡因為 env(safe-area-inset-top) 是 0，兩次疊加也還是 0，完全看不出異狀；
-           但在「加入主畫面」以獨立模式全螢幕啟動時，這個值是真正的瀏海／狀態列高度，疊加兩次就變成將近
-           兩倍的空白，這正是舊圖示（狀態列高度只套用一次，顯示正常）跟新加入的圖示（套用兩次，跑版）
-           之間的差異來源。只保留在 body 上套用一次即可。 */
-        body {
+            
+            /* 3. 建議補上這行：避免透明狀態列的時間/電量與你的網頁內容重疊 */
             padding-top: env(safe-area-inset-top);
         }
 
@@ -8861,7 +8852,7 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         let dragPanActive = false, dragStartX = 0, dragStartRange = null;
         let lastTapTime = 0, lastTapX = 0, lastTapY = 0;
         // 🔍 兩指按住不動偵測：先不馬上判定是縮放還是區間比較，等一小段時間看手指有沒有移動超過容許誤差
-        const INTERVAL_HOLD_MS = 220, INTERVAL_HOLD_TOLERANCE_PX = 14;
+        const INTERVAL_HOLD_MS = 420, INTERVAL_HOLD_TOLERANCE_PX = 14;
         let holdTimer = null, holdStartTouches = null;
 
         // 🩹 縮放（雙指 pinch）時不顯示節點預覽：強制關閉 holdToPreviewPlugin 的持有狀態並清空目前的
