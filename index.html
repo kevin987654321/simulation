@@ -100,8 +100,17 @@
             font-family: "Inter", "Microsoft JhengHei", sans-serif;
             margin: 0; padding: 0; height: 100dvh; width: 100vw;
             overflow: hidden; overscroll-behavior: none; display: flex;
-            
-            /* 3. 建議補上這行：避免透明狀態列的時間/電量與你的網頁內容重疊 */
+        }
+
+        /* 🩹 修復「加入主畫面」（iOS 獨立模式）啟動時，頂部出現一大段空白、選單被往下推太多的排版問題：
+           這行原本連 html 一起寫成 `html, body { padding-top: env(safe-area-inset-top); }`，
+           但 <body> 是包在 <html> 裡面的，兩個元素都套用同一份安全區留白，會疊加算兩次
+           （html 的內容區先被自己的 padding-top 往下推一次，body 又在裡面被自己的 padding-top 再推一次）。
+           在一般 Safari 分頁裡因為 env(safe-area-inset-top) 是 0，兩次疊加也還是 0，完全看不出異狀；
+           但在「加入主畫面」以獨立模式全螢幕啟動時，這個值是真正的瀏海／狀態列高度，疊加兩次就變成將近
+           兩倍的空白，這正是舊圖示（狀態列高度只套用一次，顯示正常）跟新加入的圖示（套用兩次，跑版）
+           之間的差異來源。只保留在 body 上套用一次即可。 */
+        body {
             padding-top: env(safe-area-inset-top);
         }
 
@@ -955,7 +964,15 @@
             #sidebar-overlay { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 900; backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); opacity: 0; pointer-events: none; transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
             #sidebar-overlay.active { opacity: 1; pointer-events: auto; }
             #sidebar-overlay.dragging { transition: none; }
-            #sidebar { position: fixed; left: 0; top: 0; bottom: 0; height: 100dvh; transform: translateX(-100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 5px 0 20px rgba(0,0,0,0.5); background: rgba(10, 10, 10, 0.95); backdrop-filter: blur(20px); }
+            /* 🩹 修復「加入主畫面」獨立模式下，側邊選單標題緊貼狀態列的排版問題：
+               #sidebar 在手機版是 position:fixed，而 fixed 定位的元素一律直接以「真正的螢幕視窗」為基準，
+               完全不理會任何祖先元素的 padding（就算祖先是 position:relative 也一樣）——這跟 #mobile-header
+               不同，#mobile-header 是 position:absolute、包在 position:relative 的 #content-area 裡面，
+               所以能正確吃到 body 的安全區留白往下推；#sidebar 用 fixed 定位就直接跳過這層保護，
+               永遠貼齊螢幕最頂端。在一般 Safari 分頁裡瀏覽器自己的介面本來就會佔掉頂部空間，看不出異狀；
+               但在「加入主畫面」全螢幕獨立模式下，選單標題就會直接貼著瀏海／狀態列，才會變得很擁擠。
+               這裡額外加回頂部安全區高度，讓 fixed 定位的 #sidebar 也能正確避開狀態列。 */
+            #sidebar { position: fixed; left: 0; top: 0; bottom: 0; height: 100dvh; padding-top: calc(20px + env(safe-area-inset-top)); transform: translateX(-100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 5px 0 20px rgba(0,0,0,0.5); background: rgba(10, 10, 10, 0.95); backdrop-filter: blur(20px); }
             #sidebar.open { transform: translateX(0); }
             #sidebar.dragging { transition: none; }
             
@@ -1067,7 +1084,7 @@
 <div id="sidebar-overlay" onclick="toggleSidebar()"></div>
 
 <aside id="sidebar">
-    <div class="glass-title-text" onclick="switchView('view-achievements', null)" style="cursor:pointer;" title="娛樂中心：成就與好友"><img id="sidebar-logo-img" src="logo.png" width="25" height="25"> ACORNTRADE</div>
+    <div class="glass-title-text" onclick="switchView('view-achievements', null)" style="cursor:pointer;" title="娛樂中心：成就與好友"><img id="sidebar-logo-img" src="logo.png" width="25" height="25" onerror="this.onerror=null; this.outerHTML='<i id=&quot;sidebar-logo-img&quot; class=&quot;fa-solid fa-seedling&quot; style=&quot;font-size:18px;&quot;></i>';"> ACORNTRADE</div>
     <div class="menu-item active" id="menu-item-dashboard" data-view="view-dashboard" onclick="switchView('view-dashboard', this)"><span class="nav-line"></span> 指揮操盤中心</div>
     <div class="menu-item mobile-only" data-view="view-mobile-trade" onclick="switchView('view-mobile-trade', this)"><span class="nav-line"></span> 下單櫃檯</div>
     <div class="menu-item" id="menu-item-cards" data-view="view-cards" onclick="switchView('view-cards', this)"><span class="nav-line"></span> 自選資產卡片</div>
