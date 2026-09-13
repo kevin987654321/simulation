@@ -9285,6 +9285,7 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         chartIntervalSel.canvasId = canvasId;
         chartIntervalSel.i1 = initialIndex;
         chartIntervalSel.i2 = initialIndex;
+        chartIntervalSel._lastIntervalColor = null; // 全新一次選取，清掉上次殘留的顏色記憶
         renderAllCharts(false);
         updateChartIntervalLabel();
     }
@@ -9398,9 +9399,21 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
             const mainFill = hexToRgba(mainColor, 0.05);
 
             let segmentStyle, hoverColor = mainColor;
+            let pointBorderColorVal = mainColor, pointBgColorVal = mainFill;
             if (sel) {
-                const intervalUp = selMax > selMin ? data.prices[selMax] >= data.prices[selMin] : overallUp;
-                const intervalColor = intervalUp ? upHex : downHex;
+                // 🩹 剛開始選取的那一瞬間，區間還沒有寬度（selMin === selMax），這時候沒有「區間自己」的
+                // 漲跌可以判斷，之前退而求其次直接借用「整體」的漲跌色頂著——但整體色很可能跟區間即將呈現的
+                // 顏色是相反的，等使用者一開始拖曳、區間有了寬度、算出真正的區間色時，就會跟這個借用的
+                // 起始顏色不一樣，Chart.js 的 hover 轉場動畫就會忠實地把這個「錯誤的起始色」淡出。
+                // 改成記住「上一次真正算出來、有意義」的區間顏色，寬度是零的這一瞬間就沿用它。
+                let intervalColor;
+                if (selMax > selMin) {
+                    const intervalUp = data.prices[selMax] >= data.prices[selMin];
+                    intervalColor = intervalUp ? upHex : downHex;
+                    sel._lastIntervalColor = intervalColor;
+                } else {
+                    intervalColor = sel._lastIntervalColor || mainColor;
+                }
                 const dimColor = hexToRgba(mainColor, DIM_ALPHA + 0.25);
                 const dimFill = hexToRgba(mainColor, 0.02);
                 segmentStyle = {
@@ -9408,6 +9421,14 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
                     backgroundColor: (ctx) => (ctx.p0DataIndex >= selMin && ctx.p1DataIndex <= selMax) ? hexToRgba(intervalColor, 0.12) : dimFill,
                 };
                 hoverColor = intervalColor;
+                // 🩹 真正的成因在這裡：滑鼠移動時，游標離開的那個點會從「hover 顏色」淡出回「平常（非
+                // hover）狀態」的顏色——但之前只改了 pointHoverBackgroundColor／pointHoverBorderColor，
+                // 平常狀態的顏色從沒設過，會繼續繼承資料集整體的顏色（紅）。所以即使區間全程都是綠色沒有
+                // 翻轉過，只要滑鼠一移動，離開中的那個點依然會從「hover 綠」淡出到「平常紅」，這段淡出
+                // 動畫看起來就是「綠色節點底下冒出紅色殘影」。這裡讓平常狀態的點顏色也比照 segment 的規則、
+                // 依索引落在區間內外決定，跟 hover 顏色統一，離開 hover 時就不會再有顏色不一致的問題。
+                pointBorderColorVal = (ctx) => (ctx.dataIndex >= selMin && ctx.dataIndex <= selMax) ? intervalColor : dimColor;
+                pointBgColorVal = (ctx) => (ctx.dataIndex >= selMin && ctx.dataIndex <= selMax) ? hexToRgba(intervalColor, 0.05) : dimFill;
             }
 
             return [{
@@ -9415,8 +9436,16 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
                 borderColor: mainColor, backgroundColor: mainFill,
                 borderWidth: 1.5, tension: 0.2, fill: true,
                 pointRadius: computePointRadiusArray(data.prices.length, showNodes, densityVal),
-                pointHoverBackgroundColor: hoverColor,
+                // 🩹 原本的空心圓點外觀，其實是 Chart.js 在沒有另外指定 pointBackgroundColor 時，
+                // 自動沿用「資料集本身」的 backgroundColor（這裡是 5% 透明度的極淡填色）／borderColor
+                // （完全不透明）畫出來的效果——淡到看不見的填色＋清楚的實心外框，就是「空心」的由來。
+                // 這裡改成比照同樣的邏輯自己重建：填色一樣用 5% 透明度，外框才是完全不透明的顏色，
+                // 維持原本的空心外觀，只是顏色依區間狀態而定（平常態、hover 態都統一用同一套規則）。
+                pointBackgroundColor: pointBgColorVal,
+                pointBorderColor: pointBorderColorVal,
+                pointHoverBackgroundColor: hexToRgba(hoverColor, 0.05),
                 pointHoverBorderColor: hoverColor,
+                pointHoverBorderWidth: 1.5,
                 segment: segmentStyle,
             }];
         }
