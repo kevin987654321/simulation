@@ -101,8 +101,15 @@
             margin: 0; padding: 0; height: 100dvh; width: 100vw;
             overflow: hidden; overscroll-behavior: none; display: flex;
             
-            /* 3. 建議補上這行：避免透明狀態列的時間/電量與你的網頁內容重疊 */
-            padding-top: env(safe-area-inset-top);
+            /* 🩹 修復（真正根因，已用 debug 標籤實測數據證實）：這裡原本有
+               `padding-top: env(safe-area-inset-top);`。
+               實測發現：iOS Safari 的 100dvh 這個單位，本身就已經把狀態列／瀏海的安全區域
+               高度扣掉了（clientHeight 在有無安全區域的情況下都是 812，完全一致）；
+               這裡卻又手動疊加了一次 env(safe-area-inset-top) 的 padding，等於重複扣了
+               兩次安全區域高度。當 env(safe-area-inset-top) 剛好是 0 時看不出問題，
+               一旦是實際數值（例如新加入主畫面後量到的 62px），整個 App 內容就會被
+               多推下去 62px、也連帶把底部內容擠出可視範圍。100dvh 已經處理過安全區域，
+               不需要再手動補這行，故整段移除。 */
         }
 
         /* 🖥️ 電腦版背景：改為純色 #0B0B0B（不使用漸層），手機版（≤768px）維持上方的漸層背景不變 */
