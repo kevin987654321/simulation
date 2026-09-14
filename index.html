@@ -13,17 +13,6 @@
     <meta name="theme-color" content="#030303">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
-    <!-- 🩹 修復（真正根因，已實測驗證）：原本這裡是 black-translucent。
-         這個值會讓 iOS 把「加入主畫面」當下的這個捷徑，永久設定成「貼齊螢幕邊緣、
-         狀態列半透明蓋在網頁內容上方」的全螢幕模式——這個設定是在「加入主畫面那一刻」
-         寫死進該捷徑的啟動設定裡，之後不管網頁程式碼／CSS／manifest.json 怎麼更新都不會
-         重新套用，除非使用者刪除該捷徑重新加入。而只要進入這個全螢幕模式，就會直接踩到
-         iOS WebKit 一個已知的冷啟動 bug：第一次量到的 dvh／安全區域數值有時是錯的，
-         要等到發生一次真正的 resize（例如手動轉螢幕）才會重新算對，導致畫面貼齊狀態列、
-         下方留白。改成 black（不透明狀態列）後，iOS 會在系統層級直接保留狀態列的空間，
-         網頁內容區域從狀態列下方開始，完全不會進入那個有問題的全螢幕模式，
-         也就從根本上避開了這整類 bug——這正是遠古版本（未宣告這個標籤，效果等同這裡的
-         black）加入主畫面後完全沒有版面問題的真正原因。 -->
     <meta name="apple-mobile-web-app-title" content="AcornTrade">
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -112,15 +101,8 @@
             margin: 0; padding: 0; height: 100dvh; width: 100vw;
             overflow: hidden; overscroll-behavior: none; display: flex;
             
-            /* 🩹 修復（真正根因，已用 debug 標籤實測數據證實）：這裡原本有
-               `padding-top: env(safe-area-inset-top);`。
-               實測發現：iOS Safari 的 100dvh 這個單位，本身就已經把狀態列／瀏海的安全區域
-               高度扣掉了（clientHeight 在有無安全區域的情況下都是 812，完全一致）；
-               這裡卻又手動疊加了一次 env(safe-area-inset-top) 的 padding，等於重複扣了
-               兩次安全區域高度。當 env(safe-area-inset-top) 剛好是 0 時看不出問題，
-               一旦是實際數值（例如新加入主畫面後量到的 62px），整個 App 內容就會被
-               多推下去 62px、也連帶把底部內容擠出可視範圍。100dvh 已經處理過安全區域，
-               不需要再手動補這行，故整段移除。 */
+            /* 3. 建議補上這行：避免透明狀態列的時間/電量與你的網頁內容重疊 */
+            padding-top: env(safe-area-inset-top);
         }
 
         /* 🖥️ 電腦版背景：改為純色 #0B0B0B（不使用漸層），手機版（≤768px）維持上方的漸層背景不變 */
@@ -272,19 +254,7 @@
         .menu-item .nav-line { display: block; flex-shrink: 0; width: 2px; height: 26px; border-radius: 1px; background: rgba(255, 255, 255, 0.3); box-shadow: 0 0 0 rgba(255, 255, 255, 0); transform: scaleY(0.5385); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), width 0.3s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease; }
         .menu-item.active .nav-line { width: 3px; transform: scaleY(1); background: #fff; box-shadow: 0 0 8px rgba(255, 255, 255, 0.6); }
 
-        /* 🩹 修復：原本這裡寫死 height: 100dvh，但 #content-area 是 body（display:flex）底下的 flex 子項，
-           而 body 本身有 padding-top: env(safe-area-inset-top)（見上方 html, body 規則）。
-           當 env(safe-area-inset-top) 為 0 時（例如很久以前、尚未加入 manifest.json／
-           apple-mobile-web-app-capable／status-bar-style=black-translucent 之前就已「加入主畫面」的舊捷徑，
-           iOS 並未真正進入貼齊螢幕邊緣的全螢幕模式，這個值會是 0），100dvh 剛好等於父層可用高度，看不出問題。
-           但只要是「在現有這些 PWA 標籤存在之後」才新加入主畫面的捷徑，iOS 就會啟用真正的全螢幕模式，
-           env(safe-area-inset-top) 會回傳實際的狀態列／瀏海高度（例如 47~59px）。這時 #content-area 硬寫的
-           100dvh 會比 body 扣掉 padding-top 後「真正剩餘」的高度多出整整一個狀態列高度，多出來的部分被
-           body 的 overflow:hidden 從畫面下緣裁掉，也連帶讓內部用 inset:0／calc(100dvh - 60px) 排版的
-           .view-section（也就是整個儀表板）整組看起來被往下推、下方內容（例如「問問 Gemini」欄位）被切掉。
-           改成不寫死 height，讓 flex 預設的 align-items:stretch 自動撐滿「父層扣除 safe-area 之後」的
-           正確高度，兩種情境（inset 為 0 或有實際值）都會正確，不再依賴 inset 恰好是 0 才能看起來正常。 */
-        #content-area { flex: 1; position: relative; overflow: hidden; display: flex; flex-direction: column; }
+        #content-area { flex: 1; position: relative; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
         /* 🩹 修復手機版載入時頂部霧化漸層殘影（真正根因）：
            每個 .view-section 都是 position:absolute; inset:0（互相完全疊在同一位置），未啟用時只靠 opacity:0 隱藏。
            但 opacity:0 並不會讓瀏覽器停止合成內部元素的 backdrop-filter 圖層——換句話說，所有「目前沒有顯示」的頁面
@@ -1089,53 +1059,6 @@
      （見下方 startApp() 呼叫完成後的 requestAnimationFrame 區塊）。這樣一來，不管殘影真正是哪個元素造成的，
      只要它牽涉到 backdrop-filter，都會在「最容易出問題」的初次繪製階段被完全阻止合成。 -->
 <body class="boot-no-blur">
-
-<!-- 🩹 暫時除錯用小標籤：確認問題根因後即可整段移除。
-     固定在畫面「真正的」左上角 (top:0; left:0，不吃 safe-area)，
-     印出目前 body 實際套用的 padding-top（也就是 env(safe-area-inset-top) 被解讀出的數值）
-     和其他幾個視窗尺寸相關數值，方便直接從新加入主畫面、版面跑掉時的截圖判斷問題出在哪。 -->
-<div id="debug-inset-badge" style="position:fixed;top:90px;left:8px;right:8px;z-index:999999;background:#000;border:2px solid #ffe600;color:#ffe600;font-size:16px;font-weight:bold;line-height:1.6;padding:10px 12px;font-family:monospace;white-space:pre-wrap;pointer-events:none;border-radius:8px;box-shadow:0 0 0 4px rgba(255,230,0,0.25);"></div>
-<script>
-(function () {
-    function updateDebugBadge() {
-        var el = document.getElementById('debug-inset-badge');
-        if (!el) return;
-        var bodyPadTop = getComputedStyle(document.body).paddingTop;
-        var vv = window.visualViewport;
-        el.textContent =
-            'padding-top: ' + bodyPadTop + '\n' +
-            'innerHeight: ' + window.innerHeight + '\n' +
-            'clientHeight: ' + document.documentElement.clientHeight + '\n' +
-            'visualViewport.height: ' + (vv ? Math.round(vv.height) : 'NA') + '\n' +
-            'navigator.standalone: ' + (window.navigator.standalone === undefined ? 'NA' : window.navigator.standalone);
-    }
-    updateDebugBadge();
-    window.addEventListener('resize', updateDebugBadge);
-    window.addEventListener('orientationchange', updateDebugBadge);
-    document.addEventListener('visibilitychange', updateDebugBadge);
-    if (window.visualViewport) window.visualViewport.addEventListener('resize', updateDebugBadge);
-    setTimeout(updateDebugBadge, 500);
-    setTimeout(updateDebugBadge, 1500);
-
-    // 🩹 修復：PWA 剛從主畫面全螢幕啟動時，iOS WebKit 有時第一次量到的 dvh／安全區域數值是「錯的」
-    // （量到的是還沒扣安全區域的舊邏輯），要等到「真的發生一次 resize」（例如使用者手動轉一次螢幕）
-    // 才會重新正確計算一次——這正是「畫面貼齊螢幕上緣、下方留白，轉個螢幕就恢復正常」的根因。
-    // 這裡主動「戳」一下 <meta name="viewport"> 的 content（改一個無關緊要的地方再馬上改回來），
-    // 藉此逼 WebKit 提前做一次效果類似「真的轉螢幕」的重新佈局計算，讓使用者不用自己動手轉螢幕。
-    // 啟動後多戳幾次（不同延遲），涵蓋不同裝置、不同啟動時機下這個內部數值真正「準備好」的時間點。
-    function nudgeViewportForCorrectSafeArea() {
-        var meta = document.querySelector('meta[name="viewport"]');
-        if (!meta) return;
-        var original = meta.getAttribute('content');
-        meta.setAttribute('content', original + ', minimal-ui');
-        requestAnimationFrame(function () {
-            meta.setAttribute('content', original);
-            requestAnimationFrame(updateDebugBadge);
-        });
-    }
-    [50, 200, 500, 1000, 2000].forEach(function (t) { setTimeout(nudgeViewportForCorrectSafeArea, t); });
-})();
-</script>
 
 <!-- 手機端極簡玻璃數字鍵盤 -->
 <div id="glass-numpad" class="glass-numpad"></div>
