@@ -8852,7 +8852,7 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         let dragPanActive = false, dragStartX = 0, dragStartRange = null;
         let lastTapTime = 0, lastTapX = 0, lastTapY = 0;
         // 🔍 兩指按住不動偵測：先不馬上判定是縮放還是區間比較，等一小段時間看手指有沒有移動超過容許誤差
-        const INTERVAL_HOLD_MS = 420, INTERVAL_HOLD_TOLERANCE_PX = 14;
+        const INTERVAL_HOLD_MS = 220, INTERVAL_HOLD_TOLERANCE_PX = 14;
         let holdTimer = null, holdStartTouches = null;
 
         // 🩹 縮放（雙指 pinch）時不顯示節點預覽：強制關閉 holdToPreviewPlugin 的持有狀態並清空目前的
