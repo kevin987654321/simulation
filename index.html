@@ -1076,7 +1076,7 @@
      固定在畫面「真正的」左上角 (top:0; left:0，不吃 safe-area)，
      印出目前 body 實際套用的 padding-top（也就是 env(safe-area-inset-top) 被解讀出的數值）
      和其他幾個視窗尺寸相關數值，方便直接從新加入主畫面、版面跑掉時的截圖判斷問題出在哪。 -->
-<div id="debug-inset-badge" style="position:fixed;top:0;left:0;z-index:999999;background:#ff2d55;color:#fff;font-size:11px;line-height:1.5;padding:4px 6px;font-family:monospace;white-space:pre;pointer-events:none;"></div>
+<div id="debug-inset-badge" style="position:fixed;top:90px;left:8px;right:8px;z-index:999999;background:#000;border:2px solid #ffe600;color:#ffe600;font-size:16px;font-weight:bold;line-height:1.6;padding:10px 12px;font-family:monospace;white-space:pre-wrap;pointer-events:none;border-radius:8px;box-shadow:0 0 0 4px rgba(255,230,0,0.25);"></div>
 <script>
 (function () {
     function updateDebugBadge() {
@@ -1085,11 +1085,11 @@
         var bodyPadTop = getComputedStyle(document.body).paddingTop;
         var vv = window.visualViewport;
         el.textContent =
-            'padding-top: ' + bodyPadTop +
-            ' | innerH: ' + window.innerHeight +
-            ' | clientH: ' + document.documentElement.clientHeight +
-            ' | vvH: ' + (vv ? Math.round(vv.height) : 'NA') +
-            ' | standalone: ' + (window.navigator.standalone === undefined ? 'NA' : window.navigator.standalone);
+            'padding-top: ' + bodyPadTop + '\n' +
+            'innerHeight: ' + window.innerHeight + '\n' +
+            'clientHeight: ' + document.documentElement.clientHeight + '\n' +
+            'visualViewport.height: ' + (vv ? Math.round(vv.height) : 'NA') + '\n' +
+            'navigator.standalone: ' + (window.navigator.standalone === undefined ? 'NA' : window.navigator.standalone);
     }
     updateDebugBadge();
     window.addEventListener('resize', updateDebugBadge);
