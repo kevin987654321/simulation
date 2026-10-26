@@ -7031,7 +7031,6 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         // 組合 Google News RSS 網址
         const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=${hl}&gl=${gl}&ceid=${ceid}`;
         
-        // ✨ 關鍵解法：透過第三方 RSS2JSON 服務，完全繞過 Cloudflare Worker (解決 503 問題) 且支援跨域 (CORS)
         const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
 
         // 注意：這裡不使用 myProxy，直接打 apiUrl
@@ -8052,7 +8051,7 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
 
     // ---------- 費率工作室（獨立頁面）介面 ----------
     let feeUiMarket = 'TWD';
-    const FEE_FLAGS = { TWD: '🇹🇼', USD: '🇺🇸', HKD: '🇭🇰', JPY: '🇯🇵', CNY: '🇨🇳', KRW: '🇰🇷', GBP: '🇬🇧' };
+    const FEE_FLAGS = { TWD: '🇹🇼', USD: '🇺🇸', HKD: '🇭🇰', JPY: '🇯🇵', CNY: '', KRW: '🇰🇷', GBP: '🇬🇧' };
     const FEE_SIM_DEFAULTS = { TWD: [100, 1000], USD: [200, 10], HKD: [300, 100], JPY: [3000, 100], CNY: [20, 100], KRW: [70000, 10], GBP: [30, 100] };
     const feeSimState = {};
     function feeUiEl(id) { return document.getElementById(id); }
@@ -9400,7 +9399,7 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
             if (e.touches.length === 2) {
                 e.preventDefault();
                 // 🔍 已經是區間比較模式：用兩指目前位置持續更新區間範圍（不縮放）
-                // 🩹 這裡原本只有 i2 走「有改變才重繪＋節流」的正規路徑，i1 卻是直接改變數、完全繞過重繪判斷——
+                // 🩹 這裡原本只有 i2 走「有改變才重繪＋節流」的正規路徑，i1 卻是直接改變數
                 // 兩指的觸控順序（touches[0]/[1]）在整個手勢過程中是固定的（由誰先按下決定，不是誰在左邊），
                 // 導致固定被指定為 i1 的那一指移動時完全不會觸發重繪，只有恰好另一指也跟著微幅晃動時才會連帶更新，
                 // 造成兩個邊界一邊順暢、一邊卡頓的不對稱現象。改成兩指共用同一個「有任一邊改變就重繪」的函式。
@@ -10651,12 +10650,12 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         const sharpeText = sharpeVal === null ? "資料不足" : sharpeVal.toFixed(2);
         const positionRatio = (holdingValueTWD + state.cash) > 0 ? (holdingValueTWD / (holdingValueTWD + state.cash) * 100) : 0;
 
-        const fullPrompt = `你是一位講求數據與風險控制的資深華爾街操盤手，個性直接、不說模稜兩可的場面話。
+        const fullPrompt = `你是一位專注於數據與風險控管的量化交易顧問，分析風格精準、務實。
 
-請完全根據下方提供的「實際數據」進行分析與建議，特別注意：
-1. 不要只看 RSI 一個數字就下結論，RSI 只是眾多線索之一，要跟走勢方向、短線動能、帳戶淨值趨勢、最大回撤與夏普值一起交叉判斷。
-2. 不要不管情況如何都套用「先買一部分部位試水」「分批進場」之類的制式化萬用建議——如果數據明確指向某個方向（例如強勢上升趨勢中的超賣、或下降趨勢中的反彈無力），就給出明確、有理有據的判斷與具體動作；如果數據彼此矛盾或不足以下定論，就誠實說明原因與你會觀察的下一個訊號，而不是含糊帶過。
-3. 回答要具體對應到下方數據中的實際數字與趨勢描述，不要講放諸四海皆準、跟這次數據無關的空話。
+請依據下方提供的「市場與帳戶數據」進行評估：
+1. 請綜合考量 RSI、價格趨勢、短線動能、帳戶淨值變化、最大回撤與夏普值進行交叉判讀。
+2. 根據數據呈現的客觀方向給出具體觀察重點；若指標之間出現分歧，請說明原因並指出下一個關鍵觀察訊號。
+3. 請直接針對下方數值與趨勢進行分析，保持內容精煉。
 
 【即時市場與帳戶數據】
 • 討論標的: ${currentTicker}
@@ -10671,22 +10670,17 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
 • 該標的未實現損益: TWD $${Math.floor(pnlTWD).toLocaleString()}
 • 帳戶可用現金: TWD $${Math.floor(state.cash).toLocaleString()}
 
-用簡潔專業的口吻回答用戶問題（字數約 150-200 字內，直接切入重點，不需要重複敘述上面列出的數據）。
+請以簡潔專業的口吻回答（約 150-200 字內，直接切入重點，無須重複列舉上述數據）。
 
 用戶問題：${q}`;
 
         await callGeminiAPI(fullPrompt, msgId, out, key, undefined, undefined, q);
     }
 
-    // 🩹 修復：先前只把「今天日期」寫在使用者 prompt 內文中，Gemini 仍然會因為那段日期
-    // 晚於自己模型訓練資料的知識截止日，而直接判斷成「尚未發生的未來」並拒絕回答——
-    // 即使 prompt 裡已經講了「今天是 X 年」也一樣，因為那段文字對模型來說權重不夠高。
-    // 改用 Gemini API 原生支援的 system_instruction 欄位傳遞日期資訊：這個欄位在模型內部
-    // 的優先權高於一般使用者訊息，且用字更直接、更不留模糊空間，大幅降低模型仍誤判為未來的機率。
     function buildTodaySystemInstruction() {
         const now = new Date();
         const todayStr = now.toLocaleDateString('zh-TW', { year: 'numeric', month: 'numeric', day: 'numeric' });
-        return `【系統資訊，非使用者輸入，優先級最高】現在的真實西元日期是 ${todayStr}。這是使用者當下所在的真實世界時間，不是你的知識截止日期，也不是任何假設情境。你的訓練資料可能只涵蓋到較早的某個時間點，但這不代表「現在」還沒到——現在確確實實已經是 ${todayStr}，包含西元2026年在內的日期，只要早於或等於今天，都已經是「已經發生的過去」，並非未來。你絕對不可以因為某個日期、年份（例如 2026 年或其中任何月份）超出你自己訓練資料的知識範圍，就判斷、暗示或回覆使用者「這是未來的日期」、「這個時間點尚未到來」、「無法討論尚未發生的事」之類的話——這種判斷在事實上是錯誤的。若你對某段期間的具體新聞、事件不熟悉，只需誠實告知你的知識可能沒有涵蓋到這段期間、資訊有限，並改以使用者提供的實際數據做合理推測即可，絕不可以「這是未來」為理由拒絕回答。`;
+        return `系統當前基準日期為 ${todayStr}。所有早於或等於 ${todayStr} 的時間皆屬於已發生的歷史區間。請以 ${todayStr} 作為時間錨點，並完全依據使用者訊息中所附帶的市場報價與新聞摘要進行客觀分析。`;
     }
 
     // 🧠 多輪對話記憶：Gemini 顧問室的完整對話歷史（使用者提問＋模型回覆），讓後續提問能接續前面聊過的內容，
@@ -10974,7 +10968,7 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=${hl}&gl=${gl}&ceid=${ceid}`;
         
         try {
-            // ✨ 改用 rss2json 繞過 Cloudflare Worker (解決 503 被阻擋問題)，不使用 myProxy
+            
             const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
             const res = await fetch(apiUrl, { cache: "no-store" });
             
@@ -11031,7 +11025,6 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         const displayQuestion = `${question} <span style="color:var(--color-acc)">[市場事件 ${currentTicker} ${range.startVal} ~ ${range.endVal}]</span>`;
         out.innerHTML += `<br><span style="color:#fff">> ${displayQuestion}</span><br><div id="${msgId}"><span style="color:var(--color-acc)">[GEMINI]</span> <span style="color:#777">查詢期間價格走勢與新聞中...</span></div>`; out.scrollTop = out.scrollHeight;
 
-        // 價格走勢與新聞可以平行抓取，加快回應速度
         const [bars, newsItems] = await Promise.all([
             fetchTickerPriceBars(currentTicker, range.startTs, range.endTs),
             fetchNewsForTickerRange(currentTicker, range)
@@ -11039,40 +11032,27 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         const summaryText = buildEventRangeSummaryText(currentTicker, bars, range);
         const newsSummaryText = buildNewsSummaryText(newsItems);
 
-        // 📰 這裡明確要求 Gemini：優先依「我們已經實際爬到的真實新聞」分析原因，
-        // 只有在完全沒爬到相關新聞時，才誠實說明是根據價格走勢的合理推測，不可以編造不存在的新聞內容或日期，
-        // 避免使用者誤把 AI 憑空捏造的「新聞」當真。
-        // 🩹 修復（第二輪）：光是在 prompt 文字裡告知「今天日期」仍不夠——Gemini 會直接無視這段文字，
-        // 堅持以自己訓練資料的知識截止日期為準，判定 2026 年是「未來」。這裡改用兩個更強的手段：
-        // 1) 改用 API 原生的 system_instruction 欄位（權重高於一般使用者文字）明確告知今天日期；
-        // 2) 額外附上「距今已經過了 N 天」這種具體、無法用「知識截止日期」反駁的既成事實作為佐證，
-        //    比起單純講「今天是幾號」更難被模型忽略或誤判。
         const todayStr = new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: 'numeric', day: 'numeric' });
         const daysAgoEnd = Math.max(0, Math.floor((Date.now() - range.endTs) / 86400000));
-        const daysAgoText = daysAgoEnd <= 0
-            ? `這段期間就在最近，甚至可能包含今天`
-            : `距離今天已經過了約 ${daysAgoEnd} 天，是已經確確實實發生、走完的歷史資料，不是預測或未來`;
+        const daysAgoText = daysAgoEnd <= 0 ? `近期歷史區間` : `距今約 ${daysAgoEnd} 天前的歷史區間`;
 
-        const marketEventSystemInstruction = buildTodaySystemInstruction() + `\n\n【本次額外查證】使用者這次詢問的期間是 ${range.startVal} ~ ${range.endVal}，${daysAgoText}。系統已經即時查得這段期間內「已經成交過」的真實歷史價格數據，並且已經幫你「實際爬過」這段期間的相關新聞（見下方使用者訊息），這些都是已核實的既成事實，不是假設或未來推演。你不需要、也不能自己再去搜尋——直接根據下方已經提供給你的新聞與價格資料做分析即可。絕對不要再以「未來」、「尚未發生」、「無法討論未來事件」、「無法取得該期間新聞」等理由拒絕回答；如果下方新聞清單是空的，就誠實說「查無直接相關新聞」，改用價格走勢做合理推測，而不是聲稱自己無法取得新聞。`;
+        const marketEventSystemInstruction = buildTodaySystemInstruction() + ` 本次分析區間為 ${range.startVal} 至 ${range.endVal}（${daysAgoText}），相關歷史報價與新聞摘要已由系統預先檢索並附於訊息內，請直接引用以下提供的資料進行歸納與分析。`;
 
         const newsBlock = newsSummaryText
-            ? `【系統已實際爬到這段期間相關的真實新聞標題（依日期排序，已標註來源，非你自己搜尋而來，是我們已核實提供給你的資料）】\n${newsSummaryText}\n\n請主要依據以上「已核實」的新聞標題，推測、整理出可能導致股價如此走勢的關鍵原因；不要編造上面沒有列出的新聞內容或日期。`
-            : `（系統已經實際爬過這段期間關於「${currentTicker}」的新聞，但沒有查到符合條件的中文/英文新聞報導——這是真的查無結果，不是你「不能」查或「無法取得」。請誠實告知使用者目前查無直接相關新聞，並改以下方價格走勢數據做合理推測分析，不要編造不存在的新聞內容，也不要回覆「無法取得新聞報導」這類說法。）`;
+            ? `【系統檢索之期間相關新聞摘要】\n${newsSummaryText}\n\n請依據上述新聞摘要與下方價格數據，整理影響該期間股價走勢的關鍵因素。`
+            : `（系統檢索此期間暫無直接對應的新聞標題，請直接依據下方的價格走勢與波動幅度進行技術面與市場情勢推論。）`;
 
-        const fullPrompt = `你是一位熟悉總體經濟與個股基本面的資深金融分析師。今天的實際日期是 ${todayStr}。使用者想了解「${currentTicker}」在 ${range.startVal} ~ ${range.endVal} 這段期間發生了什麼事，導致股價出現下方所列的走勢。
-
-注意：下方列出的價格走勢是系統即時從市場報價來源查得的真實歷史資料，代表 ${range.startVal} ~ ${range.endVal} 這段期間「確實已經發生過」（${daysAgoText}），並非未來、也並非假設情境。
+        const fullPrompt = `你是一位熟悉總體經濟與個股基本面的金融分析師。當前基準日期為 ${todayStr}。使用者想了解「${currentTicker}」在 ${range.startVal} ~ ${range.endVal}（${daysAgoText}）的市場動態與走勢原因。
 
 ${newsBlock}
 
-用簡潔專業的口吻回答（字數約 200 字內，直接切入重點）。
+請以簡潔專業的口吻回答（約 200 字內，直接切入重點）。
 
-【${currentTicker} 這段期間的價格走勢（真實歷史報價數據）】
+【${currentTicker} 期間價格數據】
 ${summaryText}
 
 用戶問題：${question}`;
 
-        // 🩹 這裡務必 await，理由同 sendLedgerAnalysisToGemini：避免 'both' 模式下兩邊同時 push 對話歷史造成順序錯亂
         await callGeminiAPI(fullPrompt, msgId, out, key, marketEventSystemInstruction, undefined, question);
     }
 
