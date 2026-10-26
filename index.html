@@ -35,6 +35,85 @@
     <style>
         /* 桌機版：手機專用的斷行輔助元素預設隱藏，避免在桌機版 flex 列中多出空隙 */
         #tm-row-break { display: none; }
+
+        /* 🧾 費率工作室 */
+        .fx-wrap { max-width: 980px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 0; padding-bottom: 40px; }
+        .fx-tabs { display: flex; align-items: stretch; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; flex-shrink: 0; }
+        .fx-tabs::-webkit-scrollbar { display: none; }
+        .fx-tabs .glow-line-v { height: auto; align-self: stretch; }
+        .fx-tab { flex: 1 0 auto; min-width: 104px; text-align: left; background: none; border: none; color: #888; padding: 12px 18px; cursor: pointer; transition: color .2s; position: relative; }
+        .fx-tab .t1 { font-weight: 800; font-size: 14px; white-space: nowrap; }
+        .fx-tab .t2 { font-size: 11px; color: #666; margin-top: 4px; white-space: nowrap; font-family: monospace; }
+        .fx-tab:hover { color: #ccc; }
+        .fx-tab.active { color: #fff; }
+        .fx-tab.active .t2 { color: var(--color-acc); }
+        .fx-tab.active::after { content: ""; position: absolute; left: 18px; right: 18px; bottom: 0; height: 2px; background: var(--color-acc); box-shadow: 0 0 8px var(--color-acc); border-radius: 2px; }
+        .fx-hero { padding: 22px 6px 10px; position: relative; }
+        .fx-hero-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+        .fx-hero-label { font-size: 11px; color: #888; letter-spacing: 1px; }
+        .fx-hero-broker { font-size: 20px; font-weight: bold; margin-top: 2px; }
+        .fx-big { font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 46px; font-weight: 800; line-height: 1; background: linear-gradient(90deg, var(--color-acc), var(--color-buy)); -webkit-background-clip: text; background-clip: text; color: transparent; text-align: right; }
+        .fx-big small { font-size: 16px; -webkit-text-fill-color: #8bd; margin-left: 2px; }
+        .fx-big-cap { font-size: 11px; color: #888; text-align: right; margin-top: 4px; }
+        .fx-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+        .fx-chip { background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.12); border-radius: 999px; padding: 5px 12px; font-size: 11.5px; color: #cfd; }
+        .fx-chip b { color: #fff; margin-left: 4px; }
+        .fx-hero-note { margin-top: 12px; font-size: 11.5px; color: #8aa; line-height: 1.6; }
+        .fx-stack { display: flex; flex-direction: column; gap: 0; }
+        .fx-card { padding: 22px 6px 20px; }
+        .fx-card-title { display: flex; align-items: center; gap: 8px; font-weight: bold; font-size: 14px; margin-bottom: 12px; }
+        .fx-card-title i:first-child { color: var(--color-acc); }
+        .fx-sub-title { font-size: 11px; color: #777; margin: 12px 0 6px; }
+        .fx-search, .fx-sim-inputs input { width: 100%; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 8px 10px; border-radius: 8px; font-size: 13px; }
+        .fx-broker-grid { margin-top: 10px; max-height: 360px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 2px; }
+        .fx-group-title { font-size: 11px; color: #777; margin-bottom: 6px; }
+        .fx-chips-wrap { display: flex; flex-wrap: wrap; gap: 6px; }
+        .fx-broker { display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); color: #ddd; border-radius: 10px; padding: 7px 10px; font-size: 12px; cursor: pointer; transition: all .15s; }
+        .fx-broker:hover { background: rgba(255,255,255,0.10); transform: translateY(-1px); }
+        .fx-broker .tag { font-size: 10px; background: rgba(0,212,255,0.18); color: var(--color-acc); border-radius: 6px; padding: 1px 6px; font-weight: bold; }
+        .fx-broker.active { border-color: var(--color-buy); background: rgba(0,255,170,0.12); color: #fff; box-shadow: 0 0 12px rgba(0,255,170,0.18); }
+        .fx-sim-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .fx-sim-inputs label { font-size: 11px; color: #888; display: flex; flex-direction: column; gap: 4px; }
+        .fx-sim-result { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+        .fx-sim-box { border-left: 2px solid rgba(255,255,255,0.12); padding: 2px 12px; font-size: 12px; line-height: 1.7; color: #aaa; }
+        .fx-sim-box .h { font-weight: bold; color: #fff; margin-bottom: 2px; }
+        .fx-sim-box .v { font-family: monospace; color: #fff; float: right; }
+        .fx-rank { max-height: 230px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+        .fx-rank-row { flex-shrink: 0; position: relative; display: flex; justify-content: space-between; gap: 8px; padding: 6px 10px; border-radius: 8px; font-size: 12px; cursor: pointer; overflow: hidden; }
+        .fx-rank-row .bar { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, rgba(0,212,255,0.25), rgba(0,212,255,0.04)); transition: width .4s; }
+        .fx-rank-row span { position: relative; }
+        .fx-rank-row:hover { background: rgba(255,255,255,0.08); }
+        .fx-rank-row.active { outline: 1px solid var(--color-buy); }
+        .fx-rank-row.best .nm::before { content: '🏆 '; }
+        .fx-seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; background: rgba(0,0,0,0.4); padding: 4px; border-radius: 12px; }
+        .fx-seg button { background: transparent; border: none; color: #999; padding: 10px 4px; border-radius: 9px; font-weight: bold; cursor: pointer; font-size: 13px; transition: all .2s; }
+        .fx-seg button.active { background: var(--color-acc); color: #000; box-shadow: 0 0 14px rgba(0,212,255,0.4); }
+        .fx-tl { position: relative; margin: 26px 18px 56px; height: 14px; }
+        .fx-tl-line { position: absolute; left: 0; right: 0; top: 6px; height: 2px; background: repeating-linear-gradient(90deg, rgba(255,255,255,0.28) 0 6px, transparent 6px 12px); background-size: 12px 2px; animation: fx-dash 0.9s linear infinite; }
+        .fx-tl-line.hot { background: repeating-linear-gradient(90deg, var(--color-acc) 0 6px, transparent 6px 12px); background-size: 12px 2px; filter: drop-shadow(0 0 4px var(--color-acc)); -webkit-mask-image: linear-gradient(90deg, transparent 0, transparent 40%, #000 50%, transparent 60%, transparent 100%); mask-image: linear-gradient(90deg, transparent 0, transparent 40%, #000 50%, transparent 60%, transparent 100%); -webkit-mask-size: 200% 100%; mask-size: 200% 100%; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; animation: fx-dash 0.9s linear infinite, fx-wave var(--tot) linear infinite; }
+        .fx-tl.instant .fx-tl-line { background: var(--color-buy); animation: none; opacity: .6; }
+        @keyframes fx-dash { to { background-position: 12px 0; } }
+        .fx-tl-node { position: absolute; top: 0; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: #555; border: 2px solid #030303; box-shadow: 0 0 0 1px rgba(255,255,255,0.18); }
+        .fx-tl-node.mid { animation: fx-pass var(--tot) linear infinite; animation-delay: var(--dl); }
+        .fx-tl-node.start { background: var(--color-acc); box-shadow: 0 0 10px var(--color-acc); }
+        .fx-tl-node.end { background: var(--color-buy); box-shadow: 0 0 10px var(--color-buy); }
+        @keyframes fx-pass { 0% { background: var(--color-acc); box-shadow: 0 0 14px var(--color-acc); transform: scale(1.35); } 9% { background: #555; box-shadow: 0 0 0 1px rgba(255,255,255,0.18); transform: scale(1); } 100% { background: #555; box-shadow: 0 0 0 1px rgba(255,255,255,0.18); transform: scale(1); } }
+        .fx-tl-lbl { position: absolute; top: 22px; transform: translateX(-50%); text-align: center; font-size: 10.5px; color: #777; line-height: 1.4; white-space: nowrap; }
+        .fx-tl-lbl b { display: block; font-size: 12px; color: #aaa; }
+        .fx-tl-lbl.edge b { color: #fff; font-size: 13px; }
+        .fx-tl-lbl.first { transform: translateX(-7px); text-align: left; }
+        .fx-tl-lbl.last { transform: translateX(calc(-100% + 7px)); text-align: right; }
+        .fx-pending { font-size: 12px; color: #999; display: flex; flex-direction: column; gap: 4px; }
+        .fx-pending-row { display: flex; justify-content: space-between; padding: 6px 2px; border-bottom: 1px solid var(--border-color); }
+        .fx-fine { display: none; }
+        .fx-fine.open { display: block; }
+        .fx-fine .fx-row { border-top: 1px solid rgba(255,255,255,0.06); }
+        .fx-note { font-size: 11px; color: #666; line-height: 1.7; padding: 0 6px; white-space: pre-line; }
+        @media (max-width: 768px) {
+            .fx-big { font-size: 36px; }
+            .fx-hero-top { flex-direction: column; }
+            .fx-big, .fx-big-cap { text-align: left; }
+        }
         :root {
             --bg-color: #030303;
             --bg-gradient: radial-gradient(circle at 50% 0%, #121212 0%, #030303 85%);
@@ -1629,60 +1708,11 @@
                 </div>
             </div>
 
-            <div class="settings-category-title">手續費 / 稅 / 交割（各市場分別設定）</div>
+            <div class="settings-category-title">手續費與交割</div>
             <div class="setting-item">
-                <div><div style="font-weight:bold;">設定市場</div><div style="font-size:11px; color:#777; margin-top:2px;">每個市場（幣別）各自獨立儲存設定</div></div>
-                <select id="fee-market-select" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; max-width:200px;"></select>
+                <div><div style="font-weight:bold;">手續費 / 稅 / 交割設定</div><div id="fee-summary-line" style="font-size:11px; color:#777; margin-top:2px;">各市場分別設定、一鍵套用券商規則、T+N 交割</div></div>
+                <button onclick="switchView('view-fees', null)" style="background:rgba(0,212,255,0.15); border:1px solid var(--color-acc); color:var(--color-acc); padding:8px 14px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s; white-space:nowrap;"><i class="fa-solid fa-receipt"></i> 開啟費率工作室</button>
             </div>
-            <div class="glow-divide-top setting-item">
-                <div><div style="font-weight:bold;">套用券商規則</div><div style="font-size:11px; color:#777; margin-top:2px;">選擇後自動帶入該券商的參考費率；之後仍可手動微調</div></div>
-                <select id="fee-broker-select" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; max-width:200px;"></select>
-            </div>
-            <div class="glow-divide-top setting-item">
-                <div><div style="font-weight:bold;">官方牌告手續費率 (%)</div><div style="font-size:11px; color:#777; margin-top:2px;">成交金額 × 此費率 × 折數</div></div>
-                <input type="text" id="fee-list-rate" class="mobile-num" data-decimal="true" value="0.1425" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
-            </div>
-            <div class="glow-divide-top setting-item">
-                <div><div style="font-weight:bold;">手續費折數（折）</div><div style="font-size:11px; color:#777; margin-top:2px;">10 = 不打折；2.8 = 2.8 折。<span id="fee-effective-rate" style="color:var(--color-acc);"></span></div></div>
-                <input type="text" id="fee-discount" class="mobile-num" data-decimal="true" value="10" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
-            </div>
-            <div class="glow-divide-top setting-item">
-                <div><div style="font-weight:bold;">單筆最低手續費</div><div style="font-size:11px; color:#777; margin-top:2px;">以該市場幣別計；0 = 無低消</div></div>
-                <input type="text" id="fee-min" class="mobile-num" data-decimal="true" value="0" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
-            </div>
-            <div class="glow-divide-top setting-item" id="fee-odd-row">
-                <div><div style="font-weight:bold;">零股單筆最低手續費</div><div style="font-size:11px; color:#777; margin-top:2px;">僅台股：不足 1000 股的零股適用；0 = 同一般低消</div></div>
-                <input type="text" id="fee-odd-min" class="mobile-num" data-decimal="true" value="0" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
-            </div>
-            <div class="glow-divide-top setting-item">
-                <div><div style="font-weight:bold;">按股數計費</div><div style="font-size:11px; color:#777; margin-top:2px;">例如 IBKR Pro：每股收費，另有最低與上限（取代上方百分比費率）</div></div>
-                <label class="switch"><input type="checkbox" id="fee-pershare-on"><span class="slider"></span></label>
-            </div>
-            <div class="glow-divide-top setting-item" id="fee-ps-rate-row" style="display:none;">
-                <div><div style="font-weight:bold;">　每股費用</div><div style="font-size:11px; color:#777; margin-top:2px;">以該市場幣別計</div></div>
-                <input type="text" id="fee-ps-rate" class="mobile-num" data-decimal="true" value="0.005" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
-            </div>
-            <div class="glow-divide-top setting-item" id="fee-ps-min-row" style="display:none;">
-                <div><div style="font-weight:bold;">　單筆最低費用</div><div style="font-size:11px; color:#777; margin-top:2px;"></div></div>
-                <input type="text" id="fee-ps-min" class="mobile-num" data-decimal="true" value="1" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
-            </div>
-            <div class="glow-divide-top setting-item" id="fee-ps-max-row" style="display:none;">
-                <div><div style="font-weight:bold;">　單筆上限（佔成交金額 %）</div><div style="font-size:11px; color:#777; margin-top:2px;">0 = 不設上限</div></div>
-                <input type="text" id="fee-ps-max" class="mobile-num" data-decimal="true" value="1" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
-            </div>
-            <div class="glow-divide-top setting-item">
-                <div><div style="font-weight:bold;">賣出稅率 (%)</div><div style="font-size:11px; color:#777; margin-top:2px;">台股證交稅預設 0.3%；港股印花稅 0.1%；美股無證交稅</div></div>
-                <input type="text" id="fee-tax" class="mobile-num" data-decimal="true" value="0" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
-            </div>
-            <div class="glow-divide-top setting-item">
-                <div><div style="font-weight:bold;">買進稅率 (%)</div><div style="font-size:11px; color:#777; margin-top:2px;">例如港股印花稅 0.1%、英股印花稅 0.5%；計入買進費用</div></div>
-                <input type="text" id="fee-buytax" class="mobile-num" data-decimal="true" value="0" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
-            </div>
-            <div class="glow-divide-top setting-item">
-                <div><div style="font-weight:bold;">交割方式</div><div style="font-size:11px; color:#777; margin-top:2px;">賣出款項在交割日前列為「待交割」，不可用於買進</div></div>
-                <select id="fee-settle" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; max-width:200px;"><option value="0">立即交割</option><option value="1">T+1</option><option value="2">T+2</option><option value="3">T+3</option></select>
-            </div>
-            <div class="glow-divide-top" style="padding:10px 4px; font-size:11px; color:#777; line-height:1.6;" id="fee-note">券商費率為整理自各券商官網／公開資料的「參考值」，優惠常有期限、條件與帳戶等級差異，實際請以券商公告為準。T+N 以「營業日」估算（略過週末，未計各國假日）。</div>
 
             <div class="settings-category-title">交易與自動化</div>
 
@@ -1911,6 +1941,96 @@
 
         <div style="max-width:650px; margin:0 auto; width:100%; font-size:10.5px; color:#555; text-align:center; padding:6px 10px;">
             <i class="fa-solid fa-circle-info"></i> 各帳號的現金、持倉、交易與股息紀錄皆完全獨立儲存於本機瀏覽器；密碼保護僅為本機簡易鎖定。若啟用「遠端登入 / 雲端同步」，該帳號的密碼雜湊與資料將傳送至雲端，以供在其他裝置上登入取回。
+        </div>
+    </main>
+
+    <!-- 🧾 費率工作室：手續費 / 稅 / 交割 -->
+    <main id="view-fees" class="view-section">
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom: 8px; padding:0 4px;">
+            <button onclick="switchView('view-settings', document.querySelector('.menu-item[onclick*=\'view-settings\']'))" style="background:transparent; border:1px solid rgba(255,255,255,0.2); color:#fff; width:34px; height:34px; border-radius:8px; cursor:pointer; flex-shrink:0;"><i class="fa-solid fa-arrow-left"></i></button>
+            <span style="font-size:16px; font-weight:bold;"><i class="fa-solid fa-receipt" style="color:var(--color-acc)"></i> 費率工作室</span>
+        </div>
+        <div class="fx-wrap">
+            <div class="fx-tabs" id="fx-tabs"></div>
+
+            <div class="fx-hero glow-divide-top" id="fx-hero"></div>
+
+            <div class="fx-stack">
+                <div class="fx-card glow-divide-top">
+                    <div class="fx-card-title"><i class="fa-solid fa-store"></i> 套用券商規則</div>
+                    <input type="text" id="fx-broker-search" class="fx-search" placeholder="搜尋券商…" autocomplete="off">
+                    <div id="fx-broker-grid" class="fx-broker-grid"></div>
+                </div>
+
+                <div class="fx-card glow-divide-top">
+                    <div class="fx-card-title"><i class="fa-solid fa-flask"></i> 試算與券商比價</div>
+                    <div class="fx-sim-inputs">
+                        <label>單價<input type="text" id="fx-sim-price" class="mobile-num" data-decimal="true" value="100"></label>
+                        <label>股數<input type="text" id="fx-sim-shares" class="mobile-num" data-decimal="true" value="1000"></label>
+                    </div>
+                    <div id="fx-sim-result" class="fx-sim-result"></div>
+                    <div class="fx-sub-title">買進＋賣出一輪的總成本排行（點一列即可套用）</div>
+                    <div id="fx-rank" class="fx-rank"></div>
+                </div>
+            </div>
+
+            <div class="fx-card glow-divide-top">
+                <div class="fx-card-title"><i class="fa-solid fa-calendar-check"></i> 交割方式</div>
+                <div class="fx-seg" id="fx-seg">
+                    <button data-days="0">立即交割</button><button data-days="1">T+1</button><button data-days="2">T+2</button><button data-days="3">T+3</button>
+                </div>
+                <div class="fx-tl" id="fx-timeline"></div>
+                <div class="fx-sub-title" style="margin-top:14px;">目前待交割的賣出款項</div>
+                <div id="fx-pending" class="fx-pending"></div>
+            </div>
+
+            <div class="fx-card glow-divide-top">
+                <div class="fx-card-title" style="cursor:pointer; margin-bottom:4px;" onclick="document.getElementById('fx-fine').classList.toggle('open')"><i class="fa-solid fa-screwdriver-wrench"></i> 手動微調 <i class="fa-solid fa-chevron-down" style="margin-left:auto; font-size:11px; color:#777;"></i></div>
+                <div id="fx-fine" class="fx-fine">
+                <div class="setting-item fx-row">
+                    <div><div style="font-weight:bold;">官方牌告手續費率 (%)</div><div style="font-size:11px; color:#777; margin-top:2px;">成交金額 × 費率 × 折數</div></div>
+                    <input type="text" id="fee-list-rate" class="mobile-num" data-decimal="true" value="0.1425" style="width:90px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
+                </div>
+                <div class="setting-item fx-row">
+                    <div><div style="font-weight:bold;">手續費折數（折）</div><div style="font-size:11px; color:#777; margin-top:2px;">10 = 不打折；2.8 = 2.8 折　<span id="fee-effective-rate" style="color:var(--color-acc);"></span></div></div>
+                    <input type="text" id="fee-discount" class="mobile-num" data-decimal="true" value="10" style="width:90px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
+                </div>
+                <div class="setting-item fx-row">
+                    <div><div style="font-weight:bold;">單筆最低手續費</div><div style="font-size:11px; color:#777; margin-top:2px;">以該市場幣別計；0 = 無低消</div></div>
+                    <input type="text" id="fee-min" class="mobile-num" data-decimal="true" value="0" style="width:90px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
+                </div>
+                <div class="setting-item fx-row" id="fee-odd-row">
+                    <div><div style="font-weight:bold;">零股單筆最低手續費</div><div style="font-size:11px; color:#777; margin-top:2px;">僅台股：不足 1000 股的零股適用；0 = 同一般低消</div></div>
+                    <input type="text" id="fee-odd-min" class="mobile-num" data-decimal="true" value="0" style="width:90px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
+                </div>
+                <div class="setting-item fx-row">
+                    <div><div style="font-weight:bold;">按股數計費</div><div style="font-size:11px; color:#777; margin-top:2px;">每股收費，另有最低與上限（取代百分比費率）</div></div>
+                    <label class="switch"><input type="checkbox" id="fee-pershare-on"><span class="slider"></span></label>
+                </div>
+                <div class="setting-item fx-row" id="fee-ps-rate-row" style="display:none;">
+                    <div><div style="font-weight:bold;">　每股費用</div><div style="font-size:11px; color:#777; margin-top:2px;">以該市場幣別計</div></div>
+                    <input type="text" id="fee-ps-rate" class="mobile-num" data-decimal="true" value="0.005" style="width:90px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
+                </div>
+                <div class="setting-item fx-row" id="fee-ps-min-row" style="display:none;">
+                    <div><div style="font-weight:bold;">　單筆最低費用</div><div style="font-size:11px; color:#777; margin-top:2px;"></div></div>
+                    <input type="text" id="fee-ps-min" class="mobile-num" data-decimal="true" value="1" style="width:90px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
+                </div>
+                <div class="setting-item fx-row" id="fee-ps-max-row" style="display:none;">
+                    <div><div style="font-weight:bold;">　單筆上限（佔成交金額 %）</div><div style="font-size:11px; color:#777; margin-top:2px;">0 = 不設上限</div></div>
+                    <input type="text" id="fee-ps-max" class="mobile-num" data-decimal="true" value="1" style="width:90px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
+                </div>
+                <div class="setting-item fx-row">
+                    <div><div style="font-weight:bold;">賣出稅率 (%)</div><div style="font-size:11px; color:#777; margin-top:2px;">台股證交稅 0.3%；港股印花稅 0.1%；美股無</div></div>
+                    <input type="text" id="fee-tax" class="mobile-num" data-decimal="true" value="0" style="width:90px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
+                </div>
+                <div class="setting-item fx-row">
+                    <div><div style="font-weight:bold;">買進稅率 (%)</div><div style="font-size:11px; color:#777; margin-top:2px;">港股 0.1%、英股 0.5% 印花稅；計入買進費用</div></div>
+                    <input type="text" id="fee-buytax" class="mobile-num" data-decimal="true" value="0" style="width:90px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
+                </div>
+                </div>
+            </div>
+
+            <div class="fx-note" id="fee-note"></div>
         </div>
     </main>
 
@@ -3132,7 +3252,7 @@
         activeTouches = e.touches.length;
         if (window.innerWidth > 768) return;
         if (isCardEditMode) { sIsDragging = false; return; }
-        if (e.target.closest('canvas, .tf-btn, .jelly-slider-input, .jelly-slider-container, .table-responsive, input, select, textarea, .ledger-jump-date-wrap')) { sIsDragging = false; return; }
+        if (e.target.closest('canvas, .tf-btn, .jelly-slider-input, .jelly-slider-container, .table-responsive, input, select, textarea, .ledger-jump-date-wrap, .fx-tabs')) { sIsDragging = false; return; }
         
         sStartX = e.touches[0].clientX; sStartY = e.touches[0].clientY; sIsDragging = true; sIsDetermined = false;
         if (!sidebarEl.classList.contains('open') && sStartX > window.innerWidth * 0.66) sIsDragging = false;
@@ -4072,6 +4192,7 @@
         if(id === 'view-cards') { renderCards(); }
         if(id === 'view-dashboard' || id === 'view-mobile-trade') { fetchStockHistoryData(currentTicker, true); }
         if(id === 'view-achievements') { renderAchievementsPage(); }
+        if(id === 'view-fees') { refreshFeeSettingsUI(); }
     }
 
     // 📱 手機版換頁滑動動畫本體：現在的頁面（prevSection）往左滑出，準備切換的頁面（targetSection）從右側滑入，
@@ -7863,8 +7984,7 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
 
     // 💰 單筆交易費用（以標的原生幣別計）：amount=成交金額、shares=股數、side='BUY'|'SELL'
     // 買進時的買進稅（如港股/英股印花稅）併入 fee；賣出時 fee 與 tax 分開。
-    function computeTradeCosts(ticker, amount, shares, side) {
-        const cur = getCurrencyForTicker(ticker), p = getFeeProfile(cur);
+    function costsFromProfile(cur, p, amount, shares, side) {
         let fee;
         if (p.ps && p.ps.rate > 0) {
             fee = shares * p.ps.rate;
@@ -7880,6 +8000,10 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         const buyTax = side === 'BUY' ? amount * (p.buyTax || 0) / 100 : 0;
         if (cur === 'TWD') { fee = Math.floor(fee); tax = Math.floor(tax); } // 台股實務手續費與證交稅皆無條件捨去至整數
         return { fee: fee + buyTax, tax };
+    }
+    function computeTradeCosts(ticker, amount, shares, side) {
+        const cur = getCurrencyForTicker(ticker);
+        return costsFromProfile(cur, getFeeProfile(cur), amount, shares, side);
     }
     // 📊 有效費率（供未實現損益、損益兩平價等「比例式」估算使用）：以賣出 shares 股、單價 price 計算
     function getMarketFeeConfig(ticker, shares, price) {
@@ -7926,38 +8050,119 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
     }
     function getAvailableCurrencyBalance(cur) { return Math.max(0, getCurrencyBalance(cur) - getPendingSettlement(cur)); }
 
-    // ---------- 設定介面 ----------
+    // ---------- 費率工作室（獨立頁面）介面 ----------
     let feeUiMarket = 'TWD';
+    const FEE_FLAGS = { TWD: '🇹🇼', USD: '🇺🇸', HKD: '🇭🇰', JPY: '🇯🇵', CNY: '🇨🇳', KRW: '🇰🇷', GBP: '🇬🇧' };
+    const FEE_SIM_DEFAULTS = { TWD: [100, 1000], USD: [200, 10], HKD: [300, 100], JPY: [3000, 100], CNY: [20, 100], KRW: [70000, 10], GBP: [30, 100] };
+    const feeSimState = {};
     function feeUiEl(id) { return document.getElementById(id); }
-    function populateFeeBrokerSelect() {
-        const sel = feeUiEl('fee-broker-select'); if (!sel) return;
-        const p = getFeeProfile(feeUiMarket);
-        let html = `<option value="custom">自訂（手動設定）</option>`;
-        (BROKER_PRESETS[feeUiMarket] || []).forEach(g => {
-            html += `<optgroup label="${g.group}">` + g.items.map(it => `<option value="${it.id}">${it.name}</option>`).join('') + `</optgroup>`;
+    function fmtFeeMoney(cur, n) { const d = (cur === 'TWD' || cur === 'JPY' || cur === 'KRW') ? 0 : 2; return (n || 0).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d }); }
+    function presetToProfile(pr, settle) { return { rate: pr.rate, disc: pr.disc, min: pr.min || 0, odd: pr.odd || 0, ps: pr.ps || null, tax: pr.tax || 0, buyTax: pr.buyTax || 0, settle }; }
+    function feeEffPct(p) { return (p.rate || 0) * ((p.disc > 0 ? p.disc : 10) / 10); }
+    function feeBrokerName(cur, p) { const pr = _presetByIdAll(cur, p.broker); return pr ? pr.name : '自訂規則'; }
+    function feeBrokerTag(it) {
+        if (it.ps) return '按股計';
+        if (!it.rate) return '免佣';
+        return it.disc < 10 ? `${it.disc}折` : `${it.rate}%`;
+    }
+    function feeSettleLabel(d) { return d > 0 ? `T+${d}` : '立即'; }
+    function updateFeeSummary() {
+        const el = feeUiEl('fee-summary-line'); if (!el) return;
+        el.innerText = ['TWD', 'USD'].map(c => { const p = getFeeProfile(c); return `${FEE_FLAGS[c]} ${feeBrokerName(c, p)}・${feeSettleLabel(p.settle)}`; }).join('　');
+    }
+    function renderFeeTabs() {
+        feeUiEl('fx-tabs').innerHTML = FEE_MARKETS.map((m, idx) => {
+            const p = getFeeProfile(m.cur), psOn = !!(p.ps && p.ps.rate > 0);
+            return `<button class="fx-tab ${m.cur === feeUiMarket ? 'active' : ''}" data-cur="${m.cur}"><div class="t1">${FEE_FLAGS[m.cur]} ${m.name.replace(/ \(.*\)/, '')}</div><div class="t2">${psOn ? '按股計費' : feeEffPct(p).toFixed(4).replace(/0+$/, '').replace(/\.$/, '') + '%'}・${feeSettleLabel(p.settle)}</div></button>` + (idx < FEE_MARKETS.length - 1 ? '<div class="glow-line glow-line-v"></div>' : '');
+        }).join('');
+    }
+    function renderFeeHero() {
+        const cur = feeUiMarket, p = getFeeProfile(cur), pr = _presetByIdAll(cur, p.broker), psOn = !!(p.ps && p.ps.rate > 0);
+        const big = psOn ? `${p.ps.rate}<small>/股</small>` : `${feeEffPct(p).toFixed(4).replace(/0+$/, '').replace(/\.$/, '') || '0'}<small>%</small>`;
+        const cap = psOn ? `低消 ${p.ps.min}${p.ps.maxPct > 0 ? `・上限 ${p.ps.maxPct}%` : ''}` : (p.disc < 10 ? `牌告 ${p.rate}% × ${p.disc} 折` : (p.rate === 0 ? '免佣' : '牌告費率，無折扣'));
+        const chips = [];
+        if (!psOn) chips.push(`<span class="fx-chip">單筆低消<b>${fmtFeeMoney(cur, p.min)}</b></span>`);
+        if (!psOn && cur === 'TWD' && p.odd > 0) chips.push(`<span class="fx-chip">零股低消<b>${fmtFeeMoney(cur, p.odd)}</b></span>`);
+        chips.push(`<span class="fx-chip">賣出稅<b>${p.tax || 0}%</b></span>`);
+        if (p.buyTax > 0) chips.push(`<span class="fx-chip">買進稅<b>${p.buyTax}%</b></span>`);
+        chips.push(`<span class="fx-chip">交割<b>${p.settle > 0 ? 'T+' + p.settle : '立即'}</b></span>`);
+        feeUiEl('fx-hero').innerHTML = `<div class="fx-hero-top"><div><div class="fx-hero-label">${FEE_FLAGS[cur]} ${FEE_MARKETS.find(m => m.cur === cur).name}・目前套用</div><div class="fx-hero-broker">${feeBrokerName(cur, p)}</div></div><div><div class="fx-big">${big}</div><div class="fx-big-cap">${cap}</div></div></div><div class="fx-chips">${chips.join('')}</div>${pr && pr.note ? `<div class="fx-hero-note"><i class="fa-solid fa-circle-info"></i> ${pr.note}</div>` : ''}`;
+    }
+    function renderBrokerGrid() {
+        const cur = feeUiMarket, p = getFeeProfile(cur), q = (feeUiEl('fx-broker-search').value || '').trim().toLowerCase();
+        const groups = BROKER_PRESETS[cur] || [];
+        let html = `<div><div class="fx-chips-wrap"><div class="fx-broker ${p.broker === 'custom' || !_presetByIdAll(cur, p.broker) ? 'active' : ''}" data-id="custom"><i class="fa-solid fa-pen"></i> 自訂</div></div></div>`;
+        groups.forEach(g => {
+            const items = g.items.filter(it => !q || it.name.toLowerCase().includes(q));
+            if (!items.length) return;
+            html += `<div><div class="fx-group-title">${g.group}</div><div class="fx-chips-wrap">${items.map(it => `<div class="fx-broker ${p.broker === it.id ? 'active' : ''}" data-id="${it.id}">${it.name}<span class="tag">${feeBrokerTag(it)}</span></div>`).join('')}</div></div>`;
         });
-        sel.innerHTML = html;
-        sel.value = _presetByIdAll(feeUiMarket, p.broker) ? p.broker : 'custom';
+        if (!groups.length) html += `<div style="font-size:12px; color:#777;">此市場尚無券商預設，請於下方「手動微調」自行填寫。</div>`;
+        feeUiEl('fx-broker-grid').innerHTML = html;
+    }
+    function renderFeeSim() {
+        const cur = feeUiMarket, st = feeSimState[cur] || (feeSimState[cur] = { price: FEE_SIM_DEFAULTS[cur][0], shares: FEE_SIM_DEFAULTS[cur][1] });
+        const pe = feeUiEl('fx-sim-price'), se = feeUiEl('fx-sim-shares');
+        if (document.activeElement !== pe) pe.value = st.price;
+        if (document.activeElement !== se) se.value = st.shares;
+        const amt = st.price * st.shares, p = getFeeProfile(cur);
+        const b = costsFromProfile(cur, p, amt, st.shares, 'BUY'), sl = costsFromProfile(cur, p, amt, st.shares, 'SELL');
+        feeUiEl('fx-sim-result').innerHTML =
+            `<div class="fx-sim-box"><div class="h">買進</div>成交金額<span class="v">${fmtFeeMoney(cur, amt)}</span><br>手續費<span class="v">${fmtFeeMoney(cur, b.fee)}</span><br>合計付出<span class="v">${fmtFeeMoney(cur, amt + b.fee)}</span></div>` +
+            `<div class="fx-sim-box"><div class="h">賣出</div>成交金額<span class="v">${fmtFeeMoney(cur, amt)}</span><br>手續費＋稅<span class="v">${fmtFeeMoney(cur, sl.fee + sl.tax)}</span><br>實收<span class="v">${fmtFeeMoney(cur, amt - sl.fee - sl.tax)}</span></div>`;
+        const list = [{ id: 'cur', name: '目前設定', prof: p, current: true }];
+        (BROKER_PRESETS[cur] || []).forEach(g => g.items.forEach(it => list.push({ id: it.id, name: it.name, prof: presetToProfile(it, p.settle), current: p.broker === it.id })));
+        const rows = list.map(x => { const bb = costsFromProfile(cur, x.prof, amt, st.shares, 'BUY'), ss = costsFromProfile(cur, x.prof, amt, st.shares, 'SELL'); return Object.assign({}, x, { total: bb.fee + ss.fee + ss.tax }); });
+        const ranked = rows.filter(r => r.id !== 'cur').sort((a, b) => a.total - b.total);
+        const max = Math.max(1e-9, ...ranked.map(r => r.total), rows[0].total);
+        const mk = (r, best) => `<div class="fx-rank-row ${r.current && r.id !== 'cur' ? 'active' : ''} ${best ? 'best' : ''}" data-id="${r.id}"><div class="bar" style="width:${Math.max(2, r.total / max * 100)}%"></div><span class="nm">${r.name}</span><span>${fmtFeeMoney(cur, r.total)}</span></div>`;
+        feeUiEl('fx-rank').innerHTML = mk(rows[0], false).replace('data-id="cur"', 'data-id="cur" style="cursor:default; border:1px dashed rgba(255,255,255,0.25);"') + ranked.map((r, i) => mk(r, i === 0)).join('');
+    }
+    function renderFeeSettle() {
+        const cur = feeUiMarket, p = getFeeProfile(cur), d = p.settle || 0;
+        feeUiEl('fx-seg').querySelectorAll('button').forEach(b => b.classList.toggle('active', parseInt(b.dataset.days, 10) === d));
+        const now = Date.now();
+        const fmt = t => { const x = new Date(t); return `${x.getMonth() + 1}/${x.getDate()}（${'日一二三四五六'[x.getDay()]}）`; };
+        const tl = feeUiEl('fx-timeline');
+        if (d <= 0) {
+            tl.className = 'fx-tl instant';
+            tl.style.removeProperty('--tot');
+            tl.innerHTML = `<div class="fx-tl-line"></div><div class="fx-tl-node start" style="left:0"></div><div class="fx-tl-node end" style="left:100%"></div><div class="fx-tl-lbl edge first" style="left:0"><b>${fmt(now)}</b>賣出成交</div><div class="fx-tl-lbl edge last" style="left:100%"><b>同時</b>款項立即可用</div>`;
+        } else {
+            const seg = 1.4, trvT = d * seg, tot = trvT + 1.0, trvN = trvT / tot * 100;
+            tl.className = 'fx-tl';
+            tl.style.setProperty('--tot', tot + 's');
+            let h = `<style>@keyframes fx-wave{0%{-webkit-mask-position:130% 0;mask-position:130% 0}${trvN.toFixed(1)}%{-webkit-mask-position:-30% 0;mask-position:-30% 0}100%{-webkit-mask-position:-30% 0;mask-position:-30% 0}}</style><div class="fx-tl-line"></div><div class="fx-tl-line hot"></div>`;
+            for (let i = 0; i <= d; i++) {
+                const left = (i / d * 100) + '%', t = addBusinessDays(now, i);
+                if (i === 0) h += `<div class="fx-tl-node start" style="left:${left}"></div><div class="fx-tl-lbl edge first" style="left:${left}"><b>${fmt(t)}</b>賣出成交</div>`;
+                else if (i === d) h += `<div class="fx-tl-node end" style="left:${left}"></div><div class="fx-tl-lbl edge last" style="left:${left}"><b>${fmt(t)}</b>款項入帳、可再買進</div>`;
+                else h += `<div class="fx-tl-node mid" style="left:${left}; --dl:${(((i / d + 0.3) / 1.6) * trvT).toFixed(2)}s"></div><div class="fx-tl-lbl" style="left:${left}"><b>${fmt(t)}</b>T+${i}</div>`;
+            }
+            tl.innerHTML = h;
+        }
+        const now2 = _feeNowMs(), pend = state.ledger.filter(r => r.action === 'SELL' && r.settleAt && r.settleAt > now2 && r.timestamp <= now2);
+        feeUiEl('fx-pending').innerHTML = pend.length ? pend.slice(0, 20).map(r => { const c = r.walletCurrency || 'TWD', amt = r.walletCurrency ? (r.walletCreditNative || 0) : r.total; return `<div class="fx-pending-row"><span>${r.ticker}　${fmt(r.settleAt)} 入帳</span><span>${c} ${fmtFeeMoney(c, amt)}</span></div>`; }).join('') : '目前沒有待交割款項';
     }
     function refreshFeeSettingsUI() {
-        if (!feeUiEl('fee-market-select')) return;
-        const p = getFeeProfile(feeUiMarket), cur = feeUiMarket;
-        const psOn = !!(p.ps && p.ps.rate > 0);
+        if (!feeUiEl('fx-tabs')) return;
+        const p = getFeeProfile(feeUiMarket), cur = feeUiMarket, psOn = !!(p.ps && p.ps.rate > 0);
+        // 微調欄位
         feeUiEl('fee-list-rate').value = p.rate; feeUiEl('fee-discount').value = p.disc; feeUiEl('fee-min').value = p.min;
         feeUiEl('fee-odd-min').value = p.odd || 0; feeUiEl('fee-tax').value = p.tax; feeUiEl('fee-buytax').value = p.buyTax || 0;
         feeUiEl('fee-pershare-on').checked = psOn;
         feeUiEl('fee-ps-rate').value = psOn ? p.ps.rate : 0.005; feeUiEl('fee-ps-min').value = psOn ? p.ps.min : 1; feeUiEl('fee-ps-max').value = psOn ? p.ps.maxPct : 1;
-        feeUiEl('fee-settle').value = String(p.settle || 0);
-        feeUiEl('fee-odd-row').style.display = cur === 'TWD' && !psOn ? '' : 'none';
-        ['fee-ps-rate-row', 'fee-ps-min-row', 'fee-ps-max-row'].forEach(id => feeUiEl(id).style.display = psOn ? '' : 'none');
-        feeUiEl('fee-list-rate').closest('.setting-item').style.display = psOn ? 'none' : '';
-        feeUiEl('fee-discount').closest('.setting-item').style.display = psOn ? 'none' : '';
-        feeUiEl('fee-min').closest('.setting-item').style.display = psOn ? 'none' : '';
-        const eff = (p.rate || 0) * ((p.disc > 0 ? p.disc : 10) / 10);
-        feeUiEl('fee-effective-rate').innerText = psOn ? '' : `實際費率 ≈ ${eff.toFixed(4)}%`;
+        applyFeeFieldVisibility(p);
         const pr = _presetByIdAll(cur, p.broker);
-        feeUiEl('fee-note').innerText = (pr && pr.note ? `【${pr.name}】${pr.note}。\n` : '') + '券商費率為整理自各券商官網／公開資料的「參考值」，優惠常有期限、條件與帳戶等級差異，實際請以券商公告為準。T+N 以「營業日」估算（略過週末，未計各國假日）；賣出款項於交割日前列為「待交割」，不可用於買進。';
-        feeUiEl('fee-note').style.whiteSpace = 'pre-line';
+        feeUiEl('fee-note').innerText = (pr && pr.note ? `【${pr.name}】${pr.note}\n` : '') + '券商費率為整理自各券商官網／公開資料的「參考值」，優惠常有期限、條件與帳戶等級差異，實際請以券商公告為準。\nT+N 以「營業日」估算（略過週末，未計各國假日）；賣出款項於交割日前列為「待交割」，不可用於買進。';
+        renderFeeTabs(); renderFeeHero(); renderBrokerGrid(); renderFeeSim(); renderFeeSettle(); updateFeeSummary();
+    }
+    function applyFeeFieldVisibility(p) {
+        const psOn = !!(p.ps && p.ps.rate > 0);
+        feeUiEl('fee-odd-row').style.display = feeUiMarket === 'TWD' && !psOn ? '' : 'none';
+        ['fee-ps-rate-row', 'fee-ps-min-row', 'fee-ps-max-row'].forEach(id => feeUiEl(id).style.display = psOn ? '' : 'none');
+        ['fee-list-rate', 'fee-discount', 'fee-min'].forEach(id => feeUiEl(id).closest('.setting-item').style.display = psOn ? 'none' : '');
+        feeUiEl('fee-effective-rate').innerText = psOn ? '' : `實際費率 ≈ ${feeEffPct(p).toFixed(4)}%`;
     }
     function refreshAfterFeeChange() {
         saveFeeProfiles();
@@ -7966,11 +8171,11 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
     }
     function applyBrokerPreset(id) {
         const p = getFeeProfile(feeUiMarket);
-        if (id === 'custom') { p.broker = 'custom'; refreshFeeSettingsUI(); refreshAfterFeeChange(); return; }
-        const pr = _presetByIdAll(feeUiMarket, id); if (!pr) return;
-        p.broker = id; p.rate = pr.rate; p.disc = pr.disc; p.min = pr.min || 0; p.odd = pr.odd || 0;
-        p.ps = pr.ps ? Object.assign({}, pr.ps) : null; p.tax = pr.tax || 0; p.buyTax = pr.buyTax || 0;
-        // 交割日為市場慣例，不隨券商改變，保留使用者目前設定
+        if (id === 'custom') { p.broker = 'custom'; }
+        else {
+            const pr = _presetByIdAll(feeUiMarket, id); if (!pr) return;
+            Object.assign(p, presetToProfile(pr, p.settle)); p.broker = id; // 交割日屬市場慣例，保留使用者目前設定
+        }
         refreshFeeSettingsUI(); refreshAfterFeeChange();
     }
     function readFeeNum(id, fallback) { const v = parseFloat(feeUiEl(id).value); return isNaN(v) || v < 0 ? fallback : v; }
@@ -7979,29 +8184,35 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         p.broker = 'custom';
         p.rate = readFeeNum('fee-list-rate', p.rate); p.disc = readFeeNum('fee-discount', p.disc) || 10; p.min = readFeeNum('fee-min', p.min);
         p.odd = readFeeNum('fee-odd-min', p.odd || 0); p.tax = readFeeNum('fee-tax', p.tax); p.buyTax = readFeeNum('fee-buytax', p.buyTax || 0);
-        if (feeUiEl('fee-pershare-on').checked) p.ps = { rate: readFeeNum('fee-ps-rate', 0.005), min: readFeeNum('fee-ps-min', 0), maxPct: readFeeNum('fee-ps-max', 0) };
-        else p.ps = null;
-        p.settle = parseInt(feeUiEl('fee-settle').value, 10) || 0;
-        feeUiEl('fee-broker-select').value = 'custom';
-        const psOn = !!p.ps;
-        feeUiEl('fee-odd-row').style.display = feeUiMarket === 'TWD' && !psOn ? '' : 'none';
-        ['fee-ps-rate-row', 'fee-ps-min-row', 'fee-ps-max-row'].forEach(id => feeUiEl(id).style.display = psOn ? '' : 'none');
-        ['fee-list-rate', 'fee-discount', 'fee-min'].forEach(id => feeUiEl(id).closest('.setting-item').style.display = psOn ? 'none' : '');
-        const eff = (p.rate || 0) * ((p.disc > 0 ? p.disc : 10) / 10);
-        feeUiEl('fee-effective-rate').innerText = psOn ? '' : `實際費率 ≈ ${eff.toFixed(4)}%`;
+        p.ps = feeUiEl('fee-pershare-on').checked ? { rate: readFeeNum('fee-ps-rate', 0.005), min: readFeeNum('fee-ps-min', 0), maxPct: readFeeNum('fee-ps-max', 0) } : null;
+        applyFeeFieldVisibility(p);
+        renderFeeTabs(); renderFeeHero(); renderBrokerGrid(); renderFeeSim(); updateFeeSummary();
         refreshAfterFeeChange();
     }
     function initFeeSettingsUI() {
-        const ms = feeUiEl('fee-market-select'); if (!ms || ms.dataset.ready) return; ms.dataset.ready = '1';
-        ms.innerHTML = FEE_MARKETS.map(m => `<option value="${m.cur}">${m.name}</option>`).join('');
-        ms.addEventListener('change', () => { feeUiMarket = ms.value; populateFeeBrokerSelect(); refreshFeeSettingsUI(); });
-        feeUiEl('fee-broker-select').addEventListener('change', e => applyBrokerPreset(e.target.value));
+        const tabs = feeUiEl('fx-tabs'); if (!tabs || tabs.dataset.ready) return; tabs.dataset.ready = '1';
+        tabs.addEventListener('click', e => { const b = e.target.closest('.fx-tab'); if (!b) return; feeUiMarket = b.dataset.cur; feeUiEl('fx-broker-search').value = ''; refreshFeeSettingsUI(); });
+        feeUiEl('fx-broker-grid').addEventListener('click', e => { const b = e.target.closest('.fx-broker'); if (b) applyBrokerPreset(b.dataset.id); });
+        feeUiEl('fx-rank').addEventListener('click', e => { const r = e.target.closest('.fx-rank-row'); if (r && r.dataset.id !== 'cur') applyBrokerPreset(r.dataset.id); });
+        feeUiEl('fx-broker-search').addEventListener('input', renderBrokerGrid);
+        feeUiEl('fx-seg').addEventListener('click', e => {
+            const b = e.target.closest('button'); if (!b) return;
+            getFeeProfile(feeUiMarket).settle = parseInt(b.dataset.days, 10) || 0;
+            refreshFeeSettingsUI(); refreshAfterFeeChange();
+        });
+        ['fx-sim-price', 'fx-sim-shares'].forEach(id => {
+            const h = () => {
+                const st = feeSimState[feeUiMarket] || (feeSimState[feeUiMarket] = { price: FEE_SIM_DEFAULTS[feeUiMarket][0], shares: FEE_SIM_DEFAULTS[feeUiMarket][1] });
+                const pv = parseFloat(feeUiEl('fx-sim-price').value), sv = parseFloat(feeUiEl('fx-sim-shares').value);
+                if (pv > 0) st.price = pv; if (sv > 0) st.shares = sv; renderFeeSim();
+            };
+            feeUiEl(id).addEventListener('input', h); feeUiEl(id).addEventListener('change', h);
+        });
         ['fee-list-rate', 'fee-discount', 'fee-min', 'fee-odd-min', 'fee-tax', 'fee-buytax', 'fee-ps-rate', 'fee-ps-min', 'fee-ps-max'].forEach(id => {
             feeUiEl(id).addEventListener('input', onFeeFieldEdited); feeUiEl(id).addEventListener('change', onFeeFieldEdited);
         });
         feeUiEl('fee-pershare-on').addEventListener('change', () => { onFeeFieldEdited(); refreshFeeSettingsUI(); });
-        feeUiEl('fee-settle').addEventListener('change', onFeeFieldEdited);
-        populateFeeBrokerSelect(); refreshFeeSettingsUI();
+        refreshFeeSettingsUI();
     }
 
     function validateSharesInput() {
@@ -11087,6 +11298,8 @@ ${summaryText}
         'fee-buytax':            { type: 'decimal', min: 0, step: 0.01, decimals: 4 },
         'fee-ps-rate':           { type: 'decimal', min: 0, step: 0.001, decimals: 4 },
         'fee-ps-min':            { type: 'decimal', min: 0, step: 0.1, decimals: 2 },
+        'fx-sim-price':          { type: 'decimal', min: 0, step: 1, decimals: 2 },
+        'fx-sim-shares':         { type: 'decimal', min: 1, step: 1, decimals: 0 },
         'fee-ps-max':            { type: 'decimal', min: 0, step: 0.1, decimals: 2 },
         'cfg-node-val':          { type: 'slider', sliderId: 'cfg-node-slider' },
         'cfg-timeaxis-val':      { type: 'slider', sliderId: 'cfg-timeaxis-slider' },
