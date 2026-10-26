@@ -760,7 +760,6 @@
         @keyframes modalPopIn { from { opacity:0; transform: scale(0.92) translateY(10px); } to { opacity:1; transform: scale(1) translateY(0); } }
         .modal-input { background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 11px 12px; border-radius: 8px; font-family: monospace; font-size: 14px; outline: none; width: 100%; text-align: center; letter-spacing: 2px; transition: border-color 0.2s; }
         .modal-input:focus { border-color: var(--color-acc); }
-        /* 🩹 以 type="text" + -webkit-text-security 視覺偽裝密碼輸入框，避免 Chrome 對 type="password" 強制觸發「密碼外洩」/「儲存密碼」等干擾提示 */
         .pwd-mask { -webkit-text-security: disc; -moz-text-security: disc; text-security: disc; }
 
         /* 🏆 成就系統圖示特效：銅/銀/金為星星＋對應金屬色澤 drop-shadow；白金為皇冠珍珠幻彩跑馬燈；隱藏成就為鑽石呼吸燈 */
@@ -1630,16 +1629,62 @@
                 </div>
             </div>
 
-            <div class="settings-category-title">交易與自動化</div>
-
+            <div class="settings-category-title">手續費 / 稅 / 交割（各市場分別設定）</div>
             <div class="setting-item">
-                <div><div style="font-weight:bold;">手續費費率設定 (%)</div><div style="font-size:11px; color:#777; margin-top:2px;">預設折扣 0.1425%</div></div>
-                <input type="text" id="cfg-fee-rate" class="mobile-num" data-decimal="true" value="0.1425" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
+                <div><div style="font-weight:bold;">設定市場</div><div style="font-size:11px; color:#777; margin-top:2px;">每個市場（幣別）各自獨立儲存設定</div></div>
+                <select id="fee-market-select" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; max-width:200px;"></select>
             </div>
             <div class="glow-divide-top setting-item">
-                <div><div style="font-weight:bold;">證交稅率設定 (%)</div><div style="font-size:11px; color:#777; margin-top:2px;">賣出徵收，預設 0.3%</div></div>
-                <input type="text" id="cfg-tax-rate" class="mobile-num" data-decimal="true" value="0.30" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
+                <div><div style="font-weight:bold;">套用券商規則</div><div style="font-size:11px; color:#777; margin-top:2px;">選擇後自動帶入該券商的參考費率；之後仍可手動微調</div></div>
+                <select id="fee-broker-select" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; max-width:200px;"></select>
             </div>
+            <div class="glow-divide-top setting-item">
+                <div><div style="font-weight:bold;">官方牌告手續費率 (%)</div><div style="font-size:11px; color:#777; margin-top:2px;">成交金額 × 此費率 × 折數</div></div>
+                <input type="text" id="fee-list-rate" class="mobile-num" data-decimal="true" value="0.1425" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
+            </div>
+            <div class="glow-divide-top setting-item">
+                <div><div style="font-weight:bold;">手續費折數（折）</div><div style="font-size:11px; color:#777; margin-top:2px;">10 = 不打折；2.8 = 2.8 折。<span id="fee-effective-rate" style="color:var(--color-acc);"></span></div></div>
+                <input type="text" id="fee-discount" class="mobile-num" data-decimal="true" value="10" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
+            </div>
+            <div class="glow-divide-top setting-item">
+                <div><div style="font-weight:bold;">單筆最低手續費</div><div style="font-size:11px; color:#777; margin-top:2px;">以該市場幣別計；0 = 無低消</div></div>
+                <input type="text" id="fee-min" class="mobile-num" data-decimal="true" value="0" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
+            </div>
+            <div class="glow-divide-top setting-item" id="fee-odd-row">
+                <div><div style="font-weight:bold;">零股單筆最低手續費</div><div style="font-size:11px; color:#777; margin-top:2px;">僅台股：不足 1000 股的零股適用；0 = 同一般低消</div></div>
+                <input type="text" id="fee-odd-min" class="mobile-num" data-decimal="true" value="0" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
+            </div>
+            <div class="glow-divide-top setting-item">
+                <div><div style="font-weight:bold;">按股數計費</div><div style="font-size:11px; color:#777; margin-top:2px;">例如 IBKR Pro：每股收費，另有最低與上限（取代上方百分比費率）</div></div>
+                <label class="switch"><input type="checkbox" id="fee-pershare-on"><span class="slider"></span></label>
+            </div>
+            <div class="glow-divide-top setting-item" id="fee-ps-rate-row" style="display:none;">
+                <div><div style="font-weight:bold;">　每股費用</div><div style="font-size:11px; color:#777; margin-top:2px;">以該市場幣別計</div></div>
+                <input type="text" id="fee-ps-rate" class="mobile-num" data-decimal="true" value="0.005" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
+            </div>
+            <div class="glow-divide-top setting-item" id="fee-ps-min-row" style="display:none;">
+                <div><div style="font-weight:bold;">　單筆最低費用</div><div style="font-size:11px; color:#777; margin-top:2px;"></div></div>
+                <input type="text" id="fee-ps-min" class="mobile-num" data-decimal="true" value="1" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
+            </div>
+            <div class="glow-divide-top setting-item" id="fee-ps-max-row" style="display:none;">
+                <div><div style="font-weight:bold;">　單筆上限（佔成交金額 %）</div><div style="font-size:11px; color:#777; margin-top:2px;">0 = 不設上限</div></div>
+                <input type="text" id="fee-ps-max" class="mobile-num" data-decimal="true" value="1" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
+            </div>
+            <div class="glow-divide-top setting-item">
+                <div><div style="font-weight:bold;">賣出稅率 (%)</div><div style="font-size:11px; color:#777; margin-top:2px;">台股證交稅預設 0.3%；港股印花稅 0.1%；美股無證交稅</div></div>
+                <input type="text" id="fee-tax" class="mobile-num" data-decimal="true" value="0" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
+            </div>
+            <div class="glow-divide-top setting-item">
+                <div><div style="font-weight:bold;">買進稅率 (%)</div><div style="font-size:11px; color:#777; margin-top:2px;">例如港股印花稅 0.1%、英股印花稅 0.5%；計入買進費用</div></div>
+                <input type="text" id="fee-buytax" class="mobile-num" data-decimal="true" value="0" style="width:80px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; text-align:center;">
+            </div>
+            <div class="glow-divide-top setting-item">
+                <div><div style="font-weight:bold;">交割方式</div><div style="font-size:11px; color:#777; margin-top:2px;">賣出款項在交割日前列為「待交割」，不可用於買進</div></div>
+                <select id="fee-settle" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px; border-radius:6px; max-width:200px;"><option value="0">立即交割</option><option value="1">T+1</option><option value="2">T+2</option><option value="3">T+3</option></select>
+            </div>
+            <div class="glow-divide-top" style="padding:10px 4px; font-size:11px; color:#777; line-height:1.6;" id="fee-note">券商費率為整理自各券商官網／公開資料的「參考值」，優惠常有期限、條件與帳戶等級差異，實際請以券商公告為準。T+N 以「營業日」估算（略過週末，未計各國假日）。</div>
+
+            <div class="settings-category-title">交易與自動化</div>
 
             <div class="glow-divide-top setting-item">
                 <div>
@@ -3269,7 +3314,7 @@
         {
             id: 'hidden_all_in_king', tier: 'hidden', icon: HIDDEN_ICON,
             name: '梭哈之王',
-            description: '資金利用率 99%，不是別墅靠海，就是天台排隊。',
+            description: '資金利用率 99%，不是別墅靠海，就是吃土度日。',
             condition: (state, priceCache) => {
                 const nav = achv_totalAssets(state, priceCache);
                 return Object.keys(state.holdings).length > 0 && nav > 0 && state.cash < nav * 0.01;
@@ -5589,6 +5634,7 @@
     }
 
     async function initData() {
+        initFeeSettingsUI();
         await loadAccountState();
         
         const savedChartType = localStorage.getItem('SETTING_CHART_TYPE'); 
@@ -5716,7 +5762,7 @@
             const h = state.holdings[t];
             const curP = globalPriceCache[t] || (t === currentTicker && currentRealPrice !== null ? currentRealPrice : h.avgPrice);
             const val = h.shares * curP * rate, costBasis = h.shares * h.avgPrice * rate;
-            const { feeRate, taxRate } = getMarketFeeConfig(t);
+            const { feeRate, taxRate } = getMarketFeeConfig(t, h.shares, curP);
             const itemPnl = (val - val * feeRate - val * taxRate) - costBasis;
             const breakEvenPrice = h.avgPrice / (1 - feeRate - taxRate);
             unrealizedPnlNet += itemPnl;
@@ -5986,12 +6032,13 @@
         const fxInputVal = parseFloat(document.getElementById("tm-fxrate")?.value);
         const rate = (!isNaN(fxInputVal) && fxInputVal > 0) ? fxInputVal : getCurrencyMultiplier(ticker);
         const origSubtotal = shares * price;
-        const { feeRate, taxRate } = getMarketFeeConfig(ticker);
-        const origFee = origSubtotal * feeRate;
-        const origTax = action === 'SELL' ? origSubtotal * taxRate : 0;
+        const _costs = computeTradeCosts(ticker, origSubtotal, shares, action);
+        const origFee = _costs.fee;
+        const origTax = _costs.tax;
         const twdTotalSpend = (origSubtotal + origFee) * rate, twdTotalGet = (origSubtotal - origFee - origTax) * rate, twdFee = origFee * rate, twdTax = origTax * rate;
         
         let newTrade = { time: getFullFormattedTimeFromDate(timestamp), timestamp: timestamp, action: action, ticker: ticker, price: price, shares: shares, fee: action === 'BUY' ? twdFee : (twdFee + twdTax), tax: twdTax, total: action === 'BUY' ? twdTotalSpend : twdTotalGet, rate: rate, origTotalSpend: action === 'BUY' ? (origSubtotal + origFee) : null, realizedPnL: null };
+        if (action === 'SELL') newTrade.settleAt = computeSettleAt(ticker, timestamp);
         let testLedger = JSON.parse(JSON.stringify(state.ledger)); testLedger.push(newTrade); testLedger.sort((a, b) => b.timestamp - a.timestamp); 
         
         let result = recalculateState(testLedger);
@@ -6600,7 +6647,7 @@
         visibleTickers.forEach(t => {
             const rate = getCurrencyMultiplier(t);
             const cData = cardsDataCache[t] || { price: 0, rsi: null }, h = state.holdings[t] || { shares: 0, avgPrice: 0 };
-            const gross = h.shares * cData.price * rate, { feeRate, taxRate } = getMarketFeeConfig(t);
+            const gross = h.shares * cData.price * rate, { feeRate, taxRate } = getMarketFeeConfig(t, h.shares, cData.price);
             const netValue = gross > 0 ? (gross - (gross * feeRate) - (gross * taxRate)) : 0, totalCost = h.shares * h.avgPrice * rate, pnl = netValue - totalCost;
             const pnlColor = pnl >= 0 ? 'var(--color-up)' : 'var(--color-down)';
             const deleteBtn = isCardEditMode ? `<div class="delete-btn" onclick="event.stopPropagation(); removeCard('${t}')" style="position:absolute; top:-8px; right:-8px; background:var(--color-sell); color:#fff; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:10; box-shadow:0 0 10px rgba(0,0,0,0.5);"><i class="fa-solid fa-minus"></i></div>` : '';
@@ -7682,17 +7729,18 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
     // 優先使用貨幣庫存中同幣別的餘額，不足的部分視為可即時以台幣現金換匯補足。
     function getAvailableBuyingPowerNative(ticker) {
         const curr = getCurrencyForTicker(ticker), rate = getCurrencyMultiplier(ticker);
-        if (curr === 'TWD') return state.cash;
-        return getCurrencyBalance(curr) + (state.cash / rate);
+        // 🗓️ 扣除「待交割」的賣出款項：交割日前不可用於買進
+        const availCash = getAvailableCurrencyBalance('TWD');
+        if (curr === 'TWD') return availCash;
+        return getAvailableCurrencyBalance(curr) + (availCash / rate);
     }
 
     function applyPercentShares(pct, animateConvert) {
         if (isPriceLoading || currentRealPrice === null) return;
         const rate = getCurrencyMultiplier(currentTicker);
         if (tradeMode === 'BUY') { 
-            const feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100 || 0.001425; 
             const buyingPower = getAvailableBuyingPowerNative(currentTicker);
-            sharesInput.value = Math.max(1, Math.floor(Math.floor(buyingPower / (getEffectivePrice() * (1 + feeRate))) * pct)); 
+            sharesInput.value = Math.max(1, Math.floor(maxAffordableShares(currentTicker, buyingPower, getEffectivePrice()) * pct)); 
         } else { 
             const holding = state.holdings[currentTicker]?.shares || 0;
             // 🔢 賣出 100% 時直接帶入完整持股數（含小數），避免分割/合股後的零股尾數因無條件捨去而永遠賣不掉；
@@ -7713,19 +7761,247 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
     }
     
     // ============================================================
-    // 💸 多市場稅費分離 (Market-Specific Tax & Fee Segregation)
-    // 依 Ticker 判定所屬市場，決定該筆交易應套用的手續費/證交稅率：
-    // - 台股 (.TW / .TWO)：手續費 + 賣出證交稅 0.3%
-    // - 美股與其他無證交稅市場：僅手續費，證交稅為 0；
-    //   secFeeRate 為擴充欄位(如美股 SEC Fee)，目前先設為 0，
-    //   待日後有明確費率規則時可直接在此擴充，不影響其他市場邏輯。
+    // 💸 多市場手續費 / 稅 / 交割設定 (Per-Market Fee, Tax & Settlement Profiles)
+    // 以「幣別」為單位分別儲存設定（台股 TWD、美股 USD、港股 HKD…），可一鍵套用券商預設規則。
+    // 券商費率為整理自公開資料的參考值，優惠常有期限與條件，請以券商官網為準。
     // ============================================================
-    function getMarketFeeConfig(ticker) {
-        const feeRate = parseFloat(document.getElementById("cfg-fee-rate").value) / 100;
-        if (isTaiwanTicker(ticker)) {
-            return { feeRate, taxRate: parseFloat(document.getElementById("cfg-tax-rate").value) / 100, secFeeRate: 0 };
+    const FEE_PROFILE_KEY = 'SETTING_FEE_PROFILES';
+    const FEE_MARKETS = [
+        { cur: 'TWD', name: '台股 (TWD)', settle: 2 },
+        { cur: 'USD', name: '美股 (USD)', settle: 1 },
+        { cur: 'HKD', name: '港股 (HKD)', settle: 2 },
+        { cur: 'JPY', name: '日股 (JPY)', settle: 2 },
+        { cur: 'CNY', name: '中國 A 股 (CNY)', settle: 1 },
+        { cur: 'KRW', name: '韓股 (KRW)', settle: 2 },
+        { cur: 'GBP', name: '英股 (GBP)', settle: 2 },
+    ];
+    // 欄位：rate=官方牌告費率%、disc=折數(10=不打折)、min=單筆低消、odd=零股低消(台股)、ps={rate,min,maxPct}=按股數計費、tax=賣出稅%、buyTax=買進稅%
+    const tw = (id, name, disc, min, odd, note) => ({ id, name, rate: 0.1425, disc, min, odd: odd || 0, tax: 0.3, buyTax: 0, note: note || '' });
+    const BROKER_PRESETS = {
+        TWD: [
+            { group: '台灣券商（電子下單，參考值）', items: [
+                tw('tw-list', '牌告價（10 折）', 10, 20, 1),
+                tw('tw-skis', '新光證券', 2.8, 20, 1, '新戶專案另有 12 個月內 100 萬免手續費等優惠'),
+                tw('tw-fubon', '富邦證券', 1.8, 20, 1, '新戶優惠價至 2026/12/31；一般約 4~6 折'),
+                tw('tw-sinopac', '永豐金證券（大戶投）', 2, 1, 1),
+                tw('tw-cathay', '國泰證券', 2.8, 1, 1),
+                tw('tw-pocket', '口袋證券', 2.8, 1, 1),
+                tw('tw-yuanta', '元大證券', 5.5, 20, 1, '約 5~6 折，依管道與方案不同'),
+                tw('tw-kgi', '凱基證券', 6, 20, 1),
+                tw('tw-capital', '群益金鼎證券', 6.25, 20, 0, '約 6~6.5 折'),
+                tw('tw-ctbc', '中國信託證券', 6, 20, 0),
+                tw('tw-uni', '統一證券', 6, 20, 1, 'UMONEY 專案約 2.5 折、低消 1 元'),
+                tw('tw-taishin', '台新證券', 3, 20, 5),
+                tw('tw-fugle', 'Fugle 富果', 6.5, 20, 1),
+                tw('tw-hnsec', '華南永昌證券', 6.5, 20, 1),
+                tw('tw-concord', '康和證券', 6.5, 20, 0, '網路專案約 2.5 折、低消 1 元'),
+                tw('tw-bot', '台灣銀行／土地銀行證券', 3.5, 20, 0),
+                tw('tw-tcb', '台灣企銀證券', 5.6, 20, 0),
+                tw('tw-masterlink', '國票證券', 2.8, 20, 0),
+                tw('tw-dachang', '大昌證券', 3, 15, 0),
+                tw('tw-hungyuan', '宏遠證券', 2.8, 20, 1),
+                tw('tw-jinjin', '日進證券', 2.8, 20, 0),
+                tw('tw-gaoqiao', '高橋／富隆證券', 6.5, 20, 0),
+                tw('tw-benya', '犇亞／新百王證券', 2.5, 20, 0, '約 1.68~3 折'),
+            ]},
+        ],
+        USD: [
+            { group: '台灣券商複委託（美股）', items: [
+                { id: 'us-sub-list', name: '複委託牌告價', rate: 0.5, disc: 10, min: 35, tax: 0, buyTax: 0, note: '各家牌告約 0.5%~1%，低消約 US$35~39.9' },
+                { id: 'us-sub-cathay', name: '國泰證券 複委託', rate: 0.08, disc: 10, min: 0, tax: 0, buyTax: 0, note: 'ETF 另有每筆固定 US$3 方案' },
+                { id: 'us-sub-fubon', name: '富邦證券 複委託', rate: 0.06, disc: 10, min: 0, tax: 0, buyTax: 0, note: '優惠價，原約 0.25%' },
+                { id: 'us-sub-sinopac', name: '永豐金證券 複委託', rate: 0.08, disc: 10, min: 0, tax: 0, buyTax: 0, note: '優惠有月成交額度限制（約 US$5 萬），原約 0.5~1%' },
+                { id: 'us-sub-yuanta', name: '元大證券 複委託', rate: 0.1, disc: 10, min: 0, tax: 0, buyTax: 0, note: '部分方案低消約 US$1' },
+                { id: 'us-sub-kgi', name: '凱基證券 複委託', rate: 0.1, disc: 10, min: 0, tax: 0, buyTax: 0 },
+                { id: 'us-sub-capital', name: '群益金鼎證券 複委託', rate: 0.08, disc: 10, min: 0, tax: 0, buyTax: 0 },
+            ]},
+            { group: '海外券商（美股）', items: [
+                { id: 'us-ibkr-lite', name: 'IBKR Lite（免佣）', rate: 0, disc: 10, min: 0, tax: 0, buyTax: 0 },
+                { id: 'us-ibkr-fixed', name: 'IBKR Pro 固定費率', rate: 0, disc: 10, min: 0, ps: { rate: 0.005, min: 1, maxPct: 1 }, tax: 0, buyTax: 0, note: '每股 US$0.005、低消 US$1、上限 1%；另有交易所/監管費未計入' },
+                { id: 'us-ibkr-tiered', name: 'IBKR Pro 階梯費率', rate: 0, disc: 10, min: 0, ps: { rate: 0.0035, min: 0.35, maxPct: 1 }, tax: 0, buyTax: 0, note: '起始級距；月成交量大會更低，另有交易所/監管費未計入' },
+                { id: 'us-schwab', name: 'Charles Schwab（免佣）', rate: 0, disc: 10, min: 0, tax: 0, buyTax: 0 },
+                { id: 'us-fidelity', name: 'Fidelity（免佣）', rate: 0, disc: 10, min: 0, tax: 0, buyTax: 0 },
+                { id: 'us-firstrade', name: 'Firstrade（免佣）', rate: 0, disc: 10, min: 0, tax: 0, buyTax: 0 },
+                { id: 'us-webull', name: 'Webull（免佣）', rate: 0, disc: 10, min: 0, tax: 0, buyTax: 0 },
+                { id: 'us-moomoo', name: 'moomoo（免佣）', rate: 0, disc: 10, min: 0, tax: 0, buyTax: 0, note: '平台使用費等另計' },
+                { id: 'us-etoro', name: 'eToro（免佣）', rate: 0, disc: 10, min: 0, tax: 0, buyTax: 0, note: '匯兌等其他費用另計' },
+            ]},
+        ],
+        HKD: [{ group: '海外券商（港股）', items: [
+            { id: 'hk-ibkr', name: 'IBKR 固定費率', rate: 0.08, disc: 10, min: 18, tax: 0.1, buyTax: 0.1, note: '稅率為港股印花稅 0.1%（買賣雙邊）；其他規費未計入' },
+        ]}],
+        JPY: [{ group: '海外券商（日股）', items: [
+            { id: 'jp-ibkr', name: 'IBKR 固定費率', rate: 0.08, disc: 10, min: 80, tax: 0, buyTax: 0, note: '各資料來源低消略有差異，請自行確認' },
+        ]}],
+        GBP: [{ group: '海外券商（英股）', items: [
+            { id: 'uk-ibkr', name: 'IBKR 固定費率', rate: 0.05, disc: 10, min: 1, tax: 0, buyTax: 0.5, note: '買進另有 0.5% 英國印花稅' },
+        ]}],
+        KRW: [{ group: '海外券商（韓股）', items: [
+            { id: 'kr-ibkr', name: 'IBKR', rate: 0.06, disc: 10, min: 0, tax: 0, buyTax: 0, note: '約 0.06%；韓國賣出證券交易稅未預設，請自行於「賣出稅率」填入' },
+        ]}],
+        CNY: [],
+    };
+    function _presetByIdAll(cur, id) {
+        for (const g of (BROKER_PRESETS[cur] || [])) { const f = g.items.find(x => x.id === id); if (f) return f; }
+        return null;
+    }
+    function defaultFeeProfile(cur) {
+        const m = FEE_MARKETS.find(x => x.cur === cur);
+        // 預設維持舊版行為：手續費 0.1425%、無折扣、無低消；台股賣出證交稅 0.3%
+        return { broker: 'custom', rate: 0.1425, disc: 10, min: 0, odd: 0, ps: null, tax: cur === 'TWD' ? 0.3 : 0, buyTax: 0, settle: m ? m.settle : 0 };
+    }
+    let feeProfiles = (function () {
+        let saved = {};
+        try { saved = JSON.parse(localStorage.getItem(FEE_PROFILE_KEY) || '{}') || {}; } catch (e) { saved = {}; }
+        const out = {};
+        FEE_MARKETS.forEach(m => { out[m.cur] = Object.assign(defaultFeeProfile(m.cur), saved[m.cur] || {}); });
+        return out;
+    })();
+    function saveFeeProfiles() { try { localStorage.setItem(FEE_PROFILE_KEY, JSON.stringify(feeProfiles)); } catch (e) {} }
+    function getFeeProfile(cur) { return feeProfiles[cur] || (feeProfiles[cur] = defaultFeeProfile(cur)); }
+    function getFeeProfileForTicker(ticker) { return getFeeProfile(getCurrencyForTicker(ticker)); }
+
+    // 💰 單筆交易費用（以標的原生幣別計）：amount=成交金額、shares=股數、side='BUY'|'SELL'
+    // 買進時的買進稅（如港股/英股印花稅）併入 fee；賣出時 fee 與 tax 分開。
+    function computeTradeCosts(ticker, amount, shares, side) {
+        const cur = getCurrencyForTicker(ticker), p = getFeeProfile(cur);
+        let fee;
+        if (p.ps && p.ps.rate > 0) {
+            fee = shares * p.ps.rate;
+            if (p.ps.min > 0) fee = Math.max(fee, p.ps.min);
+            if (p.ps.maxPct > 0) fee = Math.min(fee, amount * p.ps.maxPct / 100);
+        } else {
+            fee = amount * (p.rate || 0) / 100 * ((p.disc > 0 ? p.disc : 10) / 10);
+            const isOdd = cur === 'TWD' && shares < 1000 && p.odd > 0;
+            const minF = isOdd ? p.odd : (p.min || 0);
+            if (amount > 0 && fee < minF) fee = minF;
         }
-        return { feeRate, taxRate: 0, secFeeRate: 0 };
+        let tax = side === 'SELL' ? amount * (p.tax || 0) / 100 : 0;
+        const buyTax = side === 'BUY' ? amount * (p.buyTax || 0) / 100 : 0;
+        if (cur === 'TWD') { fee = Math.floor(fee); tax = Math.floor(tax); } // 台股實務手續費與證交稅皆無條件捨去至整數
+        return { fee: fee + buyTax, tax };
+    }
+    // 📊 有效費率（供未實現損益、損益兩平價等「比例式」估算使用）：以賣出 shares 股、單價 price 計算
+    function getMarketFeeConfig(ticker, shares, price) {
+        const p = getFeeProfileForTicker(ticker);
+        if (shares > 0 && price > 0) {
+            const amt = shares * price, c = computeTradeCosts(ticker, amt, shares, 'SELL');
+            return { feeRate: c.fee / amt, taxRate: c.tax / amt, secFeeRate: 0 };
+        }
+        const pct = p.ps && p.ps.rate > 0 ? 0 : (p.rate || 0) / 100 * ((p.disc > 0 ? p.disc : 10) / 10);
+        return { feeRate: pct, taxRate: (p.tax || 0) / 100, secFeeRate: 0 };
+    }
+    // 買進時最多可買股數（含低消、每股費用等）：先用比例估算，再逐步下修至總成本不超過購買力
+    function maxAffordableShares(ticker, buyingPower, price) {
+        if (!(price > 0) || !(buyingPower > 0)) return 0;
+        let n = Math.floor(buyingPower / (price * (1 + getMarketFeeConfig(ticker).feeRate + (getFeeProfileForTicker(ticker).buyTax || 0) / 100)));
+        const cost = k => { const a = k * price; return a + computeTradeCosts(ticker, a, k, 'BUY').fee; };
+        let guard = 0;
+        while (n > 0 && cost(n) > buyingPower + 1e-9 && guard++ < 5000) n--;
+        return Math.max(0, n);
+    }
+
+    // ---------- 交割（T+N / 立即交割） ----------
+    function _feeNowMs() { return (typeof drillActive !== 'undefined' && drillActive && drillMeta && drillMeta.simTime) ? drillMeta.simTime.getTime() : Date.now(); }
+    function addBusinessDays(ts, n) {
+        const d = new Date(ts); let left = n;
+        while (left > 0) { d.setDate(d.getDate() + 1); const w = d.getDay(); if (w !== 0 && w !== 6) left--; }
+        return d.getTime();
+    }
+    function computeSettleAt(ticker, ts) {
+        const days = getFeeProfileForTicker(ticker).settle || 0;
+        return days > 0 ? addBusinessDays(ts, days) : ts;
+    }
+    // 尚未交割入帳的賣出款項（以該幣別計）：這些金額已在餘額中，但交割日前不可用於買進
+    function getPendingSettlement(cur) {
+        const now = _feeNowMs(); let sum = 0;
+        for (let i = 0; i < state.ledger.length; i++) {
+            const r = state.ledger[i];
+            if (r.action !== 'SELL' || !r.settleAt || r.settleAt <= now) continue;
+            if (r.timestamp > now) continue;
+            if (cur === 'TWD') { if (!r.walletCurrency) sum += r.total; }
+            else if (r.walletCurrency === cur) sum += (r.walletCreditNative || 0);
+        }
+        return sum;
+    }
+    function getAvailableCurrencyBalance(cur) { return Math.max(0, getCurrencyBalance(cur) - getPendingSettlement(cur)); }
+
+    // ---------- 設定介面 ----------
+    let feeUiMarket = 'TWD';
+    function feeUiEl(id) { return document.getElementById(id); }
+    function populateFeeBrokerSelect() {
+        const sel = feeUiEl('fee-broker-select'); if (!sel) return;
+        const p = getFeeProfile(feeUiMarket);
+        let html = `<option value="custom">自訂（手動設定）</option>`;
+        (BROKER_PRESETS[feeUiMarket] || []).forEach(g => {
+            html += `<optgroup label="${g.group}">` + g.items.map(it => `<option value="${it.id}">${it.name}</option>`).join('') + `</optgroup>`;
+        });
+        sel.innerHTML = html;
+        sel.value = _presetByIdAll(feeUiMarket, p.broker) ? p.broker : 'custom';
+    }
+    function refreshFeeSettingsUI() {
+        if (!feeUiEl('fee-market-select')) return;
+        const p = getFeeProfile(feeUiMarket), cur = feeUiMarket;
+        const psOn = !!(p.ps && p.ps.rate > 0);
+        feeUiEl('fee-list-rate').value = p.rate; feeUiEl('fee-discount').value = p.disc; feeUiEl('fee-min').value = p.min;
+        feeUiEl('fee-odd-min').value = p.odd || 0; feeUiEl('fee-tax').value = p.tax; feeUiEl('fee-buytax').value = p.buyTax || 0;
+        feeUiEl('fee-pershare-on').checked = psOn;
+        feeUiEl('fee-ps-rate').value = psOn ? p.ps.rate : 0.005; feeUiEl('fee-ps-min').value = psOn ? p.ps.min : 1; feeUiEl('fee-ps-max').value = psOn ? p.ps.maxPct : 1;
+        feeUiEl('fee-settle').value = String(p.settle || 0);
+        feeUiEl('fee-odd-row').style.display = cur === 'TWD' && !psOn ? '' : 'none';
+        ['fee-ps-rate-row', 'fee-ps-min-row', 'fee-ps-max-row'].forEach(id => feeUiEl(id).style.display = psOn ? '' : 'none');
+        feeUiEl('fee-list-rate').closest('.setting-item').style.display = psOn ? 'none' : '';
+        feeUiEl('fee-discount').closest('.setting-item').style.display = psOn ? 'none' : '';
+        feeUiEl('fee-min').closest('.setting-item').style.display = psOn ? 'none' : '';
+        const eff = (p.rate || 0) * ((p.disc > 0 ? p.disc : 10) / 10);
+        feeUiEl('fee-effective-rate').innerText = psOn ? '' : `實際費率 ≈ ${eff.toFixed(4)}%`;
+        const pr = _presetByIdAll(cur, p.broker);
+        feeUiEl('fee-note').innerText = (pr && pr.note ? `【${pr.name}】${pr.note}。\n` : '') + '券商費率為整理自各券商官網／公開資料的「參考值」，優惠常有期限、條件與帳戶等級差異，實際請以券商公告為準。T+N 以「營業日」估算（略過週末，未計各國假日）；賣出款項於交割日前列為「待交割」，不可用於買進。';
+        feeUiEl('fee-note').style.whiteSpace = 'pre-line';
+    }
+    function refreshAfterFeeChange() {
+        saveFeeProfiles();
+        try { if (typeof validateSharesInput === 'function') validateSharesInput(); } catch (e) {}
+        try { if (typeof updateAllViews === 'function') updateAllViews(); } catch (e) {}
+    }
+    function applyBrokerPreset(id) {
+        const p = getFeeProfile(feeUiMarket);
+        if (id === 'custom') { p.broker = 'custom'; refreshFeeSettingsUI(); refreshAfterFeeChange(); return; }
+        const pr = _presetByIdAll(feeUiMarket, id); if (!pr) return;
+        p.broker = id; p.rate = pr.rate; p.disc = pr.disc; p.min = pr.min || 0; p.odd = pr.odd || 0;
+        p.ps = pr.ps ? Object.assign({}, pr.ps) : null; p.tax = pr.tax || 0; p.buyTax = pr.buyTax || 0;
+        // 交割日為市場慣例，不隨券商改變，保留使用者目前設定
+        refreshFeeSettingsUI(); refreshAfterFeeChange();
+    }
+    function readFeeNum(id, fallback) { const v = parseFloat(feeUiEl(id).value); return isNaN(v) || v < 0 ? fallback : v; }
+    function onFeeFieldEdited() {
+        const p = getFeeProfile(feeUiMarket);
+        p.broker = 'custom';
+        p.rate = readFeeNum('fee-list-rate', p.rate); p.disc = readFeeNum('fee-discount', p.disc) || 10; p.min = readFeeNum('fee-min', p.min);
+        p.odd = readFeeNum('fee-odd-min', p.odd || 0); p.tax = readFeeNum('fee-tax', p.tax); p.buyTax = readFeeNum('fee-buytax', p.buyTax || 0);
+        if (feeUiEl('fee-pershare-on').checked) p.ps = { rate: readFeeNum('fee-ps-rate', 0.005), min: readFeeNum('fee-ps-min', 0), maxPct: readFeeNum('fee-ps-max', 0) };
+        else p.ps = null;
+        p.settle = parseInt(feeUiEl('fee-settle').value, 10) || 0;
+        feeUiEl('fee-broker-select').value = 'custom';
+        const psOn = !!p.ps;
+        feeUiEl('fee-odd-row').style.display = feeUiMarket === 'TWD' && !psOn ? '' : 'none';
+        ['fee-ps-rate-row', 'fee-ps-min-row', 'fee-ps-max-row'].forEach(id => feeUiEl(id).style.display = psOn ? '' : 'none');
+        ['fee-list-rate', 'fee-discount', 'fee-min'].forEach(id => feeUiEl(id).closest('.setting-item').style.display = psOn ? 'none' : '');
+        const eff = (p.rate || 0) * ((p.disc > 0 ? p.disc : 10) / 10);
+        feeUiEl('fee-effective-rate').innerText = psOn ? '' : `實際費率 ≈ ${eff.toFixed(4)}%`;
+        refreshAfterFeeChange();
+    }
+    function initFeeSettingsUI() {
+        const ms = feeUiEl('fee-market-select'); if (!ms || ms.dataset.ready) return; ms.dataset.ready = '1';
+        ms.innerHTML = FEE_MARKETS.map(m => `<option value="${m.cur}">${m.name}</option>`).join('');
+        ms.addEventListener('change', () => { feeUiMarket = ms.value; populateFeeBrokerSelect(); refreshFeeSettingsUI(); });
+        feeUiEl('fee-broker-select').addEventListener('change', e => applyBrokerPreset(e.target.value));
+        ['fee-list-rate', 'fee-discount', 'fee-min', 'fee-odd-min', 'fee-tax', 'fee-buytax', 'fee-ps-rate', 'fee-ps-min', 'fee-ps-max'].forEach(id => {
+            feeUiEl(id).addEventListener('input', onFeeFieldEdited); feeUiEl(id).addEventListener('change', onFeeFieldEdited);
+        });
+        feeUiEl('fee-pershare-on').addEventListener('change', () => { onFeeFieldEdited(); refreshFeeSettingsUI(); });
+        feeUiEl('fee-settle').addEventListener('change', onFeeFieldEdited);
+        populateFeeBrokerSelect(); refreshFeeSettingsUI();
     }
 
     function validateSharesInput() {
@@ -7740,9 +8016,9 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         }
 
         if (isPriceLoading || currentRealPrice === null) { document.getElementById("exec-trade-btn").disabled = true; return; }
-        let s = parseFloat(sharesInput.value) || 0; const rate = getCurrencyMultiplier(currentTicker), feeRate = getMarketFeeConfig(currentTicker).feeRate;
+        let s = parseFloat(sharesInput.value) || 0; const rate = getCurrencyMultiplier(currentTicker);
         const buyingPower = getAvailableBuyingPowerNative(currentTicker);
-        const maxBuy = Math.max(0, Math.floor(buyingPower / (getEffectivePrice() * (1 + feeRate)))); const holding = state.holdings[currentTicker]?.shares || 0;
+        const maxBuy = maxAffordableShares(currentTicker, buyingPower, getEffectivePrice()); const holding = state.holdings[currentTicker]?.shares || 0;
         document.getElementById("holding-shares-display").innerText = holding.toLocaleString();
 
         // 💰 現金／外幣錢包可用餘額：改為兩種情況都顯示——台幣標的顯示現金餘額，非台幣標的顯示對應外幣錢包餘額
@@ -7751,10 +8027,12 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
             const curr = getCurrencyForTicker(currentTicker);
             if (curr === 'TWD') {
                 walletIndicatorLabel.innerHTML = `<i class="fa-solid fa-wallet"></i> 現金可用`;
-                walletIndicatorVal.innerText = `NT$ ${Math.floor(state.cash).toLocaleString()}`;
+                const pendTWD = getPendingSettlement('TWD');
+                walletIndicatorVal.innerText = `NT$ ${Math.floor(state.cash - pendTWD).toLocaleString()}` + (pendTWD > 0.5 ? `（待交割 ${Math.floor(pendTWD).toLocaleString()}）` : '');
             } else {
                 walletIndicatorLabel.innerHTML = `<i class="fa-solid fa-wallet"></i> 外幣錢包可用`;
-                walletIndicatorVal.innerText = `${curr} ${getCurrencyBalance(curr).toLocaleString(undefined, {maximumFractionDigits:2})}`;
+                const pendF = getPendingSettlement(curr);
+                walletIndicatorVal.innerText = `${curr} ${getAvailableCurrencyBalance(curr).toLocaleString(undefined, {maximumFractionDigits:2})}` + (pendF > 0.005 ? `（待交割 ${pendF.toLocaleString(undefined, {maximumFractionDigits:2})}）` : '');
             }
         }
         
@@ -7772,10 +8050,9 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
     function recalculateOrder() {
         if (isPriceLoading || currentRealPrice === null) return;
         let s = parseFloat(sharesInput.value) || 0; const rate = getCurrencyMultiplier(currentTicker);
-        const { feeRate, taxRate } = getMarketFeeConfig(currentTicker);
         const effPrice = getEffectivePrice() || currentRealPrice;
-        const subtotal = s * effPrice * rate, fee = subtotal * feeRate;
-        const tax = tradeMode === 'SELL' ? subtotal * taxRate : 0;
+        const subtotal = s * effPrice * rate, _c = computeTradeCosts(currentTicker, s * effPrice, s, tradeMode);
+        const fee = _c.fee * rate, tax = _c.tax * rate;
         document.getElementById("calc-subtotal").innerText = `$ ${subtotal.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
         document.getElementById("calc-fee").innerText = `$ ${fee.toFixed(2)}`; document.getElementById("calc-tax").innerText = `$ ${tax.toFixed(2)}`;
         const total = tradeMode === 'BUY' ? (subtotal + fee) : (subtotal - fee - tax); const totalEl = document.getElementById("calc-total");
@@ -7791,9 +8068,9 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
     function executeTradeCore(ticker, mode, s, price, opts) {
         opts = opts || {};
         const rate = getCurrencyMultiplier(ticker), origSubtotal = s * price;
-        const { feeRate, taxRate } = getMarketFeeConfig(ticker);
-        const origFee = origSubtotal * feeRate;
-        const origTax = mode === 'SELL' ? origSubtotal * taxRate : 0;
+        const _tc = computeTradeCosts(ticker, origSubtotal, s, mode);
+        const origFee = _tc.fee;
+        const origTax = _tc.tax;
         const twdTotalSpend = (origSubtotal + origFee) * rate, twdTotalGet = (origSubtotal - origFee - origTax) * rate, twdFee = origFee * rate, twdTax = origTax * rate;
         // 🎮 演練期間：帳本時間戳記用「模擬時間」而非真實現在，讓交易紀錄跟走勢圖的時間軸對得起來
         const timestamp = (drillActive && drillMeta && drillMeta.simTime) ? drillMeta.simTime.getTime() : Date.now();
@@ -7803,11 +8080,11 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
             const curr = getCurrencyForTicker(ticker), nativeCost = origSubtotal + origFee;
             let walletSpendNative = 0, cashSpendTWD = 0;
             if (curr === 'TWD') {
-                if (nativeCost > state.cash + 1e-6) return { success: false, reason: 'cash' };
+                if (nativeCost > getAvailableCurrencyBalance('TWD') + 1e-6) return { success: false, reason: 'cash' };
                 cashSpendTWD = nativeCost; state.cash -= cashSpendTWD;
             } else {
-                const walletAvail = getCurrencyBalance(curr);
-                const buyingPowerNative = walletAvail + (state.cash / rate);
+                const walletAvail = getAvailableCurrencyBalance(curr);
+                const buyingPowerNative = walletAvail + (getAvailableCurrencyBalance('TWD') / rate);
                 if (nativeCost > buyingPowerNative + 1e-6) return { success: false, reason: 'cash' };
                 walletSpendNative = Math.min(walletAvail, nativeCost);
                 const shortfallNative = nativeCost - walletSpendNative;
@@ -7825,7 +8102,7 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
             if (curr === 'TWD') { state.cash += twdTotalGet; } else { adjustCurrencyBalance(curr, netNative); }
             const costBasisTWD = s * h.avgPrice * rate, realizedPnL = twdTotalGet - costBasisTWD;
             h.shares -= s; if(h.shares === 0) delete state.holdings[ticker];
-            state.ledger.unshift({ time: tradeTime, timestamp: timestamp, action: "SELL", ticker: ticker, price: price, shares: s, fee: twdFee + twdTax, total: twdTotalGet, realizedPnL: realizedPnL, rate: rate, walletCurrency: curr !== 'TWD' ? curr : undefined, walletCreditNative: curr !== 'TWD' ? netNative : undefined, orderType: opts.orderType });
+            state.ledger.unshift({ time: tradeTime, timestamp: timestamp, action: "SELL", ticker: ticker, price: price, shares: s, fee: twdFee + twdTax, total: twdTotalGet, realizedPnL: realizedPnL, rate: rate, walletCurrency: curr !== 'TWD' ? curr : undefined, walletCreditNative: curr !== 'TWD' ? netNative : undefined, orderType: opts.orderType, settleAt: computeSettleAt(ticker, timestamp) });
             return { success: true, curr, netNative, twdTotalGet };
         }
     }
@@ -8258,8 +8535,8 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
             const price = globalPriceCache[plan.ticker] !== undefined ? globalPriceCache[plan.ticker] : (plan.ticker === currentTicker ? currentRealPrice : null);
             if (price === null || price === undefined || price <= 0) continue; // 報價尚未就緒，下次輪詢再試，nextRunAt 暫不推進
 
-            const rate = getCurrencyMultiplier(plan.ticker), feeRate = getMarketFeeConfig(plan.ticker).feeRate;
-            const shares = Math.floor(plan.amountTWD / (price * rate * (1 + feeRate)));
+            const rate = getCurrencyMultiplier(plan.ticker);
+            const shares = maxAffordableShares(plan.ticker, plan.amountTWD / rate, price);
             changed = true;
             let guard = 0;
             plan.nextRunAt = computeNextDcaRun(plan.nextRunAt, plan.frequency);
@@ -8333,7 +8610,7 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
             let price = globalPriceCache[t] || (t === currentTicker && currentRealPrice !== null ? currentRealPrice : state.holdings[t].avgPrice); 
             const val = state.holdings[t].shares * price * rate, costBasis = state.holdings[t].shares * state.holdings[t].avgPrice * rate;
             // 🩹 未實現損益改以「若現在賣出」計算淨損益：市值先扣掉賣出時會產生的手續費與證交稅，再減去持股成本
-            const { feeRate, taxRate } = getMarketFeeConfig(t);
+            const { feeRate, taxRate } = getMarketFeeConfig(t, state.holdings[t].shares, price);
             unrealizedPnlNet += (val - val * feeRate - val * taxRate) - costBasis;
 
             holdingsVal += val; 
@@ -8358,7 +8635,7 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
             const rate = getCurrencyMultiplier(t), h = state.holdings[t];
             const curP = globalPriceCache[t] || (t === currentTicker && currentRealPrice !== null ? currentRealPrice : h.avgPrice);
             const val = h.shares * curP * rate;
-            const feeRate = getMarketFeeConfig(t).feeRate, taxRate = getMarketFeeConfig(t).taxRate;
+            const { feeRate, taxRate } = getMarketFeeConfig(t, h.shares, curP);
             // 🩹 與主頁「未實現總損益」邏輯一致：扣掉若現在賣出會產生的手續費及證交稅
             const itemPnl = (val - val * feeRate - val * taxRate) - (h.shares * h.avgPrice * rate);
             const breakEvenPrice = h.avgPrice / (1 - feeRate - taxRate);
@@ -10802,8 +11079,15 @@ ${summaryText}
         'tm-fxrate':             { type: 'decimal', min: 0, step: 0.01, decimals: 2 },
         'tm-shares':             { type: 'decimal', min: 0, step: 1, decimals: 0 },
         'cfg-stoploss-percent':  { type: 'decimal', min: 0.1, step: 1, decimals: 2 },
-        'cfg-fee-rate':          { type: 'decimal', min: 0, step: 0.01, decimals: 4 },
-        'cfg-tax-rate':          { type: 'decimal', min: 0, step: 0.01, decimals: 4 },
+        'fee-list-rate':         { type: 'decimal', min: 0, step: 0.01, decimals: 4 },
+        'fee-discount':          { type: 'decimal', min: 0.1, step: 0.1, decimals: 2 },
+        'fee-min':               { type: 'decimal', min: 0, step: 1, decimals: 2 },
+        'fee-odd-min':           { type: 'decimal', min: 0, step: 1, decimals: 2 },
+        'fee-tax':               { type: 'decimal', min: 0, step: 0.01, decimals: 4 },
+        'fee-buytax':            { type: 'decimal', min: 0, step: 0.01, decimals: 4 },
+        'fee-ps-rate':           { type: 'decimal', min: 0, step: 0.001, decimals: 4 },
+        'fee-ps-min':            { type: 'decimal', min: 0, step: 0.1, decimals: 2 },
+        'fee-ps-max':            { type: 'decimal', min: 0, step: 0.1, decimals: 2 },
         'cfg-node-val':          { type: 'slider', sliderId: 'cfg-node-slider' },
         'cfg-timeaxis-val':      { type: 'slider', sliderId: 'cfg-timeaxis-slider' },
         'cfg-valueaxis-val':     { type: 'slider', sliderId: 'cfg-valueaxis-slider' },
@@ -11333,7 +11617,7 @@ ${summaryText}
     function isIosDevice() {
         const ua = window.navigator.userAgent || '';
         const isIPhoneIpadIpod = /iPad|iPhone|iPod/.test(ua);
-        // iPadOS 13+ 的 UA 會偽裝成 Mac，需另外用觸控點數判斷
+        // iPadOS 13+ 的 UA 會模擬成 Mac，需另外用觸控點數判斷
         const isIpadOS13Plus = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
         return isIPhoneIpadIpod || isIpadOS13Plus;
     }
