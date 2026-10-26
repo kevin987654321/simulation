@@ -1355,8 +1355,30 @@
         </div>
 
         <div class="glass-panel" style="padding:16px; display:flex; flex-direction:column; gap:10px;">
-            <span style="font-size:13px; font-weight:bold;"><i class="fa-solid fa-scale-balanced" style="color:var(--color-acc)"></i> 委買委賣</span>
+            <span style="font-size:13px; font-weight:bold;"><i class="fa-solid fa-scale-balanced" style="color:var(--color-acc)"></i> 五檔報價</span>
             <div id="detail-bidask-panel"><div style="color:#666; font-size:12px; text-align:center; padding:10px;"><i class="fa-solid fa-spinner fa-spin"></i> 讀取中...</div></div>
+        </div>
+
+        <div class="glass-panel" style="padding:16px; display:flex; flex-direction:column; gap:10px;">
+            <span style="font-size:13px; font-weight:bold;"><i class="fa-solid fa-chart-pie" style="color:var(--color-acc)"></i> 資金分佈 <span style="font-size:10px; color:#777; font-weight:normal;">（估算）</span></span>
+            <div id="detail-flow-date" style="font-size:11px; color:#888;"></div>
+            <div id="detail-flow-settings"></div>
+            <div id="detail-flow-status" style="display:none;"></div>
+            <div id="detail-flow-body" style="display:flex; gap:16px; flex-wrap:wrap; align-items:center;">
+                <div style="height:200px; flex:1; min-width:200px; position:relative;"><canvas id="detailFlowDonut"></canvas></div>
+                <div id="detail-flow-legend" style="flex:1; min-width:200px; display:flex; flex-direction:column; gap:6px; font-size:12px;"></div>
+            </div>
+        </div>
+
+        <div class="glass-panel" style="padding:16px; display:flex; flex-direction:column; gap:10px;">
+            <span style="font-size:13px; font-weight:bold;"><i class="fa-solid fa-user-tie" style="color:var(--color-acc)"></i> 大戶／散戶買賣力 <span style="font-size:10px; color:#777; font-weight:normal;">（累計・估算）</span></span>
+            <div id="detail-strength-panel" style="display:flex; gap:12px; flex-wrap:wrap;"></div>
+        </div>
+
+        <div class="glass-panel" style="padding:16px; display:flex; flex-direction:column; gap:10px;">
+            <span style="font-size:13px; font-weight:bold;"><i class="fa-solid fa-chart-line" style="color:var(--color-acc)"></i> 資金流向 <span style="font-size:10px; color:#777; font-weight:normal;">（累計淨流入・估算）</span></span>
+            <div style="height:240px; position:relative;"><canvas id="detailFlowLine"></canvas></div>
+            <div style="font-size:10px; color:#666; line-height:1.5;">台股使用 FinMind 逐筆成交（TaiwanStockPriceTick）：金額＝成交價×成交量(張)×1000，依 TickType 1=外盤流入、2=內盤流出，0 忽略。非台股無逐筆資料，改以 Yahoo 1 分 K 估算（每根 K 棒視為一筆，結果偏向大單，僅供參考）。今日尚無資料時顯示前一交易日。</div>
         </div>
 
         <div class="glass-panel" style="padding:16px; display:flex; flex-direction:column; gap:10px;">
@@ -1711,7 +1733,7 @@
             <div class="settings-category-title">手續費與交割</div>
             <div class="setting-item">
                 <div><div style="font-weight:bold;">手續費 / 稅 / 交割設定</div><div id="fee-summary-line" style="font-size:11px; color:#777; margin-top:2px;">各市場分別設定、一鍵套用券商規則、T+N 交割</div></div>
-                <button onclick="switchView('view-fees', null)" style="background:rgba(0,212,255,0.15); border:1px solid var(--color-acc); color:var(--color-acc); padding:8px 14px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s; white-space:nowrap;"><i class="fa-solid fa-receipt"></i> 開啟費率工作室</button>
+                <button onclick="switchView('view-fees', null)" style="background:rgba(0,212,255,0.15); border:1px solid var(--color-acc); color:var(--color-acc); padding:8px 14px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:bold; transition:all 0.2s; white-space:nowrap;">進入設定</button>
             </div>
 
             <div class="settings-category-title">交易與自動化</div>
@@ -1957,13 +1979,12 @@
 
             <div class="fx-stack">
                 <div class="fx-card glow-divide-top">
-                    <div class="fx-card-title"><i class="fa-solid fa-store"></i> 套用券商規則</div>
                     <input type="text" id="fx-broker-search" class="fx-search" placeholder="搜尋券商…" autocomplete="off">
                     <div id="fx-broker-grid" class="fx-broker-grid"></div>
                 </div>
 
                 <div class="fx-card glow-divide-top">
-                    <div class="fx-card-title"><i class="fa-solid fa-flask"></i> 試算與券商比價</div>
+                    <div class="fx-card-title">試算與券商比價</div>
                     <div class="fx-sim-inputs">
                         <label>單價<input type="text" id="fx-sim-price" class="mobile-num" data-decimal="true" value="100"></label>
                         <label>股數<input type="text" id="fx-sim-shares" class="mobile-num" data-decimal="true" value="1000"></label>
@@ -1975,7 +1996,7 @@
             </div>
 
             <div class="fx-card glow-divide-top">
-                <div class="fx-card-title"><i class="fa-solid fa-calendar-check"></i> 交割方式</div>
+                <div class="fx-card-title">交割方式</div>
                 <div class="fx-seg" id="fx-seg">
                     <button data-days="0">立即交割</button><button data-days="1">T+1</button><button data-days="2">T+2</button><button data-days="3">T+3</button>
                 </div>
@@ -1985,7 +2006,7 @@
             </div>
 
             <div class="fx-card glow-divide-top">
-                <div class="fx-card-title" style="cursor:pointer; margin-bottom:4px;" onclick="document.getElementById('fx-fine').classList.toggle('open')"><i class="fa-solid fa-screwdriver-wrench"></i> 手動微調 <i class="fa-solid fa-chevron-down" style="margin-left:auto; font-size:11px; color:#777;"></i></div>
+                <div class="fx-card-title" style="cursor:pointer; margin-bottom:4px;" onclick="document.getElementById('fx-fine').classList.toggle('open')">自訂<i class="fa-solid fa-chevron-down" style="margin-left:auto; font-size:11px; color:#777;"></i></div>
                 <div id="fx-fine" class="fx-fine">
                 <div class="setting-item fx-row">
                     <div><div style="font-weight:bold;">官方牌告手續費率 (%)</div><div style="font-size:11px; color:#777; margin-top:2px;">成交金額 × 費率 × 折數</div></div>
@@ -6842,6 +6863,7 @@
         { label: '1M', range: '1mo', interval: '1d' }, { label: '3M', range: '3mo', interval: '1d' },
         { label: '1Y', range: '1y', interval: '1d' }, { label: 'All', range: '5y', interval: '1wk' }
     ];
+    let detailFlowToken = 0, detailFlowLastFetch = 0, detailFlowDonut = null, detailFlowLine = null;
     let detailTicker = null, detailRangeLabel = '1M', detailReqToken = 0, detailNewsToken = 0, detailQuoteToken = 0;
 
     function openTickerDetail(ticker) {
@@ -6857,7 +6879,11 @@
         renderDetailRangeButtons();
         loadTickerDetailChart();
         loadTickerDetailNews();
+        detailFlowLastFetch = 0;
+        document.getElementById('detail-strength-panel').innerHTML = '';
+        document.getElementById('detail-flow-legend').innerHTML = '';
         loadTickerDetailQuoteExtra(ticker);
+        loadTickerDetailFlow(ticker, true);
     }
     window.openTickerDetail = openTickerDetail;
 
@@ -6947,57 +6973,314 @@
     // ⚠️ 這只是「最佳一檔」揭示（Level 1），不是台股官方五檔完整委買委賣簿；
     // 且不同交易所、不同標的，Yahoo 是否有回傳這筆資料本身就不保證，抓不到時會誠實顯示「暫無資料」。
     // ============================================================
+    // 五檔：台股優先嘗試證交所 MIS（有完整五檔）；失敗或非台股則退回 Yahoo 最佳一檔
+    async function fetchTwseFiveLevel(ticker) {
+        const m = ticker.match(/^(\w+)\.(TW|TWO)$/i);
+        if (!m) return null;
+        const ex = m[2].toUpperCase() === 'TW' ? 'tse' : 'otc';
+        const url = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=${ex}_${m[1]}.tw&json=1&delay=0&_=${Date.now()}`;
+        const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), 5000);
+        try {
+            const res = await fetch(`${myProxy}${encodeURIComponent(url)}`, { cache: 'no-store', signal: ctrl.signal });
+            if (!res.ok) return null;
+            const j = await res.json(), r = j && j.msgArray && j.msgArray[0];
+            if (!r) return null;
+            const split = (v) => (v || '').split('_').filter(x => x !== '').map(Number);
+            const bp = split(r.b), bv = split(r.g), ap = split(r.a), av = split(r.f);
+            if (!bp.length && !ap.length) return null;
+            return { bids: bp.slice(0, 5).map((p, i) => ({ p, v: bv[i] })), asks: ap.slice(0, 5).map((p, i) => ({ p, v: av[i] })), full: true };
+        } catch (e) { return null; } finally { clearTimeout(t); }
+    }
+
     async function loadTickerDetailQuoteExtra(ticker) {
         const myToken = ++detailQuoteToken;
         try {
             const proxyUrl = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(ticker)}`)}`;
-            const res = await fetch(proxyUrl, { cache: "no-store" });
-            if (!res.ok) throw new Error('http ' + res.status);
-            const json = await res.json();
-            const q = (json && json.quoteResponse && json.quoteResponse.result && json.quoteResponse.result[0]) || null;
-            if (myToken !== detailQuoteToken || ticker !== detailTicker) return; // 已切換代號，忽略過期結果
-            renderDetailBidAsk(ticker, q, false);
+            const [five, quoteRes] = await Promise.all([
+                isTaiwanTicker(ticker) ? fetchTwseFiveLevel(ticker) : Promise.resolve(null),
+                fetch(proxyUrl, { cache: "no-store" }).then(async r => { if (!r.ok) throw new Error('http ' + r.status); return r.json(); }).catch(e => ({ __err: e }))
+            ]);
+            if (myToken !== detailQuoteToken || ticker !== detailTicker) return;
+            const q = quoteRes && quoteRes.quoteResponse && quoteRes.quoteResponse.result ? quoteRes.quoteResponse.result[0] : null;
+            if (!five && quoteRes && quoteRes.__err) throw quoteRes.__err;
+            renderDetailBidAsk(ticker, q, false, five);
         } catch (e) {
-            console.error('[委買委賣讀取失敗]', e); // 🩹 印出實際錯誤（如 HTTP 狀態碼），方便從瀏覽器 console 判斷是被擋、逾時、還是格式錯誤
+            console.error('[五檔報價讀取失敗]', e);
             if (myToken === detailQuoteToken && ticker === detailTicker) renderDetailBidAsk(ticker, null, true);
         }
     }
     window.loadTickerDetailQuoteExtra = loadTickerDetailQuoteExtra;
 
-    function renderDetailBidAsk(ticker, q, failed) {
+    function renderDetailBidAsk(ticker, q, failed, five) {
         const wrap = document.getElementById('detail-bidask-panel');
         if (!wrap) return;
         if (failed) {
             wrap.innerHTML = `<div style="color:#888; font-size:12px; text-align:center; padding:10px; display:flex; flex-direction:column; gap:8px; align-items:center;">
-                <span><i class="fa-solid fa-triangle-exclamation" style="color:var(--color-sell)"></i> 委買委賣讀取失敗</span>
+                <span><i class="fa-solid fa-triangle-exclamation" style="color:var(--color-sell)"></i> 五檔報價讀取失敗</span>
                 <button type="button" onclick="loadTickerDetailQuoteExtra('${ticker}')" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:6px 14px; border-radius:6px; font-size:11px; cursor:pointer; font-weight:bold;"><i class="fa-solid fa-rotate-right"></i> 重試</button>
             </div>`;
             return;
         }
-        const hasBid = q && typeof q.bid === 'number' && q.bid > 0;
-        const hasAsk = q && typeof q.ask === 'number' && q.ask > 0;
-        if (!hasBid && !hasAsk) {
-            wrap.innerHTML = `<div style="color:#666; font-size:12px; text-align:center; padding:10px;">此標的目前無委買委賣報價資料</div>`;
-            return;
+        let bids, asks, full = false;
+        if (five) { bids = five.bids; asks = five.asks; full = true; }
+        else {
+            const hasBid = q && typeof q.bid === 'number' && q.bid > 0, hasAsk = q && typeof q.ask === 'number' && q.ask > 0;
+            if (!hasBid && !hasAsk) { wrap.innerHTML = `<div style="color:#666; font-size:12px; text-align:center; padding:10px;">此標的目前無委買委賣報價資料</div>`; return; }
+            bids = hasBid ? [{ p: q.bid, v: q.bidSize }] : []; asks = hasAsk ? [{ p: q.ask, v: q.askSize }] : [];
         }
-        // 台股 Yahoo 回傳的 bidSize/askSize 慣例上即為「張」數；其餘市場多為「股」數，依交易所回傳格式而異，此處僅盡量標示單位供參考
         const unit = isTaiwanTicker(ticker) ? '張' : '股';
-        const fmtSize = (v) => (v === null || v === undefined) ? '--' : Math.round(v).toLocaleString() + ' ' + unit;
+        const rows = 5, maxV = Math.max(1, ...bids.map(x => x.v || 0), ...asks.map(x => x.v || 0));
+        const fv = (v) => (v === null || v === undefined || isNaN(v)) ? '--' : Math.round(v).toLocaleString();
+        const fp = (v) => (v === null || v === undefined || isNaN(v)) ? '--' : v.toFixed(2);
+        let body = '';
+        for (let i = 0; i < rows; i++) {
+            const b = bids[i], a = asks[i];
+            const bw = b && b.v ? Math.max(2, b.v / maxV * 100) : 0, aw = a && a.v ? Math.max(2, a.v / maxV * 100) : 0;
+            body += `<div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-family:monospace; font-size:12px;">
+                <div style="position:relative; display:flex; justify-content:space-between; padding:5px 8px; border-radius:4px; overflow:hidden;">
+                    <div style="position:absolute; right:0; top:0; bottom:0; width:${bw}%; background:rgba(0,255,170,0.14);"></div>
+                    <span style="position:relative; color:#aaa;">${b ? fv(b.v) : '--'}</span><span style="position:relative; color:var(--color-buy); font-weight:bold;">${b ? fp(b.p) : '--'}</span>
+                </div>
+                <div style="position:relative; display:flex; justify-content:space-between; padding:5px 8px; border-radius:4px; overflow:hidden;">
+                    <div style="position:absolute; left:0; top:0; bottom:0; width:${aw}%; background:rgba(255,69,96,0.14);"></div>
+                    <span style="position:relative; color:var(--color-sell); font-weight:bold;">${a ? fp(a.p) : '--'}</span><span style="position:relative; color:#aaa;">${a ? fv(a.v) : '--'}</span>
+                </div>
+            </div>`;
+        }
+        const bt = bids.reduce((n, x) => n + (x.v || 0), 0), at = asks.reduce((n, x) => n + (x.v || 0), 0);
         wrap.innerHTML = `
-            <div style="display:flex; gap:12px; flex-wrap:wrap;">
-                <div style="flex:1; min-width:120px; background:rgba(0,255,170,0.08); border:1px solid rgba(0,255,170,0.2); border-radius:8px; padding:10px 12px;">
-                    <div style="font-size:11px; color:#888; margin-bottom:4px;">委買 Bid</div>
-                    <div style="font-family:monospace; font-weight:bold; font-size:16px; color:var(--color-buy);">${hasBid ? '$' + q.bid.toFixed(2) : '--'}</div>
-                    <div style="font-size:11px; color:#888; margin-top:2px;">${hasBid ? fmtSize(q.bidSize) : '--'}</div>
-                </div>
-                <div style="flex:1; min-width:120px; background:rgba(255,69,96,0.08); border:1px solid rgba(255,69,96,0.2); border-radius:8px; padding:10px 12px;">
-                    <div style="font-size:11px; color:#888; margin-bottom:4px;">委賣 Ask</div>
-                    <div style="font-family:monospace; font-weight:bold; font-size:16px; color:var(--color-sell);">${hasAsk ? '$' + q.ask.toFixed(2) : '--'}</div>
-                    <div style="font-size:11px; color:#888; margin-top:2px;">${hasAsk ? fmtSize(q.askSize) : '--'}</div>
-                </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:11px; color:#888; padding:0 8px;">
+                <div style="display:flex; justify-content:space-between;"><span>委買量（${unit}）</span><span>買價</span></div>
+                <div style="display:flex; justify-content:space-between;"><span>賣價</span><span>委賣量（${unit}）</span></div>
             </div>
-            ${(hasBid && hasAsk) ? `<div style="font-size:11px; color:#666; text-align:center; margin-top:8px;">價差 Spread: $${(q.ask - q.bid).toFixed(2)}</div>` : ''}
-        `;
+            <div style="display:flex; flex-direction:column; gap:3px;">${body}</div>
+            <div style="display:flex; justify-content:space-between; font-size:11px; color:#888; padding:0 8px;">
+                <span>買量合計 <b style="color:var(--color-buy)">${fv(bt)}</b></span>
+                ${(bids[0] && asks[0]) ? `<span>價差 $${(asks[0].p - bids[0].p).toFixed(2)}</span>` : ''}
+                <span>賣量合計 <b style="color:var(--color-sell)">${fv(at)}</b></span>
+            </div>
+            ${full ? '' : `<div style="font-size:10px; color:#666; text-align:center;">⚠️ 目前僅取得最佳一檔（Yahoo Level 1）；完整五檔來源（證交所 MIS）無法連線或標的非台股。</div>`}`;
+    }
+
+    // ============================================================
+    // 💹 資金分佈／大戶散戶買賣力／資金流向（估算）
+    // Yahoo 沒有真實的大戶／散戶資料：以今日 1 分鐘 K 線推估。
+    // 量能前 20% 的 K 棒 = 大戶；方向依該棒收盤 vs 開盤（平盤沿用前一棒方向）。
+    // ============================================================
+    // 單別門檻（成交金額，元）。可在「資金分佈」面板調整，存於 localStorage
+    const FLOW_DEFAULTS = { xl: 3000000, l: 1500000, m: 500000 };
+    let flowThresholds = (() => { try { const j = JSON.parse(localStorage.getItem('flowThresholds') || 'null'); if (j && j.xl > j.l && j.l > j.m && j.m > 0) return j; } catch (e) {} return { ...FLOW_DEFAULTS }; })();
+    let detailFlowCache = null;
+
+    // 匯率（USD→TWD，用來把台幣門檻換算成美元門檻）與 FinMind token，皆可在設定面板調整
+    let flowUsdRate = (() => { try { const n = Number(localStorage.getItem('flowUsdRate')); return n > 0 ? n : 32; } catch (e) { return 32; } })();
+    let finmindToken = (() => { try { return localStorage.getItem('finmindToken') || ''; } catch (e) { return ''; } })();
+    let detailFlowForceYahoo = false;
+    // 依標的幣別換算門檻：USD 標的 = 台幣門檻 ÷ 匯率；其他幣別沿用原數字
+    function effectiveFlowThresholds(ticker) {
+        const cur = (typeof getCurrencyForTicker === 'function') ? getCurrencyForTicker(ticker) : 'TWD';
+        const d = cur === 'USD' ? flowUsdRate : 1;
+        return { xl: flowThresholds.xl / d, l: flowThresholds.l / d, m: flowThresholds.m / d };
+    }
+
+    // 核心分類：trades = [{label, amt, v(股), tick}]；tick 1=外盤(流入) 2=內盤(流出，金額記負) 0=忽略
+    function classifyFlow(trades, th, lotSize) {
+        const mk = () => ({ inA: 0, outA: 0, inV: 0, outV: 0 });
+        const G = { xl: mk(), l: mk(), m: mk(), s: mk() };
+        let cumAll = 0, cumBig = 0, cumSmall = 0, n = 0;
+        const lineMap = new Map(); // 以分鐘合併，避免逐筆資料畫出數萬個點
+        for (const b of trades) {
+            const k = b.amt >= th.xl ? 'xl' : b.amt >= th.l ? 'l' : b.amt >= th.m ? 'm' : 's';
+            const isBig = k === 'xl' || k === 'l';
+            if (b.tick === 1) { G[k].inA += b.amt; G[k].inV += b.v; cumAll += b.amt; if (isBig) cumBig += b.amt; else cumSmall += b.amt; n++; }
+            else if (b.tick === 2) { G[k].outA -= b.amt; G[k].outV += b.v; cumAll -= b.amt; if (isBig) cumBig -= b.amt; else cumSmall -= b.amt; n++; }
+            lineMap.set(b.label, [cumAll, cumBig, cumSmall]);
+        }
+        if (!trades.length) return null;
+        const labels = [...lineMap.keys()], vals = [...lineMap.values()];
+        const sum = (x, y, f) => x[f] + y[f];
+        const bigG = { inA: sum(G.xl, G.l, 'inA'), outA: sum(G.xl, G.l, 'outA'), inV: sum(G.xl, G.l, 'inV'), outV: sum(G.xl, G.l, 'outV') };
+        const smallG = { inA: sum(G.m, G.s, 'inA'), outA: sum(G.m, G.s, 'outA'), inV: sum(G.m, G.s, 'inV'), outV: sum(G.m, G.s, 'outV') };
+        return { G, big: bigG, small: smallG, labels, all: vals.map(x => x[0]), big_line: vals.map(x => x[1]), small_line: vals.map(x => x[2]), lotSize, nBars: n };
+    }
+
+    // 非台股：以 Yahoo 1 分鐘 K 棒視為一筆成交（金額 = 均價 × 成交量；收盤>開盤=外盤，<開盤=內盤，平盤忽略）
+    function computeFlowFromBars(ts, o, h, l, c, v, lotSize, th) {
+        const trades = [];
+        for (let i = 0; i < ts.length; i++) {
+            if (c[i] == null || o[i] == null || v[i] == null || v[i] <= 0) continue;
+            const d = new Date(ts[i] * 1000);
+            trades.push({ label: `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`, tick: c[i] > o[i] ? 1 : (c[i] < o[i] ? 2 : 0),
+                amt: ((h[i] ?? c[i]) + (l[i] ?? c[i]) + c[i]) / 3 * v[i], v: v[i] });
+        }
+        return classifyFlow(trades, th, lotSize);
+    }
+
+    // 台股：FinMind TaiwanStockPriceTick 真實逐筆。amount = 成交價 × 成交量(張) × 1000
+    function computeFlowFromTicks(rows, th) {
+        const trades = [];
+        for (const r of rows) {
+            const price = Number(r.deal_price ?? r.close), vol = Number(r.volume), tick = Number(r.TickType);
+            if (!(price > 0) || !(vol > 0)) continue;
+            const hhmm = String(r.Time || '').slice(0, 5);
+            trades.push({ label: hhmm, tick: tick === 1 ? 1 : (tick === 2 ? 2 : 0), amt: price * vol * 1000, v: vol * 1000 });
+        }
+        return classifyFlow(trades, th, 1000);
+    }
+
+    async function fetchFinMindTicks(stockId, dateStr) {
+        const qs = `dataset=TaiwanStockPriceTick&data_id=${encodeURIComponent(stockId)}&start_date=${dateStr}` + (finmindToken ? `&token=${encodeURIComponent(finmindToken)}` : '');
+        const api = `https://api.finmindtrade.com/api/v4/data?${qs}`;
+        let res;
+        try { res = await fetch(api, { cache: 'no-store' }); }
+        catch (e) { res = await fetch(`${myProxy}${encodeURIComponent(api)}`, { cache: 'no-store' }); } // 直連被 CORS 擋時改走 proxy
+        const j = await res.json();
+        if (j.status !== 200) { const err = new Error(j.msg || ('FinMind status ' + j.status)); err.finmind = true; err.status = j.status; throw err; }
+        return j.data || [];
+    }
+
+    async function loadTickerDetailFlow(ticker, force) {
+        const now = Date.now();
+        if (!force && now - detailFlowLastFetch < 30000) return; // 資料量大，30 秒才更新一次
+        detailFlowLastFetch = now;
+        const myToken = ++detailFlowToken;
+        const statusEl = document.getElementById('detail-flow-status');
+        const showErr = (msg, extra) => {
+            if (myToken !== detailFlowToken || ticker !== detailTicker) return;
+            statusEl.style.display = 'block';
+            statusEl.innerHTML = `<div style="color:#888; font-size:12px; text-align:center; padding:10px; display:flex; flex-direction:column; gap:8px; align-items:center;">
+                <span><i class="fa-solid fa-triangle-exclamation" style="color:var(--color-sell)"></i> ${escapeHtml(msg)}</span>
+                <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:center;">
+                <button type="button" onclick="detailFlowForceYahoo=false; loadTickerDetailFlow('${ticker}', true)" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:6px 14px; border-radius:6px; font-size:11px; cursor:pointer; font-weight:bold;"><i class="fa-solid fa-rotate-right"></i> 重試</button>${extra || ''}</div></div>`;
+        };
+        try {
+            const tw = isTaiwanTicker(ticker) && !detailFlowForceYahoo;
+            if (tw) {
+                const stockId = ticker.replace(/\.(TW|TWO)$/i, '');
+                // 由今天（台北時間）往前找，最多回溯 10 天，遇到週末跳過；取第一個有逐筆資料的交易日
+                const todayStr = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+                let rows = null, day = null;
+                for (let i = 0; i < 10 && !rows; i++) {
+                    const d = new Date(Date.parse(todayStr + 'T00:00:00Z') - i * 86400e3);
+                    if (d.getUTCDay() === 0 || d.getUTCDay() === 6) continue;
+                    const ds = d.toISOString().slice(0, 10);
+                    const r = (detailFlowCache && detailFlowCache.ticker === ticker && detailFlowCache.day === ds && detailFlowCache.rows && ds !== todayStr) ? detailFlowCache.rows : await fetchFinMindTicks(stockId, ds);
+                    if (myToken !== detailFlowToken || ticker !== detailTicker) return;
+                    if (r.length) { rows = r; day = ds; }
+                }
+                if (!rows) throw new Error('近 10 天查無逐筆資料');
+                detailFlowCache = { ticker, day, isToday: day === todayStr, rows, source: 'FinMind 逐筆' };
+            } else {
+                const url = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=5d&interval=1m`)}`;
+                const res = await fetch(url, { cache: 'no-store' });
+                if (!res.ok) throw new Error('http ' + res.status);
+                const json = await res.json(), r = json.chart && json.chart.result ? json.chart.result[0] : null;
+                if (myToken !== detailFlowToken || ticker !== detailTicker) return;
+                if (!r || !(r.timestamp || []).length) throw new Error('no data');
+                const qd = (r.indicators.quote[0]) || {}, tsAll = r.timestamp, off = (r.meta && r.meta.gmtoffset) || 0;
+                const dayKey = (t) => new Date((t + off) * 1000).toISOString().slice(0, 10);
+                let day = null;
+                for (let i = tsAll.length - 1; i >= 0; i--) if (qd.close && qd.close[i] != null && qd.volume && qd.volume[i] > 0) { day = dayKey(tsAll[i]); break; }
+                if (!day) throw new Error('no volume');
+                const idx = []; for (let i = 0; i < tsAll.length; i++) if (dayKey(tsAll[i]) === day) idx.push(i);
+                const pick = (arr) => idx.map(i => (arr || [])[i]);
+                detailFlowCache = { ticker, day, isToday: day === dayKey(Math.floor(Date.now() / 1000)), source: 'Yahoo 1 分 K 估算',
+                    ts: pick(tsAll), o: pick(qd.open), h: pick(qd.high), l: pick(qd.low), c: pick(qd.close), v: pick(qd.volume), lot: isTaiwanTicker(ticker) ? 1000 : 1 };
+            }
+            statusEl.style.display = 'none';
+            recomputeDetailFlow();
+        } catch (e) {
+            console.error('[資金流向讀取失敗]', e);
+            if (e && e.finmind) {
+                const needToken = e.status === 401 || e.status === 402 || /level|token|permission|sponsor|backer/i.test(e.message || '');
+                showErr(needToken ? 'FinMind 逐筆成交需要有權限的 token（Backer／Sponsor 會員）。請在下方「單別門檻設定」填入 token。' : 'FinMind 讀取失敗：' + e.message,
+                    isTaiwanTicker(ticker) ? `<button type="button" onclick="detailFlowForceYahoo=true; loadTickerDetailFlow('${ticker}', true)" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:6px 14px; border-radius:6px; font-size:11px; cursor:pointer;">暫時改用 Yahoo 估算</button>` : '');
+                const se = document.getElementById('detail-flow-settings'); if (se) renderFlowSettings();
+            } else showErr('資料讀取失敗（或尚無成交）：' + (e && e.message ? e.message : ''));
+        }
+    }
+    window.loadTickerDetailFlow = loadTickerDetailFlow;
+
+    function recomputeDetailFlow() {
+        const C = detailFlowCache; if (!C || C.ticker !== detailTicker) return;
+        const th = effectiveFlowThresholds(C.ticker);
+        const f = C.rows ? computeFlowFromTicks(C.rows, th) : computeFlowFromBars(C.ts, C.o, C.h, C.l, C.c, C.v, C.lot, th);
+        if (f) renderDetailFlow(C.ticker, f);
+    }
+    function setFlowThreshold(key, val) {
+        const n = Number(val) * 10000; // 輸入單位：萬元
+        if (!(n > 0)) return;
+        const t = { ...flowThresholds, [key]: n };
+        if (!(t.xl > t.l && t.l > t.m)) { alert('門檻需符合：超大單 > 大單 > 中單 > 0'); renderFlowSettings(); return; }
+        flowThresholds = t; try { localStorage.setItem('flowThresholds', JSON.stringify(t)); } catch (e) {}
+        recomputeDetailFlow();
+    }
+    function resetFlowThresholds() { flowThresholds = { ...FLOW_DEFAULTS }; try { localStorage.removeItem('flowThresholds'); } catch (e) {} renderFlowSettings(); recomputeDetailFlow(); }
+    function setFlowUsdRate(v) { const n = Number(v); if (!(n > 0)) return; flowUsdRate = n; try { localStorage.setItem('flowUsdRate', String(n)); } catch (e) {} recomputeDetailFlow(); }
+    function setFinmindToken(v) { finmindToken = (v || '').trim(); try { localStorage.setItem('finmindToken', finmindToken); } catch (e) {} if (detailTicker) loadTickerDetailFlow(detailTicker, true); }
+    window.setFlowUsdRate = setFlowUsdRate; window.setFinmindToken = setFinmindToken;
+    window.setFlowThreshold = setFlowThreshold; window.resetFlowThresholds = resetFlowThresholds;
+    function renderFlowSettings() {
+        const el = document.getElementById('detail-flow-settings'); if (!el) return;
+        const inp = (k, label) => `<label style="display:flex; flex-direction:column; gap:2px; font-size:10px; color:#888;">${label}≥（萬元）<input type="number" min="1" value="${flowThresholds[k] / 10000}" onchange="setFlowThreshold('${k}', this.value)" style="width:90px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.2); color:#fff; border-radius:4px; padding:4px 6px; font-size:12px;"></label>`;
+        el.innerHTML = `<details><summary style="cursor:pointer; font-size:11px; color:#888;"><i class="fa-solid fa-sliders"></i> 單別門檻設定（大戶＝超大單＋大單；散戶＝中單＋小單）</summary>
+            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-top:8px;">${inp('xl', '超大單')}${inp('l', '大單')}${inp('m', '中單')}
+            <label style="display:flex; flex-direction:column; gap:2px; font-size:10px; color:#888;">USD 匯率（門檻÷匯率）<input type="number" min="1" step="0.1" value="${flowUsdRate}" onchange="setFlowUsdRate(this.value)" style="width:90px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.2); color:#fff; border-radius:4px; padding:4px 6px; font-size:12px;"></label>
+            <label style="display:flex; flex-direction:column; gap:2px; font-size:10px; color:#888;">FinMind token（台股逐筆）<input type="password" value="${escapeHtml(finmindToken)}" onchange="setFinmindToken(this.value)" placeholder="貼上 token" style="width:150px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.2); color:#fff; border-radius:4px; padding:4px 6px; font-size:12px;"></label>
+            <button type="button" onclick="resetFlowThresholds()" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:5px 10px; border-radius:6px; font-size:11px; cursor:pointer;">還原預設</button></div>
+            <div style="font-size:10px; color:#666; margin-top:4px;">小單＝低於中單門檻。預設 300 萬／150 萬／50 萬（新台幣）；美股（USD）標的自動除以匯率換算。</div></details>`;
+    }
+
+    function renderDetailFlow(ticker, f) {
+        const rs = getComputedStyle(document.documentElement);
+        const up = rs.getPropertyValue('--color-up').trim() || '#00ffaa', down = rs.getPropertyValue('--color-down').trim() || '#ff4560';
+        const unit = isTaiwanTicker(ticker) ? '張' : '股';
+        const fmtAmt = (a) => { const x = Math.abs(a); return (a < 0 ? '-' : '') + (x >= 1e8 ? (x / 1e8).toFixed(2) + ' 億' : x >= 1e4 ? (x / 1e4).toFixed(1) + ' 萬' : Math.round(x).toLocaleString()); };
+        const lots = (v) => Math.round(v / f.lotSize);
+        const { big, small } = f;
+        const dayLbl = detailFlowCache ? `${detailFlowCache.day}${detailFlowCache.isToday ? '（今日）' : '（前一交易日，今日尚無資料）'}` : '';
+        const dEl = document.getElementById('detail-flow-date'); if (dEl) dEl.innerHTML = `資料日期：<b style="color:#ccc;">${dayLbl}</b>・來源：${detailFlowCache ? detailFlowCache.source : ''}`;
+        const _se = document.getElementById('detail-flow-settings'); if (_se && !_se.innerHTML) renderFlowSettings();
+        const pct = (x, y) => (x + y) ? (x / (x + y) * 100) : 0;
+        const bigInPct = pct(big.inA, small.inA), smallInPct = 100 - ((big.inA + small.inA) ? bigInPct : 100);
+        const bigOutAbs = Math.abs(big.outA), smallOutAbs = Math.abs(small.outA);
+        const bigOutPct = pct(bigOutAbs, smallOutAbs), smallOutPct = (bigOutAbs + smallOutAbs) ? 100 - bigOutPct : 0;
+        const totalNet = (big.inA + small.inA) - (bigOutAbs + smallOutAbs);
+        const segs = [
+            { name: '大戶流入', val: big.inA, pct: bigInPct, color: up }, { name: '散戶流入', val: small.inA, pct: (big.inA + small.inA) ? smallInPct : 0, color: up + '88' },
+            { name: '大戶流出', val: -bigOutAbs, pct: bigOutPct, color: down }, { name: '散戶流出', val: -smallOutAbs, pct: smallOutPct, color: down + '88' }
+        ];
+        document.getElementById('detail-flow-legend').innerHTML = segs.map(sg =>
+            `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px;"><span><span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:${sg.color}; margin-right:6px;"></span>${sg.name}</span><span style="font-family:monospace; color:#ccc;">${fmtAmt(sg.val)} <span style="color:#777;">(${sg.pct.toFixed(1)}%)</span></span></div>`).join('')
+            + `<div style="border-top:1px solid rgba(255,255,255,0.1); padding-top:6px; display:flex; justify-content:space-between;"><span>今日資金流向（總淨額）</span><b style="font-family:monospace; color:${totalNet >= 0 ? 'var(--color-up)' : 'var(--color-down)'};">${fmtAmt(totalNet)}</b></div>`;
+        const donutData = { labels: segs.map(x => x.name), datasets: [{ data: segs.map(x => Math.abs(x.val)), backgroundColor: segs.map(x => x.color), borderColor: 'rgba(0,0,0,0.4)', borderWidth: 1 }] };
+        if (!detailFlowDonut) {
+            detailFlowDonut = new Chart(document.getElementById('detailFlowDonut').getContext('2d'), { type: 'doughnut', data: donutData,
+                options: { responsive: true, maintainAspectRatio: false, cutout: '62%', plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => ` ${c.label}: ${fmtAmt(c.parsed)}` } } } } });
+        } else { detailFlowDonut.data = donutData; detailFlowDonut.update(); }
+
+        const card = (title, g, sub) => {
+            const net = g.inV - g.outV, isUp = net >= 0, col = isUp ? 'var(--color-up)' : 'var(--color-down)';
+            const totV = g.inV + g.outV, avg = totV ? (g.inA + Math.abs(g.outA)) / totV : null;
+            const bAvg = g.inV ? g.inA / g.inV : null, sAvg = g.outV ? Math.abs(g.outA) / g.outV : null;
+            const fp = (v) => v === null ? '--' : '$' + v.toFixed(2);
+            return `<div style="flex:1; min-width:150px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px 12px;">
+                <div style="font-size:11px; color:#888; margin-bottom:4px;">${title} <span style="color:#666;">${sub}</span></div>
+                <div style="font-family:monospace; font-weight:bold; font-size:16px; color:${col};">${isUp ? '買超' : '賣超'} ${Math.abs(lots(net)).toLocaleString()} ${unit}</div>
+                <div style="font-size:11px; color:#aaa; margin-top:6px; line-height:1.7;">成交均價 <b style="font-family:monospace;">${fp(avg)}</b><br>買進均價 <span style="font-family:monospace;">${fp(bAvg)}</span>・賣出均價 <span style="font-family:monospace;">${fp(sAvg)}</span><br>外盤 ${lots(g.inV).toLocaleString()}・內盤 ${lots(g.outV).toLocaleString()} ${unit}<br>淨額 <span style="font-family:monospace; color:${col};">${fmtAmt(g.inA + g.outA)}</span></div></div>`;
+        };
+        document.getElementById('detail-strength-panel').innerHTML = card('大戶', big, '超大單＋大單') + card('散戶', small, '中單＋小單');
+
+        const lineData = { labels: f.labels, datasets: [
+            { label: '整體', data: f.all, borderColor: '#00d4ff', borderWidth: 2, pointRadius: 0, tension: 0.15 },
+            { label: '大戶', data: f.big_line, borderColor: '#ffb020', borderWidth: 2, pointRadius: 0, tension: 0.15 },
+            { label: '散戶', data: f.small_line, borderColor: '#b57bff', borderWidth: 2, pointRadius: 0, tension: 0.15 } ] };
+        if (!detailFlowLine) {
+            detailFlowLine = new Chart(document.getElementById('detailFlowLine').getContext('2d'), { type: 'line', data: lineData,
+                options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+                    plugins: { legend: { labels: { color: '#aaa', boxWidth: 12 } }, tooltip: { callbacks: { label: (c) => ` ${c.dataset.label}: ${fmtAmt(c.parsed.y)}` } } },
+                    scales: { x: { ticks: { color: '#777', maxTicksLimit: 8 }, grid: { display: false } }, y: { ticks: { color: '#777', callback: (v) => fmtAmt(v) }, grid: { color: 'rgba(255,255,255,0.06)' } } } } });
+        } else { detailFlowLine.data = lineData; detailFlowLine.update(); }
     }
 
     // 📰 抓取個股最新相關新聞（不限日期區間，僅取最新幾則），沿用「市場事件」分析已有的 Google 新聞 RSS 爬取邏輯，
@@ -11527,7 +11810,7 @@ ${summaryText}
             fetchStockHistoryData(currentTicker, false);
             fetchAllCardsData();
             // 🔁 個股詳情頁開著時，委買委賣資料也跟著每輪報價輪詢一起更新
-            if (detailTicker && document.getElementById('view-ticker-detail').classList.contains('active')) loadTickerDetailQuoteExtra(detailTicker);
+            if (detailTicker && document.getElementById('view-ticker-detail').classList.contains('active')) { loadTickerDetailQuoteExtra(detailTicker); loadTickerDetailFlow(detailTicker, false); }
         }, 8000);
 
         // 每 30 分鐘檢查一次是否已跨過一天，達成「每天自動查詢一次」股息 / 股票分割
