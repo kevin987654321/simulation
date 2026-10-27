@@ -1378,7 +1378,7 @@
         <div class="glass-panel" style="padding:16px; display:flex; flex-direction:column; gap:10px;">
             <span style="font-size:13px; font-weight:bold;"><i class="fa-solid fa-chart-line" style="color:var(--color-acc)"></i> 資金流向 <span style="font-size:10px; color:#777; font-weight:normal;">（累計淨流入・估算）</span></span>
             <div style="height:240px; position:relative;"><canvas id="detailFlowLine"></canvas></div>
-            <div style="font-size:10px; color:#666; line-height:1.5;">台股使用 FinMind 逐筆成交（TaiwanStockPriceTick）：金額＝成交價×成交量(張)×1000，依 TickType 1=外盤流入、2=內盤流出，0 忽略。非台股無逐筆資料，改以 Yahoo 1 分 K 估算（每根 K 棒視為一筆，結果偏向大單，僅供參考）。今日尚無資料時顯示前一交易日。</div>
+            <div style="font-size:10px; color:#666; line-height:1.5;">台股使用富果 Fugle 盤中逐筆成交：金額＝成交價×張數×1000；成交價≥委賣價為外盤（流入）、≤委買價為內盤（流出），其餘（含試撮／集合競價）不計。非台股無逐筆資料，改以 Yahoo 1 分 K 估算（每根 K 棒視為一筆，結果偏向大單，僅供參考）。</div>
         </div>
 
         <div class="glass-panel" style="padding:16px; display:flex; flex-direction:column; gap:10px;">
@@ -7072,9 +7072,11 @@
     let flowThresholds = (() => { try { const j = JSON.parse(localStorage.getItem('flowThresholds') || 'null'); if (j && j.xl > j.l && j.l > j.m && j.m > 0) return j; } catch (e) {} return { ...FLOW_DEFAULTS }; })();
     let detailFlowCache = null;
 
-    // 匯率（USD→TWD，用來把台幣門檻換算成美元門檻）與 FinMind token，皆可在設定面板調整
+    // 匯率（USD→TWD，用來把台幣門檻換算成美元門檻），可在設定面板調整
     let flowUsdRate = (() => { try { const n = Number(localStorage.getItem('flowUsdRate')); return n > 0 ? n : 32; } catch (e) { return 32; } })();
-    let finmindToken = (() => { try { return localStorage.getItem('finmindToken') || ''; } catch (e) { return ''; } })();
+    // 富果 Fugle API Key：由 GitHub Actions 在部署時以 Secret FUGLE_API_KEY 取代下列佔位字串（見 .github/workflows/deploy.yml）
+    const FUGLE_API_KEY = '__FUGLE_API_KEY__';
+    const fugleKeyReady = () => !!FUGLE_API_KEY && !FUGLE_API_KEY.startsWith('__');
     let detailFlowForceYahoo = false;
     // 依標的幣別換算門檻：USD 標的 = 台幣門檻 ÷ 匯率；其他幣別沿用原數字
     function effectiveFlowThresholds(ticker) {
@@ -7116,27 +7118,26 @@
         return classifyFlow(trades, th, lotSize);
     }
 
-    // 台股：FinMind TaiwanStockPriceTick 真實逐筆。amount = 成交價 × 成交量(張) × 1000
+    // 台股：富果 Fugle 盤中逐筆成交。amount = price × size(張) × 1000
+    // 外盤（流入, tick_type=1）：ask>0 且 price>=ask；內盤（流出, tick_type=2）：bid>0 且 price<=bid；其餘（含試撮/集合競價）為中立不計
     function computeFlowFromTicks(rows, th) {
-        const trades = [];
-        for (const r of rows) {
-            const price = Number(r.deal_price ?? r.close), vol = Number(r.volume), tick = Number(r.TickType);
-            if (!(price > 0) || !(vol > 0)) continue;
-            const hhmm = String(r.Time || '').slice(0, 5);
-            trades.push({ label: hhmm, tick: tick === 1 ? 1 : (tick === 2 ? 2 : 0), amt: price * vol * 1000, v: vol * 1000 });
-        }
+        const list = rows.filter(r => r && Number(r.price) > 0 && Number(r.size) > 0 && !r.isTrial).sort((x, y) => Number(x.time) - Number(y.time));
+        const trades = list.map(r => {
+            const price = Number(r.price), size = Number(r.size), bid = Number(r.bid) || 0, ask = Number(r.ask) || 0;
+            const tick = (ask > 0 && price >= ask) ? 1 : ((bid > 0 && price <= bid) ? 2 : 0);
+            const label = new Date(Number(r.time) / 1000 + 8 * 3600e3).toISOString().slice(11, 16); // 微秒時間戳 → 台北 HH:MM
+            return { label, tick, amt: price * size * 1000, v: size * 1000 };
+        });
         return classifyFlow(trades, th, 1000);
     }
 
-    async function fetchFinMindTicks(stockId, dateStr) {
-        const qs = `dataset=TaiwanStockPriceTick&data_id=${encodeURIComponent(stockId)}&start_date=${dateStr}` + (finmindToken ? `&token=${encodeURIComponent(finmindToken)}` : '');
-        const api = `https://api.finmindtrade.com/api/v4/data?${qs}`;
-        let res;
-        try { res = await fetch(api, { cache: 'no-store' }); }
-        catch (e) { res = await fetch(`${myProxy}${encodeURIComponent(api)}`, { cache: 'no-store' }); } // 直連被 CORS 擋時改走 proxy
+    async function fetchFugleTicks(ticker) {
+        if (!fugleKeyReady()) { const e = new Error('尚未注入 FUGLE_API_KEY（需透過 GitHub Actions 部署，或在本機手動替換佔位字串）'); e.fugle = true; throw e; }
+        const symbol = ticker.replace(/\.(TW|TWO)$/i, '');
+        const res = await fetch(`https://api.fugle.tw/marketdata/v1.0/stock/intraday/ticks/${encodeURIComponent(symbol)}`, { headers: { 'X-API-KEY': FUGLE_API_KEY }, cache: 'no-store' });
+        if (!res.ok) { const e = new Error('Fugle HTTP ' + res.status + (res.status === 401 ? '（API Key 無效）' : res.status === 429 ? '（超過速率限制）' : '')); e.fugle = true; throw e; }
         const j = await res.json();
-        if (j.status !== 200) { const err = new Error(j.msg || ('FinMind status ' + j.status)); err.finmind = true; err.status = j.status; throw err; }
-        return j.data || [];
+        return { rows: Array.isArray(j.data) ? j.data : [], date: j.date || null };
     }
 
     async function loadTickerDetailFlow(ticker, force) {
@@ -7156,20 +7157,12 @@
         try {
             const tw = isTaiwanTicker(ticker) && !detailFlowForceYahoo;
             if (tw) {
-                const stockId = ticker.replace(/\.(TW|TWO)$/i, '');
-                // 由今天（台北時間）往前找，最多回溯 10 天，遇到週末跳過；取第一個有逐筆資料的交易日
+                const { rows, date } = await fetchFugleTicks(ticker);
+                if (myToken !== detailFlowToken || ticker !== detailTicker) return;
+                if (!rows.length) throw new Error('Fugle 查無逐筆資料');
                 const todayStr = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
-                let rows = null, day = null;
-                for (let i = 0; i < 10 && !rows; i++) {
-                    const d = new Date(Date.parse(todayStr + 'T00:00:00Z') - i * 86400e3);
-                    if (d.getUTCDay() === 0 || d.getUTCDay() === 6) continue;
-                    const ds = d.toISOString().slice(0, 10);
-                    const r = (detailFlowCache && detailFlowCache.ticker === ticker && detailFlowCache.day === ds && detailFlowCache.rows && ds !== todayStr) ? detailFlowCache.rows : await fetchFinMindTicks(stockId, ds);
-                    if (myToken !== detailFlowToken || ticker !== detailTicker) return;
-                    if (r.length) { rows = r; day = ds; }
-                }
-                if (!rows) throw new Error('近 10 天查無逐筆資料');
-                detailFlowCache = { ticker, day, isToday: day === todayStr, rows, source: 'FinMind 逐筆' };
+                const day = date || todayStr;
+                detailFlowCache = { ticker, day, isToday: day === todayStr, rows, source: 'Fugle 逐筆' };
             } else {
                 const url = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=5d&interval=1m`)}`;
                 const res = await fetch(url, { cache: 'no-store' });
@@ -7191,11 +7184,9 @@
             recomputeDetailFlow();
         } catch (e) {
             console.error('[資金流向讀取失敗]', e);
-            if (e && e.finmind) {
-                const needToken = e.status === 401 || e.status === 402 || /level|token|permission|sponsor|backer/i.test(e.message || '');
-                showErr(needToken ? 'FinMind 逐筆成交需要有權限的 token（Backer／Sponsor 會員）。請在下方「單別門檻設定」填入 token。' : 'FinMind 讀取失敗：' + e.message,
-                    isTaiwanTicker(ticker) ? `<button type="button" onclick="detailFlowForceYahoo=true; loadTickerDetailFlow('${ticker}', true)" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:6px 14px; border-radius:6px; font-size:11px; cursor:pointer;">暫時改用 Yahoo 估算</button>` : '');
-                const se = document.getElementById('detail-flow-settings'); if (se) renderFlowSettings();
+            if (e && e.fugle) {
+                showErr('Fugle 讀取失敗：' + e.message,
+                    `<button type="button" onclick="detailFlowForceYahoo=true; loadTickerDetailFlow('${ticker}', true)" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:6px 14px; border-radius:6px; font-size:11px; cursor:pointer;">暫時改用 Yahoo 估算</button>`);
             } else showErr('資料讀取失敗（或尚無成交）：' + (e && e.message ? e.message : ''));
         }
     }
@@ -7217,8 +7208,7 @@
     }
     function resetFlowThresholds() { flowThresholds = { ...FLOW_DEFAULTS }; try { localStorage.removeItem('flowThresholds'); } catch (e) {} renderFlowSettings(); recomputeDetailFlow(); }
     function setFlowUsdRate(v) { const n = Number(v); if (!(n > 0)) return; flowUsdRate = n; try { localStorage.setItem('flowUsdRate', String(n)); } catch (e) {} recomputeDetailFlow(); }
-    function setFinmindToken(v) { finmindToken = (v || '').trim(); try { localStorage.setItem('finmindToken', finmindToken); } catch (e) {} if (detailTicker) loadTickerDetailFlow(detailTicker, true); }
-    window.setFlowUsdRate = setFlowUsdRate; window.setFinmindToken = setFinmindToken;
+    window.setFlowUsdRate = setFlowUsdRate;
     window.setFlowThreshold = setFlowThreshold; window.resetFlowThresholds = resetFlowThresholds;
     function renderFlowSettings() {
         const el = document.getElementById('detail-flow-settings'); if (!el) return;
@@ -7226,7 +7216,6 @@
         el.innerHTML = `<details><summary style="cursor:pointer; font-size:11px; color:#888;"><i class="fa-solid fa-sliders"></i> 單別門檻設定（大戶＝超大單＋大單；散戶＝中單＋小單）</summary>
             <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-top:8px;">${inp('xl', '超大單')}${inp('l', '大單')}${inp('m', '中單')}
             <label style="display:flex; flex-direction:column; gap:2px; font-size:10px; color:#888;">USD 匯率（門檻÷匯率）<input type="number" min="1" step="0.1" value="${flowUsdRate}" onchange="setFlowUsdRate(this.value)" style="width:90px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.2); color:#fff; border-radius:4px; padding:4px 6px; font-size:12px;"></label>
-            <label style="display:flex; flex-direction:column; gap:2px; font-size:10px; color:#888;">FinMind token（台股逐筆）<input type="password" value="${escapeHtml(finmindToken)}" onchange="setFinmindToken(this.value)" placeholder="貼上 token" style="width:150px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.2); color:#fff; border-radius:4px; padding:4px 6px; font-size:12px;"></label>
             <button type="button" onclick="resetFlowThresholds()" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#ccc; padding:5px 10px; border-radius:6px; font-size:11px; cursor:pointer;">還原預設</button></div>
             <div style="font-size:10px; color:#666; margin-top:4px;">小單＝低於中單門檻。預設 300 萬／150 萬／50 萬（新台幣）；美股（USD）標的自動除以匯率換算。</div></details>`;
     }
