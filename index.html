@@ -7074,9 +7074,7 @@
 
     // 匯率（USD→TWD，用來把台幣門檻換算成美元門檻），可在設定面板調整
     let flowUsdRate = (() => { try { const n = Number(localStorage.getItem('flowUsdRate')); return n > 0 ? n : 32; } catch (e) { return 32; } })();
-    // 富果 Fugle API Key：由 GitHub Actions 在部署時以 Secret FUGLE_API_KEY 取代下列佔位字串（見 .github/workflows/deploy.yml）
-    const FUGLE_API_KEY = '__FUGLE_API_KEY__';
-    const fugleKeyReady = () => !!FUGLE_API_KEY && !FUGLE_API_KEY.startsWith('__');
+    // 富果 Fugle 逐筆資料：由 Cloudflare Worker（/api/fugle/ticks）代為呼叫，Key 只存在 Worker 的環境變數，前端不含任何金鑰
     let detailFlowForceYahoo = false;
     // 依標的幣別換算門檻：USD 標的 = 台幣門檻 ÷ 匯率；其他幣別沿用原數字
     function effectiveFlowThresholds(ticker) {
@@ -7132,10 +7130,15 @@
     }
 
     async function fetchFugleTicks(ticker) {
-        if (!fugleKeyReady()) { const e = new Error('尚未注入 FUGLE_API_KEY（需透過 GitHub Actions 部署，或在本機手動替換佔位字串）'); e.fugle = true; throw e; }
         const symbol = ticker.replace(/\.(TW|TWO)$/i, '');
-        const res = await fetch(`https://api.fugle.tw/marketdata/v1.0/stock/intraday/ticks/${encodeURIComponent(symbol)}`, { headers: { 'X-API-KEY': FUGLE_API_KEY }, cache: 'no-store' });
-        if (!res.ok) { const e = new Error('Fugle HTTP ' + res.status + (res.status === 401 ? '（API Key 無效）' : res.status === 429 ? '（超過速率限制）' : '')); e.fugle = true; throw e; }
+        const base = String(myProxy).split('?')[0].replace(/\/+$/, ''); // Worker 根網址（myProxy 形如 https://xxx.workers.dev/?url=）
+        let res;
+        try { res = await fetch(`${base}/api/fugle/ticks?symbol=${encodeURIComponent(symbol)}`, { cache: 'no-store' }); }
+        catch (err) { const e = new Error('無法連線到 Worker（請確認已部署 /api/fugle/ticks 路由）'); e.fugle = true; throw e; }
+        if (!res.ok) {
+            let msg = ''; try { msg = (await res.json()).error || ''; } catch (_) {}
+            const e = new Error('Worker/Fugle HTTP ' + res.status + (msg ? '：' + msg : '')); e.fugle = true; throw e;
+        }
         const j = await res.json();
         return { rows: Array.isArray(j.data) ? j.data : [], date: j.date || null };
     }
