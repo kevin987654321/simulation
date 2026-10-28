@@ -1378,7 +1378,7 @@
         <div class="glass-panel" style="padding:16px; display:flex; flex-direction:column; gap:10px;">
             <span style="font-size:13px; font-weight:bold;"><i class="fa-solid fa-chart-line" style="color:var(--color-acc)"></i> 資金流向 <span style="font-size:10px; color:#777; font-weight:normal;">（累計淨流入・估算）</span></span>
             <div style="height:240px; position:relative;"><canvas id="detailFlowLine"></canvas></div>
-            <div style="font-size:10px; color:#666; line-height:1.5;">台股使用富果 Fugle 盤中逐筆成交：金額＝成交價×張數×1000；成交價≥委賣價為外盤（流入）、≤委買價為內盤（流出），其餘（含試撮／集合競價）不計。非台股無逐筆資料，改以 Yahoo 1 分 K 估算（每根 K 棒視為一筆，結果偏向大單，僅供參考）。</div>
+            <div style="font-size:10px; color:#666; line-height:1.5;">台股使用富果 Fugle 逐筆成交：金額＝成交價×張數×1000（零股不乘）；成交價≥委賣價為外盤（流入）、≤委買價為內盤（流出），缺買賣價時以 tick rule 判斷。成交筆數超過 3,000 的熱門股會「全天等距抽樣」最多 6 頁（約 3,000 筆），再依總筆數（或總成交金額）等比放大還原，屬估算。非台股無逐筆資料，改以 Yahoo 1 分 K 估算。</div>
         </div>
 
         <div class="glass-panel" style="padding:16px; display:flex; flex-direction:column; gap:10px;">
@@ -7084,7 +7084,7 @@
     }
 
     // 核心分類：trades = [{label, amt, v(股), tick}]；tick 1=外盤(流入) 2=內盤(流出，金額記負) 0=忽略
-    function classifyFlow(trades, th, lotSize) {
+    function classifyFlow(trades, th, lotSize, scale = 1) {
         const mk = () => ({ inA: 0, outA: 0, inV: 0, outV: 0 });
         const G = { xl: mk(), l: mk(), m: mk(), s: mk() };
         let cumAll = 0, cumBig = 0, cumSmall = 0, n = 0;
@@ -7092,8 +7092,9 @@
         for (const b of trades) {
             const k = b.amt >= th.xl ? 'xl' : b.amt >= th.l ? 'l' : b.amt >= th.m ? 'm' : 's';
             const isBig = k === 'xl' || k === 'l';
-            if (b.tick === 1) { G[k].inA += b.amt; G[k].inV += b.v; cumAll += b.amt; if (isBig) cumBig += b.amt; else cumSmall += b.amt; n++; }
-            else if (b.tick === 2) { G[k].outA -= b.amt; G[k].outV += b.v; cumAll -= b.amt; if (isBig) cumBig -= b.amt; else cumSmall -= b.amt; n++; }
+            const A = b.amt * scale, V = b.v * scale; // 門檻用原始單筆金額判定，累計值才乘上還原倍率
+            if (b.tick === 1) { G[k].inA += A; G[k].inV += V; cumAll += A; if (isBig) cumBig += A; else cumSmall += A; n++; }
+            else if (b.tick === 2) { G[k].outA -= A; G[k].outV += V; cumAll -= A; if (isBig) cumBig -= A; else cumSmall -= A; n++; }
             lineMap.set(b.label, [cumAll, cumBig, cumSmall]);
         }
         if (!trades.length) return null;
@@ -7116,31 +7117,105 @@
         return classifyFlow(trades, th, lotSize);
     }
 
-    // 台股：富果 Fugle 盤中逐筆成交。amount = price × size(張) × 1000
-    // 外盤（流入, tick_type=1）：ask>0 且 price>=ask；內盤（流出, tick_type=2）：bid>0 且 price<=bid；其餘（含試撮/集合競價）為中立不計
-    function computeFlowFromTicks(rows, th) {
-        const list = rows.filter(r => r && Number(r.price) > 0 && Number(r.size) > 0 && !r.isTrial).sort((x, y) => Number(x.time) - Number(y.time));
-        const trades = list.map(r => {
-            const price = Number(r.price), size = Number(r.size), bid = Number(r.bid) || 0, ask = Number(r.ask) || 0;
-            const tick = (ask > 0 && price >= ask) ? 1 : ((bid > 0 && price <= bid) ? 2 : 0);
-            const label = new Date(Number(r.time) / 1000 + 8 * 3600e3).toISOString().slice(11, 16); // 微秒時間戳 → 台北 HH:MM
-            return { label, tick, amt: price * size * 1000, v: size * 1000 };
-        });
-        return classifyFlow(trades, th, 1000);
-    }
+    // 台股：富果 Fugle 逐筆成交（經 Worker 轉發 /intraday/trades，支援 limit/offset）
+    // 金額 = price × size × (unit || 1000)；unit===1（零股）不乘 1000
+    // 外盤（流入）：ask>0 且 price>=ask；內盤（流出）：bid>0 且 price<=bid；缺 bid/ask 時以 tick rule（與前一筆不同價者比較漲跌，同價沿用前一方向）
+    const FLOW_PAGE = 500, FLOW_MAX_PAGES = 6;
+    const fugleChunkCache = new Map(); // `${symbol}|${date}|${a}` → 已完整抓回的歷史分頁（a = 以「最舊一筆為 0」的起始序號，對齊 500 的倍數，內容不會隨新成交改變）
 
-    async function fetchFugleTicks(ticker) {
-        const symbol = ticker.replace(/\.(TW|TWO)$/i, '');
-        const base = String(myProxy).split('?')[0].replace(/\/+$/, ''); // Worker 根網址（myProxy 形如 https://xxx.workers.dev/?url=）
+    async function fugleFetchPage(symbol, offset, limit) {
+        const base = String(myProxy).split('?')[0].replace(/\/+$/, '');
         let res;
-        try { res = await fetch(`${base}/api/fugle/ticks?symbol=${encodeURIComponent(symbol)}`, { cache: 'no-store' }); }
+        try { res = await fetch(`${base}/api/fugle/ticks?symbol=${encodeURIComponent(symbol)}&limit=${limit}&offset=${offset}`, { cache: 'no-store' }); }
         catch (err) { const e = new Error('無法連線到 Worker（請確認已部署 /api/fugle/ticks 路由）'); e.fugle = true; throw e; }
         if (!res.ok) {
             let msg = ''; try { msg = (await res.json()).error || ''; } catch (_) {}
             const e = new Error('Worker/Fugle HTTP ' + res.status + (msg ? '：' + msg : '')); e.fugle = true; throw e;
         }
-        const j = await res.json();
-        return { rows: Array.isArray(j.data) ? j.data : [], date: j.date || null };
+        return res.json();
+    }
+
+    // 全天等距分層抽樣：total<=3000 抓完整天；否則最多 6 次請求，均勻散佈在全天，並回傳 meta 供放大還原
+    async function fetchFugleTicks(ticker) {
+        const symbol = ticker.replace(/\.(TW|TWO)$/i, '');
+        const first = await fugleFetchPage(symbol, 0, FLOW_PAGE);
+        const date = first.date || null;
+        const r0 = (Array.isArray(first.data) ? first.data : []).map(r => ({ ...r, _c: -1 }));
+        const tvRaw = Number(first.totalTradeValue ?? (first.total && first.total.tradeValue));
+        const meta = { total: null, sampled: false, partial: false, totalTradeValue: tvRaw > 0 ? tvRaw : null };
+        let T = Number(first.total); if (!Number.isFinite(T) || T < r0.length) T = null;
+        if (T === null && r0.length < FLOW_PAGE) T = r0.length;
+
+        if (T === null) { // API 未回傳 total 且第一頁已滿：依序往後抓到短頁或達上限
+            let rows = r0, complete = false;
+            for (let p = 1; p < FLOW_MAX_PAGES; p++) {
+                const j = await fugleFetchPage(symbol, p * FLOW_PAGE, FLOW_PAGE), d = (Array.isArray(j.data) ? j.data : []).map(r => ({ ...r, _c: p }));
+                rows = rows.concat(d); if (d.length < FLOW_PAGE) { complete = true; break; }
+            }
+            meta.partial = !complete; meta.total = complete ? rows.length : null;
+            return { rows, date, meta };
+        }
+        meta.total = T;
+        if (r0.length >= T) return { rows: r0, date, meta };
+
+        // 第一頁排序判斷：desc（最新在前，Fugle 預設）或 asc
+        const desc = r0.length < 2 || Number(r0[0].time) >= Number(r0[r0.length - 1].time);
+        const starts = new Set();
+        if (T <= FLOW_PAGE * FLOW_MAX_PAGES) { for (let a = 0; a < T; a += FLOW_PAGE) starts.add(a); }
+        else {
+            meta.sampled = true;
+            const step = Math.floor((T - FLOW_PAGE) / 5);
+            for (let k = 0; k <= 4; k++) starts.add(Math.floor(k * step / FLOW_PAGE) * FLOW_PAGE); // 等距散佈（對齊 500 倍數 → 固定歷史區段，可快取）
+            starts.add(T - FLOW_PAGE); // 最新一段
+        }
+        const jobs = [];
+        for (const a of starts) {
+            if (desc ? a >= T - FLOW_PAGE : a === 0) continue; // 已被第一頁涵蓋
+            const len = Math.min(FLOW_PAGE, T - a), offset = desc ? T - a - len : a;
+            const cacheable = len === FLOW_PAGE && a % FLOW_PAGE === 0 && a + FLOW_PAGE <= T && a < T - FLOW_PAGE;
+            const key = `${symbol}|${date}|${a}`;
+            if (cacheable && fugleChunkCache.has(key)) { jobs.push(Promise.resolve(fugleChunkCache.get(key))); continue; }
+            jobs.push(fugleFetchPage(symbol, offset, len).then(j => {
+                const d = (Array.isArray(j.data) ? j.data : []).map(r => ({ ...r, _c: a }));
+                if (cacheable && d.length === len) { if (fugleChunkCache.size > 200) fugleChunkCache.delete(fugleChunkCache.keys().next().value); fugleChunkCache.set(key, d); }
+                return d;
+            }));
+        }
+        const parts = await Promise.all(jobs);
+        return { rows: r0.concat(...parts), date, meta };
+    }
+
+    function computeFlowFromTicks(rows, th, meta) {
+        const seen = new Set(), list = [];
+        for (const r of rows) {
+            if (!r || !(Number(r.price) > 0) || !(Number(r.size) > 0) || r.isTrial) continue;
+            if (r.serial !== undefined && r.serial !== null) { const k = String(r.serial); if (seen.has(k)) continue; seen.add(k); }
+            list.push(r);
+        }
+        list.sort((x, y) => (Number(x.time) - Number(y.time)) || (Number(x.serial) - Number(y.serial)) || 0);
+        let prevPrice = null, lastTick = 0, prevC = null, sampledAmt = 0;
+        const trades = list.map(r => {
+            const price = Number(r.price), size = Number(r.size), bid = Number(r.bid) || 0, ask = Number(r.ask) || 0;
+            const unit = Number(r.unit) || 1000; // unit===1 為零股：金額 = price × size × 1
+            if (r._c !== prevC) { prevC = r._c; prevPrice = null; lastTick = 0; } // 抽樣分段不相連，tick rule 在段首重置
+            let tick = 0;
+            if (ask > 0 && price >= ask) tick = 1; else if (bid > 0 && price <= bid) tick = 2;
+            if (!tick && !(bid > 0 && ask > 0) && prevPrice !== null) tick = price > prevPrice ? 1 : (price < prevPrice ? 2 : lastTick);
+            if (tick) lastTick = tick;
+            prevPrice = price;
+            const amt = price * size * unit; sampledAmt += amt;
+            return { label: new Date(Number(r.time) / 1000 + 8 * 3600e3).toISOString().slice(11, 16), tick, amt, v: size * unit };
+        });
+        let scale = 1, label = 'Fugle 逐筆';
+        if (meta && meta.total && meta.total > trades.length && trades.length) {
+            scale = (meta.totalTradeValue && sampledAmt > 0) ? meta.totalTradeValue / sampledAmt : meta.total / trades.length;
+            if (!Number.isFinite(scale) || scale < 1) scale = 1;
+            label = `Fugle 逐筆（抽樣 ${trades.length.toLocaleString()}／${meta.total.toLocaleString()} 筆，金額放大 ×${scale.toFixed(2)} 還原）`;
+        } else if (meta && meta.partial) label = `Fugle 逐筆（API 未回傳總筆數，僅取得 ${trades.length.toLocaleString()} 筆，未還原）`;
+        else label = `Fugle 逐筆（全量 ${trades.length.toLocaleString()} 筆）`;
+        const f = classifyFlow(trades, th, 1000, scale);
+        if (f) f.sourceLabel = label;
+        return f;
     }
 
     async function loadTickerDetailFlow(ticker, force) {
@@ -7160,12 +7235,12 @@
         try {
             const tw = isTaiwanTicker(ticker) && !detailFlowForceYahoo;
             if (tw) {
-                const { rows, date } = await fetchFugleTicks(ticker);
+                const { rows, date, meta } = await fetchFugleTicks(ticker);
                 if (myToken !== detailFlowToken || ticker !== detailTicker) return;
                 if (!rows.length) throw new Error('Fugle 查無逐筆資料');
                 const todayStr = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
                 const day = date || todayStr;
-                detailFlowCache = { ticker, day, isToday: day === todayStr, rows, source: 'Fugle 逐筆' };
+                detailFlowCache = { ticker, day, isToday: day === todayStr, rows, meta, source: 'Fugle 逐筆' };
             } else {
                 const url = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=5d&interval=1m`)}`;
                 const res = await fetch(url, { cache: 'no-store' });
@@ -7198,8 +7273,8 @@
     function recomputeDetailFlow() {
         const C = detailFlowCache; if (!C || C.ticker !== detailTicker) return;
         const th = effectiveFlowThresholds(C.ticker);
-        const f = C.rows ? computeFlowFromTicks(C.rows, th) : computeFlowFromBars(C.ts, C.o, C.h, C.l, C.c, C.v, C.lot, th);
-        if (f) renderDetailFlow(C.ticker, f);
+        const f = C.rows ? computeFlowFromTicks(C.rows, th, C.meta) : computeFlowFromBars(C.ts, C.o, C.h, C.l, C.c, C.v, C.lot, th);
+        if (f) { if (f.sourceLabel) C.source = f.sourceLabel; renderDetailFlow(C.ticker, f); }
     }
     function setFlowThreshold(key, val) {
         const n = Number(val) * 10000; // 輸入單位：萬元
