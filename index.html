@@ -2001,7 +2001,7 @@
                     <button data-days="0">立即交割</button><button data-days="1">T+1</button><button data-days="2">T+2</button><button data-days="3">T+3</button>
                 </div>
                 <div class="fx-tl" id="fx-timeline"></div>
-                <div class="fx-sub-title" style="margin-top:14px;">目前待交割的賣出款項</div>
+                <div class="fx-sub-title" style="margin-top:14px;">目前待交割款項（買進待扣款／賣出待入帳）</div>
                 <div id="fx-pending" class="fx-pending"></div>
             </div>
 
@@ -2115,6 +2115,34 @@
                         </div>
                         <div id="drill-setup-error" style="display:none; color:var(--color-sell); font-size:11px;"><i class="fa-solid fa-triangle-exclamation"></i> <span id="drill-setup-error-text"></span></div>
                         <button onclick="startPracticeDrill()" style="background:var(--color-acc); border:none; color:#000; padding:11px; border-radius:8px; font-weight:bold; font-size:13px; cursor:pointer; margin-top:4px;"><i class="fa-solid fa-play"></i> 開始演練（100 萬現金）</button>
+                    </div>
+                </div>
+
+                <div class="glass-panel" style="padding:16px; margin-bottom:16px;">
+                    <div style="font-weight:bold; font-size:13px; margin-bottom:4px;"><i class="fa-solid fa-flask" style="color:var(--color-acc);"></i> 開盤方向策略模擬器</div>
+                    <div style="font-size:11px; color:#777; margin-bottom:12px; line-height:1.6;">選一檔股票與日期區間，分別設定「開盤價高於昨收（開高）」與「低於昨收（開低）」時，當天幾點買進、幾點賣出，看回測的損益百分比。使用 5 分鐘 K 線（Yahoo 僅提供最近約 60 天），時間為該市場當地時間；買賣價取該時間那根 K 棒的開盤價。</div>
+                    <div style="display:flex; flex-direction:column; gap:10px;">
+                        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                            <div style="flex:1; min-width:110px;"><div style="font-size:11px; color:#888; margin-bottom:4px;">股票代號</div><input type="text" id="sim-ticker" class="modal-input" placeholder="如 2330 或 AAPL" style="margin:0;"></div>
+                            <div style="flex:1; min-width:130px;"><div style="font-size:11px; color:#888; margin-bottom:4px;">起始日期</div><input type="date" id="sim-start" class="modal-input" style="margin:0;"></div>
+                            <div style="flex:1; min-width:130px;"><div style="font-size:11px; color:#888; margin-bottom:4px;">結束日期</div><input type="date" id="sim-end" class="modal-input" style="margin:0;"></div>
+                        </div>
+                        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                            <div style="flex:1; min-width:200px; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px;">
+                                <div style="font-size:12px; font-weight:bold; color:var(--color-up); margin-bottom:8px;"><i class="fa-solid fa-arrow-trend-up"></i> 開盤價「漲」（高於昨收）</div>
+                                <label style="font-size:11px; color:#aaa; display:flex; align-items:center; gap:6px; margin-bottom:6px;"><input type="checkbox" id="sim-up-on" checked> 這種日子要交易</label>
+                                <div style="display:flex; gap:8px;"><div style="flex:1;"><div style="font-size:10px; color:#888;">買進時間</div><input type="time" id="sim-up-buy" step="300" value="09:05" class="modal-input" style="margin:0;"></div><div style="flex:1;"><div style="font-size:10px; color:#888;">賣出時間</div><input type="time" id="sim-up-sell" step="300" value="13:20" class="modal-input" style="margin:0;"></div></div>
+                            </div>
+                            <div style="flex:1; min-width:200px; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px;">
+                                <div style="font-size:12px; font-weight:bold; color:var(--color-down); margin-bottom:8px;"><i class="fa-solid fa-arrow-trend-down"></i> 開盤價「跌」（低於昨收）</div>
+                                <label style="font-size:11px; color:#aaa; display:flex; align-items:center; gap:6px; margin-bottom:6px;"><input type="checkbox" id="sim-down-on" checked> 這種日子要交易</label>
+                                <div style="display:flex; gap:8px;"><div style="flex:1;"><div style="font-size:10px; color:#888;">買進時間</div><input type="time" id="sim-down-buy" step="300" value="09:05" class="modal-input" style="margin:0;"></div><div style="flex:1;"><div style="font-size:10px; color:#888;">賣出時間</div><input type="time" id="sim-down-sell" step="300" value="13:20" class="modal-input" style="margin:0;"></div></div>
+                            </div>
+                        </div>
+                        <label style="font-size:11px; color:#aaa; display:flex; align-items:center; gap:6px;"><input type="checkbox" id="sim-fee-on" checked> 扣除手續費與交易稅（使用費率設定）</label>
+                        <div id="sim-error" style="display:none; color:var(--color-sell); font-size:11px;"></div>
+                        <button id="sim-run-btn" onclick="runOpenSimulator()" style="background:var(--color-acc); border:none; color:#000; padding:11px; border-radius:8px; font-weight:bold; font-size:13px; cursor:pointer;"><i class="fa-solid fa-play"></i> 開始模擬</button>
+                        <div id="sim-result" style="display:none; flex-direction:column; gap:12px;"></div>
                     </div>
                 </div>
 
@@ -2876,7 +2904,7 @@
         // 補查目前尚未有快取匯率的持有幣別
         await Promise.all(codes.filter(c => currencyRatesToTWD[c] === undefined).map(c => ensureCurrencyRate(c)));
 
-        let rows = `<tr><td><strong style="color:#fff;">TWD</strong> <span style="color:#888; font-size:11px;">新台幣</span></td><td style="font-family:monospace;">$ ${Math.floor(state.cash).toLocaleString()}</td><td style="font-family:monospace; color:#888;">1.0000</td><td style="font-family:monospace;">$ ${Math.floor(state.cash).toLocaleString()}</td></tr>`;
+        let rows = `<tr><td><strong style="color:#fff;">TWD</strong> <span style="color:#888; font-size:11px;">新台幣</span></td><td style="font-family:monospace;">$ ${Math.floor(getSettledBalance('TWD')).toLocaleString()}</td><td style="font-family:monospace; color:#888;">1.0000</td><td style="font-family:monospace;">$ ${Math.floor(getSettledBalance('TWD')).toLocaleString()}</td></tr>`;
         codes.sort().forEach(cur => {
             const amt = wallet[cur];
             const rate = currencyRatesToTWD[cur] !== undefined ? currencyRatesToTWD[cur] : currentUSDTWD;
@@ -3816,6 +3844,127 @@
         d.setDate(d.getDate() + drillMeta.currentDayOffset);
         return d;
     }
+
+    // ============================================================
+    // 🧪 開盤方向策略模擬器：開盤價高於／低於昨收，各自設定當天買進、賣出時間，回測損益%
+    // 以 Yahoo 5 分鐘 K 線（約最近 60 天）；日界線與時間皆用該市場當地時間（meta.gmtoffset）
+    // ============================================================
+    let simChart = null;
+    (function simInitDefaults() {
+        try {
+            const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+            const end = new Date(), start = new Date(Date.now() - 20 * 86400e3);
+            const e = document.getElementById('sim-end'), st = document.getElementById('sim-start');
+            if (e && !e.value) e.value = iso(end); if (st && !st.value) st.value = iso(start);
+        } catch (err) {}
+    })();
+    async function simFetchIntraday(symbol, p1, p2) {
+        const url = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?period1=${p1}&period2=${p2}&interval=5m`)}`;
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) throw new Error('http ' + res.status);
+        const j = await res.json(), r = j.chart && j.chart.result ? j.chart.result[0] : null;
+        if (!r || !(r.timestamp || []).length) return null;
+        return r;
+    }
+    async function runOpenSimulator() {
+        const errEl = document.getElementById('sim-error'), out = document.getElementById('sim-result'), btn = document.getElementById('sim-run-btn');
+        const fail = (m) => { errEl.style.display = 'block'; errEl.innerText = m; out.style.display = 'none'; };
+        errEl.style.display = 'none';
+        let ticker = (document.getElementById('sim-ticker').value || '').trim().toUpperCase();
+        const sv = document.getElementById('sim-start').value, ev = document.getElementById('sim-end').value;
+        if (!ticker) return fail('請輸入股票代號');
+        if (!sv || !ev) return fail('請選擇日期區間');
+        const startMs = Date.parse(sv + 'T00:00:00Z'), endMs = Date.parse(ev + 'T00:00:00Z');
+        if (endMs < startMs) return fail('結束日期不能早於起始日期');
+        if (Date.now() - startMs > 58 * 86400e3) return fail('5 分鐘 K 線 Yahoo 只提供最近約 60 天，請把起始日期改為 58 天內');
+        const toMin = (v) => { const m = /^(\d{1,2}):(\d{2})/.exec(v || ''); return m ? (+m[1]) * 60 + (+m[2]) : null; };
+        const cfg = {};
+        for (const side of ['up', 'down']) {
+            cfg[side] = { on: document.getElementById(`sim-${side}-on`).checked, buy: toMin(document.getElementById(`sim-${side}-buy`).value), sell: toMin(document.getElementById(`sim-${side}-sell`).value) };
+            if (cfg[side].on) {
+                if (cfg[side].buy === null || cfg[side].sell === null) return fail('請設定完整的買進與賣出時間');
+                if (cfg[side].sell <= cfg[side].buy) return fail(`「${side === 'up' ? '開盤漲' : '開盤跌'}」的賣出時間必須晚於買進時間`);
+            }
+        }
+        if (!cfg.up.on && !cfg.down.on) return fail('至少要勾選一種開盤情況進行交易');
+        const feeOn = document.getElementById('sim-fee-on').checked;
+        btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 讀取歷史資料中...';
+        try {
+            const p1 = Math.floor(startMs / 1000) - 8 * 86400, p2 = Math.floor(endMs / 1000) + 2 * 86400; // 往前多抓幾天以取得第一天的昨收
+            const cands = /^\d{4,6}[A-Z]?$/.test(ticker) ? [ticker + '.TW', ticker + '.TWO'] : [ticker];
+            let r = null;
+            for (const c of cands) { try { r = await simFetchIntraday(c, p1, p2); } catch (e) {} if (r) { ticker = c; break; } }
+            if (!r) throw new Error('查無此代號的 5 分鐘資料（可能代號有誤，或該區間沒有交易）');
+            const off = (r.meta && r.meta.gmtoffset) || 0, q = r.indicators.quote[0] || {};
+            const days = new Map();
+            r.timestamp.forEach((t, i) => {
+                if (q.open[i] == null || q.close[i] == null) return;
+                const d = new Date((t + off) * 1000), key = d.toISOString().slice(0, 10);
+                if (!days.has(key)) days.set(key, []);
+                days.get(key).push({ m: d.getUTCHours() * 60 + d.getUTCMinutes(), o: q.open[i], c: q.close[i] });
+            });
+            const keys = [...days.keys()].sort();
+            const trades = [];
+            for (let i = 1; i < keys.length; i++) {
+                const key = keys[i];
+                if (Date.parse(key + 'T00:00:00Z') < startMs || Date.parse(key + 'T00:00:00Z') > endMs) continue;
+                const bars = days.get(key).sort((a, b) => a.m - b.m), prevBars = days.get(keys[i - 1]);
+                const prevClose = prevBars[prevBars.length - 1].c, open = bars[0].o;
+                if (!(prevClose > 0) || open === prevClose) continue;
+                const side = open > prevClose ? 'up' : 'down', c = cfg[side];
+                if (!c.on) continue;
+                const bi = bars.findIndex(b => b.m >= c.buy);
+                if (bi < 0) continue;
+                let si = bars.findIndex((b, k) => k > bi && b.m >= c.sell);
+                const buyP = bars[bi].o, sellP = si >= 0 ? bars[si].o : bars[bars.length - 1].c;
+                if (si < 0 && bars.length - 1 <= bi) continue;
+                let ret = sellP / buyP - 1;
+                if (feeOn) {
+                    const N = 1000, bc = computeTradeCosts(ticker, buyP * N, N, 'BUY'), sc = computeTradeCosts(ticker, sellP * N, N, 'SELL');
+                    ret = (sellP * N - sc.fee - sc.tax) / (buyP * N + bc.fee + (bc.tax || 0)) - 1;
+                }
+                trades.push({ key, side, gap: open / prevClose - 1, buyP, sellP, ret, exitLate: si < 0 });
+            }
+            if (!trades.length) throw new Error('這段期間沒有符合條件的交易日（可能全是平盤開、被設定排除，或買進時間超過收盤）');
+            renderOpenSimulator(ticker, trades, cfg, feeOn);
+        } catch (e) { fail(e.message || '模擬失敗'); }
+        finally { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-play"></i> 開始模擬'; }
+    }
+    function renderOpenSimulator(ticker, trades, cfg, feeOn) {
+        const out = document.getElementById('sim-result');
+        const pct = (x) => (x >= 0 ? '+' : '') + (x * 100).toFixed(2) + '%', col = (x) => x >= 0 ? 'var(--color-up)' : 'var(--color-down)';
+        const stat = (arr) => { if (!arr.length) return null; const w = arr.filter(t => t.ret > 0).length; return { n: arr.length, win: w / arr.length, avg: arr.reduce((a, t) => a + t.ret, 0) / arr.length, cum: arr.reduce((a, t) => a * (1 + t.ret), 1) - 1 }; };
+        const all = stat(trades), up = stat(trades.filter(t => t.side === 'up')), dn = stat(trades.filter(t => t.side === 'down'));
+        let cum = 1; const labels = [], line = [];
+        trades.forEach(t => { cum *= 1 + t.ret; labels.push(t.key.slice(5)); line.push((cum - 1) * 100); });
+        const best = trades.reduce((a, t) => t.ret > a.ret ? t : a), worst = trades.reduce((a, t) => t.ret < a.ret ? t : a);
+        const card = (t, v, c) => `<div style="flex:1; min-width:100px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:8px 10px;"><div style="font-size:10px; color:#888;">${t}</div><div style="font-family:monospace; font-weight:bold; font-size:15px; ${c ? 'color:' + c : ''}">${v}</div></div>`;
+        const sideRow = (n, s, c) => s ? `<div style="display:flex; justify-content:space-between; font-size:11.5px; padding:4px 0;"><span style="color:${c}">${n}</span><span style="font-family:monospace; color:#ccc;">${s.n} 天・勝率 ${(s.win * 100).toFixed(0)}%・平均 ${pct(s.avg)}・累計 ${pct(s.cum)}</span></div>` : '';
+        const esc = (x) => escapeHtml(String(x));
+        out.innerHTML = `
+            <div style="font-size:12px; color:#aaa;">${esc(ticker)}　共交易 <b style="color:#fff;">${all.n}</b> 天${feeOn ? '（已扣手續費與稅）' : '（未扣成本）'}</div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                ${card('累計報酬（複利）', pct(all.cum), col(all.cum))}${card('平均單日損益', pct(all.avg), col(all.avg))}${card('勝率', (all.win * 100).toFixed(1) + '%')}
+                ${card('最佳單日', pct(best.ret) + ' ' + best.key.slice(5), col(best.ret))}${card('最差單日', pct(worst.ret) + ' ' + worst.key.slice(5), col(worst.ret))}
+            </div>
+            <div>${sideRow('開盤漲', up, 'var(--color-up)')}${sideRow('開盤跌', dn, 'var(--color-down)')}</div>
+            <div style="height:200px; position:relative;"><canvas id="simChartCanvas"></canvas></div>
+            <div style="max-height:280px; overflow:auto; border:1px solid rgba(255,255,255,0.08); border-radius:8px;">
+                <table style="width:100%; border-collapse:collapse; font-size:11.5px; font-family:monospace;">
+                    <thead><tr style="color:#888; text-align:right; position:sticky; top:0; background:#14161c;"><th style="text-align:left; padding:6px 8px;">日期</th><th>開盤vs昨收</th><th>買價</th><th>賣價</th><th style="padding-right:8px;">損益</th></tr></thead>
+                    <tbody>${trades.map(t => `<tr style="text-align:right; border-top:1px solid rgba(255,255,255,0.05);"><td style="text-align:left; padding:5px 8px;">${t.key}</td><td style="color:${col(t.gap)}">${pct(t.gap)}</td><td>${t.buyP.toFixed(2)}</td><td>${t.sellP.toFixed(2)}${t.exitLate ? '*' : ''}</td><td style="padding-right:8px; color:${col(t.ret)}">${pct(t.ret)}</td></tr>`).join('')}</tbody>
+                </table>
+            </div>
+            <div style="font-size:10px; color:#666; line-height:1.5;">累計報酬假設每天以全部資金進出、損益滾入下一天；*代表賣出時間超過最後一根 K 棒，改以收盤價出場。歷史回測不代表未來績效，也未計滑價與流動性。</div>`;
+        out.style.display = 'flex';
+        if (simChart) { simChart.destroy(); simChart = null; }
+        const up_ = getComputedStyle(document.documentElement).getPropertyValue('--color-up').trim() || '#00ffaa';
+        simChart = new Chart(document.getElementById('simChartCanvas').getContext('2d'), { type: 'line',
+            data: { labels, datasets: [{ label: '累計報酬 %', data: line, borderColor: up_, backgroundColor: up_ + '22', fill: true, borderWidth: 2, pointRadius: 2, tension: 0.15 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => ` 累計 ${c.parsed.y.toFixed(2)}%` } } },
+                scales: { x: { ticks: { color: '#777', maxTicksLimit: 8 }, grid: { display: false } }, y: { ticks: { color: '#777', callback: (v) => v + '%' }, grid: { color: 'rgba(255,255,255,0.06)' } } } } });
+    }
+    window.runOpenSimulator = runOpenSimulator;
 
     // --- 開始演練 ---
     async function startPracticeDrill() {
@@ -6180,7 +6329,7 @@
         const twdTotalSpend = (origSubtotal + origFee) * rate, twdTotalGet = (origSubtotal - origFee - origTax) * rate, twdFee = origFee * rate, twdTax = origTax * rate;
         
         let newTrade = { time: getFullFormattedTimeFromDate(timestamp), timestamp: timestamp, action: action, ticker: ticker, price: price, shares: shares, fee: action === 'BUY' ? twdFee : (twdFee + twdTax), tax: twdTax, total: action === 'BUY' ? twdTotalSpend : twdTotalGet, rate: rate, origTotalSpend: action === 'BUY' ? (origSubtotal + origFee) : null, realizedPnL: null };
-        if (action === 'SELL') newTrade.settleAt = computeSettleAt(ticker, timestamp);
+        newTrade.settleAt = computeSettleAt(ticker, timestamp);
         let testLedger = JSON.parse(JSON.stringify(state.ledger)); testLedger.push(newTrade); testLedger.sort((a, b) => b.timestamp - a.timestamp); 
         
         let result = recalculateState(testLedger);
@@ -8397,6 +8546,19 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         }
         return sum;
     }
+    // 尚未交割扣款的買進款項：內部帳務已先扣掉（保留為已凍結的購買力），但「帳戶餘額」要到交割日才會真的減少
+    function getPendingBuyPayable(cur) {
+        const now = _feeNowMs(); let sum = 0;
+        for (let i = 0; i < state.ledger.length; i++) {
+            const r = state.ledger[i];
+            if (r.action !== 'BUY' || !r.settleAt || r.settleAt <= now || r.timestamp > now) continue;
+            if (cur === 'TWD') sum += r.walletCurrency ? (r.cashSpendTWD || 0) : (r.total || 0);
+            else if (r.walletCurrency === cur) sum += (r.walletSpendNative || 0);
+        }
+        return sum;
+    }
+    // 帳戶餘額（依交割日計）：買進款項交割日才扣、賣出款項交割日才入帳；可用餘額則已同時扣掉待付款
+    function getSettledBalance(cur) { return getCurrencyBalance(cur) + getPendingBuyPayable(cur) - getPendingSettlement(cur); }
     function getAvailableCurrencyBalance(cur) { return Math.max(0, getCurrencyBalance(cur) - getPendingSettlement(cur)); }
 
     // ---------- 費率工作室（獨立頁面）介面 ----------
@@ -8490,7 +8652,8 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
             }
             tl.innerHTML = h;
         }
-        const now2 = _feeNowMs(), pend = state.ledger.filter(r => r.action === 'SELL' && r.settleAt && r.settleAt > now2 && r.timestamp <= now2);
+        const now2 = _feeNowMs(), pend = state.ledger.filter(r => (r.action === 'SELL' || r.action === 'BUY') && r.settleAt && r.settleAt > now2 && r.timestamp <= now2);
+        feeUiEl('fx-pending').innerHTML = pend.length ? pend.slice(0, 20).map(r => { const buy = r.action === 'BUY', c = r.walletCurrency || 'TWD', amt = buy ? (r.walletCurrency ? (r.walletSpendNative || 0) + (r.cashSpendTWD || 0) / (r.rate || 1) : r.total) : (r.walletCurrency ? (r.walletCreditNative || 0) : r.total); return `<div class="fx-pending-row"><span>${r.ticker}　${fmt(r.settleAt)} ${buy ? '扣款' : '入帳'}</span><span>${buy ? '−' : '+'}${c} ${fmtFeeMoney(c, amt)}</span></div>`; }).join('') : '目前沒有待交割款項';
         feeUiEl('fx-pending').innerHTML = pend.length ? pend.slice(0, 20).map(r => { const c = r.walletCurrency || 'TWD', amt = r.walletCurrency ? (r.walletCreditNative || 0) : r.total; return `<div class="fx-pending-row"><span>${r.ticker}　${fmt(r.settleAt)} 入帳</span><span>${c} ${fmtFeeMoney(c, amt)}</span></div>`; }).join('') : '目前沒有待交割款項';
     }
     function refreshFeeSettingsUI() {
@@ -8503,7 +8666,7 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         feeUiEl('fee-ps-rate').value = psOn ? p.ps.rate : 0.005; feeUiEl('fee-ps-min').value = psOn ? p.ps.min : 1; feeUiEl('fee-ps-max').value = psOn ? p.ps.maxPct : 1;
         applyFeeFieldVisibility(p);
         const pr = _presetByIdAll(cur, p.broker);
-        feeUiEl('fee-note').innerText = (pr && pr.note ? `【${pr.name}】${pr.note}\n` : '') + '券商費率為整理自各券商官網／公開資料的「參考值」，優惠常有期限、條件與帳戶等級差異，實際請以券商公告為準。\nT+N 以「營業日」估算（略過週末，未計各國假日）；賣出款項於交割日前列為「待交割」，不可用於買進。';
+        feeUiEl('fee-note').innerText = (pr && pr.note ? `【${pr.name}】${pr.note}\n` : '') + '券商費率為整理自各券商官網／公開資料的「參考值」，優惠常有期限、條件與帳戶等級差異，實際請以券商公告為準。\nT+N 以「營業日」估算（略過週末，未計各國假日）；買進款項於交割日才會從帳戶餘額扣除（但購買力會先凍結）；賣出款項於交割日前列為「待入帳」，不可用於買進。';
         renderFeeTabs(); renderFeeHero(); renderBrokerGrid(); renderFeeSim(); renderFeeSettle(); updateFeeSummary();
     }
     function applyFeeFieldVisibility(p) {
@@ -8587,12 +8750,12 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
             const curr = getCurrencyForTicker(currentTicker);
             if (curr === 'TWD') {
                 walletIndicatorLabel.innerHTML = `<i class="fa-solid fa-wallet"></i> 現金可用`;
-                const pendTWD = getPendingSettlement('TWD');
-                walletIndicatorVal.innerText = `NT$ ${Math.floor(state.cash - pendTWD).toLocaleString()}` + (pendTWD > 0.5 ? `（待交割 ${Math.floor(pendTWD).toLocaleString()}）` : '');
+                const pendTWD = getPendingSettlement('TWD'), payTWD = getPendingBuyPayable('TWD');
+                walletIndicatorVal.innerText = `NT$ ${Math.floor(state.cash - pendTWD).toLocaleString()}` + ((pendTWD > 0.5 || payTWD > 0.5) ? `（${payTWD > 0.5 ? '待付款 ' + Math.floor(payTWD).toLocaleString() : ''}${payTWD > 0.5 && pendTWD > 0.5 ? '、' : ''}${pendTWD > 0.5 ? '待入帳 ' + Math.floor(pendTWD).toLocaleString() : ''}）` : '');
             } else {
                 walletIndicatorLabel.innerHTML = `<i class="fa-solid fa-wallet"></i> 外幣錢包可用`;
-                const pendF = getPendingSettlement(curr);
-                walletIndicatorVal.innerText = `${curr} ${getAvailableCurrencyBalance(curr).toLocaleString(undefined, {maximumFractionDigits:2})}` + (pendF > 0.005 ? `（待交割 ${pendF.toLocaleString(undefined, {maximumFractionDigits:2})}）` : '');
+                const pendF = getPendingSettlement(curr), payF = getPendingBuyPayable(curr), _f = (n) => n.toLocaleString(undefined, {maximumFractionDigits:2});
+                walletIndicatorVal.innerText = `${curr} ${_f(getAvailableCurrencyBalance(curr))}` + ((pendF > 0.005 || payF > 0.005) ? `（${payF > 0.005 ? '待付款 ' + _f(payF) : ''}${payF > 0.005 && pendF > 0.005 ? '、' : ''}${pendF > 0.005 ? '待入帳 ' + _f(pendF) : ''}）` : '');
             }
         }
         
@@ -8654,7 +8817,7 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
             if(!state.holdings[ticker]) state.holdings[ticker] = { shares: 0, avgPrice: 0 };
             const h = state.holdings[ticker], origTotalSpend = origSubtotal + origFee;
             h.avgPrice = ((h.shares * h.avgPrice) + origTotalSpend) / (h.shares + s); h.shares += s;
-            state.ledger.unshift({ time: tradeTime, timestamp: timestamp, action: "BUY", ticker: ticker, price: price, shares: s, fee: twdFee, total: twdTotalSpend, realizedPnL: null, rate: rate, origTotalSpend: origTotalSpend, walletCurrency: curr !== 'TWD' ? curr : undefined, walletSpendNative: curr !== 'TWD' ? walletSpendNative : undefined, cashSpendTWD: curr !== 'TWD' ? cashSpendTWD : undefined, orderType: opts.orderType });
+            state.ledger.unshift({ time: tradeTime, timestamp: timestamp, action: "BUY", ticker: ticker, price: price, shares: s, fee: twdFee, total: twdTotalSpend, realizedPnL: null, rate: rate, origTotalSpend: origTotalSpend, walletCurrency: curr !== 'TWD' ? curr : undefined, walletSpendNative: curr !== 'TWD' ? walletSpendNative : undefined, cashSpendTWD: curr !== 'TWD' ? cashSpendTWD : undefined, orderType: opts.orderType, settleAt: computeSettleAt(ticker, timestamp) });
             return { success: true, curr, walletSpendNative, twdTotalSpend };
         } else {
             const h = state.holdings[ticker]; if(!h || h.shares < s) return { success: false, reason: 'shares' };
@@ -9181,7 +9344,9 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
         // 以及貨幣庫存台幣等值）快取進 state.totalAssetsTWD，隨帳號資料一起存本機並同步雲端，讓後端 get_public_profile /
         // add_friend_mutual 可以直接讀這個已經算好的正確總資產，而不必自己在後端重算（後端沒有即時報價與匯率）
         state.totalAssetsTWD = nav;
-        document.getElementById("nav-total").innerText = `$ ${Math.floor(nav).toLocaleString()}`; document.getElementById("nav-cash").innerText = `$ ${Math.floor(state.cash).toLocaleString()}`;
+        document.getElementById("nav-total").innerText = `$ ${Math.floor(nav).toLocaleString()}`; { const _pb = getPendingBuyPayable('TWD'), _ps = getPendingSettlement('TWD'), _navCashEl = document.getElementById("nav-cash");
+            _navCashEl.innerText = `$ ${Math.floor(getSettledBalance('TWD')).toLocaleString()}`;
+            _navCashEl.title = (_pb > 0.5 || _ps > 0.5) ? `帳戶餘額（依交割日計）。待付款 ${Math.floor(_pb).toLocaleString()}、待入帳 ${Math.floor(_ps).toLocaleString()}；目前可用 ${Math.floor(state.cash - _ps).toLocaleString()}` : ''; }
         document.getElementById("nav-holdings").innerText = `$ ${Math.floor(holdingsVal).toLocaleString()}`;
         document.getElementById("nav-pnl").innerText = `${pnl >= 0 ? '+' : ''}$ ${Math.floor(pnl).toLocaleString()} (${totalCost > 0 ? ((pnl/totalCost)*100).toFixed(1) : 0}%)`;
         document.getElementById("nav-pnl").style.color = pnl >= 0 ? "var(--color-up)" : "var(--color-down)";
@@ -11018,7 +11183,7 @@ async function fetchLatestNewsForTicker(ticker, limit = 8) {
 • 當前持股數量: ${holding.shares} 股（約占「此標的市值＋現金」的 ${positionRatio.toFixed(0)}%）
 • 持股買入均價: $${holding.avgPrice.toFixed(2)}
 • 該標的未實現損益: TWD $${Math.floor(pnlTWD).toLocaleString()}
-• 帳戶可用現金: TWD $${Math.floor(state.cash).toLocaleString()}
+• 帳戶可用現金: TWD $${Math.floor(state.cash - getPendingSettlement('TWD')).toLocaleString()}（已扣除待付款與未入帳款項）
 
 請以簡潔專業的口吻回答（約 150-200 字內，直接切入重點，無須重複列舉上述數據）。
 
