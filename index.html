@@ -710,6 +710,18 @@
         .lr-preset-btn.active { background: rgba(0,212,255,0.15); border-color: var(--color-acc); color: var(--color-acc); }
 
         /* 🔍 個股詳情頁：資訊格與新聞列表 */
+        /* 🧪 開盤方向策略模擬器：手機版一律用 grid + min-width:0，避免輸入框撐破容器 */
+        .sim-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+        .sim-grid2 > *, .sim-cards > *, .sim-stats > * { min-width:0; }
+        .sim-cards { display:grid; grid-template-columns:1fr; gap:10px; }
+        .sim-stats { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px; }
+        @media (min-width:640px) { .sim-cards { grid-template-columns:1fr 1fr; } .sim-stats { grid-template-columns:repeat(3, minmax(0,1fr)); } }
+        .sim-lbl { font-size:11px; color:#888; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .sim-in { display:block; width:100%; min-width:0; max-width:100%; box-sizing:border-box; height:40px; margin:0; padding:0 8px; font-size:14px; text-align:center; color:#fff; background:rgba(0,0,0,0.45); border:1px solid rgba(255,255,255,0.2); border-radius:8px; -webkit-appearance:none; appearance:none; font-family:inherit; }
+        .sim-in:focus { outline:none; border-color:var(--color-acc); }
+        .sim-in::-webkit-date-and-time-value { text-align:center; min-height:1.2em; }
+        .sim-card { box-sizing:border-box; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px; }
+        .sim-offset { display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto; align-items:center; gap:4px; font-size:11px; color:#888; }
         .detail-info-cell { display:flex; flex-direction:column; gap:4px; }
         .detail-info-label { color:#777; }
         .detail-info-value { font-family:monospace; font-weight:bold; font-size:13px; }
@@ -2118,36 +2130,67 @@
                     </div>
                 </div>
 
-                <div class="glass-panel" style="padding:16px; margin-bottom:16px;">
+                <div class="glass-panel" style="padding:16px; margin-bottom:16px; overflow:hidden;">
                     <div style="font-weight:bold; font-size:13px; margin-bottom:4px;"><i class="fa-solid fa-flask" style="color:var(--color-acc);"></i> 開盤方向策略模擬器</div>
-                    <div style="font-size:11px; color:#777; margin-bottom:12px; line-height:1.6;">選一檔股票與日期區間，分別設定「開盤價高於昨收（開高）」與「低於昨收（開低）」時，當天幾點買進、幾點賣出，看回測的損益百分比。使用 5 分鐘 K 線（Yahoo 僅提供最近約 60 天），時間為該市場當地時間；買賣價取該時間那根 K 棒的開盤價。</div>
+                    <div style="font-size:11px; color:#777; margin-bottom:12px; line-height:1.6;">選一檔股票與日期區間，分別設定「開盤價高於昨收（開高）」與「低於昨收（開低）」時，當天幾點買進、幾點賣出，看回測的損益百分比。使用 5 分鐘 K 線（Yahoo 僅提供最近約 60 天）。台股填當地時間；美股等其他市場因冬令／夏令不同，改填「開盤後幾小時幾分鐘」。買賣價取該時間那根 K 棒的開盤價。</div>
                     <div style="display:flex; flex-direction:column; gap:10px;">
-                        <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                            <div style="flex:1; min-width:110px;"><div style="font-size:11px; color:#888; margin-bottom:4px;">股票代號</div><input type="text" id="sim-ticker" class="modal-input" placeholder="如 2330 或 AAPL" style="margin:0;"></div>
-                            <div style="flex:1; min-width:130px;"><div style="font-size:11px; color:#888; margin-bottom:4px;">起始日期</div><input type="date" id="sim-start" class="modal-input" style="margin:0;"></div>
-                            <div style="flex:1; min-width:130px;"><div style="font-size:11px; color:#888; margin-bottom:4px;">結束日期</div><input type="date" id="sim-end" class="modal-input" style="margin:0;"></div>
-                        </div>
-                        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end;">
-                            <div style="flex:2; min-width:200px;"><div style="font-size:11px; color:#888; margin-bottom:4px;">模擬模式</div>
-                                <select id="sim-mode" class="modal-input" onchange="simSetMode()" style="margin:0;"><option value="daytrade">空手當沖：先買進、再賣出</option><option value="holding">已有持股：先賣出、再買回（高賣低買）</option></select></div>
-                            <div id="sim-shares-wrap" style="flex:1; min-width:120px; display:none;"><div style="font-size:11px; color:#888; margin-bottom:4px;">持股股數（選填，算金額用）</div><input type="number" id="sim-shares" class="modal-input" min="0" placeholder="例如 1000" style="margin:0;"></div>
-                        </div>
-                        <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                            <div style="flex:1; min-width:200px; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px;">
-                                <div style="font-size:12px; font-weight:bold; color:var(--color-up); margin-bottom:8px;"><i class="fa-solid fa-arrow-trend-up"></i> 開盤價「漲」（高於昨收）</div>
-                                <label style="font-size:11px; color:#aaa; display:flex; align-items:center; gap:6px; margin-bottom:6px;"><input type="checkbox" id="sim-up-on" checked> 這種日子要交易</label>
-                                <div style="display:flex; gap:8px;"><div style="flex:1;"><div style="font-size:10px; color:#888;">買進時間</div><input type="time" id="sim-up-buy" step="300" value="09:05" class="modal-input" style="margin:0;"></div><div style="flex:1;"><div style="font-size:10px; color:#888;">賣出時間</div><input type="time" id="sim-up-sell" step="300" value="13:20" class="modal-input" style="margin:0;"></div></div>
+                        <div>
+                            <div class="sim-lbl">股票代號</div>
+                            <div class="custom-select-wrapper" id="sim-ticker-wrapper" style="position:relative; z-index:10;">
+                                <div class="select-input-box" style="width:100%; box-sizing:border-box;">
+                                    <i class="fa-solid fa-magnifying-glass" style="color:#666; font-size:12px; margin-right:8px;"></i>
+                                    <input type="text" id="sim-ticker" autocomplete="off" placeholder="搜尋代號" style="min-width:0; width:100%; text-transform:uppercase;">
+                                    <button class="select-dropdown-btn" type="button" onclick="toggleSimTickerDropdown()"><i class="fa-solid fa-chevron-down"></i></button>
+                                </div>
+                                <div class="opaque-dropdown-list" id="sim-ticker-dropdown">
+                                    <div class="dropdown-group-title" id="sim-recent-title" style="color:var(--color-buy)">★ 最近選過</div>
+                                    <div id="sim-recent-list"></div>
+                                    <div class="dropdown-group-title" id="sim-pinned-title" style="color:var(--color-acc); border-top:1px solid rgba(255,255,255,0.05);">📌 已釘選</div>
+                                    <div id="sim-pinned-list"></div>
+                                    <div class="dropdown-group-title" style="border-top:1px solid rgba(255,255,255,0.05);">即時搜尋結果</div>
+                                    <div id="sim-live-list"><div style="padding:10px 12px; font-size:11px; color:#666;">輸入代號以搜尋全球市場...</div></div>
+                                </div>
                             </div>
-                            <div style="flex:1; min-width:200px; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px;">
+                        </div>
+                        <div class="sim-grid2">
+                            <div><div class="sim-lbl">起始日期</div><input type="date" id="sim-start" class="sim-in"></div>
+                            <div><div class="sim-lbl">結束日期</div><input type="date" id="sim-end" class="sim-in"></div>
+                        </div>
+                        <div>
+                            <div class="sim-lbl">模擬模式</div>
+                            <select id="sim-mode" class="sim-in" onchange="simSetMode()" style="text-align:left; padding:0 10px;"><option value="daytrade">空手當沖：先買進、再賣出</option><option value="holding">已有持股：先賣出、再買回</option></select>
+                        </div>
+                        <div id="sim-shares-wrap" style="display:none;"><div class="sim-lbl">持股股數（選填，算金額用）</div><input type="number" id="sim-shares" class="sim-in" min="0" placeholder="例如 1000" inputmode="numeric"></div>
+                        <div class="sim-cards">
+                            <div class="sim-card">
+                                <div style="font-size:12px; font-weight:bold; color:var(--color-up); margin-bottom:8px;"><i class="fa-solid fa-arrow-trend-up"></i> 開盤價「漲」（高於昨收）</div>
+                                <label style="font-size:11px; color:#aaa; display:flex; align-items:center; gap:6px; margin-bottom:8px;"><input type="checkbox" id="sim-up-on" checked> 這種日子要交易</label>
+                                <div class="sim-grid2">
+                                    <div><div class="sim-lbl" id="sim-up-buy-lbl"></div>
+                                    <input type="time" id="sim-up-buy" step="300" value="09:05" class="sim-in sim-time">
+                                    <div class="sim-offset sim-off" id="sim-up-buy-off" style="display:none;"><input type="number" id="sim-up-buy-h" min="0" max="23" value="0" inputmode="numeric" class="sim-in"><span>時</span><input type="number" id="sim-up-buy-m" min="0" max="59" value="5" inputmode="numeric" class="sim-in"><span>分</span></div></div>
+                                    <div><div class="sim-lbl" id="sim-up-sell-lbl"></div>
+                                    <input type="time" id="sim-up-sell" step="300" value="13:20" class="sim-in sim-time">
+                                    <div class="sim-offset sim-off" id="sim-up-sell-off" style="display:none;"><input type="number" id="sim-up-sell-h" min="0" max="23" value="5" inputmode="numeric" class="sim-in"><span>時</span><input type="number" id="sim-up-sell-m" min="0" max="59" value="30" inputmode="numeric" class="sim-in"><span>分</span></div></div>
+                                </div>
+                            </div>
+                            <div class="sim-card">
                                 <div style="font-size:12px; font-weight:bold; color:var(--color-down); margin-bottom:8px;"><i class="fa-solid fa-arrow-trend-down"></i> 開盤價「跌」（低於昨收）</div>
-                                <label style="font-size:11px; color:#aaa; display:flex; align-items:center; gap:6px; margin-bottom:6px;"><input type="checkbox" id="sim-down-on" checked> 這種日子要交易</label>
-                                <div style="display:flex; gap:8px;"><div style="flex:1;"><div style="font-size:10px; color:#888;">買進時間</div><input type="time" id="sim-down-buy" step="300" value="09:05" class="modal-input" style="margin:0;"></div><div style="flex:1;"><div style="font-size:10px; color:#888;">賣出時間</div><input type="time" id="sim-down-sell" step="300" value="13:20" class="modal-input" style="margin:0;"></div></div>
+                                <label style="font-size:11px; color:#aaa; display:flex; align-items:center; gap:6px; margin-bottom:8px;"><input type="checkbox" id="sim-down-on" checked> 這種日子要交易</label>
+                                <div class="sim-grid2">
+                                    <div><div class="sim-lbl" id="sim-down-buy-lbl"></div>
+                                    <input type="time" id="sim-down-buy" step="300" value="09:05" class="sim-in sim-time">
+                                    <div class="sim-offset sim-off" id="sim-down-buy-off" style="display:none;"><input type="number" id="sim-down-buy-h" min="0" max="23" value="0" inputmode="numeric" class="sim-in"><span>時</span><input type="number" id="sim-down-buy-m" min="0" max="59" value="5" inputmode="numeric" class="sim-in"><span>分</span></div></div>
+                                    <div><div class="sim-lbl" id="sim-down-sell-lbl"></div>
+                                    <input type="time" id="sim-down-sell" step="300" value="13:20" class="sim-in sim-time">
+                                    <div class="sim-offset sim-off" id="sim-down-sell-off" style="display:none;"><input type="number" id="sim-down-sell-h" min="0" max="23" value="5" inputmode="numeric" class="sim-in"><span>時</span><input type="number" id="sim-down-sell-m" min="0" max="59" value="30" inputmode="numeric" class="sim-in"><span>分</span></div></div>
+                                </div>
                             </div>
                         </div>
                         <label style="font-size:11px; color:#aaa; display:flex; align-items:center; gap:6px;"><input type="checkbox" id="sim-fee-on" checked> 扣除手續費與交易稅（使用費率設定）</label>
                         <div id="sim-error" style="display:none; color:var(--color-sell); font-size:11px;"></div>
                         <button id="sim-run-btn" onclick="runOpenSimulator()" style="background:var(--color-acc); border:none; color:#000; padding:11px; border-radius:8px; font-weight:bold; font-size:13px; cursor:pointer;"><i class="fa-solid fa-play"></i> 開始模擬</button>
-                        <div id="sim-result" style="display:none; flex-direction:column; gap:12px;"></div>
+                        <div id="sim-result" style="display:none; flex-direction:column; gap:12px; min-width:0;"></div>
                     </div>
                 </div>
 
@@ -3855,19 +3898,65 @@
     // 以 Yahoo 5 分鐘 K 線（約最近 60 天）；日界線與時間皆用該市場當地時間（meta.gmtoffset）
     // ============================================================
     let simChart = null;
-    function simSetMode() {
-        const hold = document.getElementById('sim-mode').value === 'holding';
-        for (const side of ['up', 'down']) {
-            document.getElementById(`sim-${side}-buy`).previousElementSibling.innerText = hold ? '賣出時間（先）' : '買進時間';
-            document.getElementById(`sim-${side}-sell`).previousElementSibling.innerText = hold ? '買回時間（後）' : '賣出時間';
-        }
-        document.getElementById('sim-shares-wrap').style.display = hold ? 'block' : 'none';
-        if (hold) { // 若該代號目前真的有持股，順手帶入股數
-            try { const t = (document.getElementById('sim-ticker').value || '').trim().toUpperCase(), inp = document.getElementById('sim-shares');
-                const k = Object.keys(state.holdings || {}).find(x => x === t || x.replace(/\.(TW|TWO)$/i, '') === t); if (k && !inp.value) inp.value = state.holdings[k].shares; } catch (e) {}
+    // 台股（含 .TW/.TWO 或純數字）填當地時間；其他市場（美股等有冬夏令）改填「開盤後幾小時幾分」
+    function simIsTW(t) { t = (t || '').trim().toUpperCase(); return /\.(TW|TWO)$/.test(t) || /^\d{4,6}[A-Z]?$/.test(t); }
+    function simSyncMarket() {
+        const hold = document.getElementById('sim-mode').value === 'holding', raw = document.getElementById('sim-ticker').value, off = !!raw.trim() && !simIsTW(raw);
+        for (const side of ['up', 'down']) for (const w of ['buy', 'sell']) {
+            const id = `sim-${side}-${w}`;
+            document.getElementById(id).style.display = off ? 'none' : 'block';
+            document.getElementById(id + '-off').style.display = off ? 'grid' : 'none';
+            document.getElementById(id + '-lbl').innerText = (w === 'buy' ? (hold ? '先賣出' : '買進') : (hold ? '後買回' : '賣出')) + (off ? '（開盤後）' : '（當地時間）');
         }
     }
+    function simSetMode() {
+        const hold = document.getElementById('sim-mode').value === 'holding';
+        document.getElementById('sim-shares-wrap').style.display = hold ? 'block' : 'none';
+        simSyncMarket();
+        if (hold) simFillHolding();
+    }
+    function simFillHolding() { // 若該代號目前真的有持股，順手帶入股數
+        try { const t = (document.getElementById('sim-ticker').value || '').trim().toUpperCase(), inp = document.getElementById('sim-shares');
+            const k = t && Object.keys(state.holdings || {}).find(x => x === t || x.replace(/\.(TW|TWO)$/i, '') === t); if (k) inp.value = state.holdings[k].shares; } catch (e) {}
+    }
     window.simSetMode = simSetMode;
+    // 代號欄：與「即時報價與下單」同款（最近選過／已釘選／Yahoo 即時搜尋）
+    function renderSimTickerLists() {
+        const recent = (state.recentTickers || []), pinned = (state.cardTickers || []);
+        const row = (t, tag, c) => `<div class="dropdown-item" onclick="selectSimTicker('${t}')"><span style="font-weight:bold; color:${c}">${escapeHtml(t)}</span><span style="color:#888; font-size:11px;">${tag}</span></div>`;
+        document.getElementById('sim-recent-list').innerHTML = recent.map(t => row(t, '最近選取', 'var(--color-buy)')).join('');
+        document.getElementById('sim-pinned-list').innerHTML = pinned.map(t => row(t, '已釘選', 'var(--color-acc)')).join('');
+        for (const [k, arr] of [['recent', recent], ['pinned', pinned]]) { const d = arr.length ? 'block' : 'none'; document.getElementById(`sim-${k}-title`).style.display = d; document.getElementById(`sim-${k}-list`).style.display = d; }
+    }
+    function toggleSimTickerDropdown() { renderSimTickerLists(); document.getElementById('sim-ticker-dropdown').classList.toggle('show'); }
+    function selectSimTicker(t) {
+        document.getElementById('sim-ticker').value = t;
+        document.getElementById('sim-ticker-dropdown').classList.remove('show');
+        simSyncMarket(); if (document.getElementById('sim-mode').value === 'holding') simFillHolding();
+    }
+    window.toggleSimTickerDropdown = toggleSimTickerDropdown; window.selectSimTicker = selectSimTicker;
+    (function simInitTickerSearch() {
+        const inp = document.getElementById('sim-ticker'); if (!inp) return;
+        let timer = null;
+        inp.addEventListener('input', (e) => {
+            simSyncMarket();
+            const query = e.target.value.trim().toUpperCase(), dd = document.getElementById('sim-ticker-dropdown'), list = document.getElementById('sim-live-list');
+            dd.classList.add('show');
+            for (const id of ['sim-recent-title', 'sim-recent-list', 'sim-pinned-title', 'sim-pinned-list']) document.getElementById(id).style.display = 'none';
+            clearTimeout(timer);
+            if (!query) { list.innerHTML = '<div style="padding:10px 12px; font-size:11px; color:#666;">輸入代號以搜尋全球市場...</div>'; return; }
+            list.innerHTML = `<div style="padding:10px 12px; font-size:11px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> 搜尋 ${escapeHtml(query)}...</div>`;
+            timer = setTimeout(async () => {
+                try {
+                    const res = await fetch(`${myProxy}${encodeURIComponent(`https://query2.finance.yahoo.com/v1/finance/search?q=${query}&quotesCount=6`)}`, { cache: 'no-store' }), json = await res.json();
+                    if (inp.value.trim().toUpperCase() !== query) return;
+                    list.innerHTML = (json.quotes && json.quotes.length) ? json.quotes.map(q => `<div class="dropdown-item" onclick="selectSimTicker('${escapeHtml(q.symbol)}')"><div><strong style="color:#fff">${escapeHtml(q.symbol)}</strong> <span style="color:#888; font-size:11px">${escapeHtml(q.shortname || '')}</span></div><span style="color:var(--color-acc); font-size:11px">${escapeHtml(q.exchDisp || '')}</span></div>`).join('') : '<div style="padding:10px 12px; font-size:11px; color:#ff4560;">查無符合標的</div>';
+                } catch (err) { list.innerHTML = '<div style="padding:10px 12px; font-size:11px; color:#ff4560;">連線異常</div>'; }
+            }, 300);
+        });
+        document.addEventListener('click', (e) => { const w = document.getElementById('sim-ticker-wrapper'); if (w && !w.contains(e.target)) document.getElementById('sim-ticker-dropdown').classList.remove('show'); });
+        simSyncMarket();
+    })();
     (function simInitDefaults() {
         try {
             const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -3895,11 +3984,13 @@
         const startMs = Date.parse(sv + 'T00:00:00Z'), endMs = Date.parse(ev + 'T00:00:00Z');
         if (endMs < startMs) return fail('結束日期不能早於起始日期');
         if (Date.now() - startMs > 58 * 86400e3) return fail('5 分鐘 K 線 Yahoo 只提供最近約 60 天，請把起始日期改為 58 天內');
+        const offMode = !simIsTW(ticker); // 非台股：以「開盤後經過幾分鐘」計
         const toMin = (v) => { const m = /^(\d{1,2}):(\d{2})/.exec(v || ''); return m ? (+m[1]) * 60 + (+m[2]) : null; };
+        const readT = (id) => { if (!offMode) return toMin(document.getElementById(id).value); const h = parseInt(document.getElementById(id + '-h').value, 10), m = parseInt(document.getElementById(id + '-m').value, 10); return (isNaN(h) && isNaN(m)) ? null : (h || 0) * 60 + (m || 0); };
         const hold = document.getElementById('sim-mode').value === 'holding', nShares = hold ? (parseFloat(document.getElementById('sim-shares').value) || 0) : 0;
         const cfg = {};
         for (const side of ['up', 'down']) {
-            cfg[side] = { on: document.getElementById(`sim-${side}-on`).checked, buy: toMin(document.getElementById(`sim-${side}-buy`).value), sell: toMin(document.getElementById(`sim-${side}-sell`).value) };
+            cfg[side] = { on: document.getElementById(`sim-${side}-on`).checked, buy: readT(`sim-${side}-buy`), sell: readT(`sim-${side}-sell`) };
             if (cfg[side].on) {
                 if (cfg[side].buy === null || cfg[side].sell === null) return fail('請設定完整的買進與賣出時間');
                 if (cfg[side].sell <= cfg[side].buy) return fail(`「${side === 'up' ? '開盤漲' : '開盤跌'}」的${hold ? '買回' : '賣出'}時間必須晚於${hold ? '賣出' : '買進'}時間`);
@@ -3933,9 +4024,10 @@
                 if (!(prevClose > 0) || open === prevClose) continue;
                 const side = open > prevClose ? 'up' : 'down', c = cfg[side];
                 if (!c.on) continue;
-                const bi = bars.findIndex(b => b.m >= c.buy);
+                const t0 = offMode ? bars[0].m : 0; // 開盤後模式：以當天第一根 K 棒為 0
+                const bi = bars.findIndex(b => b.m - t0 >= c.buy);
                 if (bi < 0) continue;
-                let si = bars.findIndex((b, k) => k > bi && b.m >= c.sell);
+                let si = bars.findIndex((b, k) => k > bi && b.m - t0 >= c.sell);
                 const buyP = bars[bi].o, sellP = si >= 0 ? bars[si].o : bars[bars.length - 1].c;
                 if (si < 0 && bars.length - 1 <= bi) continue;
                 // 一般模式：buyP 買、sellP 賣；持股模式：buyP 欄位＝先賣出價、sellP 欄位＝買回價
@@ -3965,12 +4057,12 @@
         trades.forEach(t => { cum *= 1 + t.ret; labels.push(t.key.slice(5)); line.push((cum - 1) * 100); });
         const totAmt = trades.reduce((a, t) => a + (t.amt || 0), 0);
         const best = trades.reduce((a, t) => t.ret > a.ret ? t : a), worst = trades.reduce((a, t) => t.ret < a.ret ? t : a);
-        const card = (t, v, c) => `<div style="flex:1; min-width:100px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:8px 10px;"><div style="font-size:10px; color:#888;">${t}</div><div style="font-family:monospace; font-weight:bold; font-size:15px; ${c ? 'color:' + c : ''}">${v}</div></div>`;
+        const card = (t, v, c) => `<div style="background:rgba(255,255,255,0.04); box-sizing:border-box; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:8px 10px;"><div style="font-size:10px; color:#888;">${t}</div><div style="font-family:monospace; font-weight:bold; font-size:14px; overflow-wrap:anywhere; ${c ? 'color:' + c : ''}">${v}</div></div>`;
         const sideRow = (n, s, c) => s ? `<div style="display:flex; justify-content:space-between; font-size:11.5px; padding:4px 0;"><span style="color:${c}">${n}</span><span style="font-family:monospace; color:#ccc;">${s.n} 天・勝率 ${(s.win * 100).toFixed(0)}%・平均 ${pct(s.avg)}・累計 ${pct(s.cum)}</span></div>` : '';
         const esc = (x) => escapeHtml(String(x));
         out.innerHTML = `
             <div style="font-size:12px; color:#aaa;">${esc(ticker)}（${mo.hold ? '持股・先賣後買回' : '當沖・先買後賣'}）　共交易 <b style="color:#fff;">${all.n}</b> 天${feeOn ? '（已扣手續費與稅）' : '（未扣成本）'}</div>
-            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <div class="sim-stats">
                 ${card('累計報酬（複利）', pct(all.cum), col(all.cum))}${card('平均單日損益', pct(all.avg), col(all.avg))}${card('勝率', (all.win * 100).toFixed(1) + '%')}
                 ${card('最佳單日', pct(best.ret) + ' ' + best.key.slice(5), col(best.ret))}${card('最差單日', pct(worst.ret) + ' ' + worst.key.slice(5), col(worst.ret))}
                 ${mo.hold && mo.holdRet !== null ? card('期間純持有', pct(mo.holdRet), col(mo.holdRet)) + card('高賣低買後（等值）', pct((1 + mo.holdRet) * (1 + all.cum) - 1), col((1 + mo.holdRet) * (1 + all.cum) - 1)) : ''}
@@ -3978,7 +4070,7 @@
             </div>
             <div>${sideRow('開盤漲', up, 'var(--color-up)')}${sideRow('開盤跌', dn, 'var(--color-down)')}</div>
             <div style="height:200px; position:relative;"><canvas id="simChartCanvas"></canvas></div>
-            <div style="max-height:280px; overflow:auto; border:1px solid rgba(255,255,255,0.08); border-radius:8px;">
+            <div style="max-height:280px; overflow:auto; max-width:100%; -webkit-overflow-scrolling:touch; border:1px solid rgba(255,255,255,0.08); border-radius:8px;">
                 <table style="width:100%; border-collapse:collapse; font-size:11.5px; font-family:monospace;">
                     <thead><tr style="color:#888; text-align:right; position:sticky; top:0; background:#14161c;"><th style="text-align:left; padding:6px 8px;">日期</th><th>開盤vs昨收</th><th>${mo.hold ? '賣出價' : '買價'}</th><th>${mo.hold ? '買回價' : '賣價'}</th><th style="padding-right:8px;">損益</th></tr></thead>
                     <tbody>${trades.map(t => `<tr style="text-align:right; border-top:1px solid rgba(255,255,255,0.05);"><td style="text-align:left; padding:5px 8px;">${t.key}</td><td style="color:${col(t.gap)}">${pct(t.gap)}</td><td>${t.buyP.toFixed(2)}</td><td>${t.sellP.toFixed(2)}${t.exitLate ? '*' : ''}</td><td style="padding-right:8px; color:${col(t.ret)}">${pct(t.ret)}${mo.hold && t.amt !== null ? '<br><span style="font-size:10px;">' + (t.amt >= 0 ? '+' : '') + Math.round(t.amt).toLocaleString() + '</span>' : ''}</td></tr>`).join('')}</tbody>
