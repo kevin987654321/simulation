@@ -721,6 +721,7 @@
         .sim-in:focus { outline:none; border-color:var(--color-acc); }
         .sim-in::-webkit-date-and-time-value { text-align:center; min-height:1.2em; }
         .sim-card { box-sizing:border-box; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px; }
+        .sim-clock { display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center; gap:4px; color:#888; }
         .sim-offset { display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto; align-items:center; gap:4px; font-size:11px; color:#888; }
         .detail-info-cell { display:flex; flex-direction:column; gap:4px; }
         .detail-info-label { color:#777; }
@@ -2157,21 +2158,26 @@
                             <div><div class="sim-lbl">結束日期</div><input type="date" id="sim-end" class="sim-in"></div>
                         </div>
                         <div>
+                            <div class="sim-lbl">漲跌判定：用前幾根 5 分 K（0＝只看開盤價）</div>
+                            <input type="text" id="sim-nbars" class="sim-in mobile-num" data-maxlen="2" onfocus="this.select()" value="0" inputmode="numeric">
+                            <div style="font-size:10px; color:#666; margin-top:4px; line-height:1.5;">例如填 3：以開盤後第 3 根 K 棒的收盤價（約 15 分鐘）對比昨收來判定漲或跌與幅度；買進時間若早於判定完成，會自動順延到判定後的下一根，避免偷看未來。</div>
+                        </div>
+                        <div>
                             <div class="sim-lbl">模擬模式</div>
                             <select id="sim-mode" class="sim-in" onchange="simSetMode()" style="text-align:left; padding:0 10px;"><option value="daytrade">空手當沖：先買進、再賣出</option><option value="holding">已有持股：先賣出、再買回</option></select>
                         </div>
-                        <div id="sim-shares-wrap" style="display:none;"><div class="sim-lbl">持股股數（選填，算金額用）</div><input type="number" id="sim-shares" class="sim-in" min="0" placeholder="例如 1000" inputmode="numeric"></div>
+                        <div id="sim-shares-wrap" style="display:none;"><div class="sim-lbl">持股股數（選填，算金額用）</div><input type="text" id="sim-shares" class="sim-in mobile-num" data-decimal="true" onfocus="this.select()" placeholder="例如 1000" inputmode="numeric"></div>
                         <div class="sim-cards">
                             <div class="sim-card">
                                 <div style="font-size:12px; font-weight:bold; color:var(--color-up); margin-bottom:8px;"><i class="fa-solid fa-arrow-trend-up"></i> 開盤價「漲」（高於昨收）</div>
                                 <label style="font-size:11px; color:#aaa; display:flex; align-items:center; gap:6px; margin-bottom:8px;"><input type="checkbox" id="sim-up-on" checked> 這種日子要交易</label>
                                 <div class="sim-grid2">
                                     <div><div class="sim-lbl" id="sim-up-buy-lbl"></div>
-                                    <input type="time" id="sim-up-buy" step="300" value="09:05" class="sim-in sim-time">
-                                    <div class="sim-offset sim-off" id="sim-up-buy-off" style="display:none;"><input type="number" id="sim-up-buy-h" min="0" max="23" value="0" inputmode="numeric" class="sim-in"><span>時</span><input type="number" id="sim-up-buy-m" min="0" max="59" value="5" inputmode="numeric" class="sim-in"><span>分</span></div></div>
+                                    <div class="sim-clock" id="sim-up-buy-clk"><input type="text" id="sim-up-buy-ch" value="09" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric"><span>:</span><input type="text" id="sim-up-buy-cm" value="05" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric"></div>
+                                    <div class="sim-offset sim-off" id="sim-up-buy-off" style="display:none;"><input type="text" id="sim-up-buy-h" value="0" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric"><span>時</span><input type="text" id="sim-up-buy-m" value="5" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric"><span>分</span></div></div>
                                     <div><div class="sim-lbl" id="sim-up-sell-lbl"></div>
-                                    <input type="time" id="sim-up-sell" step="300" value="13:20" class="sim-in sim-time">
-                                    <div class="sim-offset sim-off" id="sim-up-sell-off" style="display:none;"><input type="number" id="sim-up-sell-h" min="0" max="23" value="5" inputmode="numeric" class="sim-in"><span>時</span><input type="number" id="sim-up-sell-m" min="0" max="59" value="30" inputmode="numeric" class="sim-in"><span>分</span></div></div>
+                                    <div class="sim-clock" id="sim-up-sell-clk"><input type="text" id="sim-up-sell-ch" value="13" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric"><span>:</span><input type="text" id="sim-up-sell-cm" value="20" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric"></div>
+                                    <div class="sim-offset sim-off" id="sim-up-sell-off" style="display:none;"><input type="text" id="sim-up-sell-h" value="5" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric"><span>時</span><input type="text" id="sim-up-sell-m" value="30" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric"><span>分</span></div></div>
                                 </div>
                             </div>
                             <div class="sim-card">
@@ -2179,11 +2185,11 @@
                                 <label style="font-size:11px; color:#aaa; display:flex; align-items:center; gap:6px; margin-bottom:8px;"><input type="checkbox" id="sim-down-on" checked> 這種日子要交易</label>
                                 <div class="sim-grid2">
                                     <div><div class="sim-lbl" id="sim-down-buy-lbl"></div>
-                                    <input type="time" id="sim-down-buy" step="300" value="09:05" class="sim-in sim-time">
-                                    <div class="sim-offset sim-off" id="sim-down-buy-off" style="display:none;"><input type="number" id="sim-down-buy-h" min="0" max="23" value="0" inputmode="numeric" class="sim-in"><span>時</span><input type="number" id="sim-down-buy-m" min="0" max="59" value="5" inputmode="numeric" class="sim-in"><span>分</span></div></div>
+                                    <div class="sim-clock" id="sim-down-buy-clk"><input type="text" id="sim-down-buy-ch" value="09" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric"><span>:</span><input type="text" id="sim-down-buy-cm" value="05" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric"></div>
+                                    <div class="sim-offset sim-off" id="sim-down-buy-off" style="display:none;"><input type="text" id="sim-down-buy-h" value="0" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric"><span>時</span><input type="text" id="sim-down-buy-m" value="5" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric"><span>分</span></div></div>
                                     <div><div class="sim-lbl" id="sim-down-sell-lbl"></div>
-                                    <input type="time" id="sim-down-sell" step="300" value="13:20" class="sim-in sim-time">
-                                    <div class="sim-offset sim-off" id="sim-down-sell-off" style="display:none;"><input type="number" id="sim-down-sell-h" min="0" max="23" value="5" inputmode="numeric" class="sim-in"><span>時</span><input type="number" id="sim-down-sell-m" min="0" max="59" value="30" inputmode="numeric" class="sim-in"><span>分</span></div></div>
+                                    <div class="sim-clock" id="sim-down-sell-clk"><input type="text" id="sim-down-sell-ch" value="13" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric"><span>:</span><input type="text" id="sim-down-sell-cm" value="20" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric"></div>
+                                    <div class="sim-offset sim-off" id="sim-down-sell-off" style="display:none;"><input type="text" id="sim-down-sell-h" value="5" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric"><span>時</span><input type="text" id="sim-down-sell-m" value="30" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric"><span>分</span></div></div>
                                 </div>
                             </div>
                         </div>
@@ -2193,15 +2199,15 @@
                             <div id="sim-tiers" style="display:flex; flex-direction:column; gap:8px;"></div>
                             <button type="button" onclick="simAddTier()" class="sim-in" style="margin-top:8px; cursor:pointer; color:var(--color-acc); border-style:dashed;"><i class="fa-solid fa-plus"></i> 新增一組幅度規則</button>
                         </details>
-                        <div style="border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:8px;">
-                            <div class="sim-lbl" style="margin:0;"><i class="fa-solid fa-floppy-disk"></i> 配置（存在這台裝置的瀏覽器）</div>
-                            <div style="display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px;"><input type="text" id="sim-preset-name" class="sim-in" placeholder="配置名稱，例如 MU 高開策略" style="text-align:left; padding:0 10px;"><button type="button" onclick="simSavePreset()" class="sim-in" style="width:auto; padding:0 14px; cursor:pointer; color:#000; background:var(--color-acc); border:none; font-weight:bold;">儲存</button></div>
-                            <div style="display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:8px;"><select id="sim-preset-select" class="sim-in" style="text-align:left; padding:0 10px;"></select><button type="button" onclick="simLoadPreset()" class="sim-in" style="width:auto; padding:0 14px; cursor:pointer;">載入</button><button type="button" onclick="simDeletePreset()" class="sim-in" style="width:auto; padding:0 14px; cursor:pointer; color:var(--color-sell);"><i class="fa-solid fa-trash"></i></button></div>
-                        </div>
                         <label style="font-size:11px; color:#aaa; display:flex; align-items:center; gap:6px;"><input type="checkbox" id="sim-fee-on" checked> 扣除手續費與交易稅（使用費率設定）</label>
                         <div id="sim-error" style="display:none; color:var(--color-sell); font-size:11px;"></div>
                         <button id="sim-run-btn" onclick="runOpenSimulator()" style="background:var(--color-acc); border:none; color:#000; padding:11px; border-radius:8px; font-weight:bold; font-size:13px; cursor:pointer;"><i class="fa-solid fa-play"></i> 開始模擬</button>
                         <div id="sim-result" style="display:none; flex-direction:column; gap:12px; min-width:0;"></div>
+                        <div style="border-top:1px solid rgba(255,255,255,0.1); padding-top:12px; display:flex; flex-direction:column; gap:8px;">
+                            <div class="sim-lbl" style="margin:0;"><i class="fa-solid fa-floppy-disk"></i> 配置（存在這台裝置的瀏覽器）</div>
+                            <div style="display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:8px;"><select id="sim-preset-select" class="sim-in" style="text-align:left; padding:0 10px;"></select><button type="button" onclick="simLoadPreset()" class="sim-in" style="width:auto; padding:0 14px; cursor:pointer;">載入</button><button type="button" onclick="simDeletePreset()" class="sim-in" style="width:auto; padding:0 14px; cursor:pointer; color:var(--color-sell);"><i class="fa-solid fa-trash"></i></button></div>
+                            <button type="button" onclick="simSavePreset()" class="sim-in" style="cursor:pointer; color:#000; background:var(--color-acc); border:none; font-weight:bold;"><i class="fa-solid fa-floppy-disk"></i> 儲存目前配置</button>
+                        </div>
                     </div>
                 </div>
 
@@ -3914,8 +3920,8 @@
     const SIM_PRESET_KEY = 'SIM_STRATEGY_PRESETS';
     function simFieldHTML(prefix, w, defTime, dh, dm) {
         const i = `sim-${prefix}-${w}`;
-        return `<div><div class="sim-lbl" id="${i}-lbl"></div><input type="time" id="${i}" step="300" value="${defTime}" class="sim-in sim-time">
-            <div class="sim-offset" id="${i}-off" style="display:none;"><input type="number" id="${i}-h" min="0" max="23" value="${dh}" inputmode="numeric" class="sim-in"><span>時</span><input type="number" id="${i}-m" min="0" max="59" value="${dm}" inputmode="numeric" class="sim-in"><span>分</span></div></div>`;
+        return `<div><div class="sim-lbl" id="${i}-lbl"></div><div class="sim-clock" id="${i}-clk"><input type="text" id="${i}-ch" value="${defTime.slice(0, 2)}" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric"><span>:</span><input type="text" id="${i}-cm" value="${defTime.slice(3, 5)}" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric"></div>
+            <div class="sim-offset" id="${i}-off" style="display:none;"><input type="text" id="${i}-h" value="${dh}" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric"><span>時</span><input type="text" id="${i}-m" value="${dm}" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric"><span>分</span></div></div>`;
     }
     function simAddTier(d) {
         d = d || {};
@@ -3923,13 +3929,14 @@
         const box = document.createElement('div'); box.className = 'sim-card'; box.id = `sim-tier-${id}`;
         box.innerHTML = `
             <div style="display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) auto; gap:8px; align-items:end; margin-bottom:8px;">
-                <div><div class="sim-lbl">開盤幅度 ≥（%）</div><input type="number" id="sim-${id}-th" class="sim-in" min="0" step="0.1" value="${d.th ?? 3}" inputmode="decimal"></div>
+                <div><div class="sim-lbl">開盤幅度 ≥（%）</div><input type="text" id="sim-${id}-th" class="sim-in mobile-num" data-decimal="true" onfocus="this.select()" value="${d.th ?? 3}" inputmode="decimal"></div>
                 <div><div class="sim-lbl">方向</div><select id="sim-${id}-dir" class="sim-in" style="padding:0 6px;"><option value="both">漲跌皆可</option><option value="up">只限開漲</option><option value="down">只限開跌</option></select></div>
                 <button type="button" onclick="simRemoveTier('${id}')" class="sim-in" style="width:40px; padding:0; cursor:pointer; color:var(--color-sell);" title="刪除這組"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <label style="font-size:11px; color:#aaa; display:flex; align-items:center; gap:6px; margin-bottom:8px;"><input type="checkbox" id="sim-${id}-on" checked> 符合時要交易（取消勾選＝這種日子空手）</label>
             <div class="sim-grid2">${simFieldHTML(id, 'buy', '09:05', 0, 5)}${simFieldHTML(id, 'sell', '13:20', 5, 30)}</div>`;
         document.getElementById('sim-tiers').appendChild(box);
+        if (window.setupMobileNumInput) box.querySelectorAll('.mobile-num').forEach(window.setupMobileNumInput);
         document.getElementById(`sim-${id}-dir`).value = d.dir || 'both';
         if (d.on === false) document.getElementById(`sim-${id}-on`).checked = false;
         simWriteRule(id, d);
@@ -3944,18 +3951,19 @@
     }
     function simClearTiers() { [...simTierIds].forEach(simRemoveTier); }
     window.simAddTier = simAddTier; window.simRemoveTier = simRemoveTier;
-    const SIM_RULE_FIELDS = ['buy', 'buy-h', 'buy-m', 'sell', 'sell-h', 'sell-m'];
+    const SIM_RULE_FIELDS = ['buy-ch', 'buy-cm', 'buy-h', 'buy-m', 'sell-ch', 'sell-cm', 'sell-h', 'sell-m'];
     function simReadRule(prefix) { const r = { on: document.getElementById(`sim-${prefix}-on`).checked }; SIM_RULE_FIELDS.forEach(f => { r[f] = document.getElementById(`sim-${prefix}-${f}`).value; }); return r; }
-    function simWriteRule(prefix, r) { if (!r) return; if (r.on !== undefined) document.getElementById(`sim-${prefix}-on`).checked = !!r.on; SIM_RULE_FIELDS.forEach(f => { if (r[f] !== undefined && r[f] !== null) document.getElementById(`sim-${prefix}-${f}`).value = r[f]; }); }
+    function simWriteRule(prefix, r) { if (!r) return;
+        for (const w of ['buy', 'sell']) if (typeof r[w] === 'string' && /^\d{1,2}:\d{2}/.test(r[w])) { r[w + '-ch'] = r[w].slice(0, 2); r[w + '-cm'] = r[w].slice(3, 5); } if (r.on !== undefined) document.getElementById(`sim-${prefix}-on`).checked = !!r.on; SIM_RULE_FIELDS.forEach(f => { if (r[f] !== undefined && r[f] !== null) document.getElementById(`sim-${prefix}-${f}`).value = r[f]; }); }
     function simGetConfig() {
         return { ticker: document.getElementById('sim-ticker').value, start: document.getElementById('sim-start').value, end: document.getElementById('sim-end').value,
-            mode: document.getElementById('sim-mode').value, shares: document.getElementById('sim-shares').value, fee: document.getElementById('sim-fee-on').checked,
+            nbars: document.getElementById('sim-nbars').value, mode: document.getElementById('sim-mode').value, shares: document.getElementById('sim-shares').value, fee: document.getElementById('sim-fee-on').checked,
             up: simReadRule('up'), down: simReadRule('down'),
             tiers: simTierIds.map(id => ({ ...simReadRule(id), th: document.getElementById(`sim-${id}-th`).value, dir: document.getElementById(`sim-${id}-dir`).value })) };
     }
     function simApplyConfig(c) {
         document.getElementById('sim-ticker').value = c.ticker || ''; if (c.start) document.getElementById('sim-start').value = c.start; if (c.end) document.getElementById('sim-end').value = c.end;
-        document.getElementById('sim-mode').value = c.mode || 'daytrade'; document.getElementById('sim-shares').value = c.shares || '';
+        document.getElementById('sim-nbars').value = c.nbars || '0'; document.getElementById('sim-mode').value = c.mode || 'daytrade'; document.getElementById('sim-shares').value = c.shares || '';
         document.getElementById('sim-fee-on').checked = c.fee !== false;
         simWriteRule('up', c.up); simWriteRule('down', c.down);
         simClearTiers(); (c.tiers || []).forEach(t => simAddTier(t));
@@ -3968,19 +3976,20 @@
         el.innerHTML = names.length ? names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('') : '<option value="">（尚無已存配置）</option>';
         if (sel && names.includes(sel)) el.value = sel;
     }
+    let simLastPresetName = '';
     function simSavePreset() {
-        const nameEl = document.getElementById('sim-preset-name'), name = nameEl.value.trim();
-        if (!name) { alert('請先輸入配置名稱'); return; }
         const all = simLoadPresets();
+        const name = (prompt('請輸入配置名稱：', simLastPresetName || ((document.getElementById('sim-ticker').value || '').trim().toUpperCase() + ' 策略').trim()) || '').trim();
+        if (!name) return;
         if (all[name] && !confirm(`已有名為「${name}」的配置，要覆蓋嗎？`)) return;
         all[name] = simGetConfig();
         try { localStorage.setItem(SIM_PRESET_KEY, JSON.stringify(all)); } catch (e) { alert('儲存失敗（瀏覽器可能封鎖了儲存空間）'); return; }
-        simRefreshPresetList(name); nameEl.value = '';
+        simLastPresetName = name; simRefreshPresetList(name);
     }
     function simLoadPreset() {
         const name = document.getElementById('sim-preset-select').value, c = simLoadPresets()[name];
         if (!c) { alert('沒有可載入的配置'); return; }
-        simApplyConfig(c); document.getElementById('sim-preset-name').value = name;
+        simApplyConfig(c); simLastPresetName = name;
     }
     function simDeletePreset() {
         const name = document.getElementById('sim-preset-select').value, all = simLoadPresets();
@@ -3996,7 +4005,7 @@
         const hold = document.getElementById('sim-mode').value === 'holding', raw = document.getElementById('sim-ticker').value, off = !!raw.trim() && !simIsTW(raw);
         for (const side of ['up', 'down', ...simTierIds]) for (const w of ['buy', 'sell']) {
             const id = `sim-${side}-${w}`;
-            document.getElementById(id).style.display = off ? 'none' : 'block';
+            document.getElementById(id + '-clk').style.display = off ? 'none' : 'grid';
             document.getElementById(id + '-off').style.display = off ? 'grid' : 'none';
             document.getElementById(id + '-lbl').innerText = (w === 'buy' ? (hold ? '先賣出' : '買進') : (hold ? '後買回' : '賣出')) + (off ? '（開盤後）' : '（當地時間）');
         }
@@ -4078,7 +4087,8 @@
         if (Date.now() - startMs > 58 * 86400e3) return fail('5 分鐘 K 線 Yahoo 只提供最近約 60 天，請把起始日期改為 58 天內');
         const offMode = !simIsTW(ticker); // 非台股：以「開盤後經過幾分鐘」計
         const toMin = (v) => { const m = /^(\d{1,2}):(\d{2})/.exec(v || ''); return m ? (+m[1]) * 60 + (+m[2]) : null; };
-        const readT = (id) => { if (!offMode) return toMin(document.getElementById(id).value); const h = parseInt(document.getElementById(id + '-h').value, 10), m = parseInt(document.getElementById(id + '-m').value, 10); return (isNaN(h) && isNaN(m)) ? null : (h || 0) * 60 + (m || 0); };
+        const readT = (id) => { if (!offMode) { const h = parseInt(document.getElementById(id + '-ch').value, 10), m = parseInt(document.getElementById(id + '-cm').value, 10); return (isNaN(h) || isNaN(m) || h > 23 || m > 59) ? null : h * 60 + m; } const h = parseInt(document.getElementById(id + '-h').value, 10), m = parseInt(document.getElementById(id + '-m').value, 10); return (isNaN(h) && isNaN(m)) ? null : (h || 0) * 60 + (m || 0); };
+        const nDecide = Math.max(0, Math.min(30, parseInt(document.getElementById('sim-nbars').value, 10) || 0));
         const hold = document.getElementById('sim-mode').value === 'holding', nShares = hold ? (parseFloat(document.getElementById('sim-shares').value) || 0) : 0;
         const cfg = {};
         for (const side of ['up', 'down']) {
@@ -4123,7 +4133,7 @@
                 const key = keys[i];
                 if (Date.parse(key + 'T00:00:00Z') < startMs || Date.parse(key + 'T00:00:00Z') > endMs) continue;
                 const bars = days.get(key).sort((a, b) => a.m - b.m), prevBars = days.get(keys[i - 1]);
-                const prevClose = prevBars[prevBars.length - 1].c, open = bars[0].o;
+                const prevClose = prevBars[prevBars.length - 1].c, open = nDecide > 0 ? bars[Math.min(nDecide, bars.length) - 1].c : bars[0].o; // 判定價：前 N 根的收盤價（0＝開盤價）
                 if (baseFirst === null && prevClose > 0) baseFirst = prevClose; baseLast = bars[bars.length - 1].c;
                 if (!(prevClose > 0) || open === prevClose) continue;
                 const side = open > prevClose ? 'up' : 'down', gapAbs = Math.abs(open / prevClose - 1) * 100;
@@ -4131,7 +4141,7 @@
                 const c = hit || cfg[side], ruleLabel = hit ? hit.label : '基本';
                 if (!c.on) continue;
                 const t0 = offMode ? bars[0].m : 0; // 開盤後模式：以當天第一根 K 棒為 0
-                const bi = bars.findIndex(b => b.m - t0 >= c.buy);
+                const bi = bars.findIndex((b, k) => k >= nDecide && b.m - t0 >= c.buy); // k>=nDecide：判定完成後才能進場
                 if (bi < 0) continue;
                 let si = bars.findIndex((b, k) => k > bi && b.m - t0 >= c.sell);
                 const buyP = bars[bi].o, sellP = si >= 0 ? bars[si].o : bars[bars.length - 1].c;
@@ -4149,7 +4159,7 @@
                 trades.push({ key, side, gap: open / prevClose - 1, buyP, sellP, ret, amt, exitLate: si < 0, rule: ruleLabel });
             }
             if (!trades.length) throw new Error('這段期間沒有符合條件的交易日（可能全是平盤開、被設定排除，或買進時間超過收盤）');
-            renderOpenSimulator(ticker, trades, cfg, feeOn, { hold, nShares, holdRet: (baseFirst && baseLast) ? baseLast / baseFirst - 1 : null });
+            renderOpenSimulator(ticker, trades, cfg, feeOn, { hold, nShares, nDecide, holdRet: (baseFirst && baseLast) ? baseLast / baseFirst - 1 : null });
         } catch (e) { fail(e.message || '模擬失敗'); }
         finally { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-play"></i> 開始模擬'; }
     }
@@ -4179,7 +4189,7 @@
             <div style="height:200px; position:relative;"><canvas id="simChartCanvas"></canvas></div>
             <div style="max-height:280px; overflow:auto; max-width:100%; -webkit-overflow-scrolling:touch; border:1px solid rgba(255,255,255,0.08); border-radius:8px;">
                 <table style="width:100%; border-collapse:collapse; font-size:11.5px; font-family:monospace;">
-                    <thead><tr style="color:#888; text-align:right; position:sticky; top:0; background:#14161c;"><th style="text-align:left; padding:6px 8px;">日期</th><th>開盤vs昨收</th>${ruleNames.length > 1 ? '<th>規則</th>' : ''}<th>${mo.hold ? '賣出價' : '買價'}</th><th>${mo.hold ? '買回價' : '賣價'}</th><th style="padding-right:8px;">損益</th></tr></thead>
+                    <thead><tr style="color:#888; text-align:right; position:sticky; top:0; background:#14161c;"><th style="text-align:left; padding:6px 8px;">日期</th><th>${mo.nDecide > 0 ? '判定漲跌' : '開盤vs昨收'}</th>${ruleNames.length > 1 ? '<th>規則</th>' : ''}<th>${mo.hold ? '賣出價' : '買價'}</th><th>${mo.hold ? '買回價' : '賣價'}</th><th style="padding-right:8px;">損益</th></tr></thead>
                     <tbody>${trades.map(t => `<tr style="text-align:right; border-top:1px solid rgba(255,255,255,0.05);"><td style="text-align:left; padding:5px 8px;">${t.key}</td><td style="color:${col(t.gap)}">${pct(t.gap)}</td>${ruleNames.length > 1 ? `<td style="color:#888;">${esc(t.rule)}</td>` : ''}<td>${t.buyP.toFixed(2)}</td><td>${t.sellP.toFixed(2)}${t.exitLate ? '*' : ''}</td><td style="padding-right:8px; color:${col(t.ret)}">${pct(t.ret)}${mo.hold && t.amt !== null ? '<br><span style="font-size:10px;">' + (t.amt >= 0 ? '+' : '') + Math.round(t.amt).toLocaleString() + '</span>' : ''}</td></tr>`).join('')}</tbody>
                 </table>
             </div>
@@ -11867,7 +11877,8 @@ ${summaryText}
     document.addEventListener('touchend', clearNumpadBackspaceHold);
     document.addEventListener('touchcancel', clearNumpadBackspaceHold);
 
-    document.querySelectorAll('.mobile-num').forEach(input => {
+    function setupMobileNumInput(input) {
+        if (input.dataset.numpadReady) return; input.dataset.numpadReady = '1';
         if(window.innerWidth <= 768) {
             input.setAttribute('inputmode', 'none');
             // 🩹 修復：單靠 inputmode="none" 並不可靠 —— 使用者若在「已聚焦」的輸入框內點擊
@@ -11913,7 +11924,9 @@ ${summaryText}
                 if (numpad && numpad.style.display !== 'grid') numpad.style.display = 'grid';
             });
         }
-    });
+    }
+    document.querySelectorAll('.mobile-num').forEach(setupMobileNumInput);
+    window.setupMobileNumInput = setupMobileNumInput;
 
     function numpadPress(e, key) {
         e.preventDefault(); 
