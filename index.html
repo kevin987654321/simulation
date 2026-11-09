@@ -2195,10 +2195,88 @@
                         </div>
                         <details id="sim-adv" class="sim-card">
                             <summary style="cursor:pointer; font-size:12px; font-weight:bold; color:#ccc;"><i class="fa-solid fa-layer-group" style="color:var(--color-acc);"></i> 進階：依開盤幅度套用獨立規則 <span id="sim-tier-count" style="color:#888; font-weight:normal;">（0 組）</span></summary>
-                            <div style="font-size:11px; color:#777; line-height:1.6; margin:8px 0;">當天「開盤相對昨收的幅度」≥ 設定值時，改用該組自己的買賣時間，取代上面的基本規則。可新增多組（例如 3%、6%、9%）逐級疊加：同一天符合多組時，採用幅度門檻最高的那一組。</div>
+                            <div style="font-size:11px; color:#777; line-height:1.6; margin:8px 0;">當天「開盤相對昨收的幅度」落在某個區間（從 ≥ 下限、＜ 上限；上限留空＝不設限）時，改用該組自己的買賣時間，取代上面的基本規則。可新增多組（例如 3%～6%、6%～9%、≥9%）；同一天符合多組時，採用下限最高的那一組。</div>
                             <div id="sim-tiers" style="display:flex; flex-direction:column; gap:8px;"></div>
                             <button type="button" onclick="simAddTier()" class="sim-in" style="margin-top:8px; cursor:pointer; color:var(--color-acc); border-style:dashed;"><i class="fa-solid fa-plus"></i> 新增一組幅度規則</button>
                         </details>
+                        <details id="sim-bl" class="sim-card">
+                            <summary style="cursor:pointer; font-size:12px; font-weight:bold; color:#ccc;"><i class="fa-solid fa-ban" style="color:var(--color-sell);"></i> 區間黑名單：這些幅度的日子一律空手 <span id="sim-bl-count" style="color:#888; font-weight:normal;">（0 組）</span></summary>
+                            <div style="font-size:11px; color:#777; line-height:1.6; margin:8px 0;">開盤（或判定）幅度落在黑名單區間內的日子，不論基本規則或幅度規則，一律不交易。優先權最高。</div>
+                            <div id="sim-bls" style="display:flex; flex-direction:column; gap:8px;"></div>
+                            <button type="button" onclick="simAddBl()" class="sim-in" style="margin-top:8px; cursor:pointer; color:var(--color-sell); border-style:dashed;"><i class="fa-solid fa-plus"></i> 新增黑名單區間</button>
+                        </details>
+                    <!-- ── 智慧尋優與條件排行榜面板（含開盤後最晚完畢時間限制） ── -->
+<details id="sim-opt-panel" class="sim-card" style="border-color:rgba(0,212,255,0.3); background:rgba(0,212,255,0.03);">
+    <summary style="cursor:pointer; font-size:12px; font-weight:bold; color:var(--color-acc);">
+        <i class="fa-solid fa-wand-magic-sparkles"></i> 智慧尋優：依條件找出最優買賣時間排行
+    </summary>
+    <div style="font-size:11px; color:#888; line-height:1.6; margin:8px 0;">
+        自動掃描所有 5 分鐘 K 棒買賣時間組合（自動連動上方「模擬模式」、「扣除手續費與交易稅」及已設定的幅度／黑名單規則），篩選出符合以下硬性條件的最佳策略排行，點擊即可一鍵套用並繪製曲線。
+    </div>
+    <div style="display:flex; flex-direction:column; gap:8px;">
+        <div class="sim-grid2">
+            <div>
+                <div class="sim-lbl">最低勝率要求（%）≥</div>
+                <input type="text" id="sim-opt-min-win" class="sim-in mobile-num" data-decimal="true" onfocus="this.select()" value="60" placeholder="例如 60" inputmode="decimal">
+            </div>
+            <div>
+                <div class="sim-lbl">勝率檢驗方式</div>
+                <select id="sim-opt-win-mode" class="sim-in" style="padding:0 6px;">
+                    <option value="global">總體合併勝率達標</option>
+                    <option value="strict">漲跌各別規則皆須達標</option>
+                </select>
+            </div>
+        </div>
+        <div class="sim-grid2">
+            <div>
+                <div class="sim-lbl">最低總交易天數 ≥</div>
+                <input type="text" id="sim-opt-min-days" class="sim-in mobile-num" data-maxlen="2" onfocus="this.select()" value="8" placeholder="例如 8" inputmode="numeric">
+            </div>
+            <div>
+                <div class="sim-lbl">單日最大虧損上限（%）≤</div>
+                <input type="text" id="sim-opt-max-loss" class="sim-in mobile-num" data-decimal="true" onfocus="this.select()" value="" placeholder="不限（例填 2.5 代表 -2.5%）" inputmode="decimal">
+            </div>
+        </div>
+        <div class="sim-grid2">
+            <div>
+                <div class="sim-lbl">最短持倉時間（分鐘）≥</div>
+                <input type="text" id="sim-opt-min-hold" class="sim-in mobile-num" data-maxlen="3" onfocus="this.select()" value="10" placeholder="例如 10" inputmode="numeric">
+            </div>
+            <div>
+                <div class="sim-lbl" id="sim-opt-max-finish-lbl">開盤後最晚完畢（分鐘）≤</div>
+                <input type="text" id="sim-opt-max-finish" class="sim-in mobile-num" data-maxlen="3" onfocus="this.select()" value="" placeholder="不限（例填 60＝開盤1小時內）" inputmode="numeric">
+            </div>
+        </div>
+        <div>
+            <div class="sim-lbl">排行榜排序依據</div>
+            <select id="sim-opt-sort" class="sim-in" style="padding:0 10px; text-align:left;">
+                <option value="score">綜合推薦評分（報酬+勝率+穩定度）</option>
+                <option value="cum">累計報酬率（複利）最高</option>
+                <option value="win">勝率最高優先</option>
+                <option value="pf">獲利因子（賺賠比）最高</option>
+                <option value="stability">參數高原穩定度最高（防過擬合）</option>
+            </select>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:5px; padding:4px 0;">
+            <label style="font-size:11px; color:#aaa; display:flex; align-items:center; gap:6px;">
+                <input type="checkbox" id="sim-opt-auto-bl" checked> 允許 AI 自動探索「最佳黑名單區間」（自動過濾開高走低等誘多幅度）
+            </label>
+            <label style="font-size:11px; color:#aaa; display:flex; align-items:center; gap:6px;">
+                <input type="checkbox" id="sim-opt-auto-nbars"> 自動尋優「漲跌判定 K 棒根數」（同時測試 0, 1, 2, 3, 6 根）
+            </label>
+            <label style="font-size:11px; color:#aaa; display:flex; align-items:center; gap:6px;">
+                <input type="checkbox" id="sim-opt-no-late"> 排除收盤強制平倉（*），只允許盤中 5 分鐘 K 棒出場
+            </label>
+            <label style="font-size:11px; color:#aaa; display:flex; align-items:center; gap:6px;">
+                <input type="checkbox" id="sim-opt-wf"> 啟用樣本外盲測驗證（前 70% 日期尋優，後 30% 日期驗證防過擬合）
+            </label>
+        </div>
+        <button id="sim-opt-btn" type="button" onclick="runOpenOptimizer()" style="background:linear-gradient(90deg, #00d4ff, #00ffaa); border:none; color:#000; padding:10px; border-radius:8px; font-weight:bold; font-size:13px; cursor:pointer;">
+            <i class="fa-solid fa-ranking-star"></i> 計算最優解排行榜
+        </button>
+        <div id="sim-opt-board" style="display:none; flex-direction:column; gap:8px; margin-top:4px;"></div>
+    </div>
+</details>
                         <label style="font-size:11px; color:#aaa; display:flex; align-items:center; gap:6px;"><input type="checkbox" id="sim-fee-on" checked> 扣除手續費與交易稅（使用費率設定）</label>
                         <div id="sim-error" style="display:none; color:var(--color-sell); font-size:11px;"></div>
                         <button id="sim-run-btn" onclick="runOpenSimulator()" style="background:var(--color-acc); border:none; color:#000; padding:11px; border-radius:8px; font-weight:bold; font-size:13px; cursor:pointer;"><i class="fa-solid fa-play"></i> 開始模擬</button>
@@ -3928,8 +4006,11 @@
         const n = ++simTierSeq, id = 't' + n; simTierIds.push(id);
         const box = document.createElement('div'); box.className = 'sim-card'; box.id = `sim-tier-${id}`;
         box.innerHTML = `
-            <div style="display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) auto; gap:8px; align-items:end; margin-bottom:8px;">
-                <div><div class="sim-lbl">開盤幅度 ≥（%）</div><input type="text" id="sim-${id}-th" class="sim-in mobile-num" data-decimal="true" onfocus="this.select()" value="${d.th ?? 3}" inputmode="decimal"></div>
+            <div class="sim-grid2" style="margin-bottom:8px;">
+                <div><div class="sim-lbl">幅度從（%）≥</div><input type="text" id="sim-${id}-th" class="sim-in mobile-num" data-decimal="true" onfocus="this.select()" value="${d.th ?? 3}" inputmode="decimal"></div>
+                <div><div class="sim-lbl">到（%）＜（空白＝不設上限）</div><input type="text" id="sim-${id}-to" class="sim-in mobile-num" data-decimal="true" onfocus="this.select()" value="${d.to ?? ''}" placeholder="不限" inputmode="decimal"></div>
+            </div>
+            <div style="display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:end; margin-bottom:8px;">
                 <div><div class="sim-lbl">方向</div><select id="sim-${id}-dir" class="sim-in" style="padding:0 6px;"><option value="both">漲跌皆可</option><option value="up">只限開漲</option><option value="down">只限開跌</option></select></div>
                 <button type="button" onclick="simRemoveTier('${id}')" class="sim-in" style="width:40px; padding:0; cursor:pointer; color:var(--color-sell);" title="刪除這組"><i class="fa-solid fa-xmark"></i></button>
             </div>
@@ -3951,6 +4032,32 @@
     }
     function simClearTiers() { [...simTierIds].forEach(simRemoveTier); }
     window.simAddTier = simAddTier; window.simRemoveTier = simRemoveTier;
+    let simBlSeq = 0; const simBlIds = [];
+    function simAddBl(d) {
+        d = d || {};
+        const id = 'b' + (++simBlSeq); simBlIds.push(id);
+        const box = document.createElement('div'); box.className = 'sim-card'; box.id = `sim-bl-${id}`;
+        box.innerHTML = `
+            <div class="sim-grid2" style="margin-bottom:8px;">
+                <div><div class="sim-lbl">幅度從（%）≥</div><input type="text" id="sim-${id}-th" class="sim-in mobile-num" data-decimal="true" onfocus="this.select()" value="${d.th ?? 5}" inputmode="decimal"></div>
+                <div><div class="sim-lbl">到（%）＜（空白＝不設上限）</div><input type="text" id="sim-${id}-to" class="sim-in mobile-num" data-decimal="true" onfocus="this.select()" value="${d.to ?? ''}" placeholder="不限" inputmode="decimal"></div>
+            </div>
+            <div style="display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:end;">
+                <div><div class="sim-lbl">方向</div><select id="sim-${id}-dir" class="sim-in" style="padding:0 6px;"><option value="both">漲跌皆可</option><option value="up">只限開漲</option><option value="down">只限開跌</option></select></div>
+                <button type="button" onclick="simRemoveBl('${id}')" class="sim-in" style="width:40px; padding:0; cursor:pointer; color:var(--color-sell);" title="刪除這組"><i class="fa-solid fa-xmark"></i></button>
+            </div>`;
+        document.getElementById('sim-bls').appendChild(box);
+        if (window.setupMobileNumInput) box.querySelectorAll('.mobile-num').forEach(window.setupMobileNumInput);
+        document.getElementById(`sim-${id}-dir`).value = d.dir || 'both';
+        document.getElementById('sim-bl-count').innerText = `（${simBlIds.length} 組）`;
+    }
+    function simRemoveBl(id) {
+        const i = simBlIds.indexOf(id); if (i >= 0) simBlIds.splice(i, 1);
+        const el = document.getElementById(`sim-bl-${id}`); if (el) el.remove();
+        document.getElementById('sim-bl-count').innerText = `（${simBlIds.length} 組）`;
+    }
+    function simClearBls() { [...simBlIds].forEach(simRemoveBl); }
+    window.simAddBl = simAddBl; window.simRemoveBl = simRemoveBl;
     const SIM_RULE_FIELDS = ['buy-ch', 'buy-cm', 'buy-h', 'buy-m', 'sell-ch', 'sell-cm', 'sell-h', 'sell-m'];
     function simReadRule(prefix) { const r = { on: document.getElementById(`sim-${prefix}-on`).checked }; SIM_RULE_FIELDS.forEach(f => { r[f] = document.getElementById(`sim-${prefix}-${f}`).value; }); return r; }
     function simWriteRule(prefix, r) { if (!r) return;
@@ -3959,7 +4066,8 @@
         return { ticker: document.getElementById('sim-ticker').value, start: document.getElementById('sim-start').value, end: document.getElementById('sim-end').value,
             nbars: document.getElementById('sim-nbars').value, mode: document.getElementById('sim-mode').value, shares: document.getElementById('sim-shares').value, fee: document.getElementById('sim-fee-on').checked,
             up: simReadRule('up'), down: simReadRule('down'),
-            tiers: simTierIds.map(id => ({ ...simReadRule(id), th: document.getElementById(`sim-${id}-th`).value, dir: document.getElementById(`sim-${id}-dir`).value })) };
+            tiers: simTierIds.map(id => ({ ...simReadRule(id), th: document.getElementById(`sim-${id}-th`).value, to: document.getElementById(`sim-${id}-to`).value, dir: document.getElementById(`sim-${id}-dir`).value })),
+            blacklist: simBlIds.map(id => ({ th: document.getElementById(`sim-${id}-th`).value, to: document.getElementById(`sim-${id}-to`).value, dir: document.getElementById(`sim-${id}-dir`).value })) };
     }
     function simApplyConfig(c) {
         document.getElementById('sim-ticker').value = c.ticker || ''; if (c.start) document.getElementById('sim-start').value = c.start; if (c.end) document.getElementById('sim-end').value = c.end;
@@ -3968,6 +4076,8 @@
         simWriteRule('up', c.up); simWriteRule('down', c.down);
         simClearTiers(); (c.tiers || []).forEach(t => simAddTier(t));
         if ((c.tiers || []).length) document.getElementById('sim-adv').open = true;
+        simClearBls(); (c.blacklist || []).forEach(b => simAddBl(b));
+        if ((c.blacklist || []).length) document.getElementById('sim-bl').open = true;
         simSetMode();
     }
     function simLoadPresets() { try { return JSON.parse(localStorage.getItem(SIM_PRESET_KEY) || '{}') || {}; } catch (e) { return {}; } }
@@ -4098,18 +4208,25 @@
                 if (cfg[side].sell <= cfg[side].buy) return fail(`「${side === 'up' ? '開盤漲' : '開盤跌'}」的${hold ? '買回' : '賣出'}時間必須晚於${hold ? '賣出' : '買進'}時間`);
             }
         }
+        const rangeOf = (id) => {
+            const th = parseFloat(document.getElementById(`sim-${id}-th`).value), toRaw = (document.getElementById(`sim-${id}-to`).value || '').trim(), to = toRaw === '' ? null : parseFloat(toRaw);
+            return { th, to, dir: document.getElementById(`sim-${id}-dir`).value, label: to === null ? `≥${th}%` : `${th}~${to}%` };
+        };
+        const rangeErr = (r, what) => !(r.th >= 0) ? `${what}的下限（%）請填入有效數字` : (r.to !== null && !(r.to > r.th)) ? `${what}的上限必須大於下限` : null;
         const tiers = [];
         for (const id of simTierIds) {
-            const th = parseFloat(document.getElementById(`sim-${id}-th`).value);
-            if (!(th >= 0)) return fail('幅度規則的門檻（%）請填入有效數字');
-            const t = { label: `≥${th}%`, th, dir: document.getElementById(`sim-${id}-dir`).value, on: document.getElementById(`sim-${id}-on`).checked, buy: readT(`sim-${id}-buy`), sell: readT(`sim-${id}-sell`) };
+            const r = rangeOf(id), e = rangeErr(r, '幅度規則'); if (e) return fail(e);
+            const t = { ...r, on: document.getElementById(`sim-${id}-on`).checked, buy: readT(`sim-${id}-buy`), sell: readT(`sim-${id}-sell`) };
             if (t.on) {
                 if (t.buy === null || t.sell === null) return fail(`幅度規則「${t.label}」請設定完整的買賣時間`);
                 if (t.sell <= t.buy) return fail(`幅度規則「${t.label}」的${hold ? '買回' : '賣出'}時間必須晚於${hold ? '賣出' : '買進'}時間`);
             }
             tiers.push(t);
         }
-        tiers.sort((a, b) => b.th - a.th); // 門檻高者優先
+        const blacklist = [];
+        for (const id of simBlIds) { const r = rangeOf(id), e = rangeErr(r, '黑名單'); if (e) return fail(e); blacklist.push(r); }
+        let blSkipped = 0;
+        tiers.sort((a, b) => (b.th - a.th) || ((a.to ?? Infinity) - (b.to ?? Infinity))); // 下限高者優先；同下限則區間較窄者優先
         if (!cfg.up.on && !cfg.down.on && !tiers.some(t => t.on)) return fail('至少要啟用一組規則進行交易');
         const feeOn = document.getElementById('sim-fee-on').checked;
         btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 讀取歷史資料中...';
@@ -4137,7 +4254,9 @@
                 if (baseFirst === null && prevClose > 0) baseFirst = prevClose; baseLast = bars[bars.length - 1].c;
                 if (!(prevClose > 0) || open === prevClose) continue;
                 const side = open > prevClose ? 'up' : 'down', gapAbs = Math.abs(open / prevClose - 1) * 100;
-                const hit = tiers.find(t => gapAbs >= t.th && (t.dir === 'both' || t.dir === side));
+                const inRange = (r) => gapAbs >= r.th && (r.to === null || gapAbs < r.to) && (r.dir === 'both' || r.dir === side);
+                if (blacklist.some(inRange)) { blSkipped++; continue; } // 黑名單：一律空手
+                const hit = tiers.find(inRange);
                 const c = hit || cfg[side], ruleLabel = hit ? hit.label : '基本';
                 if (!c.on) continue;
                 const t0 = offMode ? bars[0].m : 0; // 開盤後模式：以當天第一根 K 棒為 0
@@ -4159,7 +4278,7 @@
                 trades.push({ key, side, gap: open / prevClose - 1, buyP, sellP, ret, amt, exitLate: si < 0, rule: ruleLabel });
             }
             if (!trades.length) throw new Error('這段期間沒有符合條件的交易日（可能全是平盤開、被設定排除，或買進時間超過收盤）');
-            renderOpenSimulator(ticker, trades, cfg, feeOn, { hold, nShares, nDecide, holdRet: (baseFirst && baseLast) ? baseLast / baseFirst - 1 : null });
+            renderOpenSimulator(ticker, trades, cfg, feeOn, { hold, nShares, nDecide, blSkipped, holdRet: (baseFirst && baseLast) ? baseLast / baseFirst - 1 : null });
         } catch (e) { fail(e.message || '模擬失敗'); }
         finally { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-play"></i> 開始模擬'; }
     }
@@ -4178,7 +4297,7 @@
         const sideRow = (n, s, c) => s ? `<div style="display:flex; justify-content:space-between; font-size:11.5px; padding:4px 0;"><span style="color:${c}">${n}</span><span style="font-family:monospace; color:#ccc;">${s.n} 天・勝率 ${(s.win * 100).toFixed(0)}%・平均 ${pct(s.avg)}・累計 ${pct(s.cum)}</span></div>` : '';
         const esc = (x) => escapeHtml(String(x));
         out.innerHTML = `
-            <div style="font-size:12px; color:#aaa;">${esc(ticker)}（${mo.hold ? '持股・先賣後買回' : '當沖・先買後賣'}）　共交易 <b style="color:#fff;">${all.n}</b> 天${feeOn ? '（已扣手續費與稅）' : '（未扣成本）'}</div>
+            <div style="font-size:12px; color:#aaa;">${esc(ticker)}（${mo.hold ? '持股・先賣後買回' : '當沖・先買後賣'}）　共交易 <b style="color:#fff;">${all.n}</b> 天${mo.blSkipped ? `（黑名單排除 ${mo.blSkipped} 天）` : ''}${feeOn ? '（已扣手續費與稅）' : '（未扣成本）'}</div>
             <div class="sim-stats">
                 ${card('累計報酬（複利）', pct(all.cum), col(all.cum))}${card('平均單日損益', pct(all.avg), col(all.avg))}${card('勝率', (all.win * 100).toFixed(1) + '%')}
                 ${card('最佳單日', pct(best.ret) + ' ' + best.key.slice(5), col(best.ret))}${card('最差單日', pct(worst.ret) + ' ' + worst.key.slice(5), col(worst.ret))}
@@ -4203,6 +4322,595 @@
                 scales: { x: { ticks: { color: '#777', maxTicksLimit: 8 }, grid: { display: false } }, y: { ticks: { color: '#777', callback: (v) => v + '%' }, grid: { color: 'rgba(255,255,255,0.06)' } } } } });
     }
     window.runOpenSimulator = runOpenSimulator;
+
+    // ════════════════════════════════════════════════════════════════
+    // ④ 智慧尋優與最優解排行榜引擎（含「開盤後最晚完畢時間」雙層限制）
+    // ════════════════════════════════════════════════════════════════
+    let simOptCacheResults = [];
+
+    // 確保新增的 .mobile-num 輸入框支援手機版玻璃小鍵盤
+    if (window.setupMobileNumInput) {
+        document.querySelectorAll('#sim-opt-panel .mobile-num').forEach(window.setupMobileNumInput);
+    }
+
+    // 動態更新「開盤後最晚完畢」標籤提示（自動換算台股當地時鐘或開盤後時分）
+    function simUpdateMaxFinishHint() {
+        const lbl = document.getElementById('sim-opt-max-finish-lbl');
+        const inp = document.getElementById('sim-opt-max-finish');
+        if (!lbl || !inp) return;
+        const val = parseInt(inp.value, 10);
+        if (!val || val <= 0) {
+            lbl.innerText = '開盤後最晚完畢（分鐘）≤';
+            return;
+        }
+        const rawTicker = document.getElementById('sim-ticker').value;
+        const isTw = !rawTicker.trim() || simIsTW(rawTicker);
+        if (isTw) {
+            const clockMin = 540 + val; // 台股 09:00 (540分) 起算
+            const hh = String(Math.floor(clockMin / 60)).padStart(2, '0');
+            const mm = String(clockMin % 60).padStart(2, '0');
+            lbl.innerText = `最晚完畢 ≤ ${val}分 (約 ${hh}:${mm} 前出場)`;
+        } else {
+            lbl.innerText = `最晚完畢 ≤ 開盤後 ${Math.floor(val / 60)}時${val % 60}分`;
+        }
+    }
+    (function simBindMaxFinishEvents() {
+        const inp = document.getElementById('sim-opt-max-finish');
+        const tickerInp = document.getElementById('sim-ticker');
+        if (inp) inp.addEventListener('input', simUpdateMaxFinishHint);
+        if (tickerInp) tickerInp.addEventListener('input', simUpdateMaxFinishHint);
+    })();
+
+    // 將分鐘數轉為顯示字串與表單欄位格式
+    function simFormatGridMin(minVal, offMode, isLateExit) {
+        if (isLateExit) return offMode ? `${Math.floor(minVal / 60)}時${minVal % 60}分(收盤*)` : `${String(Math.floor(minVal / 60)).padStart(2, '0')}:${String(minVal % 60).padStart(2, '0')}(收盤*)`;
+        if (offMode) return `${Math.floor(minVal / 60)}時${minVal % 60}分`;
+        return `${String(Math.floor(minVal / 60)).padStart(2, '0')}:${String(minVal % 60).padStart(2, '0')}`;
+    }
+
+    // 第一階段：為給定的交易日建立標準時間網格與三維報酬張量 (D x T x T)
+    // 新增參數 maxFinishMin：限制整筆交易（含出場）必須在開盤後 maxFinishMin 分鐘內完成
+    function simBuildReturnTensor(dayRecords, nDecide, offMode, hold, feeOn, ticker, noLateExit, maxFinishMin) {
+        const timeSet = new Set();
+        dayRecords.forEach(d => {
+            const t0 = offMode ? d.bars[0].m : 0;
+            d.bars.forEach(b => timeSet.add(b.m - t0));
+        });
+        const gridTimes = [...timeSet].sort((a, b) => a - b);
+        if (!gridTimes.length) return null;
+
+        // 若有設定開盤後最晚完畢時間，不可使用超過最後一根K棒的收盤兜底價 (exitLate)
+        const disallowLate = noLateExit || (maxFinishMin !== null);
+        const lateTime = gridTimes[gridTimes.length - 1] + 5;
+        if (!disallowLate) gridTimes.push(lateTime);
+
+        const T = gridTimes.length;
+        const D = dayRecords.length;
+        const baseOpenClock = gridTimes[0]; // 台股通常為 540 (09:00)，非台股為 0
+
+        const tensor = new Float64Array(D * T * T);
+        tensor.fill(NaN);
+
+        const N = 1000;
+        for (let d = 0; d < D; d++) {
+            const bars = dayRecords[d].bars;
+            const t0 = offMode ? bars[0].m : 0;
+            // 當日開盤基準時間（台股取 09:00 與首根K棒較早者，非台股取首根K棒）
+            const dayOpenMin = offMode ? bars[0].m : Math.min(baseOpenClock, bars[0].m);
+
+            const barIdxForGrid = new Int16Array(T);
+            for (let g = 0; g < T; g++) {
+                const gm = gridTimes[g];
+                const idx = bars.findIndex(b => (b.m - t0) >= gm);
+                barIdxForGrid[g] = idx;
+            }
+
+            for (let bi = 0; bi < T - 1; bi++) {
+                // 網格層級快速預篩：買進時間若已超過最晚完畢時間，後續皆不合法
+                const buyElapsed = offMode ? gridTimes[bi] : (gridTimes[bi] - baseOpenClock);
+                if (maxFinishMin !== null && buyElapsed >= maxFinishMin) break;
+
+                const realBi = barIdxForGrid[bi];
+                if (realBi < nDecide || realBi < 0) continue;
+                if (bi > 0 && barIdxForGrid[bi - 1] === realBi) continue;
+                // 實際進場 K 棒也必須在最晚完畢時間前
+                if (maxFinishMin !== null && (bars[realBi].m - dayOpenMin) > maxFinishMin) continue;
+
+                const buyP = bars[realBi].o;
+                for (let si = bi + 1; si < T; si++) {
+                    // 網格層級預篩：賣出（第二動作）距離開盤不得超過 maxFinishMin
+                    const sellElapsed = offMode ? gridTimes[si] : (gridTimes[si] - baseOpenClock);
+                    if (maxFinishMin !== null && sellElapsed > maxFinishMin) break;
+
+                    const realSi = barIdxForGrid[si];
+                    let sellP;
+                    if (realSi >= 0) {
+                        if (realSi <= realBi) continue;
+                        if (si > bi + 1 && barIdxForGrid[si - 1] === realSi) continue;
+                        // 逐日 K 棒層級嚴格檢驗：實際出場 K 棒距離開盤不得超過 maxFinishMin 分鐘
+                        if (maxFinishMin !== null && (bars[realSi].m - dayOpenMin) > maxFinishMin) continue;
+                        sellP = bars[realSi].o;
+                    } else {
+                        if (disallowLate || bars.length - 1 <= realBi) continue;
+                        sellP = bars[bars.length - 1].c;
+                    }
+
+                    let ret;
+                    if (!hold) {
+                        ret = sellP / buyP - 1;
+                        if (feeOn) {
+                            const bc = computeTradeCosts(ticker, buyP * N, N, 'BUY');
+                            const sc = computeTradeCosts(ticker, sellP * N, N, 'SELL');
+                            ret = (sellP * N - sc.fee - sc.tax) / (buyP * N + bc.fee + (bc.tax || 0)) - 1;
+                        }
+                    } else {
+                        ret = buyP / sellP - 1;
+                        if (feeOn) {
+                            const sc = computeTradeCosts(ticker, buyP * N, N, 'SELL');
+                            const bc = computeTradeCosts(ticker, sellP * N, N, 'BUY');
+                            ret = (buyP * N - sc.fee - sc.tax) / (sellP * N + bc.fee + (bc.tax || 0)) - 1;
+                        }
+                    }
+                    tensor[(d * T + bi) * T + si] = ret;
+                }
+            }
+        }
+        return { tensor, gridTimes, T, D, lateTime, baseOpenClock };
+    }
+
+    // 第二階段：針對單一互斥分區評估所有 (bi, si) 並計算 5x5 參數高原穩定度
+    function simEvaluatePartition(dayIndices, tensorObj, minHoldMin, maxLossDec, maxFinishMin, offMode) {
+        const { tensor, gridTimes, T, lateTime, baseOpenClock } = tensorObj;
+        const nSub = dayIndices.length;
+        const emptyCand = {
+            on: false, bi: -1, si: -1, buyMin: 545, sellMin: 800, isLate: false,
+            n: 0, wins: 0, winRate: 0, cum: 0, logCum: 0, sumRet: 0,
+            posSum: 0, negSum: 0, worst: 0, stability: 1.0, dayIndices: []
+        };
+        if (nSub === 0) return [emptyCand];
+
+        const rawCands = [];
+        const cumGrid = new Float64Array(T * T);
+        cumGrid.fill(NaN);
+
+        for (let bi = 0; bi < T - 1; bi++) {
+            const buyMin = gridTimes[bi];
+            const buyElapsed = offMode ? buyMin : (buyMin - baseOpenClock);
+            if (maxFinishMin !== null && buyElapsed >= maxFinishMin) break;
+
+            for (let si = bi + 1; si < T; si++) {
+                const sellMin = gridTimes[si];
+                const sellElapsed = offMode ? sellMin : (sellMin - baseOpenClock);
+                // 第二動作（賣出／買回）超過開盤後 maxFinishMin 分鐘即直接跳出內層迴圈
+                if (maxFinishMin !== null && sellElapsed > maxFinishMin) break;
+                if (sellMin - buyMin < minHoldMin) continue;
+
+                let wins = 0, logCum = 0, sumRet = 0, posSum = 0, negSum = 0, worst = Infinity;
+                let validAll = true;
+                for (let k = 0; k < nSub; k++) {
+                    const d = dayIndices[k];
+                    const r = tensor[(d * T + bi) * T + si];
+                    if (isNaN(r)) { validAll = false; break; }
+                    if (maxLossDec !== null && r < -maxLossDec) { validAll = false; break; }
+                    if (r > 0) { wins++; posSum += r; }
+                    else if (r < 0) { negSum += (-r); }
+                    if (r < worst) worst = r;
+                    sumRet += r;
+                    logCum += Math.log(Math.max(1e-6, 1 + r));
+                }
+                if (!validAll) continue;
+
+                const cum = Math.exp(logCum) - 1;
+                cumGrid[bi * T + si] = cum;
+                rawCands.push({
+                    on: true, bi, si, buyMin, sellMin, isLate: sellMin === lateTime,
+                    n: nSub, wins, winRate: wins / nSub, cum, logCum, sumRet,
+                    posSum, negSum, worst, stability: 0.5, dayIndices
+                });
+            }
+        }
+
+        // 計算 5x5 鄰域參數高原穩定度 (Parameter Plateau Convolution)
+        for (let i = 0; i < rawCands.length; i++) {
+            const c = rawCands[i];
+            let nbCount = 0, nbPos = 0, nbSum = 0, nbSqSum = 0;
+            for (let dbi = -2; dbi <= 2; dbi++) {
+                for (let dsi = -2; dsi <= 2; dsi++) {
+                    const nbi = c.bi + dbi, nsi = c.si + dsi;
+                    if (nbi >= 0 && nbi < nsi && nsi < T) {
+                        const val = cumGrid[nbi * T + nsi];
+                        if (!isNaN(val)) {
+                            nbCount++;
+                            if (val > 0) nbPos++;
+                            nbSum += val;
+                            nbSqSum += val * val;
+                        }
+                    }
+                }
+            }
+            if (nbCount > 0) {
+                const posRate = nbPos / nbCount;
+                const mean = nbSum / nbCount;
+                const variance = Math.max(0, nbSqSum / nbCount - mean * mean);
+                const std = Math.sqrt(variance);
+                const consistency = 1 / (1 + std / (Math.abs(mean) + 0.01));
+                c.stability = posRate * 0.6 + consistency * 0.4;
+            }
+        }
+
+        // 帕累托剪枝
+        const byWins = new Map();
+        rawCands.forEach(c => {
+            if (!byWins.has(c.wins)) byWins.set(c.wins, []);
+            byWins.get(c.wins).push(c);
+        });
+        const pruned = [emptyCand];
+        const addedSet = new Set();
+        byWins.forEach(list => {
+            list.sort((a, b) => b.cum - a.cum);
+            for (let k = 0; k < Math.min(2, list.length); k++) {
+                const key = `${list[k].bi}_${list[k].si}`;
+                if (!addedSet.has(key)) { addedSet.add(key); pruned.push(list[k]); }
+            }
+            list.sort((a, b) => (b.stability * 0.5 + b.cum * 0.5) - (a.stability * 0.5 + a.cum * 0.5));
+            if (list.length > 0) {
+                const key = `${list[0].bi}_${list[0].si}`;
+                if (!addedSet.has(key)) { addedSet.add(key); pruned.push(list[0]); }
+            }
+        });
+        rawCands.sort((a, b) => b.cum - a.cum);
+        for (let k = 0; k < Math.min(25, rawCands.length); k++) {
+            const key = `${rawCands[k].bi}_${rawCands[k].si}`;
+            if (!addedSet.has(key)) { addedSet.add(key); pruned.push(rawCands[k]); }
+        }
+        return pruned;
+    }
+
+    // 主尋優入口函式
+    async function runOpenOptimizer() {
+        const errEl = document.getElementById('sim-error'), boardEl = document.getElementById('sim-opt-board'), btn = document.getElementById('sim-opt-btn');
+        const fail = (m) => { errEl.style.display = 'block'; errEl.innerText = m; boardEl.style.display = 'none'; };
+        errEl.style.display = 'none';
+
+        let ticker = (document.getElementById('sim-ticker').value || '').trim().toUpperCase();
+        const sv = document.getElementById('sim-start').value, ev = document.getElementById('sim-end').value;
+        if (!ticker) return fail('請先輸入股票代號');
+        if (!sv || !ev) return fail('請選擇日期區間');
+        const startMs = Date.parse(sv + 'T00:00:00Z'), endMs = Date.parse(ev + 'T00:00:00Z');
+        if (endMs < startMs) return fail('結束日期不能早於起始日期');
+        if (Date.now() - startMs > 58 * 86400e3) return fail('5 分鐘 K 線 Yahoo 只提供最近約 60 天，請把起始日期改為 58 天內');
+
+        const minWinPct = parseFloat(document.getElementById('sim-opt-min-win').value) || 0;
+        const winMode = document.getElementById('sim-opt-win-mode').value;
+        const minDays = Math.max(1, parseInt(document.getElementById('sim-opt-min-days').value, 10) || 1);
+        const maxLossRaw = (document.getElementById('sim-opt-max-loss').value || '').trim();
+        const maxLossDec = maxLossRaw === '' ? null : Math.abs(parseFloat(maxLossRaw)) / 100;
+        const minHoldMin = Math.max(0, parseInt(document.getElementById('sim-opt-min-hold').value, 10) || 0);
+
+        // 讀取「開盤後最晚完畢（分鐘）」並驗證與最短持倉時間之邏輯關係
+        const maxFinishRaw = (document.getElementById('sim-opt-max-finish').value || '').trim();
+        const maxFinishMin = maxFinishRaw === '' ? null : parseInt(maxFinishRaw, 10);
+        if (maxFinishMin !== null) {
+            if (isNaN(maxFinishMin) || maxFinishMin < 5) return fail('「開盤後最晚完畢時間」請填入至少 5 分鐘以上的有效整數');
+            if (maxFinishMin <= minHoldMin) return fail(`「開盤後最晚完畢時間（${maxFinishMin} 分）」必須大於「最短持倉時間（${minHoldMin} 分）」`);
+        }
+
+        const sortBy = document.getElementById('sim-opt-sort').value;
+        const autoBl = document.getElementById('sim-opt-auto-bl').checked;
+        const autoNbars = document.getElementById('sim-opt-auto-nbars').checked;
+        const noLateExit = document.getElementById('sim-opt-no-late').checked;
+        const useWf = document.getElementById('sim-opt-wf').checked;
+
+        const offMode = !simIsTW(ticker);
+        const hold = document.getElementById('sim-mode').value === 'holding';
+        const feeOn = document.getElementById('sim-fee-on').checked;
+        const baseNDecide = Math.max(0, Math.min(30, parseInt(document.getElementById('sim-nbars').value, 10) || 0));
+
+        // 檢查判定 K 棒數是否已經超過最晚完畢時間（每根 K 棒 5 分鐘）
+        if (!autoNbars && maxFinishMin !== null && baseNDecide * 5 >= maxFinishMin) {
+            return fail(`目前設定用前 ${baseNDecide} 根 5 分 K 判定（需 ${baseNDecide * 5} 分鐘），已超過或等於「開盤後最晚完畢時間（${maxFinishMin} 分鐘）」，無法完成買賣`);
+        }
+
+        const userBls = [];
+        for (const id of simBlIds) {
+            const th = parseFloat(document.getElementById(`sim-${id}-th`).value);
+            const toRaw = (document.getElementById(`sim-${id}-to`).value || '').trim();
+            const to = toRaw === '' ? null : parseFloat(toRaw);
+            if (th >= 0 && (to === null || to > th)) {
+                userBls.push({ th, to, dir: document.getElementById(`sim-${id}-dir`).value });
+            }
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在進行三維張量窮舉與帕累托合成...';
+
+        try {
+            const tStart = performance.now();
+            const p1 = Math.floor(startMs / 1000) - 8 * 86400, p2 = Math.floor(endMs / 1000) + 2 * 86400;
+            const cands = /^\d{4,6}[A-Z]?$/.test(ticker) ? [ticker + '.TW', ticker + '.TWO'] : [ticker];
+            let r = null;
+            for (const c of cands) { try { r = await simFetchIntraday(c, p1, p2); } catch (e) {} if (r) { ticker = c; break; } }
+            if (!r) throw new Error('查無此代號的 5 分鐘資料');
+
+            const off = (r.meta && r.meta.gmtoffset) || 0, q = r.indicators.quote[0] || {};
+            const days = new Map();
+            r.timestamp.forEach((t, i) => {
+                if (q.open[i] == null || q.close[i] == null) return;
+                const d = new Date((t + off) * 1000), key = d.toISOString().slice(0, 10);
+                if (!days.has(key)) days.set(key, []);
+                days.get(key).push({ m: d.getUTCHours() * 60 + d.getUTCMinutes(), o: q.open[i], c: q.close[i] });
+            });
+            const keys = [...days.keys()].sort();
+            const rawDays = [];
+            for (let i = 1; i < keys.length; i++) {
+                const key = keys[i];
+                if (Date.parse(key + 'T00:00:00Z') < startMs || Date.parse(key + 'T00:00:00Z') > endMs) continue;
+                const bars = days.get(key).sort((a, b) => a.m - b.m), prevBars = days.get(keys[i - 1]);
+                const prevClose = prevBars[prevBars.length - 1].c;
+                if (prevClose > 0 && bars.length > 1) rawDays.push({ key, bars, prevClose });
+            }
+            if (rawDays.length < 3) throw new Error('有效交易日過少，請拉長日期區間');
+
+            const splitIdx = useWf ? Math.max(2, Math.floor(rawDays.length * 0.7)) : rawDays.length;
+            const isDays = rawDays.slice(0, splitIdx);
+
+            const nDecideList = (autoNbars ? [...new Set([baseNDecide, 0, 1, 2, 3, 6])] : [baseNDecide])
+                .filter(nd => maxFinishMin === null || (nd * 5 + Math.max(5, minHoldMin)) <= maxFinishMin);
+
+            const blTemplates = [{ label: '無新增', rules: [] }];
+            if (autoBl) {
+                [2.0, 2.5, 3.0, 4.0].forEach(th => {
+                    blTemplates.push({ label: `開漲≥${th}%空手`, rules: [{ th, to: null, dir: 'up' }] });
+                    blTemplates.push({ label: `開跌≥${th}%空手`, rules: [{ th, to: null, dir: 'down' }] });
+                    blTemplates.push({ label: `漲跌≥${th}%空手`, rules: [{ th, to: null, dir: 'both' }] });
+                });
+                [0.3, 0.5].forEach(to => {
+                    blTemplates.push({ label: `幅度<${to}%空手`, rules: [{ th: 0, to, dir: 'both' }] });
+                });
+            }
+
+            const allSolutions = [];
+
+            for (const nd of nDecideList) {
+                const tensorObj = simBuildReturnTensor(isDays, nd, offMode, hold, feeOn, ticker, noLateExit, maxFinishMin);
+                if (!tensorObj) continue;
+
+                const dayMeta = isDays.map((d, idx) => {
+                    const openP = nd > 0 ? d.bars[Math.min(nd, d.bars.length) - 1].c : d.bars[0].o;
+                    const side = openP > d.prevClose ? 'up' : (openP < d.prevClose ? 'down' : 'flat');
+                    const gapAbs = Math.abs(openP / d.prevClose - 1) * 100;
+                    return { idx, side, gapAbs };
+                });
+
+                for (const blTpl of blTemplates) {
+                    const combinedBls = [...userBls, ...blTpl.rules];
+                    const inBl = (m) => combinedBls.some(r => m.gapAbs >= r.th && (r.to === null || m.gapAbs < r.to) && (r.dir === 'both' || r.dir === m.side));
+
+                    const upIdx = [], dnIdx = [];
+                    dayMeta.forEach(m => {
+                        if (m.side === 'flat' || inBl(m)) return;
+                        if (m.side === 'up') upIdx.push(m.idx);
+                        else if (m.side === 'down') dnIdx.push(m.idx);
+                    });
+
+                    if (upIdx.length + dnIdx.length < minDays) continue;
+
+                    const upCands = simEvaluatePartition(upIdx, tensorObj, minHoldMin, maxLossDec, maxFinishMin, offMode);
+                    const dnCands = simEvaluatePartition(dnIdx, tensorObj, minHoldMin, maxLossDec, maxFinishMin, offMode);
+
+                    for (let u = 0; u < upCands.length; u++) {
+                        const uc = upCands[u];
+                        if (winMode === 'strict' && uc.on && (uc.winRate * 100) < minWinPct) continue;
+
+                        for (let v = 0; v < dnCands.length; v++) {
+                            const dc = dnCands[v];
+                            if (!uc.on && !dc.on) continue;
+                            if (winMode === 'strict' && dc.on && (dc.winRate * 100) < minWinPct) continue;
+
+                            const totN = uc.n + dc.n;
+                            if (totN < minDays) continue;
+
+                            const totWins = uc.wins + dc.wins;
+                            const totWinRate = (totWins / totN) * 100;
+                            if (totWinRate + 1e-9 < minWinPct) continue;
+
+                            const totCum = (1 + uc.cum) * (1 + dc.cum) - 1;
+                            const totAvg = (uc.sumRet + dc.sumRet) / totN;
+                            const totPos = uc.posSum + dc.posSum;
+                            const totNeg = uc.negSum + dc.negSum;
+                            const pf = totNeg > 1e-6 ? (totPos / totNeg) : (totPos > 0 ? 99.9 : 0);
+                            const worst = Math.min(uc.on ? uc.worst : 0, dc.on ? dc.worst : 0);
+                            const stability = ((uc.on ? uc.stability * uc.n : 0) + (dc.on ? dc.stability * dc.n : 0)) / totN;
+
+                            allSolutions.push({
+                                ticker, offMode, hold, feeOn, nDecide: nd,
+                                maxFinishMin,
+                                blLabel: blTpl.label, extraBls: blTpl.rules,
+                                up: uc, down: dc,
+                                n: totN, wins: totWins, winRate: totWinRate,
+                                cum: totCum, avg: totAvg, pf, worst, stability
+                            });
+                        }
+                    }
+                }
+            }
+
+            if (!allSolutions.length) {
+                const finishHint = maxFinishMin !== null ? `、開盤後 ≤ ${maxFinishMin} 分鐘完畢` : '';
+                throw new Error(`在目前條件下（勝率 ≥ ${minWinPct}%、最低 ${minDays} 天${finishHint}）找不到合規解。建議放寬「開盤後最晚完畢時間」、調降最低勝率，或勾選「允許 AI 自動探索最佳黑名單區間」。`);
+            }
+
+            const maxCum = Math.max(0.01, ...allSolutions.map(s => s.cum));
+            allSolutions.forEach(s => {
+                const normCum = Math.max(-0.5, Math.min(1.2, s.cum / maxCum));
+                const normWin = s.winRate / 100;
+                const normPf = Math.min(1, s.pf / 4);
+                const normTail = Math.max(0, 1 - Math.abs(s.worst) * 15);
+                s.score = (normCum * 38 + normWin * 22 + s.stability * 22 + normPf * 10 + normTail * 8);
+            });
+
+            const uniqueMap = new Map();
+            allSolutions.forEach(s => {
+                const sig = `${s.nDecide}|${s.up.on ? s.up.buyMin + '-' + s.up.sellMin : 'off'}|${s.down.on ? s.down.buyMin + '-' + s.down.sellMin : 'off'}|${s.n}|${s.cum.toFixed(5)}`;
+                if (!uniqueMap.has(sig) || uniqueMap.get(sig).score < s.score) {
+                    uniqueMap.set(sig, s);
+                }
+            });
+            const deduped = [...uniqueMap.values()];
+
+            const sorters = {
+                score: (a, b) => b.score - a.score || b.cum - a.cum,
+                cum: (a, b) => b.cum - a.cum || b.winRate - a.winRate,
+                win: (a, b) => b.winRate - a.winRate || b.cum - a.cum,
+                pf: (a, b) => b.pf - a.pf || b.cum - a.cum,
+                stability: (a, b) => (b.stability - a.stability) || (b.cum - a.cum)
+            };
+            deduped.sort(sorters[sortBy] || sorters.score);
+
+            const topList = deduped.slice(0, 10);
+
+            if (useWf && rawDays.length > splitIdx) {
+                const oosDays = rawDays.slice(splitIdx);
+                topList.forEach(sol => {
+                    const oosTensor = simBuildReturnTensor(oosDays, sol.nDecide, offMode, hold, feeOn, ticker, noLateExit, maxFinishMin);
+                    let oosWins = 0, oosN = 0, oosCum = 1;
+                    if (oosTensor) {
+                        const combinedBls = [...userBls, ...sol.extraBls];
+                        oosDays.forEach((d, idx) => {
+                            const openP = sol.nDecide > 0 ? d.bars[Math.min(sol.nDecide, d.bars.length) - 1].c : d.bars[0].o;
+                            if (openP === d.prevClose) return;
+                            const side = openP > d.prevClose ? 'up' : 'down';
+                            const gapAbs = Math.abs(openP / d.prevClose - 1) * 100;
+                            if (combinedBls.some(r => gapAbs >= r.th && (r.to === null || gapAbs < r.to) && (r.dir === 'both' || r.dir === side))) return;
+                            const rule = side === 'up' ? sol.up : sol.down;
+                            if (!rule.on) return;
+                            const bIdx = oosTensor.gridTimes.indexOf(rule.buyMin);
+                            const sIdx = oosTensor.gridTimes.indexOf(rule.sellMin);
+                            if (bIdx >= 0 && sIdx > bIdx) {
+                                const ret = oosTensor.tensor[(idx * oosTensor.T + bIdx) * oosTensor.T + sIdx];
+                                if (!isNaN(ret)) {
+                                    oosN++;
+                                    if (ret > 0) oosWins++;
+                                    oosCum *= (1 + ret);
+                                }
+                            }
+                        });
+                    }
+                    sol.oos = { n: oosN, winRate: oosN ? (oosWins / oosN) * 100 : 0, cum: oosCum - 1 };
+                });
+            }
+
+            simOptCacheResults = topList;
+            const elapsedMs = (performance.now() - tStart).toFixed(1);
+            simRenderOptLeaderboard(topList, deduped.length, elapsedMs, useWf, maxFinishMin);
+        } catch (err) {
+            fail(err.message || '尋優運算失敗');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-ranking-star"></i> 計算最優解排行榜';
+        }
+    }
+
+    // 渲染最優解排行榜 UI（標示開盤後實際完畢時間）
+    function simRenderOptLeaderboard(list, totalValid, elapsedMs, useWf, maxFinishMin) {
+        const boardEl = document.getElementById('sim-opt-board');
+        const pct = (x) => (x >= 0 ? '+' : '') + (x * 100).toFixed(2) + '%';
+        const col = (x) => x >= 0 ? 'var(--color-up)' : 'var(--color-down)';
+
+        boardEl.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; color:#aaa; padding:4px 2px;">
+                <span>共篩選出 <b style="color:#fff;">${totalValid.toLocaleString()}</b> 組符合條件方案${maxFinishMin !== null ? `（均於開盤 <b>${maxFinishMin}</b> 分內完畢）` : ''}</span>
+                <span style="font-family:monospace; color:var(--color-acc);">耗時 ${elapsedMs} ms</span>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:8px; max-height:420px; overflow-y:auto; padding-right:2px;">
+                ${list.map((s, idx) => {
+                    const upElapsed = s.up.on ? (s.offMode ? s.up.sellMin : s.up.sellMin - 540) : 0;
+                    const dnElapsed = s.down.on ? (s.offMode ? s.down.sellMin : s.down.sellMin - 540) : 0;
+                    const maxUsedElapsed = Math.max(upElapsed, dnElapsed);
+                    const upStr = s.up.on ? `${simFormatGridMin(s.up.buyMin, s.offMode, false)} → ${simFormatGridMin(s.up.sellMin, s.offMode, s.up.isLate)} <span style="color:#888;">(開盤${upElapsed}分完畢・${s.up.wins}/${s.up.n}勝, ${pct(s.up.cum)})</span>` : '<span style="color:#666;">空手不交易</span>';
+                    const dnStr = s.down.on ? `${simFormatGridMin(s.down.buyMin, s.offMode, false)} → ${simFormatGridMin(s.down.sellMin, s.offMode, s.down.isLate)} <span style="color:#888;">(開盤${dnElapsed}分完畢・${s.down.wins}/${s.down.n}勝, ${pct(s.down.cum)})</span>` : '<span style="color:#666;">空手不交易</span>';
+                    const stabScore = Math.round(s.stability * 100);
+                    const stabColor = stabScore >= 70 ? 'var(--color-buy)' : (stabScore >= 45 ? 'var(--color-warn)' : 'var(--color-sell)');
+                    return `
+                    <div class="sim-card" style="background:rgba(0,0,0,0.5); border-color:${idx === 0 ? 'var(--color-acc)' : 'rgba(255,255,255,0.12)'}; display:flex; flex-direction:column; gap:6px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap;">
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <span style="background:${idx === 0 ? 'var(--color-acc)' : 'rgba(255,255,255,0.15)'}; color:${idx === 0 ? '#000' : '#fff'}; font-weight:bold; font-size:11px; padding:2px 7px; border-radius:4px; font-family:monospace;">#${idx + 1}</span>
+                                <span style="font-size:12px; font-weight:bold; font-family:monospace; color:${col(s.cum)};">累計 ${pct(s.cum)}</span>
+                                <span style="font-size:11px; font-family:monospace; color:#fff;">勝率 ${s.winRate.toFixed(1)}% <span style="color:#888;">(${s.wins}/${s.n}天)</span></span>
+                            </div>
+                            <button type="button" onclick="simApplyOptSolution(${idx})" style="background:var(--color-acc); color:#000; border:none; border-radius:6px; padding:4px 10px; font-size:11px; font-weight:bold; cursor:pointer;">
+                                <i class="fa-solid fa-check"></i> 套用並繪圖
+                            </button>
+                        </div>
+                        <div style="display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:4px; font-size:10.5px; font-family:monospace; color:#aaa; background:rgba(255,255,255,0.03); padding:5px 8px; border-radius:6px;">
+                            <div>平均單日: <span style="color:${col(s.avg)}">${pct(s.avg)}</span></div>
+                            <div>最差單日: <span style="color:${col(s.worst)}">${pct(s.worst)}</span></div>
+                            <div>高原穩定: <span style="color:${stabColor}">${stabScore}分</span> / PF ${s.pf >= 99 ? '∞' : s.pf.toFixed(2)}</div>
+                        </div>
+                        <div style="font-size:11px; font-family:monospace; line-height:1.5; color:#ccc;">
+                            <div><span style="color:var(--color-up);">▲ 開盤漲:</span> ${upStr}</div>
+                            <div><span style="color:var(--color-down);">▼ 開盤跌:</span> ${dnStr}</div>
+                            <div style="color:#999; font-size:10.5px;">⏱️ 最晚完畢: 開盤後 <b style="color:#fff;">${maxUsedElapsed}</b> 分鐘 | ⚙️ 判定K棒: 前 <b>${s.nDecide}</b> 根 | 黑名單: <b style="color:${s.extraBls.length ? 'var(--color-warn)' : '#888'}">${escapeHtml(s.blLabel)}</b></div>
+                            ${useWf && s.oos ? `<div style="margin-top:3px; padding-top:3px; border-top:1px dashed rgba(255,255,255,0.1); color:var(--color-acc); font-size:10.5px;">🔬 樣本外盲測 (後30%日期): 共 ${s.oos.n} 天・勝率 ${s.oos.winRate.toFixed(1)}%・盲測累計 <b style="color:${col(s.oos.cum)}">${pct(s.oos.cum)}</b></div>` : ''}
+                        </div>
+                    </div>`;
+                }).join('')}
+            </div>`;
+        boardEl.style.display = 'flex';
+    }
+
+    // 將選中的排行榜方案一鍵寫回模擬器表單並觸發完整回測繪圖
+    function simApplyOptSolution(idx) {
+        const sol = simOptCacheResults[idx];
+        if (!sol) return;
+
+        document.getElementById('sim-nbars').value = String(sol.nDecide);
+
+        const applySide = (prefix, ruleObj, offMode) => {
+            document.getElementById(`sim-${prefix}-on`).checked = !!ruleObj.on;
+            if (!ruleObj.on) return;
+            if (!offMode) {
+                const bh = String(Math.floor(ruleObj.buyMin / 60)).padStart(2, '0');
+                const bm = String(ruleObj.buyMin % 60).padStart(2, '0');
+                const sh = String(Math.floor(ruleObj.sellMin / 60)).padStart(2, '0');
+                const sm = String(ruleObj.sellMin % 60).padStart(2, '0');
+                document.getElementById(`sim-${prefix}-buy-ch`).value = bh;
+                document.getElementById(`sim-${prefix}-buy-cm`).value = bm;
+                document.getElementById(`sim-${prefix}-sell-ch`).value = sh;
+                document.getElementById(`sim-${prefix}-sell-cm`).value = sm;
+            } else {
+                document.getElementById(`sim-${prefix}-buy-h`).value = String(Math.floor(ruleObj.buyMin / 60));
+                document.getElementById(`sim-${prefix}-buy-m`).value = String(ruleObj.buyMin % 60);
+                document.getElementById(`sim-${prefix}-sell-h`).value = String(Math.floor(ruleObj.sellMin / 60));
+                document.getElementById(`sim-${prefix}-sell-m`).value = String(ruleObj.sellMin % 60);
+            }
+        };
+
+        applySide('up', sol.up, sol.offMode);
+        applySide('down', sol.down, sol.offMode);
+
+        if (sol.extraBls && sol.extraBls.length) {
+            sol.extraBls.forEach(b => {
+                const exists = simBlIds.some(id => {
+                    const th = parseFloat(document.getElementById(`sim-${id}-th`).value);
+                    const toRaw = (document.getElementById(`sim-${id}-to`).value || '').trim();
+                    const to = toRaw === '' ? null : parseFloat(toRaw);
+                    const dir = document.getElementById(`sim-${id}-dir`).value;
+                    return th === b.th && to === b.to && dir === b.dir;
+                });
+                if (!exists) simAddBl({ th: b.th, to: b.to ?? '', dir: b.dir });
+            });
+            document.getElementById('sim-bl').open = true;
+        }
+
+        simSyncMarket();
+        runOpenSimulator();
+    }
+
+    window.runOpenOptimizer = runOpenOptimizer;
+    window.simApplyOptSolution = simApplyOptSolution;
+
 
     // --- 開始演練 ---
     async function startPracticeDrill() {
