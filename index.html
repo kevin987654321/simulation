@@ -2205,7 +2205,7 @@
                             <div id="sim-bls" style="display:flex; flex-direction:column; gap:8px;"></div>
                             <button type="button" onclick="simAddBl()" class="sim-in" style="margin-top:8px; cursor:pointer; color:var(--color-sell); border-style:dashed;"><i class="fa-solid fa-plus"></i> 新增黑名單區間</button>
                         </details>
-                    <!-- ── 智慧尋優與條件排行榜面板（含開盤後最晚完畢時間限制） ── -->
+                    <!-- ── 智慧尋優與條件排行榜面板（含最早開始 ＋ 最晚完畢時間窗限制） ── -->
 <details id="sim-opt-panel" class="sim-card" style="border-color:rgba(0,212,255,0.3); background:rgba(0,212,255,0.03);">
     <summary style="cursor:pointer; font-size:12px; font-weight:bold; color:var(--color-acc);">
         <i class="fa-solid fa-wand-magic-sparkles"></i> 智慧尋優：依條件找出最優買賣時間排行
@@ -2239,23 +2239,29 @@
         </div>
         <div class="sim-grid2">
             <div>
+                <div class="sim-lbl" id="sim-opt-min-start-lbl">開盤後最早開始（分鐘）≥</div>
+                <input type="text" id="sim-opt-min-start" class="sim-in mobile-num" data-maxlen="3" onfocus="this.select()" value="" placeholder="不限（例填 15＝09:15後）" inputmode="numeric">
+            </div>
+            <div>
+                <div class="sim-lbl" id="sim-opt-max-finish-lbl">開盤後最晚完畢（分鐘）≤</div>
+                <input type="text" id="sim-opt-max-finish" class="sim-in mobile-num" data-maxlen="3" onfocus="this.select()" value="" placeholder="不限（例填 60＝1小時內）" inputmode="numeric">
+            </div>
+        </div>
+        <div class="sim-grid2">
+            <div>
                 <div class="sim-lbl">最短持倉時間（分鐘）≥</div>
                 <input type="text" id="sim-opt-min-hold" class="sim-in mobile-num" data-maxlen="3" onfocus="this.select()" value="10" placeholder="例如 10" inputmode="numeric">
             </div>
             <div>
-                <div class="sim-lbl" id="sim-opt-max-finish-lbl">開盤後最晚完畢（分鐘）≤</div>
-                <input type="text" id="sim-opt-max-finish" class="sim-in mobile-num" data-maxlen="3" onfocus="this.select()" value="" placeholder="不限（例填 60＝開盤1小時內）" inputmode="numeric">
+                <div class="sim-lbl">排行榜排序依據</div>
+                <select id="sim-opt-sort" class="sim-in" style="padding:0 6px;">
+                    <option value="score">綜合推薦評分（報酬+勝率+穩定度）</option>
+                    <option value="cum">累計報酬率（複利）最高</option>
+                    <option value="win">勝率最高優先</option>
+                    <option value="pf">獲利因子（賺賠比）最高</option>
+                    <option value="stability">參數高原穩定度最高（防過擬合）</option>
+                </select>
             </div>
-        </div>
-        <div>
-            <div class="sim-lbl">排行榜排序依據</div>
-            <select id="sim-opt-sort" class="sim-in" style="padding:0 10px; text-align:left;">
-                <option value="score">綜合推薦評分（報酬+勝率+穩定度）</option>
-                <option value="cum">累計報酬率（複利）最高</option>
-                <option value="win">勝率最高優先</option>
-                <option value="pf">獲利因子（賺賠比）最高</option>
-                <option value="stability">參數高原穩定度最高（防過擬合）</option>
-            </select>
         </div>
         <div style="display:flex; flex-direction:column; gap:5px; padding:4px 0;">
             <label style="font-size:11px; color:#aaa; display:flex; align-items:center; gap:6px;">
@@ -4324,7 +4330,7 @@
     window.runOpenSimulator = runOpenSimulator;
 
     // ════════════════════════════════════════════════════════════════
-    // ④ 智慧尋優與最優解排行榜引擎（含「開盤後最晚完畢時間」雙層限制）
+    // ④ 智慧尋優與最優解排行榜引擎（含「最早開始」與「最晚完畢」時間窗限制）
     // ════════════════════════════════════════════════════════════════
     let simOptCacheResults = [];
 
@@ -4333,32 +4339,46 @@
         document.querySelectorAll('#sim-opt-panel .mobile-num').forEach(window.setupMobileNumInput);
     }
 
-    // 動態更新「開盤後最晚完畢」標籤提示（自動換算台股當地時鐘或開盤後時分）
-    function simUpdateMaxFinishHint() {
-        const lbl = document.getElementById('sim-opt-max-finish-lbl');
-        const inp = document.getElementById('sim-opt-max-finish');
-        if (!lbl || !inp) return;
-        const val = parseInt(inp.value, 10);
-        if (!val || val <= 0) {
-            lbl.innerText = '開盤後最晚完畢（分鐘）≤';
-            return;
-        }
+    // 動態更新「開盤後最早開始」與「開盤後最晚完畢」標籤提示（自動換算台股當地時鐘或開盤後時分）
+    function simUpdateTimeWindowHints() {
         const rawTicker = document.getElementById('sim-ticker').value;
         const isTw = !rawTicker.trim() || simIsTW(rawTicker);
-        if (isTw) {
-            const clockMin = 540 + val; // 台股 09:00 (540分) 起算
-            const hh = String(Math.floor(clockMin / 60)).padStart(2, '0');
-            const mm = String(clockMin % 60).padStart(2, '0');
-            lbl.innerText = `最晚完畢 ≤ ${val}分 (約 ${hh}:${mm} 前出場)`;
-        } else {
-            lbl.innerText = `最晚完畢 ≤ 開盤後 ${Math.floor(val / 60)}時${val % 60}分`;
+
+        const startLbl = document.getElementById('sim-opt-min-start-lbl');
+        const startInp = document.getElementById('sim-opt-min-start');
+        if (startLbl && startInp) {
+            const vStart = parseInt(startInp.value, 10);
+            if (isNaN(vStart) || vStart < 0 || startInp.value.trim() === '') {
+                startLbl.innerText = '開盤後最早開始（分鐘）≥';
+            } else if (isTw) {
+                const cMin = 540 + vStart;
+                startLbl.innerText = `最早開始 ≥ ${vStart}分 (${String(Math.floor(cMin / 60)).padStart(2, '0')}:${String(cMin % 60).padStart(2, '0')} 起進場)`;
+            } else {
+                startLbl.innerText = `最早開始 ≥ 開盤後 ${Math.floor(vStart / 60)}時${vStart % 60}分`;
+            }
+        }
+
+        const finLbl = document.getElementById('sim-opt-max-finish-lbl');
+        const finInp = document.getElementById('sim-opt-max-finish');
+        if (finLbl && finInp) {
+            const vFin = parseInt(finInp.value, 10);
+            if (!vFin || vFin <= 0) {
+                finLbl.innerText = '開盤後最晚完畢（分鐘）≤';
+            } else if (isTw) {
+                const cMin = 540 + vFin;
+                finLbl.innerText = `最晚完畢 ≤ ${vFin}分 (${String(Math.floor(cMin / 60)).padStart(2, '0')}:${String(cMin % 60).padStart(2, '0')} 前出場)`;
+            } else {
+                finLbl.innerText = `最晚完畢 ≤ 開盤後 ${Math.floor(vFin / 60)}時${vFin % 60}分`;
+            }
         }
     }
-    (function simBindMaxFinishEvents() {
-        const inp = document.getElementById('sim-opt-max-finish');
-        const tickerInp = document.getElementById('sim-ticker');
-        if (inp) inp.addEventListener('input', simUpdateMaxFinishHint);
-        if (tickerInp) tickerInp.addEventListener('input', simUpdateMaxFinishHint);
+    (function simBindTimeWindowEvents() {
+        const sInp = document.getElementById('sim-opt-min-start');
+        const fInp = document.getElementById('sim-opt-max-finish');
+        const tInp = document.getElementById('sim-ticker');
+        if (sInp) sInp.addEventListener('input', simUpdateTimeWindowHints);
+        if (fInp) fInp.addEventListener('input', simUpdateTimeWindowHints);
+        if (tInp) tInp.addEventListener('input', simUpdateTimeWindowHints);
     })();
 
     // 將分鐘數轉為顯示字串與表單欄位格式
@@ -4368,9 +4388,9 @@
         return `${String(Math.floor(minVal / 60)).padStart(2, '0')}:${String(minVal % 60).padStart(2, '0')}`;
     }
 
-    // 第一階段：為給定的交易日建立標準時間網格與三維報酬張量 (D x T x T)
-    // 新增參數 maxFinishMin：限制整筆交易（含出場）必須在開盤後 maxFinishMin 分鐘內完成
-    function simBuildReturnTensor(dayRecords, nDecide, offMode, hold, feeOn, ticker, noLateExit, maxFinishMin) {
+    // 第一階段：建立標準時間網格與三維報酬張量 (D x T x T)
+    // 支援 minStartMin（開盤後最早進場分鐘）與 maxFinishMin（開盤後最晚出場分鐘）
+    function simBuildReturnTensor(dayRecords, nDecide, offMode, hold, feeOn, ticker, noLateExit, minStartMin, maxFinishMin) {
         const timeSet = new Set();
         dayRecords.forEach(d => {
             const t0 = offMode ? d.bars[0].m : 0;
@@ -4379,7 +4399,6 @@
         const gridTimes = [...timeSet].sort((a, b) => a - b);
         if (!gridTimes.length) return null;
 
-        // 若有設定開盤後最晚完畢時間，不可使用超過最後一根K棒的收盤兜底價 (exitLate)
         const disallowLate = noLateExit || (maxFinishMin !== null);
         const lateTime = gridTimes[gridTimes.length - 1] + 5;
         if (!disallowLate) gridTimes.push(lateTime);
@@ -4395,7 +4414,6 @@
         for (let d = 0; d < D; d++) {
             const bars = dayRecords[d].bars;
             const t0 = offMode ? bars[0].m : 0;
-            // 當日開盤基準時間（台股取 09:00 與首根K棒較早者，非台股取首根K棒）
             const dayOpenMin = offMode ? bars[0].m : Math.min(baseOpenClock, bars[0].m);
 
             const barIdxForGrid = new Int16Array(T);
@@ -4406,19 +4424,23 @@
             }
 
             for (let bi = 0; bi < T - 1; bi++) {
-                // 網格層級快速預篩：買進時間若已超過最晚完畢時間，後續皆不合法
                 const buyElapsed = offMode ? gridTimes[bi] : (gridTimes[bi] - baseOpenClock);
+                // 網格層級預篩：進場時間早於「最早開始時間」直接跳過
+                if (minStartMin !== null && buyElapsed < minStartMin) continue;
+                // 網格層級預篩：進場時間已超過「最晚完畢時間」直接結束迴圈
                 if (maxFinishMin !== null && buyElapsed >= maxFinishMin) break;
 
                 const realBi = barIdxForGrid[bi];
                 if (realBi < nDecide || realBi < 0) continue;
                 if (bi > 0 && barIdxForGrid[bi - 1] === realBi) continue;
-                // 實際進場 K 棒也必須在最晚完畢時間前
-                if (maxFinishMin !== null && (bars[realBi].m - dayOpenMin) > maxFinishMin) continue;
+
+                // 逐日 K 棒層級檢驗：實際進場 K 棒必須在 [minStartMin, maxFinishMin] 區間內
+                const actualBuyElapsed = bars[realBi].m - dayOpenMin;
+                if (minStartMin !== null && actualBuyElapsed < minStartMin) continue;
+                if (maxFinishMin !== null && actualBuyElapsed > maxFinishMin) continue;
 
                 const buyP = bars[realBi].o;
                 for (let si = bi + 1; si < T; si++) {
-                    // 網格層級預篩：賣出（第二動作）距離開盤不得超過 maxFinishMin
                     const sellElapsed = offMode ? gridTimes[si] : (gridTimes[si] - baseOpenClock);
                     if (maxFinishMin !== null && sellElapsed > maxFinishMin) break;
 
@@ -4427,7 +4449,6 @@
                     if (realSi >= 0) {
                         if (realSi <= realBi) continue;
                         if (si > bi + 1 && barIdxForGrid[si - 1] === realSi) continue;
-                        // 逐日 K 棒層級嚴格檢驗：實際出場 K 棒距離開盤不得超過 maxFinishMin 分鐘
                         if (maxFinishMin !== null && (bars[realSi].m - dayOpenMin) > maxFinishMin) continue;
                         sellP = bars[realSi].o;
                     } else {
@@ -4459,7 +4480,7 @@
     }
 
     // 第二階段：針對單一互斥分區評估所有 (bi, si) 並計算 5x5 參數高原穩定度
-    function simEvaluatePartition(dayIndices, tensorObj, minHoldMin, maxLossDec, maxFinishMin, offMode) {
+    function simEvaluatePartition(dayIndices, tensorObj, minHoldMin, maxLossDec, minStartMin, maxFinishMin, offMode) {
         const { tensor, gridTimes, T, lateTime, baseOpenClock } = tensorObj;
         const nSub = dayIndices.length;
         const emptyCand = {
@@ -4476,12 +4497,14 @@
         for (let bi = 0; bi < T - 1; bi++) {
             const buyMin = gridTimes[bi];
             const buyElapsed = offMode ? buyMin : (buyMin - baseOpenClock);
+            // 第一動作早於「開盤後最早開始時間」直接跳過
+            if (minStartMin !== null && buyElapsed < minStartMin) continue;
             if (maxFinishMin !== null && buyElapsed >= maxFinishMin) break;
 
             for (let si = bi + 1; si < T; si++) {
                 const sellMin = gridTimes[si];
                 const sellElapsed = offMode ? sellMin : (sellMin - baseOpenClock);
-                // 第二動作（賣出／買回）超過開盤後 maxFinishMin 分鐘即直接跳出內層迴圈
+                // 第二動作晚於「開盤後最晚完畢時間」直接結束內層迴圈
                 if (maxFinishMin !== null && sellElapsed > maxFinishMin) break;
                 if (sellMin - buyMin < minHoldMin) continue;
 
@@ -4587,12 +4610,23 @@
         const maxLossDec = maxLossRaw === '' ? null : Math.abs(parseFloat(maxLossRaw)) / 100;
         const minHoldMin = Math.max(0, parseInt(document.getElementById('sim-opt-min-hold').value, 10) || 0);
 
-        // 讀取「開盤後最晚完畢（分鐘）」並驗證與最短持倉時間之邏輯關係
+        // 讀取「開盤後最早開始（分鐘）」與「開盤後最晚完畢（分鐘）」並進行時間窗邏輯驗證
+        const minStartRaw = (document.getElementById('sim-opt-min-start').value || '').trim();
+        const minStartMin = minStartRaw === '' ? null : parseInt(minStartRaw, 10);
+        if (minStartMin !== null && (isNaN(minStartMin) || minStartMin < 0)) {
+            return fail('「開盤後最早開始時間」請填入 0 以上的有效整數分鐘');
+        }
+
         const maxFinishRaw = (document.getElementById('sim-opt-max-finish').value || '').trim();
         const maxFinishMin = maxFinishRaw === '' ? null : parseInt(maxFinishRaw, 10);
-        if (maxFinishMin !== null) {
-            if (isNaN(maxFinishMin) || maxFinishMin < 5) return fail('「開盤後最晚完畢時間」請填入至少 5 分鐘以上的有效整數');
-            if (maxFinishMin <= minHoldMin) return fail(`「開盤後最晚完畢時間（${maxFinishMin} 分）」必須大於「最短持倉時間（${minHoldMin} 分）」`);
+        if (maxFinishMin !== null && (isNaN(maxFinishMin) || maxFinishMin < 5)) {
+            return fail('「開盤後最晚完畢時間」請填入至少 5 分鐘以上的有效整數');
+        }
+
+        const effectiveStart = minStartMin || 0;
+        const effectiveHold = Math.max(5, minHoldMin);
+        if (maxFinishMin !== null && (effectiveStart + effectiveHold > maxFinishMin)) {
+            return fail(`時間窗衝突：「最早開始（${effectiveStart} 分）」＋「最短持倉（${effectiveHold} 分）」＝ ${effectiveStart + effectiveHold} 分，已超過「最晚完畢時間（${maxFinishMin} 分）」`);
         }
 
         const sortBy = document.getElementById('sim-opt-sort').value;
@@ -4606,9 +4640,8 @@
         const feeOn = document.getElementById('sim-fee-on').checked;
         const baseNDecide = Math.max(0, Math.min(30, parseInt(document.getElementById('sim-nbars').value, 10) || 0));
 
-        // 檢查判定 K 棒數是否已經超過最晚完畢時間（每根 K 棒 5 分鐘）
-        if (!autoNbars && maxFinishMin !== null && baseNDecide * 5 >= maxFinishMin) {
-            return fail(`目前設定用前 ${baseNDecide} 根 5 分 K 判定（需 ${baseNDecide * 5} 分鐘），已超過或等於「開盤後最晚完畢時間（${maxFinishMin} 分鐘）」，無法完成買賣`);
+        if (!autoNbars && maxFinishMin !== null && (Math.max(effectiveStart, baseNDecide * 5) + effectiveHold > maxFinishMin)) {
+            return fail(`目前設定用前 ${baseNDecide} 根 5 分 K 判定（需 ${baseNDecide * 5} 分鐘），加上持倉時間後已超過「開盤後最晚完畢時間（${maxFinishMin} 分鐘）」`);
         }
 
         const userBls = [];
@@ -4655,7 +4688,7 @@
             const isDays = rawDays.slice(0, splitIdx);
 
             const nDecideList = (autoNbars ? [...new Set([baseNDecide, 0, 1, 2, 3, 6])] : [baseNDecide])
-                .filter(nd => maxFinishMin === null || (nd * 5 + Math.max(5, minHoldMin)) <= maxFinishMin);
+                .filter(nd => maxFinishMin === null || (Math.max(effectiveStart, nd * 5) + effectiveHold) <= maxFinishMin);
 
             const blTemplates = [{ label: '無新增', rules: [] }];
             if (autoBl) {
@@ -4672,7 +4705,7 @@
             const allSolutions = [];
 
             for (const nd of nDecideList) {
-                const tensorObj = simBuildReturnTensor(isDays, nd, offMode, hold, feeOn, ticker, noLateExit, maxFinishMin);
+                const tensorObj = simBuildReturnTensor(isDays, nd, offMode, hold, feeOn, ticker, noLateExit, minStartMin, maxFinishMin);
                 if (!tensorObj) continue;
 
                 const dayMeta = isDays.map((d, idx) => {
@@ -4695,8 +4728,8 @@
 
                     if (upIdx.length + dnIdx.length < minDays) continue;
 
-                    const upCands = simEvaluatePartition(upIdx, tensorObj, minHoldMin, maxLossDec, maxFinishMin, offMode);
-                    const dnCands = simEvaluatePartition(dnIdx, tensorObj, minHoldMin, maxLossDec, maxFinishMin, offMode);
+                    const upCands = simEvaluatePartition(upIdx, tensorObj, minHoldMin, maxLossDec, minStartMin, maxFinishMin, offMode);
+                    const dnCands = simEvaluatePartition(dnIdx, tensorObj, minHoldMin, maxLossDec, minStartMin, maxFinishMin, offMode);
 
                     for (let u = 0; u < upCands.length; u++) {
                         const uc = upCands[u];
@@ -4724,7 +4757,7 @@
 
                             allSolutions.push({
                                 ticker, offMode, hold, feeOn, nDecide: nd,
-                                maxFinishMin,
+                                minStartMin, maxFinishMin,
                                 blLabel: blTpl.label, extraBls: blTpl.rules,
                                 up: uc, down: dc,
                                 n: totN, wins: totWins, winRate: totWinRate,
@@ -4736,8 +4769,9 @@
             }
 
             if (!allSolutions.length) {
-                const finishHint = maxFinishMin !== null ? `、開盤後 ≤ ${maxFinishMin} 分鐘完畢` : '';
-                throw new Error(`在目前條件下（勝率 ≥ ${minWinPct}%、最低 ${minDays} 天${finishHint}）找不到合規解。建議放寬「開盤後最晚完畢時間」、調降最低勝率，或勾選「允許 AI 自動探索最佳黑名單區間」。`);
+                const startHint = minStartMin !== null ? `、開盤 ≥ ${minStartMin} 分開始` : '';
+                const finishHint = maxFinishMin !== null ? `、開盤 ≤ ${maxFinishMin} 分完畢` : '';
+                throw new Error(`在目前條件下（勝率 ≥ ${minWinPct}%、最低 ${minDays} 天${startHint}${finishHint}）找不到合規解。建議放寬時間窗限制、調降最低勝率，或勾選「允許 AI 自動探索最佳黑名單區間」。`);
             }
 
             const maxCum = Math.max(0.01, ...allSolutions.map(s => s.cum));
@@ -4772,7 +4806,7 @@
             if (useWf && rawDays.length > splitIdx) {
                 const oosDays = rawDays.slice(splitIdx);
                 topList.forEach(sol => {
-                    const oosTensor = simBuildReturnTensor(oosDays, sol.nDecide, offMode, hold, feeOn, ticker, noLateExit, maxFinishMin);
+                    const oosTensor = simBuildReturnTensor(oosDays, sol.nDecide, offMode, hold, feeOn, ticker, noLateExit, minStartMin, maxFinishMin);
                     let oosWins = 0, oosN = 0, oosCum = 1;
                     if (oosTensor) {
                         const combinedBls = [...userBls, ...sol.extraBls];
@@ -4802,7 +4836,7 @@
 
             simOptCacheResults = topList;
             const elapsedMs = (performance.now() - tStart).toFixed(1);
-            simRenderOptLeaderboard(topList, deduped.length, elapsedMs, useWf, maxFinishMin);
+            simRenderOptLeaderboard(topList, deduped.length, elapsedMs, useWf, minStartMin, maxFinishMin);
         } catch (err) {
             fail(err.message || '尋優運算失敗');
         } finally {
@@ -4811,24 +4845,33 @@
         }
     }
 
-    // 渲染最優解排行榜 UI（標示開盤後實際完畢時間）
-    function simRenderOptLeaderboard(list, totalValid, elapsedMs, useWf, maxFinishMin) {
+    // 渲染最優解排行榜 UI（同時標示開盤後最早開始與最晚完畢時間窗）
+    function simRenderOptLeaderboard(list, totalValid, elapsedMs, useWf, minStartMin, maxFinishMin) {
         const boardEl = document.getElementById('sim-opt-board');
         const pct = (x) => (x >= 0 ? '+' : '') + (x * 100).toFixed(2) + '%';
         const col = (x) => x >= 0 ? 'var(--color-up)' : 'var(--color-down)';
 
+        const winTag = (minStartMin !== null || maxFinishMin !== null)
+            ? `（時間窗：開盤 <b>${minStartMin ?? 0}</b>～<b>${maxFinishMin ?? '收盤'}</b> 分）`
+            : '';
+
         boardEl.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; color:#aaa; padding:4px 2px;">
-                <span>共篩選出 <b style="color:#fff;">${totalValid.toLocaleString()}</b> 組符合條件方案${maxFinishMin !== null ? `（均於開盤 <b>${maxFinishMin}</b> 分內完畢）` : ''}</span>
+                <span>共篩選出 <b style="color:#fff;">${totalValid.toLocaleString()}</b> 組符合方案${winTag}</span>
                 <span style="font-family:monospace; color:var(--color-acc);">耗時 ${elapsedMs} ms</span>
             </div>
             <div style="display:flex; flex-direction:column; gap:8px; max-height:420px; overflow-y:auto; padding-right:2px;">
                 ${list.map((s, idx) => {
-                    const upElapsed = s.up.on ? (s.offMode ? s.up.sellMin : s.up.sellMin - 540) : 0;
-                    const dnElapsed = s.down.on ? (s.offMode ? s.down.sellMin : s.down.sellMin - 540) : 0;
-                    const maxUsedElapsed = Math.max(upElapsed, dnElapsed);
-                    const upStr = s.up.on ? `${simFormatGridMin(s.up.buyMin, s.offMode, false)} → ${simFormatGridMin(s.up.sellMin, s.offMode, s.up.isLate)} <span style="color:#888;">(開盤${upElapsed}分完畢・${s.up.wins}/${s.up.n}勝, ${pct(s.up.cum)})</span>` : '<span style="color:#666;">空手不交易</span>';
-                    const dnStr = s.down.on ? `${simFormatGridMin(s.down.buyMin, s.offMode, false)} → ${simFormatGridMin(s.down.sellMin, s.offMode, s.down.isLate)} <span style="color:#888;">(開盤${dnElapsed}分完畢・${s.down.wins}/${s.down.n}勝, ${pct(s.down.cum)})</span>` : '<span style="color:#666;">空手不交易</span>';
+                    const upStartEl = s.up.on ? (s.offMode ? s.up.buyMin : s.up.buyMin - 540) : Infinity;
+                    const dnStartEl = s.down.on ? (s.offMode ? s.down.buyMin : s.down.buyMin - 540) : Infinity;
+                    const minUsedStart = Math.min(upStartEl, dnStartEl);
+
+                    const upFinEl = s.up.on ? (s.offMode ? s.up.sellMin : s.up.sellMin - 540) : 0;
+                    const dnFinEl = s.down.on ? (s.offMode ? s.down.sellMin : s.down.sellMin - 540) : 0;
+                    const maxUsedFin = Math.max(upFinEl, dnFinEl);
+
+                    const upStr = s.up.on ? `${simFormatGridMin(s.up.buyMin, s.offMode, false)} → ${simFormatGridMin(s.up.sellMin, s.offMode, s.up.isLate)} <span style="color:#888;">(開盤${upStartEl}~${upFinEl}分・${s.up.wins}/${s.up.n}勝, ${pct(s.up.cum)})</span>` : '<span style="color:#666;">空手不交易</span>';
+                    const dnStr = s.down.on ? `${simFormatGridMin(s.down.buyMin, s.offMode, false)} → ${simFormatGridMin(s.down.sellMin, s.offMode, s.down.isLate)} <span style="color:#888;">(開盤${dnStartEl}~${dnFinEl}分・${s.down.wins}/${s.down.n}勝, ${pct(s.down.cum)})</span>` : '<span style="color:#666;">空手不交易</span>';
                     const stabScore = Math.round(s.stability * 100);
                     const stabColor = stabScore >= 70 ? 'var(--color-buy)' : (stabScore >= 45 ? 'var(--color-warn)' : 'var(--color-sell)');
                     return `
@@ -4851,7 +4894,7 @@
                         <div style="font-size:11px; font-family:monospace; line-height:1.5; color:#ccc;">
                             <div><span style="color:var(--color-up);">▲ 開盤漲:</span> ${upStr}</div>
                             <div><span style="color:var(--color-down);">▼ 開盤跌:</span> ${dnStr}</div>
-                            <div style="color:#999; font-size:10.5px;">⏱️ 最晚完畢: 開盤後 <b style="color:#fff;">${maxUsedElapsed}</b> 分鐘 | ⚙️ 判定K棒: 前 <b>${s.nDecide}</b> 根 | 黑名單: <b style="color:${s.extraBls.length ? 'var(--color-warn)' : '#888'}">${escapeHtml(s.blLabel)}</b></div>
+                            <div style="color:#999; font-size:10.5px;">⏱️ 活動區間: 開盤後 <b style="color:#fff;">${minUsedStart}～${maxUsedFin}</b> 分鐘 | ⚙️ 判定K棒: 前 <b>${s.nDecide}</b> 根 | 黑名單: <b style="color:${s.extraBls.length ? 'var(--color-warn)' : '#888'}">${escapeHtml(s.blLabel)}</b></div>
                             ${useWf && s.oos ? `<div style="margin-top:3px; padding-top:3px; border-top:1px dashed rgba(255,255,255,0.1); color:var(--color-acc); font-size:10.5px;">🔬 樣本外盲測 (後30%日期): 共 ${s.oos.n} 天・勝率 ${s.oos.winRate.toFixed(1)}%・盲測累計 <b style="color:${col(s.oos.cum)}">${pct(s.oos.cum)}</b></div>` : ''}
                         </div>
                     </div>`;
