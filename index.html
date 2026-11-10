@@ -330,6 +330,18 @@
            動畫結束又彈回原位。改成 box 本身固定 26px 高、用 transform:scaleY() 做視覺上的「長高」，
            transform 不會觸發 reflow，所以完全不影響 .menu-item 的版面高度、文字也不會跳動。
            「寬度」2px→3px 維持原本寫法（仍在文件流內正常過渡），展開變寬的視覺效果完全不變。 */
+        /* 🧪 側邊選單「模擬」群組：極簡小箭頭＋橫線展開鈕 */
+        .sub-toggle { display:flex; align-items:center; gap:8px; padding:0 16px; height:14px; margin:-2px 0 6px; cursor:pointer; color:#555; transition:color 0.2s; }
+        .sub-toggle:hover { color:#bbb; }
+        .sub-toggle-line { flex:1; height:1px; background:rgba(255,255,255,0.12); }
+        .sub-toggle i { font-size:9px; transition:transform 0.25s ease; }
+        .sub-toggle.open i { transform:rotate(180deg); }
+        .sub-group { display:grid; grid-template-rows:0fr; transition:grid-template-rows 0.28s ease; }
+        .sub-group.open { grid-template-rows:1fr; }
+        .sub-group-inner { overflow:hidden; min-height:0; }
+        .sub-group-label { font-size:10px; letter-spacing:2px; color:#555; padding:4px 16px 6px; }
+        .menu-item.sub-item { padding:10px 12px 10px 20px; font-size:12px; line-height:1.4; }
+        .menu-item.sub-item .nav-line { height:20px; }
         .menu-item .nav-line { display: block; flex-shrink: 0; width: 2px; height: 26px; border-radius: 1px; background: rgba(255, 255, 255, 0.3); box-shadow: 0 0 0 rgba(255, 255, 255, 0); transform: scaleY(0.5385); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), width 0.3s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease; }
         .menu-item.active .nav-line { width: 3px; transform: scaleY(1); background: #fff; box-shadow: 0 0 8px rgba(255, 255, 255, 0.6); }
 
@@ -1164,6 +1176,15 @@
     <div class="menu-item" id="menu-item-cards" data-view="view-cards" onclick="switchView('view-cards', this)"><span class="nav-line"></span> 自選資產卡片</div>
     <div class="menu-item" id="menu-item-holdings" data-view="view-holdings" onclick="switchView('view-holdings', this)"><span class="nav-line"></span> 庫存與資產損益</div>
     <div class="menu-item" id="menu-item-ledger" data-view="view-ledger" onclick="switchView('view-ledger', this)"><span class="nav-line"></span> 時光機與歷史帳本</div>
+    <!-- 🧪 極簡展開鈕（小箭頭＋橫線）：展開「模擬」群組 -->
+    <div id="sim-nav-toggle" class="sub-toggle" onclick="toggleSimNav()" title="展開／收合 模擬"><span class="sub-toggle-line"></span><i class="fa-solid fa-chevron-down"></i><span class="sub-toggle-line"></span></div>
+    <div id="sim-nav-group" class="sub-group">
+        <div class="sub-group-inner">
+            <div class="sub-group-label">模擬</div>
+            <div class="menu-item sub-item" id="menu-item-sim-gap" data-view="view-sim" onclick="openSimView('gap', this)"><span class="nav-line"></span> 開盤方向策略模擬器</div>
+            <div class="menu-item sub-item" id="menu-item-sim-relay" data-view="view-sim" onclick="openSimView('relay', this)"><span class="nav-line"></span> 多檔股票日內資金接力與運用順序尋優器</div>
+        </div>
+    </div>
     <div class="menu-item" id="menu-item-settings" data-view="view-settings" style="margin-top: auto;" onclick="switchView('view-settings', this)"><i class="fa-solid fa-sliders"></i></div>
 </aside>
 
@@ -2131,7 +2152,15 @@
                     </div>
                 </div>
 
-                <div class="glass-panel" style="padding:16px; margin-bottom:16px; overflow:hidden;">
+                <div style="font-weight:bold; font-size:13px; margin:0 4px 8px;"><i class="fa-solid fa-clock-rotate-left" style="color:#888;"></i> 演練紀錄</div>
+                <div id="drill-history-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 🧪 模擬：開盤方向策略模擬器／多檔股票日內資金接力尋優器（由側邊選單「模擬」群組進入） -->
+    <main id="view-sim" class="view-section">
+                <div class="glass-panel" id="sim-panel-gap" style="padding:16px; margin-bottom:16px; overflow:hidden;">
                     <div style="font-weight:bold; font-size:13px; margin-bottom:4px;"><i class="fa-solid fa-flask" style="color:var(--color-acc);"></i> 開盤方向策略模擬器</div>
                     <div style="font-size:11px; color:#777; margin-bottom:12px; line-height:1.6;">選一檔股票與日期區間，分別設定「開盤價高於昨收（開高）」與「低於昨收（開低）」時，當天幾點買進、幾點賣出，看回測的損益百分比。使用 5 分鐘 K 線（Yahoo 僅提供最近約 60 天）。台股填當地時間；美股等其他市場因冬令／夏令不同，改填「開盤後幾小時幾分鐘」。買賣價取該時間那根 K 棒的開盤價。</div>
                     <div style="display:flex; flex-direction:column; gap:10px;">
@@ -2312,12 +2341,8 @@
                         </div>
                     </div>
                 </div>
-
-                <div style="font-weight:bold; font-size:13px; margin:0 4px 8px;"><i class="fa-solid fa-clock-rotate-left" style="color:#888;"></i> 演練紀錄</div>
-                <div id="drill-history-list" style="display:flex; flex-direction:column; gap:8px;"></div>
-            </div>
-        </div>
     </main>
+
 </div>
 
 <!-- 👥 好友詳細資料 Modal -->
@@ -4374,6 +4399,7 @@
 
     const panel = document.createElement('div');
     panel.className = 'glass-panel';
+    panel.id = 'msr-panel';
     panel.style.cssText = 'padding:16px; margin-bottom:16px; overflow:hidden;';
     panel.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
@@ -6517,6 +6543,21 @@
     // 📱 手機版換頁滑動動畫用：獨立追蹤「目前真正定格顯示」的頁面 id，不透過 DOM 查詢 .active
     // （動畫進行中會有兩個 .view-section 同時帶有 .active，若用查詢法取值可能抓錯來源頁，改用變數記錄更可靠）
     let currentMobileViewId = 'view-dashboard';
+
+    // 🧪 側邊選單「模擬」群組：展開／收合，並切換 view-sim 內顯示的模擬器
+    function toggleSimNav(force) {
+        const g = document.getElementById('sim-nav-group'), t = document.getElementById('sim-nav-toggle');
+        const open = (typeof force === 'boolean') ? force : !g.classList.contains('open');
+        g.classList.toggle('open', open); t.classList.toggle('open', open);
+        try { localStorage.setItem('acorn_sim_nav_open', open ? '1' : '0'); } catch (e) {}
+    }
+    function openSimView(which, btn) {
+        const gap = document.getElementById('sim-panel-gap'), relay = document.getElementById('msr-panel');
+        if (gap) gap.style.display = which === 'gap' ? '' : 'none';
+        if (relay) relay.style.display = which === 'relay' ? '' : 'none';
+        switchView('view-sim', btn || document.getElementById(which === 'gap' ? 'menu-item-sim-gap' : 'menu-item-sim-relay'));
+    }
+    (function () { try { if (localStorage.getItem('acorn_sim_nav_open') === '1') toggleSimNav(true); } catch (e) {} })();
 
     function switchView(id, btn, skipMobileSlideAnim) {
         const isMobile = window.innerWidth <= 768;
