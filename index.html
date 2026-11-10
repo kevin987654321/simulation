@@ -339,6 +339,7 @@
         .sim-view .sim-card.glow-divide-top::before { display: block; }
         .sim-view #sim-wrap > .glass-panel { padding-bottom: 8px !important; }
         .sim-view .sim-cards { gap: 0 22px; }
+        .sim-view .swg-subbox, .sim-view .swg-check-card { background: none !important; border: none !important; border-radius: 0 !important; padding: 6px 0 !important; }
         .sub-toggle { display:flex; align-items:center; gap:8px; padding:0 16px; height:14px; margin:-2px 0 6px; cursor:pointer; color:#555; transition:color 0.2s; }
         .sub-toggle:hover { color:#bbb; }
         .sub-toggle-line { flex:1; height:1px; background:rgba(255,255,255,0.12); }
@@ -1191,6 +1192,7 @@
             <div class="sub-group-label">模擬</div>
             <div class="menu-item sub-item" id="menu-item-sim-gap" data-view="view-sim-gap" onclick="switchView('view-sim-gap', this)"><span class="nav-line"></span> 開盤方向策略模擬器</div>
             <div class="menu-item sub-item" id="menu-item-sim-relay" data-view="view-sim-relay" onclick="switchView('view-sim-relay', this)"><span class="nav-line"></span> 多檔股票日內資金接力與運用順序尋優器</div>
+            <div class="menu-item sub-item" id="menu-item-sim-swing" data-view="view-sim-swing" onclick="switchView('view-sim-swing', this)"><span class="nav-line"></span> 正常中線波段規律推演</div>
         </div>
     </div>
     <div class="menu-item" id="menu-item-settings" data-view="view-settings" style="margin-top: auto;" onclick="switchView('view-settings', this)"><i class="fa-solid fa-sliders"></i></div>
@@ -2362,6 +2364,14 @@
             <span style="font-size:16px; font-weight:bold;"><i class="fa-solid fa-flask" style="color:var(--color-acc)"></i> 多檔股票日內資金接力尋優</span>
         </div>
         <div class="fx-wrap" id="msr-wrap"></div>
+    </main>
+
+    <!-- 🧪 中線波段規律推演：面板由下方腳本在載入時插入 #swg-wrap -->
+    <main id="view-sim-swing" class="view-section sim-view">
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px; padding:0 4px;">
+            <span style="font-size:16px; font-weight:bold;"><i class="fa-solid fa-flask" style="color:var(--color-acc)"></i> 中線波段規律推演</span>
+        </div>
+        <div class="fx-wrap" id="swg-wrap"></div>
     </main>
 
 </div>
@@ -6584,6 +6594,1256 @@
 
     window.runOpenOptimizer = runOpenOptimizer;
     window.simApplyOptSolution = simApplyOptSolution;
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// ⑥ 正常中線（長週期箱體與波段規律推演）策略模擬與最佳化引擎
+//    (Structural Box & Multi-Day Wave Pattern Discovery Engine)
+//    支援：1.往前推演尋找規律  2.區間內尋找規律(偷看未來)  3.執行中持續應證規律
+//          4.期望買進/賣出價格區間  5.最短/最長持有時長(選填，未填由演算法決定)
+// ════════════════════════════════════════════════════════════════════════════
+(function initMultiDaySwingModule() {
+    const oldPanel = document.getElementById('swg-main-panel');
+    if (oldPanel) oldPanel.remove();
+
+    const styleEl = document.createElement('style');
+    styleEl.textContent = `
+        .swg-badge { display:inline-block; padding:2px 7px; border-radius:4px; font-size:10px; font-family:monospace; font-weight:bold; }
+        .swg-quick-btn { background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.14); color:#ccc; border-radius:6px; padding:4px 8px; font-size:11px; cursor:pointer; font-family:monospace; transition:all 0.15s; }
+        .swg-quick-btn:hover { border-color:var(--color-acc); color:#fff; background:rgba(0,212,255,0.1); }
+        .swg-rank-card { background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.12); border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:6px; transition:border-color 0.2s, background 0.2s; }
+        .swg-rank-card:hover, .swg-rank-card.active { border-color:var(--color-acc); background:rgba(0,212,255,0.05); }
+        .swg-time-range { display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center; gap:6px; }
+        .swg-subbox { background:rgba(255,255,255,0.025); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:10px; }
+        .swg-check-card { background:rgba(0,212,255,0.04); border:1px solid rgba(0,212,255,0.22); border-radius:8px; padding:8px 10px; display:flex; flex-direction:column; gap:6px; }
+    `;
+    document.head.appendChild(styleEl);
+
+    // 主程式：掛載於側邊選單「模擬」群組的獨立頁面 #swg-wrap；獨立版：掛載於 .wrap
+    const wrap = document.getElementById('swg-wrap') || document.querySelector('.wrap');
+    if (!wrap) return;
+
+    function swgTimePointHTML(idPrefix, defCh, defCm, defOh, defOm) {
+        return `
+            <div>
+                <div class="sim-clock" id="${idPrefix}-clk">
+                    <input type="text" id="${idPrefix}-ch" value="${defCh}" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric">
+                    <span>:</span>
+                    <input type="text" id="${idPrefix}-cm" value="${defCm}" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric">
+                </div>
+                <div class="sim-offset" id="${idPrefix}-off" style="display:none;">
+                    <input type="text" id="${idPrefix}-h" value="${defOh}" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric"><span>時</span>
+                    <input type="text" id="${idPrefix}-m" value="${defOm}" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric"><span>分</span>
+                </div>
+            </div>
+        `;
+    }
+
+    const panel = document.createElement('div');
+    panel.className = 'glass-panel';
+    panel.id = 'swg-main-panel';
+    panel.style.cssText = 'padding:16px; margin-bottom:16px; overflow:hidden;';
+    panel.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; flex-wrap:wrap; gap:6px;">
+            <div style="font-weight:bold; font-size:13.5px;">
+                <i class="fa-solid fa-cubes-stacked" style="color:var(--color-acc);"></i> 正常中線（長週期箱體與波段規律推演）策略模擬與尋優引擎
+            </div>
+            <span class="swg-badge" style="background:rgba(0,255,170,0.15); color:var(--color-up); border:1px solid rgba(0,255,170,0.35);">Box & Wave Pattern Engine</span>
+        </div>
+        <div style="font-size:11px; color:#777; margin-bottom:12px; line-height:1.6;">
+            擺脫「單日漲跌判定」與「短天數強制平倉」限制，改以<b>長週期箱體支撐／壓力、波動通道與高低點轉折規律</b>捕捉完整中線波段。支援<b>往前推演尋找規律</b>、<b>在選擇日期區間內尋找規律（偷看未來）</b>及<b>執行過程中持續應證與滾動修正規律</b>，並可自訂<b>期望買賣價格區間</b>與選填<b>最短／最長持有時長</b>（未填則完全由演算法依波段規律決定）。
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:10px;">
+            <!-- (1) 標的、K線粒度與日期跨度 -->
+            <div class="sim-card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:6px;">
+                    <div class="sim-lbl" style="margin:0; color:var(--color-acc); font-weight:bold;"><i class="fa-solid fa-calendar-days"></i> 1. 波段回測標的、K 線頻率與日期區間</div>
+                    <button type="button" class="swg-quick-btn" onclick="swgSyncFromTop()">⇧ 同步上方主模擬器代號</button>
+                </div>
+                <div class="sim-grid2" style="margin-bottom:8px;">
+                    <div>
+                        <div class="sim-lbl">股票代號</div>
+                        <input type="text" id="swg-ticker" class="sim-in" placeholder="例如 2330.TW 或 NVDA" style="text-transform:uppercase; font-family:monospace; font-weight:bold;">
+                    </div>
+                    <div>
+                        <div class="sim-lbl">K 線粒度與最大回溯跨度</div>
+                        <select id="swg-kline-mode" class="sim-in" style="padding:0 8px;">
+                            <option value="60m" selected>60分K 模式（最高 730 天／約 2 年長週期波段）</option>
+                            <option value="5m">5分K 模式（最高 58 天・精細時分）</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="sim-grid2" style="margin-bottom:6px;">
+                    <div><div class="sim-lbl">起始日期</div><input type="date" id="swg-start" class="sim-in"></div>
+                    <div><div class="sim-lbl">結束日期</div><input type="date" id="swg-end" class="sim-in"></div>
+                </div>
+                <div style="display:flex; flex-wrap:wrap; align-items:center; gap:5px; margin-bottom:8px;">
+                    <span style="font-size:10.5px; color:#888;">快速跨度：</span>
+                    <button type="button" class="swg-quick-btn" onclick="swgSetQuickDays(45)">近45天(5m)</button>
+                    <button type="button" class="swg-quick-btn" style="color:var(--color-acc);" onclick="swgSetQuickDays(180)">近半年(60m)</button>
+                    <button type="button" class="swg-quick-btn" style="color:var(--color-acc);" onclick="swgSetQuickDays(365)">近1年(60m)</button>
+                    <button type="button" class="swg-quick-btn" style="color:var(--color-up);" onclick="swgSetQuickDays(600)">近600天(60m含往前推演)</button>
+                </div>
+                <div class="sim-grid2">
+                    <div>
+                        <div class="sim-lbl">波段運作方向模式</div>
+                        <select id="swg-mode" class="sim-in" onchange="swgSyncMarketUI()" style="padding:0 8px;">
+                            <option value="daytrade" selected>空手波段：箱底買進 ➔ 跨日箱頂賣出</option>
+                            <option value="holding">持股波段：箱頂先賣出 ➔ 跨日箱底買回（賺股數）</option>
+                        </select>
+                    </div>
+                    <div>
+                        <div class="sim-lbl">賣出後再進場冷卻期</div>
+                        <select id="swg-cooldown" class="sim-in" style="padding:0 8px;">
+                            <option value="1" selected>隔 1 個交易日即可再偵測買進</option>
+                            <option value="2">隔 2 個交易日冷卻</option>
+                            <option value="3">隔 3 個交易日冷卻</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- (2) 長週期規律探勘與應證模式（三大核心勾選開關） -->
+            <div class="sim-card" style="border-color:rgba(0,212,255,0.35);">
+                <div style="font-size:12px; font-weight:bold; color:var(--color-acc); margin-bottom:8px;">
+                    <i class="fa-solid fa-brain"></i> 2. 長久規律尋找模式與執行過程持續應證設定
+                </div>
+                <div class="sim-grid2" style="margin-bottom:8px;">
+                    <div>
+                        <div class="sim-lbl">長週期波段規律模型</div>
+                        <select id="swg-pattern-family" class="sim-in" style="padding:0 8px;">
+                            <option value="auto" selected>🤖 自動尋優所有規律模型（箱體＋通道＋轉折＋價格帶）</option>
+                            <option value="quantile_box">📦 經典箱體震盪規律（長週期高低點分位數支撐／壓力）</option>
+                            <option value="bollinger_box">🌊 波動率通道箱體規律（長週期均線 ± K 倍標準差通道）</option>
+                            <option value="pivot_wave">📈 波段高低點回檔／創高轉折規律（Swing Pivot Wave）</option>
+                            <option value="price_zone">🎯 固定絕對價格箱體規律（直接鎖定買進價與賣出價區間）</option>
+                        </select>
+                    </div>
+                    <div>
+                        <div class="sim-lbl">往前推演參考週期（交易日數，尋優時會自動掃描 15~90 日）</div>
+                        <input type="text" id="swg-lookback-days" class="sim-in mobile-num" data-maxlen="3" onfocus="this.select()" value="30" placeholder="例如 30" inputmode="numeric">
+                    </div>
+                </div>
+                <div class="swg-check-card">
+                    <label style="font-size:11.5px; color:#eee; display:flex; align-items:flex-start; gap:7px; cursor:pointer;">
+                        <input type="checkbox" id="swg-chk-lookback" checked style="margin-top:2px;">
+                        <span><b>往前推演尋找規律（Lookback Pre-Window Discovery）</b>：在選擇的起始日期之前額外抓取歷史 K 線，推演過去長久形成的箱體支撐買區與箱體頂部賣區。</span>
+                    </label>
+                    <label style="font-size:11.5px; color:#eee; display:flex; align-items:flex-start; gap:7px; cursor:pointer;">
+                        <input type="checkbox" id="swg-chk-lookahead" checked style="margin-top:2px;">
+                        <span><b>先在選擇的日期區間內尋找規律（偷看未來 / In-Sample Oracle Discovery）</b>：直接剖析所選模擬區間內的真實箱體高低點與波段結構，找出若完美掌握區間規律時的極限收益。</span>
+                    </label>
+                    <label style="font-size:11.5px; color:#eee; display:flex; align-items:flex-start; gap:7px; cursor:pointer;">
+                        <input type="checkbox" id="swg-chk-verify" checked style="margin-top:2px;">
+                        <span><b>在執行過程中持續應證規律（Continuous Rolling Verification）</b>：推進過程中動態滾動更新箱體上下界（適應箱體墊高或移位），並在進出場時檢驗 K 棒止跌／轉折應證訊號，防止破底接刀。</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- (3) 期望買進／賣出價格區間 ＆ 期望買進／賣出時間區間 -->
+            <div class="sim-cards">
+                <!-- 買進端 -->
+                <div class="sim-card" style="border-color:rgba(0,255,170,0.28);">
+                    <div style="font-size:12px; font-weight:bold; color:var(--color-up); margin-bottom:8px;">
+                        <i class="fa-solid fa-cart-plus"></i> 3. 期望買進價格區間 ＆ 買進時間區間
+                    </div>
+                    <div class="swg-subbox" style="margin-bottom:8px; border-color:rgba(0,255,170,0.2);">
+                        <div class="sim-lbl" style="color:var(--color-up); font-weight:bold;">
+                            💰 期望買進價格區間（選填，留空＝由演算法依箱體支撐自動決定）
+                        </div>
+                        <div class="swg-time-range">
+                            <input type="text" id="swg-buy-pmin" class="sim-in mobile-num" data-decimal="true" onfocus="this.select()" value="" placeholder="最低買價(不限)" inputmode="decimal">
+                            <span style="color:var(--color-up); font-family:monospace;">～</span>
+                            <input type="text" id="swg-buy-pmax" class="sim-in mobile-num" data-decimal="true" onfocus="this.select()" value="" placeholder="最高買價(不限)" inputmode="decimal">
+                        </div>
+                    </div>
+                    <div class="sim-grid2" style="margin-bottom:8px;">
+                        <div>
+                            <div class="sim-lbl">箱體底部買進分位門檻（%）≤</div>
+                            <input type="text" id="swg-en-q" class="sim-in mobile-num" data-decimal="true" onfocus="this.select()" value="20" placeholder="例 20 (箱底20%區)" inputmode="decimal">
+                        </div>
+                        <div>
+                            <div class="sim-lbl">買進日K棒方向過濾</div>
+                            <select id="swg-en-dir" class="sim-in" style="padding:0 6px;">
+                                <option value="any" selected>不限單日方向（觸及箱底支撐即買）</option>
+                                <option value="down">限開跌拉回箱底買進</option>
+                                <option value="up">限箱底止跌開漲確認買進</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="swg-subbox">
+                        <div class="sim-lbl" id="swg-buy-win-lbl" style="color:#ccc;">期望買進日內時間區間</div>
+                        <div class="swg-time-range">
+                            ${swgTimePointHTML('swg-buy-min', '09', '00', '0', '0')}
+                            <span style="color:var(--color-acc); font-family:monospace; font-size:12px;">～</span>
+                            ${swgTimePointHTML('swg-buy-max', '13', '30', '6', '30')}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 賣出端 -->
+                <div class="sim-card" style="border-color:rgba(255,69,96,0.28);">
+                    <div style="font-size:12px; font-weight:bold; color:var(--color-sell); margin-bottom:8px;">
+                        <i class="fa-solid fa-money-bill-trend-up"></i> 4. 期望賣出價格區間 ＆ 賣出時間區間
+                    </div>
+                    <div class="swg-subbox" style="margin-bottom:8px; border-color:rgba(255,69,96,0.2);">
+                        <div class="sim-lbl" style="color:var(--color-sell); font-weight:bold;">
+                            💰 期望賣出價格區間（選填，留空＝由演算法依箱體壓力自動決定）
+                        </div>
+                        <div class="swg-time-range">
+                            <input type="text" id="swg-sell-pmin" class="sim-in mobile-num" data-decimal="true" onfocus="this.select()" value="" placeholder="最低賣價(不限)" inputmode="decimal">
+                            <span style="color:var(--color-sell); font-family:monospace;">～</span>
+                            <input type="text" id="swg-sell-pmax" class="sim-in mobile-num" data-decimal="true" onfocus="this.select()" value="" placeholder="最高賣價(不限)" inputmode="decimal">
+                        </div>
+                    </div>
+                    <div class="sim-grid2" style="margin-bottom:8px;">
+                        <div>
+                            <div class="sim-lbl">箱體頂部賣出分位門檻（%）≥</div>
+                            <input type="text" id="swg-ex-q" class="sim-in mobile-num" data-decimal="true" onfocus="this.select()" value="82" placeholder="例 82 (箱頂82%區)" inputmode="decimal">
+                        </div>
+                        <div>
+                            <div class="sim-lbl">賣出日K棒方向過濾</div>
+                            <select id="swg-ex-dir" class="sim-in" style="padding:0 6px;">
+                                <option value="any" selected>不限單日方向（觸及箱頂壓力即賣）</option>
+                                <option value="up">限逢開漲衝高箱頂賣出</option>
+                                <option value="down">限箱頂轉弱開跌賣出</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="swg-subbox">
+                        <div class="sim-lbl" id="swg-sell-win-lbl" style="color:#ccc;">期望賣出日內時間區間</div>
+                        <div class="swg-time-range">
+                            ${swgTimePointHTML('swg-sell-min', '09', '00', '0', '0')}
+                            <span style="color:var(--color-sell); font-family:monospace; font-size:12px;">～</span>
+                            ${swgTimePointHTML('swg-sell-max', '13', '30', '6', '30')}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- (4) 最短／最長持有時長（選填，留空由演算法依規律決定） -->
+            <div class="sim-card">
+                <div style="font-size:12px; font-weight:bold; color:var(--color-warn); margin-bottom:6px;">
+                    <i class="fa-solid fa-hourglass-half"></i> 5. 最短／最長持有時長（選填：留空則不強制平倉，完全由演算法依波段規律決定）
+                </div>
+                <div class="sim-grid2" style="margin-bottom:8px;">
+                    <div>
+                        <div class="sim-lbl" id="swg-hmin-lbl">最短持有時長（交易日，選填，空白＝由演算法決定）</div>
+                        <input type="text" id="swg-hmin" class="sim-in mobile-num" data-decimal="true" onfocus="this.select()" value="" placeholder="空白＝演算法自動決定" inputmode="decimal">
+                    </div>
+                    <div>
+                        <div class="sim-lbl" id="swg-hmax-lbl">最長持有時長（交易日，選填，空白＝不限天數依箱頂出場）</div>
+                        <input type="text" id="swg-hmax" class="sim-in mobile-num" data-decimal="true" onfocus="this.select()" value="" placeholder="空白＝不限天數依規律出場" inputmode="decimal">
+                    </div>
+                </div>
+                <div class="sim-grid2">
+                    <div>
+                        <div class="sim-lbl">持有時長單位（若有填寫上方欄位時適用）</div>
+                        <select id="swg-dur-unit" class="sim-in" onchange="swgOnDurUnitChange()" style="padding:0 8px;">
+                            <option value="days" selected>以「跨日交易日數（Days）」計</option>
+                            <option value="hours">以「總交易小時數（Trading Hours）」計</option>
+                        </select>
+                    </div>
+                    <div class="sim-grid2">
+                        <div>
+                            <div class="sim-lbl">波段停利 TP（%，選填）</div>
+                            <input type="text" id="swg-tp" class="sim-in mobile-num" data-decimal="true" onfocus="this.select()" value="" placeholder="不限" inputmode="decimal">
+                        </div>
+                        <div>
+                            <div class="sim-lbl">波段停損 SL（%，選填）</div>
+                            <input type="text" id="swg-sl" class="sim-in mobile-num" data-decimal="true" onfocus="this.select()" value="" placeholder="不限" inputmode="decimal">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- (5) 尋優排行篩選條件 -->
+            <details id="swg-opt-box" class="sim-card" open style="border-color:rgba(0,212,255,0.35); background:rgba(0,212,255,0.03);">
+                <summary style="cursor:pointer; font-size:12px; font-weight:bold; color:var(--color-acc);">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> 6. 智慧尋優排行篩選門檻（最低勝率、扣費稅、排序目標）
+                </summary>
+                <div style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">
+                    <div class="sim-grid2">
+                        <div>
+                            <div class="sim-lbl">最低波段勝率要求（%）≥</div>
+                            <input type="text" id="swg-opt-min-win" class="sim-in mobile-num" data-decimal="true" onfocus="this.select()" value="70" inputmode="decimal">
+                        </div>
+                        <div>
+                            <div class="sim-lbl">最少波段交易筆數 ≥</div>
+                            <input type="text" id="swg-opt-min-trades" class="sim-in mobile-num" data-maxlen="3" onfocus="this.select()" value="3" inputmode="numeric">
+                        </div>
+                    </div>
+                    <div class="sim-grid2">
+                        <div>
+                            <div class="sim-lbl">排行榜排序目標</div>
+                            <select id="swg-opt-sort" class="sim-in" style="padding:0 6px;">
+                                <option value="cum" selected>依「累計複利報酬率（%）」最高優先</option>
+                                <option value="score">依「綜合評分（報酬+勝率+規律應證率）」優先</option>
+                                <option value="win">依「波段勝率（%）」最高優先</option>
+                                <option value="verify">依「規律應證吻合率（%）」最高優先</option>
+                                <option value="pf">依「獲利因子（賺賠比）」最高優先</option>
+                            </select>
+                        </div>
+                        <div style="display:flex; flex-direction:column; justify-content:flex-end; gap:4px; font-size:11px; color:#aaa;">
+                            <label style="display:flex; align-items:center; gap:6px;">
+                                <input type="checkbox" id="swg-fee-on" checked>
+                                扣除手續費與交易稅（使用費率設定）
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </details>
+
+            <div id="swg-error" style="display:none; color:var(--color-sell); font-size:11px;"></div>
+
+            <div class="sim-grid2">
+                <button id="swg-sim-btn" type="button" onclick="runSwingSimulator()" style="background:rgba(255,255,255,0.1); border:1px solid var(--color-acc); color:#fff; padding:11px; border-radius:8px; font-weight:bold; font-size:12.5px; cursor:pointer;">
+                    <i class="fa-solid fa-play" style="color:var(--color-acc);"></i> 依目前設定執行波段模擬
+                </button>
+                <button id="swg-opt-btn" type="button" onclick="runSwingOptimizer()" style="background:linear-gradient(90deg, var(--color-acc), var(--color-up)); border:none; color:#000; padding:11px; border-radius:8px; font-weight:bold; font-size:12.5px; cursor:pointer;">
+                    <i class="fa-solid fa-ranking-star"></i> 推演長週期箱體規律最優解排行
+                </button>
+            </div>
+
+            <div id="swg-opt-board" style="display:none; flex-direction:column; gap:8px;"></div>
+            <div id="swg-sim-result" style="display:none; flex-direction:column; gap:12px; min-width:0;"></div>
+        </div>
+    `;
+    wrap.appendChild(panel);
+    // 主程式（扁平樣式）：各區塊以頂端分隔線劃分，與「費率工作室」一致
+    if (wrap.id === 'swg-wrap') panel.querySelectorAll('.sim-card').forEach(c => c.classList.add('glow-divide-top'));
+    if (window.setupMobileNumInput) panel.querySelectorAll('.mobile-num').forEach(window.setupMobileNumInput);
+
+    let swgChartInstance = null;
+    let swgOptCache = [];
+
+    function swgSyncMarketUI() {
+        const rawT = (document.getElementById('swg-ticker').value || '').trim();
+        const off = !!rawT && !simIsTW(rawT);
+        const hold = document.getElementById('swg-mode').value === 'holding';
+        for (const p of ['swg-buy-min', 'swg-buy-max', 'swg-sell-min', 'swg-sell-max']) {
+            const clkEl = document.getElementById(p + '-clk');
+            const offEl = document.getElementById(p + '-off');
+            if (clkEl) clkEl.style.display = off ? 'none' : 'grid';
+            if (offEl) offEl.style.display = off ? 'grid' : 'none';
+        }
+        document.getElementById('swg-buy-win-lbl').innerText =
+            (hold ? '期望先賣出日內時間區間' : '期望買進日內時間區間') + (off ? '（開盤後時分）' : '（當地 HH:MM）');
+        document.getElementById('swg-sell-win-lbl').innerText =
+            (hold ? '期望後買回日內時間區間' : '期望賣出日內時間區間') + (off ? '（開盤後時分）' : '（當地 HH:MM）');
+    }
+    window.swgSyncMarketUI = swgSyncMarketUI;
+
+    function swgOnDurUnitChange() {
+        const isHr = document.getElementById('swg-dur-unit').value === 'hours';
+        document.getElementById('swg-hmin-lbl').innerText = isHr
+            ? '最短持有總交易時數（小時，選填，空白＝演算法自動決定）'
+            : '最短持有時長（交易日，選填，空白＝由演算法決定）';
+        document.getElementById('swg-hmax-lbl').innerText = isHr
+            ? '最長持有總交易時數（小時，選填，空白＝不限時數依箱頂出場）'
+            : '最長持有時長（交易日，選填，空白＝不限天數依箱頂出場）';
+    }
+    window.swgOnDurUnitChange = swgOnDurUnitChange;
+
+    function swgSetQuickDays(days) {
+        const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+        const now = new Date();
+        document.getElementById('swg-end').value = iso(now);
+        document.getElementById('swg-start').value = iso(new Date(now.getTime() - days * 86400e3));
+        document.getElementById('swg-kline-mode').value = days > 58 ? '60m' : '5m';
+    }
+    window.swgSetQuickDays = swgSetQuickDays;
+
+    function swgSyncFromTop() {
+        const topT = (document.getElementById('sim-ticker')?.value || '').trim().toUpperCase();
+        if (topT) document.getElementById('swg-ticker').value = topT;
+        document.getElementById('swg-fee-on').checked = document.getElementById('sim-fee-on')?.checked !== false;
+        swgSyncMarketUI();
+    }
+    window.swgSyncFromTop = swgSyncFromTop;
+
+    document.getElementById('swg-ticker').addEventListener('input', swgSyncMarketUI);
+
+    (function swgInitDefaults() {
+        const defT = (document.getElementById('sim-ticker')?.value || (() => { try { return state.cardTickers && state.cardTickers[0]; } catch (e) { return ''; } })() || '2330.TW').trim().toUpperCase();
+        document.getElementById('swg-ticker').value = defT;
+        swgSetQuickDays(365);
+        swgSyncMarketUI();
+    })();
+
+    function swgReadTimeMin(prefix, offMode) {
+        if (!offMode) {
+            const h = parseInt(document.getElementById(prefix + '-ch').value, 10);
+            const m = parseInt(document.getElementById(prefix + '-cm').value, 10);
+            return (isNaN(h) || isNaN(m) || h < 0 || h > 23 || m < 0 || m > 59) ? null : h * 60 + m;
+        }
+        const h = parseInt(document.getElementById(prefix + '-h').value, 10) || 0;
+        const m = parseInt(document.getElementById(prefix + '-m').value, 10) || 0;
+        return h * 60 + m;
+    }
+
+    function swgWriteTimeMin(prefix, minVal, offMode) {
+        if (!offMode) {
+            document.getElementById(prefix + '-ch').value = String(Math.floor(minVal / 60)).padStart(2, '0');
+            document.getElementById(prefix + '-cm').value = String(minVal % 60).padStart(2, '0');
+        } else {
+            document.getElementById(prefix + '-h').value = String(Math.floor(minVal / 60));
+            document.getElementById(prefix + '-m').value = String(minVal % 60);
+        }
+    }
+
+    function swgFmtMin(minVal, offMode, isClosePoint) {
+        const base = offMode
+            ? `+${Math.floor(minVal / 60)}h${String(minVal % 60).padStart(2, '0')}m`
+            : `${String(Math.floor(minVal / 60)).padStart(2, '0')}:${String(minVal % 60).padStart(2, '0')}`;
+        return isClosePoint ? `${base}(收盤)` : base;
+    }
+
+    // 輔助：計算排序陣列之分位數 (Quantile)
+    function swgQuantile(arr, q) {
+        if (!arr.length) return NaN;
+        const sorted = [...arr].sort((a, b) => a - b);
+        const pos = (sorted.length - 1) * Math.max(0, Math.min(1, q));
+        const base = Math.floor(pos), rest = pos - base;
+        return sorted[base + 1] !== undefined ? sorted[base] + rest * (sorted[base + 1] - sorted[base]) : sorted[base];
+    }
+
+    // 1. 抓取 K 線並保留「起始日前之往前推演區間 (Pre-Window Days)」＋「模擬區間 (Sim Days)」
+    async function swgFetchPatternDataset(rawTicker, startMs, endMs, interval, extraLookbackCalDays) {
+        const nowSec = Math.floor(Date.now() / 1000);
+        const maxBackSec = (interval === '60m' ? 729 : 59) * 86400 + 43200;
+        // 往前多抓 extraLookbackCalDays 供「往前推演尋找規律」使用
+        const p1 = Math.max(Math.floor(startMs / 1000) - extraLookbackCalDays * 86400, nowSec - maxBackSec);
+        const p2 = Math.min(Math.floor(endMs / 1000) + 2 * 86400, nowSec + 86400);
+
+        const cands = /^\d{4,6}[A-Z]?$/.test(rawTicker) ? [rawTicker + '.TW', rawTicker + '.TWO'] : [rawTicker];
+        let chart = null, resolvedTicker = rawTicker;
+        for (const c of cands) {
+            try {
+                const url = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${c}?period1=${p1}&period2=${p2}&interval=${interval}`)}`;
+                const res = await fetch(url, { cache: 'no-store' });
+                if (res.ok) {
+                    const j = await res.json();
+                    const r = j.chart && j.chart.result ? j.chart.result[0] : null;
+                    if (r && (r.timestamp || []).length) { chart = r; resolvedTicker = c; break; }
+                }
+            } catch (e) {}
+        }
+        if (!chart) throw new Error(`查無 ${rawTicker} 的 ${interval} K 線資料`);
+
+        const off = (chart.meta && chart.meta.gmtoffset) || 0;
+        const q = chart.indicators.quote[0] || {};
+        const dayMap = new Map();
+        chart.timestamp.forEach((t, i) => {
+            if (q.open[i] == null || q.close[i] == null) return;
+            const d = new Date((t + off) * 1000), key = d.toISOString().slice(0, 10);
+            if (!dayMap.has(key)) dayMap.set(key, []);
+            const hi = q.high && q.high[i] != null ? q.high[i] : Math.max(q.open[i], q.close[i]);
+            const lo = q.low && q.low[i] != null ? q.low[i] : Math.min(q.open[i], q.close[i]);
+            dayMap.get(key).push({ m: d.getUTCHours() * 60 + d.getUTCMinutes(), o: q.open[i], c: q.close[i], h: hi, l: lo });
+        });
+
+        const keys = [...dayMap.keys()].sort();
+        const offMode = !simIsTW(resolvedTicker);
+        const allDays = []; // 包含起始日前的往前推演日 + 模擬區間日
+        const timeSet = new Set();
+
+        for (let i = 1; i < keys.length; i++) {
+            const key = keys[i];
+            const ms = Date.parse(key + 'T00:00:00Z');
+            if (ms > endMs) continue;
+            const bars = dayMap.get(key).sort((a, b) => a.m - b.m);
+            const prevBars = dayMap.get(keys[i - 1]);
+            if (!bars.length || !prevBars || !prevBars.length) continue;
+            const prevClose = prevBars[prevBars.length - 1].c;
+            if (!(prevClose > 0)) continue;
+
+            const t0 = offMode ? bars[0].m : 0;
+            bars.forEach(b => timeSet.add(b.m - t0));
+
+            const openP = bars[0].o;
+            const closeP = bars[bars.length - 1].c;
+            const highP = Math.max(...bars.map(b => b.h));
+            const lowP = Math.min(...bars.map(b => b.l));
+            const gapPct = (openP / prevClose - 1.0) * 100.0;
+            const side = openP > prevClose ? 1 : (openP < prevClose ? -1 : 0);
+            const isSimPeriod = ms >= startMs && ms <= endMs;
+
+            allDays.push({
+                key, ms, isSimPeriod, bars, prevClose,
+                openP, closeP, highP, lowP, gapPct, side
+            });
+        }
+
+        const simStartIdx = allDays.findIndex(d => d.isSimPeriod);
+        if (simStartIdx < 0 || (allDays.length - simStartIdx) < 4) {
+            throw new Error('所選日期區間內有效交易日不足 4 天，請拉長日期區間');
+        }
+
+        const gridTimes = [...timeSet].sort((a, b) => a - b);
+        const closeGridMin = !offMode
+            ? Math.max(810, (gridTimes[gridTimes.length - 1] || 780) + (interval === '60m' ? 30 : 5))
+            : Math.max(390, (gridTimes[gridTimes.length - 1] || 360) + (interval === '60m' ? 30 : 5));
+        if (!gridTimes.includes(closeGridMin)) gridTimes.push(closeGridMin);
+
+        const D_all = allDays.length;
+        const T = gridTimes.length;
+        const barsPerDay = Math.max(1, T - 1);
+        const hoursPerDay = offMode ? 6.5 : 4.5;
+
+        const priceMat = new Float64Array(D_all * T);
+        const buyCostMat = new Float64Array(D_all * T);
+        const sellNetMat = new Float64Array(D_all * T);
+        const feeOn = document.getElementById('swg-fee-on').checked;
+        const N = 1000;
+
+        for (let d = 0; d < D_all; d++) {
+            const bars = allDays[d].bars;
+            const t0 = offMode ? bars[0].m : 0;
+            for (let b = 0; b < T; b++) {
+                let p;
+                if (b === T - 1) {
+                    p = bars[bars.length - 1].c;
+                } else {
+                    const targetM = gridTimes[b];
+                    const idx = bars.findIndex(bar => (bar.m - t0) >= targetM);
+                    p = idx >= 0 ? bars[idx].o : bars[bars.length - 1].c;
+                }
+                const cell = d * T + b;
+                priceMat[cell] = p;
+                if (feeOn) {
+                    const bc = computeTradeCosts(resolvedTicker, p * N, N, 'BUY');
+                    const sc = computeTradeCosts(resolvedTicker, p * N, N, 'SELL');
+                    buyCostMat[cell] = p * N + bc.fee + (bc.tax || 0);
+                    sellNetMat[cell] = p * N - sc.fee - sc.tax;
+                } else {
+                    buyCostMat[cell] = p * N;
+                    sellNetMat[cell] = p * N;
+                }
+            }
+        }
+
+        return {
+            resolvedTicker, offMode, interval, allDays, D_all, simStartIdx,
+            D_sim: D_all - simStartIdx, gridTimes, T, barsPerDay, hoursPerDay,
+            priceMat, buyCostMat, sellNetMat, feeOn
+        };
+    }
+
+    // 2. 核心：計算每一天的「箱體支撐上限 (Box Support Band)」與「箱體壓力下限 (Box Resistance Band)」
+    //    結合三大開關：lookback (往前推演)、lookahead (區間內偷看未來)、rollingVerify (執行過程持續應證更新)
+    function swgComputeBoxBands(ds, cfg) {
+        const { allDays, D_all, simStartIdx } = ds;
+        const {
+            family, windowW, entryQ, exitQ,
+            useLookback, useLookahead, useVerify,
+            userBuyPMin, userBuyPMax, userSellPMin, userSellPMax
+        } = cfg;
+
+        const supUpper = new Float64Array(D_all); // 買進價格上限（低於或落入此區間即屬箱體底部買區）
+        const supLower = new Float64Array(D_all); // 買進價格下限
+        const resLower = new Float64Array(D_all); // 賣出價格下限（高於或落入此區間即屬箱體頂部賣區）
+        const resUpper = new Float64Array(D_all); // 賣出價格上限
+
+        // 計算給定切片 [wStart, wEnd] 的箱體支撐價與壓力價
+        const calcSliceBox = (wStart, wEnd) => {
+            const s = Math.max(0, wStart), e = Math.min(D_all - 1, Math.max(s, wEnd));
+            const lows = [], highs = [], closes = [];
+            for (let k = s; k <= e; k++) {
+                lows.push(allDays[k].lowP);
+                highs.push(allDays[k].highP);
+                closes.push(allDays[k].closeP);
+            }
+            if (family === 'bollinger_box') {
+                const mean = closes.reduce((a, v) => a + v, 0) / closes.length;
+                const std = Math.sqrt(closes.reduce((a, v) => a + (v - mean) ** 2, 0) / closes.length) || (mean * 0.02);
+                const kIn = 1.6 - (entryQ / 100.0) * 2.2;  // entryQ 15% -> mean - 1.27*std
+                const kOut = 0.5 + ((exitQ - 50) / 50.0) * 1.4; // exitQ 85% -> mean + 1.48*std
+                return { sup: mean - kIn * std, res: mean + kOut * std };
+            } else if (family === 'pivot_wave') {
+                const minL = Math.min(...lows), maxH = Math.max(...highs);
+                const span = Math.max(minL * 0.01, maxH - minL);
+                return {
+                    sup: minL + span * (entryQ / 100.0),
+                    res: minL + span * (exitQ / 100.0)
+                };
+            } else {
+                // 預設：經典分位數箱體規律 (quantile_box / price_zone)
+                return {
+                    sup: swgQuantile(lows, entryQ / 100.0),
+                    res: swgQuantile(highs, exitQ / 100.0)
+                };
+            }
+        };
+
+        // 預先計算「僅往前推演」的初始基準箱體（在 simStartIdx 之前推演）
+        const preStart = useLookback ? Math.max(0, simStartIdx - windowW) : simStartIdx;
+        const preEnd = Math.max(preStart, simStartIdx - 1);
+        const initBox = calcSliceBox(preStart, useLookahead && !useLookback ? D_all - 1 : preEnd);
+
+        for (let d = 0; d < D_all; d++) {
+            let box;
+            if (useLookahead && useVerify) {
+                // 偷看未來 + 持續應證：以當前日 d 為中心的前後對稱視窗 [d - W/2, d + W/2] 精準鎖定當下所處箱體！
+                const halfW = Math.max(3, Math.floor(windowW / 2));
+                const ws = useLookback ? Math.max(0, d - halfW) : Math.max(simStartIdx, d - halfW);
+                const we = Math.min(D_all - 1, d + halfW);
+                box = calcSliceBox(ws, we);
+            } else if (useLookahead && !useVerify) {
+                // 偷看未來（全區間固定箱體）
+                box = calcSliceBox(simStartIdx, D_all - 1);
+            } else if (useVerify) {
+                // 往前推演 + 執行中持續應證滾動箱體：使用截至當日 d 的滾動視窗 [d - W, d]
+                const ws = useLookback ? Math.max(0, d - windowW) : Math.max(simStartIdx, d - windowW);
+                box = calcSliceBox(ws, d);
+            } else {
+                // 僅往前推演（固定歷史箱體，不隨執行過程更新）
+                box = initBox;
+            }
+
+            // 若使用者有手動填寫「期望買進價格區間」或「期望賣出價格區間」，則優先套用使用者填寫的價格上下限！
+            supLower[d] = userBuyPMin !== null ? userBuyPMin : 0;
+            supUpper[d] = userBuyPMax !== null ? userBuyPMax : box.sup;
+            resLower[d] = userSellPMin !== null ? userSellPMin : box.res;
+            resUpper[d] = userSellPMax !== null ? userSellPMax : Infinity;
+        }
+
+        return { supLower, supUpper, resLower, resUpper };
+    }
+
+    // 3. 執行長週期箱體與波段規律狀態機
+    function swgRunPatternSchedule(ds, bands, cfg, bIn, bOut) {
+        const { allDays, D_all, simStartIdx, T, priceMat } = ds;
+        const { supLower, supUpper, resLower, resUpper } = bands;
+        const {
+            useVerify, enDir, exDir, hMinD, hMaxD, cooldownDays, tpPct, slPct,
+            userBuyPMin, userBuyPMax, userSellPMin, userSellPMax
+        } = cfg;
+
+        const inDays = [];
+        const outDays = [];
+        const exitTypes = []; // 0 = 箱體頂部規律出場, 1 = 達最長持有上限平倉, 2 = 停利TP, 3 = 停損SL, 4 = 區間結束結算
+        let verifiedHits = 0;
+
+        // 若使用者未填寫 hMinD，預設至少跨 1 個交易日；若未填寫 hMaxD，則為 null（不限天數，完全依箱體頂部規律出場！）
+        const minHold = hMinD !== null ? Math.max(1, hMinD) : 1;
+        const maxHold = hMaxD !== null ? Math.max(minHold, hMaxD) : (D_all - simStartIdx);
+
+        let d = simStartIdx;
+        while (d < D_all - 1) {
+            const dayObj = allDays[d];
+            const pInCand = priceMat[d * T + bIn];
+
+            // 檢查單日方向過濾
+            const dirOk = enDir === 'any' || (enDir === 'down' && dayObj.side === -1) || (enDir === 'up' && dayObj.side === 1);
+
+            // 檢查是否進入「箱體底部支撐買進區間」（日內最低價或目標買進時點價格落入買進區間）
+            const priceHitBuyZone = (pInCand >= supLower[d] && pInCand <= supUpper[d]) ||
+                (userBuyPMax === null && dayObj.lowP <= supUpper[d] && pInCand <= supUpper[d] * 1.012);
+
+            // 若啟用「執行過程中持續應證規律」，檢驗當日是否具備支撐止跌跡象（非單日暴跌超過 4.5% 的破底長黑）
+            const supportVerified = !useVerify || (dayObj.closeP >= dayObj.lowP * 0.995 && dayObj.gapPct > -4.5);
+
+            if (dirOk && priceHitBuyZone && supportVerified) {
+                const dIn = d;
+                const entryP = pInCand;
+                const limitD = Math.min(D_all - 1, dIn + maxHold);
+                let dOut = limitD;
+                let eType = hMaxD !== null ? 1 : 4;
+
+                for (let dc = dIn + 1; dc <= limitD; dc++) {
+                    const outDayObj = allDays[dc];
+                    const pOutCand = priceMat[dc * T + bOut];
+                    const movePct = (pOutCand / entryP - 1.0) * 100.0;
+
+                    if (tpPct !== null && movePct >= tpPct) {
+                        dOut = dc; eType = 2; verifiedHits++; break;
+                    }
+                    if (slPct !== null && movePct <= -slPct) {
+                        dOut = dc; eType = 3; break;
+                    }
+                    if (dc >= dIn + minHold) {
+                        const exDirOk = exDir === 'any' || (exDir === 'up' && outDayObj.side === 1) || (exDir === 'down' && outDayObj.side === -1);
+                        const priceHitSellZone = (pOutCand >= resLower[dc] && pOutCand <= resUpper[dc]) ||
+                            (userSellPMin === null && outDayObj.highP >= resLower[dc] && pOutCand >= resLower[dc] * 0.988);
+
+                        if (exDirOk && priceHitSellZone) {
+                            dOut = dc; eType = 0; verifiedHits++; break;
+                        }
+                    }
+                }
+
+                inDays.push(dIn);
+                outDays.push(dOut);
+                exitTypes.push(eType);
+                d = dOut + Math.max(1, cooldownDays);
+            } else {
+                d++;
+            }
+        }
+
+        const K = inDays.length;
+        const verifyRate = K > 0 ? (verifiedHits / K) * 100.0 : 0.0;
+        return { inDays, outDays, exitTypes, verifyRate };
+    }
+
+    // 輔助：讀取表單上的價格區間與持有時長（支援空白＝null）
+    function swgReadUserOptionalBounds(hoursPerDay) {
+        const parseOptFloat = (id) => {
+            const raw = (document.getElementById(id)?.value || '').trim();
+            if (raw === '') return null;
+            const v = parseFloat(raw);
+            return isNaN(v) ? null : v;
+        };
+        const userBuyPMin = parseOptFloat('swg-buy-pmin');
+        const userBuyPMax = parseOptFloat('swg-buy-pmax');
+        const userSellPMin = parseOptFloat('swg-sell-pmin');
+        const userSellPMax = parseOptFloat('swg-sell-pmax');
+
+        const durUnit = document.getElementById('swg-dur-unit').value;
+        const rawHMin = parseOptFloat('swg-hmin');
+        const rawHMax = parseOptFloat('swg-hmax');
+
+        const hMinD = rawHMin === null ? null : (durUnit === 'hours' ? Math.max(1, Math.floor(rawHMin / hoursPerDay)) : Math.max(1, Math.round(rawHMin)));
+        const hMaxD = rawHMax === null ? null : (durUnit === 'hours' ? Math.max(1, Math.ceil(rawHMax / hoursPerDay)) : Math.max(1, Math.round(rawHMax)));
+
+        const tpPct = parseOptFloat('swg-tp');
+        const slPct = parseOptFloat('swg-sl');
+
+        return { userBuyPMin, userBuyPMax, userSellPMin, userSellPMax, hMinD, hMaxD, tpPct: tpPct !== null ? Math.abs(tpPct) : null, slPct: slPct !== null ? Math.abs(slPct) : null };
+    }
+
+    // 4. 單次「依目前設定執行波段模擬」
+    window.runSwingSimulator = async function() {
+        const errEl = document.getElementById('swg-error');
+        const resEl = document.getElementById('swg-sim-result');
+        const btn = document.getElementById('swg-sim-btn');
+        const fail = (m) => { errEl.style.display = 'block'; errEl.innerText = m; resEl.style.display = 'none'; };
+        errEl.style.display = 'none';
+
+        const rawTicker = (document.getElementById('swg-ticker').value || '').trim().toUpperCase();
+        const sv = document.getElementById('swg-start').value, ev = document.getElementById('swg-end').value;
+        if (!rawTicker) return fail('請輸入股票代號');
+        if (!sv || !ev) return fail('請選擇起始與結束日期');
+        const startMs = Date.parse(sv + 'T00:00:00Z'), endMs = Date.parse(ev + 'T00:00:00Z');
+        if (endMs <= startMs) return fail('結束日期必須晚於起始日期');
+
+        const interval = document.getElementById('swg-kline-mode').value;
+        const useLookback = document.getElementById('swg-chk-lookback').checked;
+        const useLookahead = document.getElementById('swg-chk-lookahead').checked;
+        const useVerify = document.getElementById('swg-chk-verify').checked;
+        const windowW = Math.max(5, parseInt(document.getElementById('swg-lookback-days').value, 10) || 30);
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 推演箱體規律並執行波段模擬...';
+
+        try {
+            const extraCalDays = useLookback ? Math.min(180, Math.round(windowW * 1.6) + 15) : 12;
+            const ds = await swgFetchPatternDataset(rawTicker, startMs, endMs, interval, extraCalDays);
+            const { offMode, gridTimes, T, hoursPerDay } = ds;
+
+            const bounds = swgReadUserOptionalBounds(hoursPerDay);
+            if (bounds.userBuyPMin !== null && bounds.userBuyPMax !== null && bounds.userBuyPMax < bounds.userBuyPMin) {
+                throw new Error('期望買進價格區間之「最高買價」不得小於「最低買價」');
+            }
+            if (bounds.userSellPMin !== null && bounds.userSellPMax !== null && bounds.userSellPMax < bounds.userSellPMin) {
+                throw new Error('期望賣出價格區間之「最高賣價」不得小於「最低賣價」');
+            }
+            if (bounds.hMinD !== null && bounds.hMaxD !== null && bounds.hMaxD < bounds.hMinD) {
+                throw new Error('最長持有時長不得小於最短持有時長');
+            }
+
+            const buyMinM = swgReadTimeMin('swg-buy-min', offMode) ?? gridTimes[0];
+            const sellMaxM = swgReadTimeMin('swg-sell-max', offMode) ?? gridTimes[T - 1];
+            let bIn = gridTimes.findIndex(m => m >= buyMinM); if (bIn < 0) bIn = 0;
+            let bOut = T - 1;
+            for (let k = T - 1; k >= 0; k--) { if (gridTimes[k] <= sellMaxM) { bOut = k; break; } }
+
+            const famSel = document.getElementById('swg-pattern-family').value;
+            const family = famSel === 'auto' ? 'quantile_box' : famSel;
+            const entryQ = parseFloat(document.getElementById('swg-en-q').value) || 20;
+            const exitQ = parseFloat(document.getElementById('swg-ex-q').value) || 82;
+            const enDir = document.getElementById('swg-en-dir').value;
+            const exDir = document.getElementById('swg-ex-dir').value;
+            const cooldownDays = parseInt(document.getElementById('swg-cooldown').value, 10) || 1;
+            const hold = document.getElementById('swg-mode').value === 'holding';
+
+            const cfg = {
+                family, windowW, entryQ, exitQ,
+                useLookback, useLookahead, useVerify,
+                enDir, exDir, cooldownDays,
+                ...bounds
+            };
+
+            const bands = swgComputeBoxBands(ds, cfg);
+            const sched = swgRunPatternSchedule(ds, bands, cfg, bIn, bOut);
+            if (!sched.inDays.length) {
+                throw new Error('在目前設定的箱體／價格區間下未觸發交易，建議放寬買賣價格區間或點選右方「推演長週期箱體規律最優解排行」自動尋優');
+            }
+
+            swgRenderSimulationReport(ds, bands, sched, bIn, bOut, {
+                hold, cfg, patternTitle: `${family === 'quantile_box' ? '經典箱體' : (family === 'bollinger_box' ? '通道箱體' : '波段轉折')}(W=${windowW}d, 買≤Q${entryQ}% / 賣≥Q${exitQ}%)`
+            });
+        } catch (err) {
+            fail(err.message || '波段模擬失敗');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-play" style="color:var(--color-acc);"></i> 依目前設定執行波段模擬';
+        }
+    };
+
+    // 5. 長週期箱體與波段規律最優解尋優主函式 (runSwingOptimizer)
+    window.runSwingOptimizer = async function() {
+        const errEl = document.getElementById('swg-error');
+        const boardEl = document.getElementById('swg-opt-board');
+        const btn = document.getElementById('swg-opt-btn');
+        const fail = (m) => { errEl.style.display = 'block'; errEl.innerText = m; boardEl.style.display = 'none'; };
+        errEl.style.display = 'none';
+
+        const rawTicker = (document.getElementById('swg-ticker').value || '').trim().toUpperCase();
+        const sv = document.getElementById('swg-start').value, ev = document.getElementById('swg-end').value;
+        if (!rawTicker) return fail('請輸入股票代號');
+        if (!sv || !ev) return fail('請選擇起始與結束日期');
+        const startMs = Date.parse(sv + 'T00:00:00Z'), endMs = Date.parse(ev + 'T00:00:00Z');
+        if (endMs <= startMs) return fail('結束日期必須晚於起始日期');
+
+        const interval = document.getElementById('swg-kline-mode').value;
+        const chkLookback = document.getElementById('swg-chk-lookback').checked;
+        const chkLookahead = document.getElementById('swg-chk-lookahead').checked;
+        const chkVerify = document.getElementById('swg-chk-verify').checked;
+
+        if (!chkLookback && !chkLookahead) {
+            return fail('請至少勾選「往前推演尋找規律」或「先在選擇的日期區間內尋找規律（偷看未來）」其中一項');
+        }
+
+        const minWinPct = parseFloat(document.getElementById('swg-opt-min-win').value) || 0;
+        const minTrades = Math.max(1, parseInt(document.getElementById('swg-opt-min-trades').value, 10) || 2);
+        const sortBy = document.getElementById('swg-opt-sort').value;
+        const hold = document.getElementById('swg-mode').value === 'holding';
+        const cooldownDays = parseInt(document.getElementById('swg-cooldown').value, 10) || 1;
+        const famSel = document.getElementById('swg-pattern-family').value;
+        const userW = Math.max(5, parseInt(document.getElementById('swg-lookback-days').value, 10) || 30);
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在推演長週期箱體支撐／壓力規律與最佳持有週期...';
+
+        try {
+            const tPerf0 = performance.now();
+            const ds = await swgFetchPatternDataset(rawTicker, startMs, endMs, interval, 150);
+            const { offMode, D_sim, gridTimes, T, hoursPerDay, priceMat, buyCostMat, sellNetMat } = ds;
+
+            const bounds = swgReadUserOptionalBounds(hoursPerDay);
+            const buyMinM = swgReadTimeMin('swg-buy-min', offMode) ?? gridTimes[0];
+            const buyMaxM = swgReadTimeMin('swg-buy-max', offMode) ?? gridTimes[T - 1];
+            const sellMinM = swgReadTimeMin('swg-sell-min', offMode) ?? gridTimes[0];
+            const sellMaxM = swgReadTimeMin('swg-sell-max', offMode) ?? gridTimes[T - 1];
+
+            // 篩選期望時間視窗內的代表性日內格點（60m 全掃；5m 自動取步進格點確保毫秒級反應）
+            const bInRaw = [], bOutRaw = [];
+            for (let b = 0; b < T; b++) {
+                const gm = gridTimes[b];
+                if (gm >= buyMinM - 2 && gm <= buyMaxM + 2) bInRaw.push(b);
+                if (gm >= sellMinM - 2 && gm <= sellMaxM + 2) bOutRaw.push(b);
+            }
+            const pickStep = (arr, maxLen) => {
+                if (!arr.length) return [0];
+                if (arr.length <= maxLen) return arr;
+                const step = Math.max(1, Math.floor(arr.length / maxLen));
+                const out = arr.filter((_, i) => i % step === 0);
+                if (!out.includes(arr[arr.length - 1])) out.push(arr[arr.length - 1]);
+                return out;
+            };
+            const bInList = pickStep(bInRaw, 8);
+            const bOutList = pickStep(bOutRaw, 8);
+
+            // 建立候選規律模型、視窗長度 W、箱底買進分位數與箱頂賣出分位數
+            const families = famSel === 'auto'
+                ? ['quantile_box', 'bollinger_box', 'pivot_wave']
+                : [famSel === 'price_zone' ? 'quantile_box' : famSel];
+            const windowList = [...new Set([userW, 15, 25, 40, 60].filter(w => w <= Math.max(30, D_sim)))];
+            const entryQList = (bounds.userBuyPMin !== null && bounds.userBuyPMax !== null) ? [20] : [12, 18, 25, 32];
+            const exitQList = (bounds.userSellPMin !== null && bounds.userSellPMax !== null) ? [82] : [75, 82, 88, 92];
+
+            // 若使用者沒填最短/最長持有時長（null），則同時測試「完全不限天數依箱頂出場 (null, null)」與常見波段週期，讓演算法決定最佳持有時長！
+            let holdCandPairs = [];
+            if (bounds.hMinD !== null || bounds.hMaxD !== null) {
+                holdCandPairs.push([bounds.hMinD, bounds.hMaxD]);
+            } else {
+                holdCandPairs = [
+                    [null, null], // 完全不限天數，觸及箱頂才賣
+                    [2, null],    // 至少持有 2 天，上限不限依箱頂出場
+                    [3, 18],      // 中線 3~18 日箱體波段
+                    [5, 30]       // 長波段 5~30 日
+                ];
+            }
+
+            // 建立規律推演模式組合（依據使用者勾選的三個開關）
+            const modeCombos = [];
+            if (chkLookback && chkVerify) modeCombos.push({ lb: true, la: false, vf: true, tag: '往前推演+持續應證' });
+            if (chkLookahead && chkVerify) modeCombos.push({ lb: chkLookback, la: true, vf: true, tag: '區間尋優(偷看未來)+持續應證' });
+            if (chkLookback && !chkVerify) modeCombos.push({ lb: true, la: false, vf: false, tag: '僅往前推演(固定箱體)' });
+            if (chkLookahead && !chkVerify) modeCombos.push({ lb: false, la: true, vf: false, tag: '區間尋優(偷看未來固定箱體)' });
+
+            const allSolutions = [];
+            let totalTested = 0;
+
+            for (const mCombo of modeCombos) {
+                for (const family of families) {
+                    for (const windowW of windowList) {
+                        for (const entryQ of entryQList) {
+                            for (const exitQ of exitQList) {
+                                const baseCfg = {
+                                    family, windowW, entryQ, exitQ,
+                                    useLookback: mCombo.lb, useLookahead: mCombo.la, useVerify: mCombo.vf,
+                                    enDir: document.getElementById('swg-en-dir').value,
+                                    exDir: document.getElementById('swg-ex-dir').value,
+                                    cooldownDays,
+                                    ...bounds
+                                };
+                                const bands = swgComputeBoxBands(ds, baseCfg);
+
+                                for (const [hMinCand, hMaxCand] of holdCandPairs) {
+                                    const runCfg = { ...baseCfg, hMinD: hMinCand, hMaxD: hMaxCand };
+                                    // 先用代表性進出場格點產生日程並評估所有 (bi, bo)
+                                    const sched = swgRunPatternSchedule(ds, bands, runCfg, bInList[0], bOutList[bOutList.length - 1]);
+                                    const K = sched.inDays.length;
+                                    if (K < minTrades) continue;
+
+                                    for (const bi of bInList) {
+                                        for (const bo of bOutList) {
+                                            totalTested++;
+                                            let cum = 1.0, peak = 1.0, mdd = 0.0, wins = 0;
+                                            let posSum = 0.0, negSum = 0.0, holdDaysSum = 0;
+                                            let minBuyP = Infinity, maxBuyP = -Infinity;
+                                            let minSellP = Infinity, maxSellP = -Infinity;
+
+                                            for (let k = 0; k < K; k++) {
+                                                const dIn = sched.inDays[k], dOut = sched.outDays[k];
+                                                const pIn = priceMat[dIn * T + bi];
+                                                const pOut = priceMat[dOut * T + bo];
+                                                if (pIn < minBuyP) minBuyP = pIn;
+                                                if (pIn > maxBuyP) maxBuyP = pIn;
+                                                if (pOut < minSellP) minSellP = pOut;
+                                                if (pOut > maxSellP) maxSellP = pOut;
+
+                                                const r = !hold
+                                                    ? (sellNetMat[dOut * T + bo] / buyCostMat[dIn * T + bi] - 1.0)
+                                                    : (sellNetMat[dIn * T + bi] / buyCostMat[dOut * T + bo] - 1.0);
+                                                cum *= (1.0 + r);
+                                                if (cum > peak) peak = cum;
+                                                const dd = cum / peak - 1.0;
+                                                if (dd < mdd) mdd = dd;
+                                                if (r > 0) { wins++; posSum += r; }
+                                                else if (r < 0) negSum += (-r);
+                                                holdDaysSum += (dOut - dIn);
+                                            }
+
+                                            const totCum = cum - 1.0;
+                                            const winRate = (wins / K) * 100.0;
+                                            if (totCum <= 0 || winRate + 1e-9 < minWinPct) continue;
+
+                                            const pf = negSum > 1e-6 ? (posSum / negSum) : (posSum > 0 ? 99.9 : 0);
+                                            const avgHold = holdDaysSum / K;
+
+                                            allSolutions.push({
+                                                ds, bands, sched, cfg: runCfg,
+                                                modeTag: mCombo.tag,
+                                                family, windowW, entryQ, exitQ,
+                                                hMinD: hMinCand, hMaxD: hMaxCand,
+                                                bi, bo, buyMin: gridTimes[bi], sellMin: gridTimes[bo],
+                                                K, wins, winRate, cum: totCum, mdd, pf,
+                                                verifyRate: sched.verifyRate, avgHold,
+                                                buyPriceRange: [minBuyP, maxBuyP],
+                                                sellPriceRange: [minSellP, maxSellP]
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (!allSolutions.length) {
+                throw new Error(`在勝率 ≥ ${minWinPct}%、最少 ${minTrades} 筆波段條件下找不到合規方案，請調降最低勝率或放寬期望買賣價格區間`);
+            }
+
+            const maxCum = Math.max(0.01, ...allSolutions.map(s => s.cum));
+            allSolutions.forEach(s => {
+                const nCum = Math.min(1.2, s.cum / maxCum);
+                const nWr = s.winRate / 100.0;
+                const nVf = s.verifyRate / 100.0;
+                const nMdd = Math.max(0, 1.0 - Math.abs(s.mdd) * 3.5);
+                s.score = (nCum * 0.45 + nWr * 0.25 + nVf * 0.20 + nMdd * 0.10) * 100.0;
+            });
+
+            const sorters = {
+                cum: (a, b) => b.cum - a.cum || b.winRate - a.winRate,
+                score: (a, b) => b.score - a.score || b.cum - a.cum,
+                win: (a, b) => b.winRate - a.winRate || b.cum - a.cum,
+                verify: (a, b) => b.verifyRate - a.verifyRate || b.cum - a.cum,
+                pf: (a, b) => b.pf - a.pf || b.cum - a.cum
+            };
+            allSolutions.sort(sorters[sortBy] || sorters.cum);
+
+            const topList = [];
+            const seenSig = new Set();
+            for (const s of allSolutions) {
+                const sig = `${s.modeTag}|${s.family}|W${s.windowW}|Q${s.entryQ}-${s.exitQ}|H${s.hMinD}-${s.hMaxD}|${s.K}|${s.cum.toFixed(3)}`;
+                if (seenSig.has(sig)) continue;
+                seenSig.add(sig);
+                topList.push(s);
+                if (topList.length >= 10) break;
+            }
+
+            swgOptCache = topList;
+            const elapsedMs = (performance.now() - tPerf0).toFixed(1);
+            swgRenderLeaderboard(topList, allSolutions.length, totalTested, elapsedMs);
+        } catch (err) {
+            fail(err.message || '箱體規律尋優失敗');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-ranking-star"></i> 推演長週期箱體規律最優解排行';
+        }
+    };
+
+    // 6. 渲染長週期箱體與波段規律 Top-10 排行榜
+    function swgRenderLeaderboard(list, validCount, totalTested, elapsedMs) {
+        const boardEl = document.getElementById('swg-opt-board');
+        const pct = (x) => (x >= 0 ? '+' : '') + (x * 100).toFixed(2) + '%';
+        const col = (x) => x >= 0 ? 'var(--color-up)' : 'var(--color-down)';
+        const famNames = { quantile_box: '經典箱體支撐/壓力', bollinger_box: '波動通道箱體', pivot_wave: '高低點波段轉折' };
+
+        boardEl.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; color:#aaa; padding:4px 2px; flex-wrap:wrap; gap:4px;">
+                <span>共推演 <b style="color:#fff;">${totalTested.toLocaleString()}</b> 組長週期箱體與波段配置・符合門檻 <b style="color:var(--color-up);">${validCount.toLocaleString()}</b> 組</span>
+                <span style="font-family:monospace; color:var(--color-acc);">⚡ 耗時 ${elapsedMs} ms</span>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:8px; max-height:460px; overflow-y:auto; padding-right:2px;">
+                ${list.map((s, idx) => {
+                    const { offMode, T } = s.ds;
+                    const tBuyStr = swgFmtMin(s.buyMin, offMode, s.bi === T - 1);
+                    const tSellStr = swgFmtMin(s.sellMin, offMode, s.bo === T - 1);
+                    const holdDesc = (s.hMinD === null && s.hMaxD === null)
+                        ? `演算法依箱頂決定 (平均持有 ${s.avgHold.toFixed(1)} 日)`
+                        : `持有 ${s.hMinD ?? 1}~${s.hMaxD ?? '不限'} 日 (均 ${s.avgHold.toFixed(1)}d)`;
+                    return `
+                    <div class="swg-rank-card ${idx === 0 ? 'active' : ''}" id="swg-rank-card-${idx}">
+                        <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap;">
+                            <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                                <span class="swg-badge" style="background:${idx === 0 ? 'var(--color-acc)' : 'rgba(255,255,255,0.14)'}; color:${idx === 0 ? '#000' : '#fff'};">#${idx + 1}</span>
+                                <span class="swg-badge" style="background:rgba(0,255,170,0.14); color:var(--color-up); border:1px solid rgba(0,255,170,0.3);">${escapeHtml(s.modeTag)}</span>
+                                <span style="font-size:13px; font-weight:bold; font-family:monospace; color:${col(s.cum)};">累計 ${pct(s.cum)}</span>
+                                <span style="font-size:11.5px; font-family:monospace; color:#fff;">勝率 ${s.winRate.toFixed(1)}% <span style="color:#888;">(${s.wins}/${s.K}波段)</span></span>
+                            </div>
+                            <button type="button" onclick="swgApplyOptSolution(${idx})" style="background:var(--color-acc); color:#000; border:none; border-radius:6px; padding:4px 10px; font-size:11px; font-weight:bold; cursor:pointer;">
+                                <i class="fa-solid fa-check"></i> 套用並繪製箱體波段圖
+                            </button>
+                        </div>
+                        <div style="display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:4px; font-size:10.5px; font-family:monospace; color:#aaa; background:rgba(255,255,255,0.03); padding:5px 8px; border-radius:6px;">
+                            <div>規律應證吻合率: <span style="color:var(--color-acc); font-weight:bold;">${s.verifyRate.toFixed(1)}%</span></div>
+                            <div>最大回撤: <span style="color:var(--color-sell);">${(s.mdd * 100).toFixed(2)}%</span></div>
+                            <div>獲利因子: <span style="color:#fff;">PF ${s.pf >= 99 ? '∞' : s.pf.toFixed(2)}</span></div>
+                        </div>
+                        <div style="font-size:11px; font-family:monospace; line-height:1.55; color:#ccc;">
+                            <div>📐 <b>規律模型:</b> ${famNames[s.family] || s.family}（推演週期 W=${s.windowW}日・箱底買進 ≤Q${s.entryQ}% ／ 箱頂賣出 ≥Q${s.exitQ}%）</div>
+                            <div>💰 <span style="color:var(--color-up);">實質買進價格帶:</span> <b>${s.buyPriceRange[0].toFixed(2)} ～ ${s.buyPriceRange[1].toFixed(2)}</b> (@${tBuyStr}) ｜ <span style="color:var(--color-sell);">實質賣出價格帶:</span> <b>${s.sellPriceRange[0].toFixed(2)} ～ ${s.sellPriceRange[1].toFixed(2)}</b> (@${tSellStr})</div>
+                            <div>⏱️ <b>持有時長策略:</b> <span style="color:var(--color-warn);">${holdDesc}</span></div>
+                        </div>
+                    </div>`;
+                }).join('')}
+            </div>
+        `;
+        boardEl.style.display = 'flex';
+        if (list.length > 0) swgApplyOptSolution(0, true);
+    }
+
+    // 7. 一鍵套用排行榜方案至表單並繪製完整箱體波段圖與明細
+    window.swgApplyOptSolution = function(idx, silentScroll) {
+        const s = swgOptCache[idx];
+        if (!s) return;
+        document.querySelectorAll('.swg-rank-card').forEach((el, i) => {
+            if (i === idx) el.classList.add('active');
+            else el.classList.remove('active');
+        });
+
+        document.getElementById('swg-lookback-days').value = String(s.windowW);
+        document.getElementById('swg-en-q').value = String(s.entryQ);
+        document.getElementById('swg-ex-q').value = String(s.exitQ);
+        swgWriteTimeMin('swg-buy-min', s.buyMin, s.ds.offMode);
+        swgWriteTimeMin('swg-sell-max', s.sellMin, s.ds.offMode);
+
+        const hold = document.getElementById('swg-mode').value === 'holding';
+        const famNames = { quantile_box: '經典箱體', bollinger_box: '通道箱體', pivot_wave: '波段轉折' };
+        swgRenderSimulationReport(s.ds, s.bands, s.sched, s.bi, s.bo, {
+            hold, cfg: s.cfg,
+            patternTitle: `[${s.modeTag}] ${famNames[s.family] || s.family}(W=${s.windowW}d, 買≤Q${s.entryQ}% / 賣≥Q${s.exitQ}%)`
+        });
+        if (!silentScroll) {
+            document.getElementById('swg-sim-result')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    };
+
+    // 8. 渲染模擬結果（含「箱體支撐下緣／壓力上緣＋買賣波段」雙圖表與逐筆明細）
+    function swgRenderSimulationReport(ds, bands, sched, bIn, bOut, meta) {
+        const resEl = document.getElementById('swg-sim-result');
+        const { resolvedTicker, offMode, interval, allDays, D_all, simStartIdx, D_sim, gridTimes, T, barsPerDay, hoursPerDay, priceMat, buyCostMat, sellNetMat, feeOn } = ds;
+        const { hold, patternTitle } = meta;
+
+        const pct = (x) => (x >= 0 ? '+' : '') + (x * 100).toFixed(2) + '%';
+        const col = (x) => x >= 0 ? 'var(--color-up)' : 'var(--color-down)';
+        const exitLabels = ['箱頂規律應證出場', '達最長持有平倉', '停利觸發(TP)', '停損觸發(SL)', '期末結算'];
+        const exitColors = ['var(--color-up)', 'var(--color-warn)', '#00d4ff', 'var(--color-sell)', '#aaa'];
+
+        const trades = [];
+        let cum = 1.0, peak = 1.0, mdd = 0.0, wins = 0, posSum = 0.0, negSum = 0.0, holdDaysTotal = 0;
+        let minBuyP = Infinity, maxBuyP = -Infinity, minSellP = Infinity, maxSellP = -Infinity;
+
+        const labels = [allDays[simStartIdx].key.slice(5)];
+        const swingCurve = [0];
+        const bhCurve = [0];
+        const baseOpenP = allDays[simStartIdx].prevClose || allDays[simStartIdx].openP;
+
+        for (let k = 0; k < sched.inDays.length; k++) {
+            const dIn = sched.inDays[k], dOut = sched.outDays[k];
+            const eType = sched.exitTypes[k];
+            const pIn = priceMat[dIn * T + bIn];
+            const pOut = priceMat[dOut * T + bOut];
+            if (pIn < minBuyP) minBuyP = pIn; if (pIn > maxBuyP) maxBuyP = pIn;
+            if (pOut < minSellP) minSellP = pOut; if (pOut > maxSellP) maxSellP = pOut;
+
+            const ret = !hold
+                ? (sellNetMat[dOut * T + bOut] / buyCostMat[dIn * T + bIn] - 1.0)
+                : (sellNetMat[dIn * T + bIn] / buyCostMat[dOut * T + bOut] - 1.0);
+
+            cum *= (1.0 + ret);
+            if (cum > peak) peak = cum;
+            const dd = cum / peak - 1.0;
+            if (dd < mdd) mdd = dd;
+            if (ret > 0) { wins++; posSum += ret; }
+            else if (ret < 0) negSum += (-ret);
+
+            const heldDays = dOut - dIn;
+            const heldBars = heldDays * barsPerDay + (bOut - bIn);
+            const heldHours = (heldBars / barsPerDay) * hoursPerDay;
+            holdDaysTotal += heldDays;
+
+            trades.push({
+                inDate: allDays[dIn].key, outDate: allDays[dOut].key,
+                inTime: swgFmtMin(gridTimes[bIn], offMode, bIn === T - 1),
+                outTime: swgFmtMin(gridTimes[bOut], offMode, bOut === T - 1),
+                boxSup: bands.supUpper[dIn], boxRes: bands.resLower[dOut],
+                pIn, pOut, heldDays, heldHours, eType, ret, cumNow: cum - 1.0
+            });
+
+            labels.push(allDays[dOut].key.slice(5));
+            swingCurve.push((cum - 1.0) * 100.0);
+            bhCurve.push(((pOut / baseOpenP) - 1.0) * 100.0);
+        }
+
+        const K = trades.length;
+        const totCum = cum - 1.0;
+        const winRate = (wins / K) * 100.0;
+        const avgRet = trades.reduce((a, t) => a + t.ret, 0) / K;
+        const pf = negSum > 1e-6 ? (posSum / negSum) : (posSum > 0 ? 99.9 : 0);
+        const bhTotal = allDays[D_all - 1].closeP / baseOpenP - 1.0;
+
+        const card = (t, v, c) => `
+            <div style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:8px 10px;">
+                <div style="font-size:10px; color:#888;">${t}</div>
+                <div style="font-family:monospace; font-weight:bold; font-size:13px; ${c ? 'color:' + c : ''}">${v}</div>
+            </div>
+        `;
+
+        resEl.innerHTML = `
+            <div style="font-size:12px; color:#aaa; display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px;">
+                <span><b>${escapeHtml(resolvedTicker)}</b> [${interval === '60m' ? '60分K' : '5分K'}]・共 <b style="color:#fff;">${K}</b> 個波段（平均持有 <b>${(holdDaysTotal / K).toFixed(1)}</b> 日）${feeOn ? '（已扣費稅）' : ''}</span>
+                <span style="font-family:monospace; color:var(--color-acc);">${escapeHtml(patternTitle)}</span>
+            </div>
+            <div class="sim-stats">
+                ${card('波段累計報酬（複利）', pct(totCum), col(totCum))}
+                ${card('波段勝率 / 規律應證率', `${winRate.toFixed(1)}% / 應證 ${sched.verifyRate.toFixed(0)}%`, 'var(--color-up)')}
+                ${card('推演買進價格區間', `$${minBuyP.toFixed(2)} ~ $${maxBuyP.toFixed(2)}`, 'var(--color-up)')}
+                ${card('推演賣出價格區間', `$${minSellP.toFixed(2)} ~ $${maxSellP.toFixed(2)}`, 'var(--color-sell)')}
+                ${card('平均單波段損益 / PF', `${pct(avgRet)} / PF ${pf >= 99 ? '∞' : pf.toFixed(2)}`, col(avgRet))}
+                ${card('最大回撤 / 期間純持有', `MDD ${(mdd * 100).toFixed(2)}% / B&H ${pct(bhTotal)}`, 'var(--color-warn)')}
+            </div>
+            <div style="height:210px; position:relative;"><canvas id="swgChartCanvas"></canvas></div>
+            <div style="max-height:310px; overflow:auto; border:1px solid rgba(255,255,255,0.08); border-radius:8px;">
+                <table style="width:100%; border-collapse:collapse; font-size:11px; font-family:monospace;">
+                    <thead>
+                        <tr style="color:#888; text-align:right; position:sticky; top:0; background:#14161c;">
+                            <th style="text-align:left; padding:6px 8px;">買進日時 (箱底支撐)</th>
+                            <th style="text-align:left;">賣出日時 (箱頂壓力)</th>
+                            <th>持有時長</th>
+                            <th>規律應證狀態</th>
+                            <th>${hold ? '高賣➔低買價' : '買價➔賣價'}</th>
+                            <th style="padding-right:8px;">波段損益 (累計)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${trades.map(t => `
+                            <tr style="text-align:right; border-top:1px solid rgba(255,255,255,0.05);">
+                                <td style="text-align:left; padding:5px 8px; white-space:nowrap;">
+                                    ${t.inDate} <span style="color:#aaa;">${t.inTime}</span>
+                                    <span style="color:var(--color-up);">(支撐≤${t.boxSup.toFixed(1)})</span>
+                                </td>
+                                <td style="text-align:left; white-space:nowrap;">
+                                    ${t.outDate} <span style="color:#aaa;">${t.outTime}</span>
+                                    <span style="color:var(--color-sell);">(壓力≥${t.boxRes < 1e8 ? t.boxRes.toFixed(1) : '-'})</span>
+                                </td>
+                                <td style="color:#ccc;">${t.heldDays}日 <span style="color:#777;">(${t.heldHours.toFixed(1)}h)</span></td>
+                                <td><span style="color:${exitColors[t.eType]};">${exitLabels[t.eType]}</span></td>
+                                <td>${t.pIn.toFixed(2)} ➔ ${t.pOut.toFixed(2)}</td>
+                                <td style="padding-right:8px; color:${col(t.ret)}; font-weight:bold;">
+                                    ${pct(t.ret)} <span style="font-weight:normal; color:#888;">(${pct(t.cumNow)})</span>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        resEl.style.display = 'flex';
+
+        if (swgChartInstance) { swgChartInstance.destroy(); swgChartInstance = null; }
+        const canvas = document.getElementById('swgChartCanvas');
+        if (canvas && typeof Chart !== 'undefined') {
+            swgChartInstance = new Chart(canvas.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            label: '箱體波段規律累計報酬 %',
+                            data: swingCurve,
+                            borderColor: '#00ffaa',
+                            backgroundColor: 'rgba(0,255,170,0.12)',
+                            fill: true, borderWidth: 2, pointRadius: 3, tension: 0.15
+                        },
+                        {
+                            label: '期間純持有 (Buy & Hold) %',
+                            data: bhCurve,
+                            borderColor: '#00d4ff',
+                            borderDash: [4, 4],
+                            fill: false, borderWidth: 1.5, pointRadius: 1, tension: 0.15
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: true, labels: { color: '#ccc', font: { size: 11 } } } },
+                    scales: {
+                        x: { ticks: { color: '#777', maxTicksLimit: 8 }, grid: { display: false } },
+                        y: { ticks: { color: '#777', callback: (v) => v + '%' }, grid: { color: 'rgba(255,255,255,0.06)' } }
+                    }
+                }
+            });
+        }
+    }
+})();
 
 
     // --- 開始演練 ---
