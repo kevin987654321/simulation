@@ -332,13 +332,13 @@
            「寬度」2px→3px 維持原本寫法（仍在文件流內正常過渡），展開變寬的視覺效果完全不變。 */
         /* 🧪 側邊選單「模擬」群組：極簡小箭頭＋橫線展開鈕 */
         /* 🧪 模擬頁：區塊劃分比照「費率工作室」——無外框箱體，改用頂端分隔線；並避免 flex 子元素被壓縮而裁切、無法滾動 */
-        #view-sim > * { flex-shrink: 0; }
-        #view-sim .glass-panel { background: none !important; border: none !important; box-shadow: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; border-radius: 0 !important; padding: 0 !important; margin: 0 !important; overflow: visible !important; }
-        #view-sim .glass-panel::before, #view-sim .glass-panel::after { display: none !important; }
-        #view-sim .sim-card:not(#sim-opt-board .sim-card):not(#msr-result .sim-card) { background: none !important; border: none !important; border-radius: 0 !important; padding: 22px 6px 20px !important; margin: 0 !important; }
-        #view-sim .sim-card.glow-divide-top::before { display: block; }
-        #view-sim #sim-wrap > .glass-panel { padding-bottom: 8px !important; }
-        #view-sim .sim-cards { gap: 0 22px; }
+        .sim-view > * { flex-shrink: 0; }
+        .sim-view .glass-panel { background: none !important; border: none !important; box-shadow: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; border-radius: 0 !important; padding: 0 !important; margin: 0 !important; overflow: visible !important; }
+        .sim-view .glass-panel::before, .sim-view .glass-panel::after { display: none !important; }
+        .sim-view .sim-card:not(#sim-opt-board .sim-card):not(#msr-result .sim-card) { background: none !important; border: none !important; border-radius: 0 !important; padding: 22px 6px 20px !important; margin: 0 !important; }
+        .sim-view .sim-card.glow-divide-top::before { display: block; }
+        .sim-view #sim-wrap > .glass-panel { padding-bottom: 8px !important; }
+        .sim-view .sim-cards { gap: 0 22px; }
         .sub-toggle { display:flex; align-items:center; gap:8px; padding:0 16px; height:14px; margin:-2px 0 6px; cursor:pointer; color:#555; transition:color 0.2s; }
         .sub-toggle:hover { color:#bbb; }
         .sub-toggle-line { flex:1; height:1px; background:rgba(255,255,255,0.12); }
@@ -1189,8 +1189,8 @@
     <div id="sim-nav-group" class="sub-group">
         <div class="sub-group-inner">
             <div class="sub-group-label">模擬</div>
-            <div class="menu-item sub-item" id="menu-item-sim-gap" data-view="view-sim" onclick="openSimView('gap', this)"><span class="nav-line"></span> 開盤方向策略模擬器</div>
-            <div class="menu-item sub-item" id="menu-item-sim-relay" data-view="view-sim" onclick="openSimView('relay', this)"><span class="nav-line"></span> 多檔股票日內資金接力與運用順序尋優器</div>
+            <div class="menu-item sub-item" id="menu-item-sim-gap" data-view="view-sim-gap" onclick="switchView('view-sim-gap', this)"><span class="nav-line"></span> 開盤方向策略模擬器</div>
+            <div class="menu-item sub-item" id="menu-item-sim-relay" data-view="view-sim-relay" onclick="switchView('view-sim-relay', this)"><span class="nav-line"></span> 多檔股票日內資金接力與運用順序尋優器</div>
         </div>
     </div>
     <div class="menu-item" id="menu-item-settings" data-view="view-settings" style="margin-top: auto;" onclick="switchView('view-settings', this)"><i class="fa-solid fa-sliders"></i></div>
@@ -2167,12 +2167,12 @@
     </main>
 
     <!-- 🧪 模擬：開盤方向策略模擬器／多檔股票日內資金接力尋優器（由側邊選單「模擬」群組進入） -->
-    <main id="view-sim" class="view-section">
+    <main id="view-sim-gap" class="view-section sim-view">
         <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px; padding:0 4px;">
-            <span style="font-size:16px; font-weight:bold;"><i class="fa-solid fa-flask" style="color:var(--color-acc)"></i> <span id="sim-view-title">模擬</span></span>
+            <span style="font-size:16px; font-weight:bold;"><i class="fa-solid fa-flask" style="color:var(--color-acc)"></i> 開盤方向策略模擬器</span>
         </div>
         <div class="fx-wrap" id="sim-wrap">
-                <div class="glass-panel" id="sim-panel-gap" style="padding:16px; margin-bottom:16px; overflow:hidden;">
+            <div class="glass-panel" id="sim-panel-gap" style="padding:16px; margin-bottom:16px; overflow:hidden;">
                     <div class="fx-card-title" style="margin-bottom:4px;"><i class="fa-solid fa-flask" style="color:var(--color-acc);"></i> 開盤方向策略模擬器</div>
                     <div style="font-size:11px; color:#777; margin-bottom:12px; line-height:1.6;">選一檔股票與日期區間，分別設定「開盤價高於昨收（開高）」與「低於昨收（開低）」時，當天幾點買進、幾點賣出，看回測的損益百分比。使用 5 分鐘 K 線（Yahoo 僅提供最近約 60 天）。台股填當地時間；美股等其他市場因冬令／夏令不同，改填「開盤後幾小時幾分鐘」。買賣價取該時間那根 K 棒的開盤價。</div>
                     <div style="display:flex; flex-direction:column; gap:10px;">
@@ -2354,6 +2354,14 @@
                     </div>
                 </div>
         </div>
+    </main>
+
+    <!-- 🧪 多檔股票日內資金接力尋優器：面板由下方腳本在載入時插入 #msr-wrap -->
+    <main id="view-sim-relay" class="view-section sim-view">
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px; padding:0 4px;">
+            <span style="font-size:16px; font-weight:bold;"><i class="fa-solid fa-flask" style="color:var(--color-acc)"></i> 多檔股票日內資金接力尋優</span>
+        </div>
+        <div class="fx-wrap" id="msr-wrap"></div>
     </main>
 
 </div>
@@ -4412,9 +4420,8 @@
     `;
     document.head.appendChild(styleEl);
 
-    // 主程式：插入於模擬器主卡片（含 #sim-result）之後
-    const simHost = document.getElementById('sim-result') && document.getElementById('sim-result').closest('.glass-panel');
-    if (!simHost) return;
+        const msrWrap = document.getElementById('msr-wrap');
+    if (!msrWrap) return;
 
     const panel = document.createElement('div');
     panel.className = 'glass-panel';
@@ -4428,7 +4435,7 @@
             <span class="msr-badge" style="background:rgba(0,255,170,0.15); color:var(--color-up); border:1px solid rgba(0,255,170,0.3);">4-Stage DAG Engine</span>
         </div>
         <div style="font-size:11px; color:#777; margin-bottom:12px; line-height:1.6;">
-            結合多檔股票，在您指定的最早進場時間、最晚出場時間、最低勝率門檻與扣除手續費／交易稅條件下，將<b>同一筆資金在一天內依時間先後跨股重複使用（不重疊接力）</b>，自動找出最佳接力棒次、買賣時段與候補順序排行。日期區間、漲跌判定根數、模擬模式與扣費稅設定會自動與上方主模擬器同步。
+            結合多檔股票，在您指定的最早進場時間、最晚出場時間、最低勝率門檻與扣除手續費／交易稅條件下，將<b>同一筆資金在一天內依時間先後跨股重複使用（不重疊接力）</b>，自動找出最佳接力棒次、買賣時段與候補順序排行。日期區間、漲跌判定根數、模擬模式、扣費稅與區間黑名單皆於本面板獨立設定，不受主模擬器影響。
         </div>
 
         <div style="display:flex; flex-direction:column; gap:10px;">
@@ -4458,9 +4465,38 @@
                 <div id="msr-ticker-chips" class="msr-chip-list"></div>
             </div>
 
+            <!-- 分析日期區間（獨立於上方主模擬器） -->
+            <div class="sim-card glow-divide-top">
+                <div class="fx-card-title" style="margin-bottom:8px;">2. 日期區間與判定規則</div>
+                <div class="sim-grid2">
+                    <div><div class="sim-lbl">起始日期</div><input type="date" id="msr-start" class="sim-in"></div>
+                    <div><div class="sim-lbl">結束日期</div><input type="date" id="msr-end" class="sim-in"></div>
+                </div>
+                <div style="font-size:10.5px; color:#666; margin-top:6px; line-height:1.5;">5 分鐘 K 線 Yahoo 僅提供最近約 60 天，起始日期請在 58 天內。</div>
+
+                <div class="sim-grid2" style="margin-top:12px;">
+                    <div>
+                        <div class="sim-lbl">漲跌判定：前幾根 5 分 K（0＝只看開盤價）</div>
+                        <input type="text" id="msr-nbars" class="sim-in mobile-num" data-maxlen="2" onfocus="this.select()" value="0" inputmode="numeric">
+                    </div>
+                    <div>
+                        <div class="sim-lbl">模擬模式</div>
+                        <select id="msr-mode" class="sim-in" style="padding:0 6px;"><option value="daytrade">空手當沖：先買再賣</option><option value="holding">已有持股：先賣再買回</option></select>
+                    </div>
+                </div>
+                <label style="font-size:11px; color:#aaa; display:flex; align-items:center; gap:6px; margin-top:10px;"><input type="checkbox" id="msr-fee-on" checked> 扣除手續費與交易稅（使用費率設定）</label>
+
+                <details id="msr-bl" style="margin-top:12px;">
+                    <summary style="cursor:pointer; font-size:12px; font-weight:bold; color:#ccc;"><i class="fa-solid fa-ban" style="color:var(--color-sell);"></i> 區間黑名單：這些幅度的日子一律空手 <span id="msr-bl-count" style="color:#888; font-weight:normal;">（0 組）</span></summary>
+                    <div style="font-size:11px; color:#777; line-height:1.6; margin:8px 0;">各檔開盤（或判定）幅度落在黑名單區間內的日子，該檔當天不交易。本面板獨立設定，不影響主模擬器。</div>
+                    <div id="msr-bls" style="display:flex; flex-direction:column; gap:8px;"></div>
+                    <button type="button" onclick="msrAddBl()" class="sim-in" style="margin-top:8px; cursor:pointer; color:var(--color-sell); border-style:dashed;"><i class="fa-solid fa-plus"></i> 新增黑名單區間</button>
+                </details>
+            </div>
+
             <!-- 時間邊界與接力參數 -->
             <div class="sim-card glow-divide-top">
-                <div class="sim-lbl" style="color:var(--color-acc); font-weight:bold; margin-bottom:8px;"><i class="fa-solid fa-clock"></i> 2. 日內資金接力時間邊界與緩衝條件</div>
+                <div class="sim-lbl" style="color:var(--color-acc); font-weight:bold; margin-bottom:8px;"><i class="fa-solid fa-clock"></i> 3. 日內資金接力時間邊界與緩衝條件</div>
                 <div class="sim-grid2" style="margin-bottom:8px;">
                     <div>
                         <div class="sim-lbl" id="msr-tmin-lbl">最早開始交易時間（當地）</div>
@@ -4528,7 +4564,7 @@
 
             <!-- 篩選門檻與排行目標 -->
             <div class="sim-card glow-divide-top">
-                <div class="sim-lbl" style="color:var(--color-up); font-weight:bold; margin-bottom:8px;"><i class="fa-solid fa-filter"></i> 3. 勝率門檻、候補機制與排行依據</div>
+                <div class="sim-lbl" style="color:var(--color-up); font-weight:bold; margin-bottom:8px;"><i class="fa-solid fa-filter"></i> 4. 勝率門檻、候補機制與排行依據</div>
                 <div class="sim-grid2" style="margin-bottom:8px;">
                     <div>
                         <div class="sim-lbl">最低總勝率門檻（%）≥</div>
@@ -4563,10 +4599,45 @@
             <div id="msr-result" style="display:none; flex-direction:column; gap:12px; min-width:0;"></div>
         </div>
     `;
-    simHost.insertAdjacentElement('afterend', panel);
+    msrWrap.appendChild(panel);
     if (window.setupMobileNumInput) panel.querySelectorAll('.mobile-num').forEach(window.setupMobileNumInput);
 
     // 2. 狀態管理：已選股票清單與市場時鐘同步
+    // 日期區間預設：近 20 天（本面板獨立，不依賴主模擬器）
+    (function msrInitDates() {
+        try {
+            const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+            const e = document.getElementById('msr-end'), st = document.getElementById('msr-start');
+            if (e && !e.value) e.value = iso(new Date());
+            if (st && !st.value) st.value = iso(new Date(Date.now() - 20 * 86400e3));
+        } catch (err) {}
+    })();
+    // 獨立的區間黑名單（與主模擬器的 simBlIds 互不影響）
+    const msrBlIds = []; let msrBlSeq = 0;
+    window.msrAddBl = function(d) {
+        d = d || {};
+        const id = 'm' + (++msrBlSeq); msrBlIds.push(id);
+        const box = document.createElement('div'); box.className = 'sim-card'; box.id = `msr-bl-${id}`;
+        box.innerHTML = `
+            <div class="sim-grid2" style="margin-bottom:8px;">
+                <div><div class="sim-lbl">幅度從（%）≥</div><input type="text" id="msr-${id}-th" class="sim-in mobile-num" data-decimal="true" onfocus="this.select()" value="${d.th ?? 5}" inputmode="decimal"></div>
+                <div><div class="sim-lbl">到（%）＜（空白＝不設上限）</div><input type="text" id="msr-${id}-to" class="sim-in mobile-num" data-decimal="true" onfocus="this.select()" value="${d.to ?? ''}" placeholder="不限" inputmode="decimal"></div>
+            </div>
+            <div style="display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:end;">
+                <div><div class="sim-lbl">方向</div><select id="msr-${id}-dir" class="sim-in" style="padding:0 6px;"><option value="both">漲跌皆可</option><option value="up">只限開漲</option><option value="down">只限開跌</option></select></div>
+                <button type="button" onclick="msrRemoveBl('${id}')" class="sim-in" style="width:40px; padding:0; cursor:pointer; color:var(--color-sell);" title="刪除這組"><i class="fa-solid fa-xmark"></i></button>
+            </div>`;
+        document.getElementById('msr-bls').appendChild(box);
+        if (window.setupMobileNumInput) box.querySelectorAll('.mobile-num').forEach(window.setupMobileNumInput);
+        document.getElementById(`msr-${id}-dir`).value = d.dir || 'both';
+        document.getElementById('msr-bl-count').innerText = `（${msrBlIds.length} 組）`;
+    };
+    window.msrRemoveBl = function(id) {
+        const i = msrBlIds.indexOf(id); if (i >= 0) msrBlIds.splice(i, 1);
+        const el = document.getElementById(`msr-bl-${id}`); if (el) el.remove();
+        document.getElementById('msr-bl-count').innerText = `（${msrBlIds.length} 組）`;
+    };
+
     const msrTickers = ['2330.TW', '2317.TW', '2454.TW'];
     let msrChartInstance = null;
     let msrLastSchedules = [];
@@ -4680,9 +4751,9 @@
         errEl.style.display = 'none';
 
         if (msrTickers.length < 2) return fail('請至少加入 2 檔股票以進行跨股資金接力尋優');
-        const sv = document.getElementById('sim-start').value;
-        const ev = document.getElementById('sim-end').value;
-        if (!sv || !ev) return fail('請先在上方選擇起始與結束日期區間');
+        const sv = document.getElementById('msr-start').value;
+        const ev = document.getElementById('msr-end').value;
+        if (!sv || !ev) return fail('請先選擇起始與結束日期區間');
         const startMs = Date.parse(sv + 'T00:00:00Z'), endMs = Date.parse(ev + 'T00:00:00Z');
         if (endMs < startMs) return fail('結束日期不能早於起始日期');
         if (Date.now() - startMs > 58 * 86400e3) return fail('5 分鐘 K 線 Yahoo 僅提供最近約 60 天，請將起始日期改為 58 天內');
@@ -4710,20 +4781,18 @@
         const enableFallback = document.getElementById('msr-enable-fallback').checked;
         const distinctStocks = document.getElementById('msr-distinct-stocks').checked;
 
-        const nDecide = Math.max(0, Math.min(30, parseInt(document.getElementById('sim-nbars').value, 10) || 0));
-        const hold = document.getElementById('sim-mode').value === 'holding';
-        const feeOn = document.getElementById('sim-fee-on').checked;
+        const nDecide = Math.max(0, Math.min(30, parseInt(document.getElementById('msr-nbars').value, 10) || 0));
+        const hold = document.getElementById('msr-mode').value === 'holding';
+        const feeOn = document.getElementById('msr-fee-on').checked;
 
-        // 讀取主模擬器設定之區間黑名單（供多股同步套用）
+        // 讀取本面板獨立設定之區間黑名單
         const blacklist = [];
-        if (typeof simBlIds !== 'undefined') {
-            for (const id of simBlIds) {
-                const th = parseFloat(document.getElementById(`sim-${id}-th`)?.value);
-                const toRaw = (document.getElementById(`sim-${id}-to`)?.value || '').trim();
-                const to = toRaw === '' ? null : parseFloat(toRaw);
-                const dir = document.getElementById(`sim-${id}-dir`)?.value || 'both';
-                if (th >= 0 && (to === null || to > th)) blacklist.push({ th, to, dir });
-            }
+        for (const id of msrBlIds) {
+            const th = parseFloat(document.getElementById(`msr-${id}-th`)?.value);
+            const toRaw = (document.getElementById(`msr-${id}-to`)?.value || '').trim();
+            const to = toRaw === '' ? null : parseFloat(toRaw);
+            const dir = document.getElementById(`msr-${id}-dir`)?.value || 'both';
+            if (th >= 0 && (to === null || to > th)) blacklist.push({ th, to, dir });
         }
 
         btn.disabled = true;
@@ -5479,7 +5548,16 @@
 
         setSideRule('up', l.mode === 'up' || l.mode === 'both', tBuyMin, tSellMin);
         setSideRule('down', l.mode === 'down' || l.mode === 'both', tBuyMin, tSellMin);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        // 一併帶入本面板的判定根數、模擬模式與扣費設定，讓主模擬器驗證結果與此處一致
+        document.getElementById('sim-nbars').value = document.getElementById('msr-nbars').value;
+        document.getElementById('sim-mode').value = document.getElementById('msr-mode').value;
+        if (typeof simSetMode === 'function') simSetMode();
+        document.getElementById('sim-fee-on').checked = document.getElementById('msr-fee-on').checked;
+        if (typeof switchView === 'function' && document.getElementById('view-sim-gap')) {
+            switchView('view-sim-gap', document.getElementById('menu-item-sim-gap'));
+        } else {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
         runOpenSimulator();
     };
 })();
@@ -6595,20 +6673,12 @@
     // （動畫進行中會有兩個 .view-section 同時帶有 .active，若用查詢法取值可能抓錯來源頁，改用變數記錄更可靠）
     let currentMobileViewId = 'view-dashboard';
 
-    // 🧪 側邊選單「模擬」群組：展開／收合，並切換 view-sim 內顯示的模擬器
+    // 🧪 側邊選單「模擬」群組：展開／收合，
     function toggleSimNav(force) {
         const g = document.getElementById('sim-nav-group'), t = document.getElementById('sim-nav-toggle');
         const open = (typeof force === 'boolean') ? force : !g.classList.contains('open');
         g.classList.toggle('open', open); t.classList.toggle('open', open);
         try { localStorage.setItem('acorn_sim_nav_open', open ? '1' : '0'); } catch (e) {}
-    }
-    function openSimView(which, btn) {
-        const gap = document.getElementById('sim-panel-gap'), relay = document.getElementById('msr-panel');
-        const tt = document.getElementById('sim-view-title');
-        if (tt) tt.textContent = which === 'gap' ? '開盤方向策略模擬器' : '多檔股票日內資金接力尋優';
-        if (gap) gap.style.display = which === 'gap' ? '' : 'none';
-        if (relay) relay.style.display = which === 'relay' ? '' : 'none';
-        switchView('view-sim', btn || document.getElementById(which === 'gap' ? 'menu-item-sim-gap' : 'menu-item-sim-relay'));
     }
     (function () { try { if (localStorage.getItem('acorn_sim_nav_open') === '1') toggleSimNav(true); } catch (e) {} })();
 
