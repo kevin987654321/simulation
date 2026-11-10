@@ -331,6 +331,14 @@
            transform 不會觸發 reflow，所以完全不影響 .menu-item 的版面高度、文字也不會跳動。
            「寬度」2px→3px 維持原本寫法（仍在文件流內正常過渡），展開變寬的視覺效果完全不變。 */
         /* 🧪 側邊選單「模擬」群組：極簡小箭頭＋橫線展開鈕 */
+        /* 🧪 模擬頁：區塊劃分比照「費率工作室」——無外框箱體，改用頂端分隔線；並避免 flex 子元素被壓縮而裁切、無法滾動 */
+        #view-sim > * { flex-shrink: 0; }
+        #view-sim .glass-panel { background: none !important; border: none !important; box-shadow: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; border-radius: 0 !important; padding: 0 !important; margin: 0 !important; overflow: visible !important; }
+        #view-sim .glass-panel::before, #view-sim .glass-panel::after { display: none !important; }
+        #view-sim .sim-card:not(#sim-opt-board .sim-card):not(#msr-result .sim-card) { background: none !important; border: none !important; border-radius: 0 !important; padding: 22px 6px 20px !important; margin: 0 !important; }
+        #view-sim .sim-card.glow-divide-top::before { display: block; }
+        #view-sim #sim-wrap > .glass-panel { padding-bottom: 8px !important; }
+        #view-sim .sim-cards { gap: 0 22px; }
         .sub-toggle { display:flex; align-items:center; gap:8px; padding:0 16px; height:14px; margin:-2px 0 6px; cursor:pointer; color:#555; transition:color 0.2s; }
         .sub-toggle:hover { color:#bbb; }
         .sub-toggle-line { flex:1; height:1px; background:rgba(255,255,255,0.12); }
@@ -1177,7 +1185,7 @@
     <div class="menu-item" id="menu-item-holdings" data-view="view-holdings" onclick="switchView('view-holdings', this)"><span class="nav-line"></span> 庫存與資產損益</div>
     <div class="menu-item" id="menu-item-ledger" data-view="view-ledger" onclick="switchView('view-ledger', this)"><span class="nav-line"></span> 時光機與歷史帳本</div>
     <!-- 🧪 極簡展開鈕（小箭頭＋橫線）：展開「模擬」群組 -->
-    <div id="sim-nav-toggle" class="sub-toggle" onclick="toggleSimNav()" title="展開／收合 模擬"><span class="sub-toggle-line"></span><i class="fa-solid fa-chevron-down"></i><span class="sub-toggle-line"></span></div>
+    <div id="sim-nav-toggle" class="sub-toggle" onclick="toggleSimNav()" title="展開／收合 模擬"><i class="fa-solid fa-chevron-down"></i><span class="sub-toggle-line"></span></div>
     <div id="sim-nav-group" class="sub-group">
         <div class="sub-group-inner">
             <div class="sub-group-label">模擬</div>
@@ -2160,8 +2168,12 @@
 
     <!-- 🧪 模擬：開盤方向策略模擬器／多檔股票日內資金接力尋優器（由側邊選單「模擬」群組進入） -->
     <main id="view-sim" class="view-section">
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px; padding:0 4px;">
+            <span style="font-size:16px; font-weight:bold;"><i class="fa-solid fa-flask" style="color:var(--color-acc)"></i> <span id="sim-view-title">模擬</span></span>
+        </div>
+        <div class="fx-wrap" id="sim-wrap">
                 <div class="glass-panel" id="sim-panel-gap" style="padding:16px; margin-bottom:16px; overflow:hidden;">
-                    <div style="font-weight:bold; font-size:13px; margin-bottom:4px;"><i class="fa-solid fa-flask" style="color:var(--color-acc);"></i> 開盤方向策略模擬器</div>
+                    <div class="fx-card-title" style="margin-bottom:4px;"><i class="fa-solid fa-flask" style="color:var(--color-acc);"></i> 開盤方向策略模擬器</div>
                     <div style="font-size:11px; color:#777; margin-bottom:12px; line-height:1.6;">選一檔股票與日期區間，分別設定「開盤價高於昨收（開高）」與「低於昨收（開低）」時，當天幾點買進、幾點賣出，看回測的損益百分比。使用 5 分鐘 K 線（Yahoo 僅提供最近約 60 天）。台股填當地時間；美股等其他市場因冬令／夏令不同，改填「開盤後幾小時幾分鐘」。買賣價取該時間那根 K 棒的開盤價。</div>
                     <div style="display:flex; flex-direction:column; gap:10px;">
                         <div>
@@ -2197,7 +2209,7 @@
                         </div>
                         <div id="sim-shares-wrap" style="display:none;"><div class="sim-lbl">持股股數（選填，算金額用）</div><input type="text" id="sim-shares" class="sim-in mobile-num" data-decimal="true" onfocus="this.select()" placeholder="例如 1000" inputmode="numeric"></div>
                         <div class="sim-cards">
-                            <div class="sim-card">
+                            <div class="sim-card glow-divide-top">
                                 <div style="font-size:12px; font-weight:bold; color:var(--color-up); margin-bottom:8px;"><i class="fa-solid fa-arrow-trend-up"></i> 開盤價「漲」（高於昨收）</div>
                                 <label style="font-size:11px; color:#aaa; display:flex; align-items:center; gap:6px; margin-bottom:8px;"><input type="checkbox" id="sim-up-on" checked> 這種日子要交易</label>
                                 <div class="sim-grid2">
@@ -2209,7 +2221,7 @@
                                     <div class="sim-offset sim-off" id="sim-up-sell-off" style="display:none;"><input type="text" id="sim-up-sell-h" value="5" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric"><span>時</span><input type="text" id="sim-up-sell-m" value="30" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric"><span>分</span></div></div>
                                 </div>
                             </div>
-                            <div class="sim-card">
+                            <div class="sim-card glow-divide-top">
                                 <div style="font-size:12px; font-weight:bold; color:var(--color-down); margin-bottom:8px;"><i class="fa-solid fa-arrow-trend-down"></i> 開盤價「跌」（低於昨收）</div>
                                 <label style="font-size:11px; color:#aaa; display:flex; align-items:center; gap:6px; margin-bottom:8px;"><input type="checkbox" id="sim-down-on" checked> 這種日子要交易</label>
                                 <div class="sim-grid2">
@@ -2222,20 +2234,20 @@
                                 </div>
                             </div>
                         </div>
-                        <details id="sim-adv" class="sim-card">
+                        <details id="sim-adv" class="sim-card glow-divide-top">
                             <summary style="cursor:pointer; font-size:12px; font-weight:bold; color:#ccc;"><i class="fa-solid fa-layer-group" style="color:var(--color-acc);"></i> 進階：依開盤幅度套用獨立規則 <span id="sim-tier-count" style="color:#888; font-weight:normal;">（0 組）</span></summary>
                             <div style="font-size:11px; color:#777; line-height:1.6; margin:8px 0;">當天「開盤相對昨收的幅度」落在某個區間（從 ≥ 下限、＜ 上限；上限留空＝不設限）時，改用該組自己的買賣時間，取代上面的基本規則。可新增多組（例如 3%～6%、6%～9%、≥9%）；同一天符合多組時，採用下限最高的那一組。</div>
                             <div id="sim-tiers" style="display:flex; flex-direction:column; gap:8px;"></div>
                             <button type="button" onclick="simAddTier()" class="sim-in" style="margin-top:8px; cursor:pointer; color:var(--color-acc); border-style:dashed;"><i class="fa-solid fa-plus"></i> 新增一組幅度規則</button>
                         </details>
-                        <details id="sim-bl" class="sim-card">
+                        <details id="sim-bl" class="sim-card glow-divide-top">
                             <summary style="cursor:pointer; font-size:12px; font-weight:bold; color:#ccc;"><i class="fa-solid fa-ban" style="color:var(--color-sell);"></i> 區間黑名單：這些幅度的日子一律空手 <span id="sim-bl-count" style="color:#888; font-weight:normal;">（0 組）</span></summary>
                             <div style="font-size:11px; color:#777; line-height:1.6; margin:8px 0;">開盤（或判定）幅度落在黑名單區間內的日子，不論基本規則或幅度規則，一律不交易。優先權最高。</div>
                             <div id="sim-bls" style="display:flex; flex-direction:column; gap:8px;"></div>
                             <button type="button" onclick="simAddBl()" class="sim-in" style="margin-top:8px; cursor:pointer; color:var(--color-sell); border-style:dashed;"><i class="fa-solid fa-plus"></i> 新增黑名單區間</button>
                         </details>
                     <!-- ── 升級版：單一股票「單日單次 ＋ 單日多波段當沖」智慧尋優面板 ── -->
-<details id="sim-opt-panel" class="sim-card" style="border-color:rgba(0,212,255,0.35); background:rgba(0,212,255,0.03);">
+<details id="sim-opt-panel" class="sim-card glow-divide-top" style="border-color:rgba(0,212,255,0.35); background:rgba(0,212,255,0.03);">
     <summary style="cursor:pointer; font-size:12px; font-weight:bold; color:var(--color-acc);">
         <i class="fa-solid fa-wand-magic-sparkles"></i> 智慧尋優：單股單次 ／ 單日多次波段當沖最優解排行
     </summary>
@@ -2341,6 +2353,7 @@
                         </div>
                     </div>
                 </div>
+        </div>
     </main>
 
 </div>
@@ -4385,6 +4398,12 @@
         .msr-chip button { background:transparent; border:none; color:#ff4560; cursor:pointer; padding:0; font-size:12px; line-height:1; }
         .msr-quick-btn { background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.14); color:#ccc; border-radius:6px; padding:4px 8px; font-size:11px; cursor:pointer; font-family:monospace; }
         .msr-quick-btn:hover { border-color:var(--color-acc); color:#fff; }
+        .msr-quick-btn.on { background:rgba(0,212,255,0.16); border-color:var(--color-acc); color:#fff; }
+        .msr-quick-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(104px, 1fr)); gap:6px; margin-top:8px; }
+        .msr-quick-grid .msr-quick-btn { display:flex; align-items:center; justify-content:center; gap:5px; padding:8px 6px; font-size:12px; font-weight:bold; border-radius:8px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .msr-quick-grid .msr-quick-btn .mk { font-size:10px; opacity:0.7; }
+        .msr-sec-head { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; font-size:11.5px; font-weight:bold; color:#aaa; margin-top:16px; }
+        .msr-empty { font-size:11px; color:#666; line-height:1.6; padding:6px 0; }
         .msr-rank-card { background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px; cursor:pointer; transition:border-color 0.2s, background 0.2s; }
         .msr-rank-card:hover, .msr-rank-card.active { border-color:var(--color-acc); background:rgba(0,212,255,0.06); }
         .msr-gantt-track { position:relative; height:36px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.12); border-radius:8px; overflow:hidden; margin:6px 0; }
@@ -4414,19 +4433,33 @@
 
         <div style="display:flex; flex-direction:column; gap:10px;">
             <!-- 多檔股票選擇器 -->
-            <div class="sim-card">
-                <div class="sim-lbl">1. 選擇參與資金接力的多檔股票（建議 2～10 檔同市場標的）</div>
-                <div style="display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:6px;">
-                    <input type="text" id="msr-ticker-input" class="sim-in" placeholder="輸入代號（可逗號分隔，如 2330.TW, 2317.TW）" style="text-align:left; padding:0 10px; text-transform:uppercase; font-family:monospace;">
-                    <button type="button" onclick="msrAddInputTickers()" class="sim-in" style="width:auto; padding:0 12px; cursor:pointer; color:var(--color-acc); font-weight:bold;"><i class="fa-solid fa-plus"></i> 加入</button>
-                    <button type="button" onclick="msrAddFromMain()" class="sim-in" style="width:auto; padding:0 10px; cursor:pointer; color:#ccc;" title="帶入上方主模擬器代號與釘選清單">帶入常用</button>
+            <div class="sim-card glow-divide-top">
+                <div class="fx-card-title" style="margin-bottom:4px;">
+                    1. 參與接力的股票
+                    <span id="msr-count" class="msr-badge" style="margin-left:auto; background:rgba(0,212,255,0.12); color:var(--color-acc); border:1px solid rgba(0,212,255,0.3);">已選 0 / 12</span>
                 </div>
-                <div id="msr-quick-picks" style="display:flex; flex-wrap:wrap; gap:5px; margin-top:6px;"></div>
+                <div style="font-size:11px; color:#777; line-height:1.6; margin-bottom:10px;">建議 2～10 檔，且同為台股或同為海外市場（時段網格才會一致）。</div>
+
+                <div style="display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px;">
+                    <input type="text" id="msr-ticker-input" class="sim-in" placeholder="輸入代號，可用逗號分隔（2330, NVDA）" autocomplete="off" autocapitalize="characters" style="text-align:left; padding:0 12px; text-transform:uppercase; font-family:monospace;" onkeydown="if(event.key==='Enter'){event.preventDefault();msrAddInputTickers();}">
+                    <button type="button" onclick="msrAddInputTickers()" class="sim-in" style="width:auto; padding:0 16px; cursor:pointer; color:#000; background:var(--color-acc); border:none; font-weight:bold;">加入</button>
+                </div>
+
+                <div class="msr-sec-head">
+                    <span><i class="fa-solid fa-thumbtack" style="color:var(--color-acc);"></i> 自選釘選（前 10 檔）</span>
+                    <span style="display:flex; gap:6px;">
+                        <button type="button" class="msr-quick-btn" onclick="msrAddPinned()">全部加入</button>
+                        <button type="button" class="msr-quick-btn" onclick="msrClearTickers()">清空已選</button>
+                    </span>
+                </div>
+                <div id="msr-quick-picks" class="msr-quick-grid"></div>
+
+                <div class="msr-sec-head" style="margin-top:14px;"><span>已選股票</span><span id="msr-market-hint" style="font-size:10.5px; font-weight:normal;"></span></div>
                 <div id="msr-ticker-chips" class="msr-chip-list"></div>
             </div>
 
             <!-- 時間邊界與接力參數 -->
-            <div class="sim-card">
+            <div class="sim-card glow-divide-top">
                 <div class="sim-lbl" style="color:var(--color-acc); font-weight:bold; margin-bottom:8px;"><i class="fa-solid fa-clock"></i> 2. 日內資金接力時間邊界與緩衝條件</div>
                 <div class="sim-grid2" style="margin-bottom:8px;">
                     <div>
@@ -4494,7 +4527,7 @@
             </div>
 
             <!-- 篩選門檻與排行目標 -->
-            <div class="sim-card">
+            <div class="sim-card glow-divide-top">
                 <div class="sim-lbl" style="color:var(--color-up); font-weight:bold; margin-bottom:8px;"><i class="fa-solid fa-filter"></i> 3. 勝率門檻、候補機制與排行依據</div>
                 <div class="sim-grid2" style="margin-bottom:8px;">
                     <div>
@@ -4549,10 +4582,18 @@
         }
     }
 
+    function msrPinnedTop10() {
+        let st = {};
+        try { st = state || {}; } catch (e) {} // 主程式的 state 可能尚未初始化（TDZ）
+        return [...new Set(st.cardTickers || [])].slice(0, 10);
+    }
+
     function msrRenderChips() {
         const box = document.getElementById('msr-ticker-chips');
+        const cnt = document.getElementById('msr-count');
+        if (cnt) cnt.innerText = `已選 ${msrTickers.length} / 12`;
         if (!msrTickers.length) {
-            box.innerHTML = '<span style="font-size:11px; color:#666;">尚未加入股票，請從上方輸入或點擊常用代號加入（至少 2 檔）</span>';
+            box.innerHTML = '<div class="msr-empty">尚未加入股票。請輸入代號，或點上方釘選清單（至少 2 檔）。</div>';
         } else {
             box.innerHTML = msrTickers.map((t, idx) => `
                 <span class="msr-chip">
@@ -4561,13 +4602,23 @@
                 </span>
             `).join('');
         }
+
+        // 快速點選：自選資產卡片中釘選的前 10 檔（點一下加入／再點一下移除）
+        const pinned = msrPinnedTop10();
         const quickBox = document.getElementById('msr-quick-picks');
-        let st = {};
-        try { st = state || {}; } catch (e) {} // 主程式的 state 可能尚未初始化（TDZ）
-        const pool = [...new Set([...(st.recentTickers || []), ...(st.cardTickers || []), '2330.TW', '2317.TW', '2454.TW', '2382.TW', '2603.TW'])];
-        quickBox.innerHTML = '<span style="font-size:10px; color:#666; align-self:center;">快速點選：</span>' + pool.map(t => `
-            <button type="button" class="msr-quick-btn" onclick="msrAddTicker('${escapeHtml(t)}')">+ ${escapeHtml(t)}</button>
-        `).join('');
+        quickBox.innerHTML = pinned.length ? pinned.map(t => {
+            const on = msrTickers.includes(t);
+            return `<button type="button" class="msr-quick-btn ${on ? 'on' : ''}" title="${escapeHtml(t)}" onclick="msrToggleTicker('${escapeHtml(t)}')"><span class="mk">${on ? '✓' : '+'}</span>${escapeHtml(t)}</button>`;
+        }).join('') : '<div class="msr-empty" style="grid-column:1/-1;">自選資產卡片裡還沒有釘選的股票。</div>';
+
+        // 市場一致性提示
+        const hint = document.getElementById('msr-market-hint');
+        if (hint) {
+            const tw = msrTickers.filter(t => simIsTW(t)).length, ot = msrTickers.length - tw;
+            if (!msrTickers.length) hint.innerHTML = '';
+            else if (tw && ot) hint.innerHTML = '<span style="color:var(--color-sell);"><i class="fa-solid fa-triangle-exclamation"></i> 台股與海外混選，無法計算</span>';
+            else hint.innerHTML = `<span style="color:#888;">${tw ? '台股（當地時鐘）' : '海外（開盤後時分）'}</span>`;
+        }
         msrSyncMarketUI();
     }
 
@@ -4583,6 +4634,9 @@
         if (i >= 0) msrTickers.splice(i, 1);
         msrRenderChips();
     };
+    window.msrToggleTicker = function(t) {
+        if (msrTickers.includes(t)) window.msrRemoveTicker(t); else window.msrAddTicker(t);
+    };
     window.msrAddInputTickers = function() {
         const inp = document.getElementById('msr-ticker-input');
         if (inp && inp.value.trim()) {
@@ -4590,11 +4644,8 @@
             inp.value = '';
         }
     };
-    window.msrAddFromMain = function() {
-        const mainT = (document.getElementById('sim-ticker').value || '').trim().toUpperCase();
-        if (mainT) window.msrAddTicker(mainT);
-        (state.cardTickers || []).forEach(t => window.msrAddTicker(t));
-    };
+    window.msrAddPinned = function() { msrPinnedTop10().forEach(t => window.msrAddTicker(t)); };
+    window.msrClearTickers = function() { msrTickers.length = 0; msrRenderChips(); };
     msrRenderChips();
     setTimeout(msrRenderChips, 1500); // state 初始化後重畫快速點選清單
 
@@ -6553,6 +6604,8 @@
     }
     function openSimView(which, btn) {
         const gap = document.getElementById('sim-panel-gap'), relay = document.getElementById('msr-panel');
+        const tt = document.getElementById('sim-view-title');
+        if (tt) tt.textContent = which === 'gap' ? '開盤方向策略模擬器' : '多檔股票日內資金接力尋優';
         if (gap) gap.style.display = which === 'gap' ? '' : 'none';
         if (relay) relay.style.display = which === 'relay' ? '' : 'none';
         switchView('view-sim', btn || document.getElementById(which === 'gap' ? 'menu-item-sim-gap' : 'menu-item-sim-relay'));
