@@ -4742,7 +4742,7 @@
         return h * 60 + m;
     }
 
-    // 3. 四階段多檔日內資金接力尋優主函式
+    // 3. 四階段多檔日內資金接力尋優主函式（支援 5分K 精細 60天 ／ 60分K 粗略 730天）
     window.runMultiStockRelayOptimizer = async function() {
         const errEl = document.getElementById('msr-error');
         const outEl = document.getElementById('msr-result');
@@ -4756,7 +4756,14 @@
         if (!sv || !ev) return fail('請先選擇起始與結束日期區間');
         const startMs = Date.parse(sv + 'T00:00:00Z'), endMs = Date.parse(ev + 'T00:00:00Z');
         if (endMs < startMs) return fail('結束日期不能早於起始日期');
-        if (Date.now() - startMs > 58 * 86400e3) return fail('5 分鐘 K 線 Yahoo 僅提供最近約 60 天，請將起始日期改為 58 天內');
+
+        const kMeta = window.simGetKlineMeta ? window.simGetKlineMeta('msr') : { interval: '5m', is60m: false, stepMin: 5, maxDays: 58, label: '5分K' };
+        const isCoarse = kMeta.is60m;
+        if (Date.now() - startMs > kMeta.maxDays * 86400e3) {
+            return fail(isCoarse
+                ? '60 分鐘 K 線（粗略模式）Yahoo 最多提供最近 730 天，請將起始日期改為 730 天內'
+                : '5 分鐘 K 線（精細模式）Yahoo 僅提供最近約 60 天，請將起始日期改為 58 天內，或切換為「60分K 粗略模式（最高 730 天）」');
+        }
 
         const isAllTW = msrTickers.every(t => simIsTW(t));
         const isAllNonTW = msrTickers.every(t => !simIsTW(t));
@@ -4785,7 +4792,6 @@
         const hold = document.getElementById('msr-mode').value === 'holding';
         const feeOn = document.getElementById('msr-fee-on').checked;
 
-        // 讀取本面板獨立設定之區間黑名單
         const blacklist = [];
         for (const id of msrBlIds) {
             const th = parseFloat(document.getElementById(`msr-${id}-th`)?.value);
@@ -4796,19 +4802,19 @@
         }
 
         btn.disabled = true;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 抓取多檔 5 分 K 並執行 4-Stage 接力尋優...';
+        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 抓取多檔 ${kMeta.label} 並執行 4-Stage 接力尋優...`;
 
         try {
             const tPerfStart = performance.now();
             const p1 = Math.floor(startMs / 1000) - 8 * 86400;
             const p2 = Math.floor(endMs / 1000) + 2 * 86400;
 
-            // ── Stage 1A: 平行抓取多檔股票 5 分鐘 K 線 ──
+            // ── Stage 1A: 平行抓取多檔股票 K 線（依模式帶入 5m 或 60m） ──
             const fetchedList = await Promise.all(msrTickers.map(async (rawSym) => {
                 const cands = /^\d{4,6}[A-Z]?$/.test(rawSym) ? [rawSym + '.TW', rawSym + '.TWO'] : [rawSym];
                 for (const c of cands) {
                     try {
-                        const r = await simFetchIntraday(c, p1, p2);
+                        const r = await simFetchIntraday(c, p1, p2, kMeta.interval);
                         if (r) return { symbol: c, raw: rawSym, chart: r };
                     } catch (e) {}
                 }
@@ -4816,12 +4822,11 @@
             }));
 
             const missing = fetchedList.filter(x => !x.chart).map(x => x.raw);
-            if (missing.length) throw new Error(`查無以下代號的 5 分鐘資料：${missing.join(', ')}`);
+            if (missing.length) throw new Error(`查無以下代號的 ${kMeta.label} 資料：${missing.join(', ')}`);
 
             const S = fetchedList.length;
             const resolvedTickers = fetchedList.map(x => x.symbol);
 
-            // 將每檔股票依當地日期分組
             const perStockDays = fetchedList.map(({ chart: r }) => {
                 const off = (r.meta && r.meta.gmtoffset) || 0;
                 const q = r.indicators.quote[0] || {};
@@ -4848,33 +4853,49 @@
                 return dayInfo;
             });
 
-            // 取所有選取股票皆有交易資料之共同交易日
             const commonDates = [...perStockDays[0].keys()].filter(dKey => perStockDays.every(m => m.has(dKey))).sort();
             if (commonDates.length < 5) {
                 throw new Error(`共同有效交易日僅 ${commonDates.length} 天（不足 5 天），請拉長日期區間`);
             }
             const D = commonDates.length;
 
-            // 建立統一 5 分鐘時間網格 (台股 09:00..13:30 共 55 點；非台股 0..385m 共 78 點)
+            // 建立統一時間網格：5m 精細模式用 5 分鐘步進；60m 粗略模式由實際小時 K 棒時間點聯集建立並補上收盤點
             msrGridTimes = [];
-            if (!msrOffMode) {
-                for (let m = 540; m <= 810; m += 5) msrGridTimes.push(m);
+            if (!isCoarse) {
+                if (!msrOffMode) {
+                    for (let m = 540; m <= 810; m += 5) msrGridTimes.push(m);
+                } else {
+                    for (let m = 0; m <= 385; m += 5) msrGridTimes.push(m);
+                }
             } else {
-                for (let m = 0; m <= 385; m += 5) msrGridTimes.push(m);
+                const tSet = new Set();
+                perStockDays.forEach(dMap => {
+                    commonDates.forEach(dKey => {
+                        const { bars } = dMap.get(dKey);
+                        const t0 = msrOffMode ? bars[0].m : 0;
+                        bars.forEach(b => tSet.add(b.m - t0));
+                    });
+                });
+                msrGridTimes = [...tSet].sort((a, b) => a - b);
+                const closeM = !msrOffMode ? 810 : Math.max(390, (msrGridTimes[msrGridTimes.length - 1] || 360) + 30);
+                if (!msrGridTimes.includes(closeM)) msrGridTimes.push(closeM);
             }
             const T = msrGridTimes.length;
 
-            // 將時間邊界轉換為網格索引
-            let minStartIdx = msrGridTimes.findIndex(m => m >= tMinVal);
+            // 60分K 下若最早開始填預設 09:05 (或 +0h05m)，自動對齊首根 09:00 (或 +0h00m)；若最晚填 13:20 則容許 13:30 收盤點
+            const effTMin = isCoarse && tMinVal <= msrGridTimes[0] + 10 ? msrGridTimes[0] : tMinVal;
+            const effTMax = isCoarse && tMaxVal >= msrGridTimes[T - 1] - 15 ? msrGridTimes[T - 1] : tMaxVal;
+
+            let minStartIdx = msrGridTimes.findIndex(m => m >= effTMin);
             if (minStartIdx < 0) minStartIdx = 0;
             minStartIdx = Math.max(minStartIdx, nDecide);
 
             let maxFinishIdx = T - 1;
             for (let k = T - 1; k >= 0; k--) {
-                if (msrGridTimes[k] <= tMaxVal) { maxFinishIdx = k; break; }
+                if (msrGridTimes[k] <= effTMax) { maxFinishIdx = k; break; }
             }
-            const minHoldBars = Math.max(1, Math.round(minHoldMin / 5));
-            const bufferBars = Math.max(0, Math.round(bufferMin / 5));
+            const minHoldBars = Math.max(1, Math.round(minHoldMin / kMeta.stepMin));
+            const bufferBars = isCoarse ? Math.floor(bufferMin / 60) : Math.max(0, Math.round(bufferMin / 5));
 
             if (maxFinishIdx - minStartIdx < minHoldBars) {
                 throw new Error('最早開始與最晚完畢時間區間過窄，無法容納最短持倉時間');
@@ -4906,7 +4927,6 @@
                     sidesAll[s][d] = sideStr === 'up' ? 1 : -1;
 
                     const t0 = msrOffMode ? bars[0].m : 0;
-                    // 對齊每個網格點 k 的進場價與出場價（與 runOpenSimulator 定價完全一致）
                     const bIdxArr = new Int16Array(T).fill(-1);
                     for (let k = 0; k < T; k++) {
                         const targetM = msrGridTimes[k];
@@ -4919,7 +4939,6 @@
                             P_sell_tensor[s][d][k] = bars[bars.length - 1].c;
                         }
                     }
-                    // 最後一點 (13:30) 若無開盤棒則取最後一根收盤價
                     P_sell_tensor[s][d][T - 1] = bars[bars.length - 1].c;
 
                     const rMat = R_tensor[s][d];
@@ -4955,7 +4974,7 @@
                 }
             }
 
-            // ── Stage 2: 提取原子策略單元 (ASU) 並執行 3x3 參數高原穩定度與時間桶剪枝 ──
+            // ── Stage 2: 提取原子策略單元 (ASU) 並執行高原穩定度與時間桶剪枝 ──
             const rawCandidates = [];
             const minSubTrades = Math.max(3, Math.min(5, Math.floor(D * 0.15)));
             const preWinFloor = Math.max(0.45, minWinRate - 0.18);
@@ -5001,7 +5020,6 @@
                             const cVal = cumGrid[idx], wVal = winGrid[idx];
                             if (isNaN(cVal) || cVal <= 0.002 || wVal < preWinFloor) continue;
 
-                            // 3x3 鄰域高原檢驗
                             let maxNb = -Infinity, sumNb = 0, sumSqNb = 0, posNb = 0, cntNb = 0;
                             for (let dbi = -1; dbi <= 1; dbi++) {
                                 for (let dsi = -1; dsi <= 1; dsi++) {
@@ -5018,7 +5036,7 @@
                                     }
                                 }
                             }
-                            if (cntNb > 1 && maxNb > 0 && cVal < maxNb * 0.90) continue;
+                            if (!isCoarse && cntNb > 1 && maxNb > 0 && cVal < maxNb * 0.90) continue;
 
                             const meanNb = sumNb / cntNb;
                             const stdNb = Math.sqrt(Math.max(0, sumSqNb / cntNb - meanNb * meanNb)) + 1e-6;
@@ -5053,10 +5071,10 @@
                 }
             }
 
-            // 粗粒度時間桶剪枝 (每 4 根 K 棒 = 20 分鐘為一桶，保留前 2 名)
+            const bucketDiv = isCoarse ? 1 : 4;
             const bucketMap = new Map();
             for (const c of rawCandidates) {
-                const bKey = `${c.s}_${c.mode}_${Math.floor(c.bi / 4)}_${Math.floor(c.si / 4)}`;
+                const bKey = `${c.s}_${c.mode}_${Math.floor(c.bi / bucketDiv)}_${Math.floor(c.si / bucketDiv)}`;
                 if (!bucketMap.has(bKey)) bucketMap.set(bKey, []);
                 bucketMap.get(bKey).push(c);
             }
@@ -5066,12 +5084,13 @@
                 eliteUnits.push(...lst.slice(0, 2));
             }
 
-            // ── Stage 2.5: 狀態依存動態候補槽位擴增 (Dynamic Fallback Slot Augmentation) ──
+            // ── Stage 2.5: 狀態依存動態候補槽位擴增 ──
             const fallbackUnits = [];
             if (enableFallback) {
                 const dirUnits = eliteUnits.filter(u => u.mode !== 'both' && u.cum > 0.02);
                 dirUnits.sort((a, b) => b.score - a.score);
                 const topDir = dirUnits.slice(0, 65);
+                const maxSpanSlack = isCoarse ? 1 : 4;
 
                 for (let i = 0; i < topDir.length; i++) {
                     const u1 = topDir[i];
@@ -5081,7 +5100,7 @@
                         const cBi = Math.min(u1.bi, u2.bi);
                         const cSi = Math.max(u1.si, u2.si);
                         const span1 = u1.si - u1.bi, span2 = u2.si - u2.bi;
-                        if (cSi - cBi > Math.max(span1, span2) + 4) continue;
+                        if (cSi - cBi > Math.max(span1, span2) + maxSpanSlack) continue;
 
                         let nFb = 0, winsFb = 0, cumFb = 1.0;
                         for (let d = 0; d < D; d++) {
@@ -5100,10 +5119,10 @@
                         for (let d = 0; d < D; d++) {
                             if (u1.dailyTraded[d]) {
                                 combRet[d] = u1.dailyRet[d];
-                                combTraded[d] = 1; // 1 = 主力成交
+                                combTraded[d] = 1;
                             } else if (u2.dailyTraded[d]) {
                                 combRet[d] = u2.dailyRet[d];
-                                combTraded[d] = 2; // 2 = 候補成交
+                                combTraded[d] = 2;
                             }
                             combCum *= (1.0 + combRet[d]);
                         }
@@ -5231,18 +5250,17 @@
 
             allValid.sort((a, b) => (b[rankMetric] || b.cum) - (a[rankMetric] || a.cum));
 
-            // 去重：確保前 10 名具有不同的標的或時段結構（避免同一組微調 5 分鐘佔滿排行榜）
+            const sigDiv = isCoarse ? 1 : 3;
             const topRanked = [];
             const seenSig = new Set();
             for (const sch of allValid) {
-                const sig = sch.legs.map(l => `${l.ticker}:${l.mode}:${l.fb_ticker || ''}:${Math.floor(l.bi / 3)}-${Math.floor(l.si / 3)}`).join('|');
+                const sig = sch.legs.map(l => `${l.ticker}:${l.mode}:${l.fb_ticker || ''}:${Math.floor(l.bi / sigDiv)}-${Math.floor(l.si / sigDiv)}`).join('|');
                 if (seenSig.has(sig)) continue;
                 seenSig.add(sig);
                 topRanked.push(sch);
                 if (topRanked.length >= 10) break;
             }
 
-            // 亦找出最佳 K=1 單一標的基準供曲線對比
             const bestSingle = (schedulesByK[1] || []).filter(s => s.win_rate >= minWinRate).sort((a, b) => b.cum - a.cum)[0] || topRanked[0];
             const elapsedMs = (performance.now() - tPerfStart).toFixed(1);
 
@@ -5618,7 +5636,270 @@
     }
 
     // 第一階段：同時建立「做多(先買後賣)」與「反手(先賣後買回)」雙向三維報酬張量 (D x T x T)
-    function simBuildDualReturnTensor(dayRecords, nDecide, offMode, feeOn, ticker, noLateExit, minStartMin, maxFinishMin) {
+    // ════════════════════════════════════════════════════════════════
+    // ⑤ 精細（5分K・60天）／粗略（60分K・730天）雙模式核心與自動介面掛載
+    // ════════════════════════════════════════════════════════════════
+    function simGetKlineMeta(scope) {
+        const el = document.getElementById(scope === 'msr' ? 'msr-kline-mode' : 'sim-kline-mode');
+        const is60m = el && el.value === '60m';
+        return {
+            interval: is60m ? '60m' : '5m',
+            is60m: !!is60m,
+            stepMin: is60m ? 60 : 5,
+            maxDays: is60m ? 730 : 58,
+            label: is60m ? '60分K(粗略)' : '5分K(精細)'
+        };
+    }
+    window.simGetKlineMeta = simGetKlineMeta;
+
+    // 快速設定近 N 天日期區間（若 N > 58 天自動切換為 60分K 粗略模式）
+    function simSetQuickDays(scope, days) {
+        const isMsr = scope === 'msr';
+        const stEl = document.getElementById(isMsr ? 'msr-start' : 'sim-start');
+        const edEl = document.getElementById(isMsr ? 'msr-end' : 'sim-end');
+        const modeEl = document.getElementById(isMsr ? 'msr-kline-mode' : 'sim-kline-mode');
+        if (!stEl || !edEl) return;
+        const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+        const now = new Date();
+        edEl.value = iso(now);
+        stEl.value = iso(new Date(now.getTime() - days * 86400e3));
+        if (modeEl) {
+            modeEl.value = days > 58 ? '60m' : modeEl.value;
+            simOnKlineModeChange(scope);
+        }
+    }
+    window.simSetQuickDays = simSetQuickDays;
+
+    // 當切換 5分K / 60分K 時，同步更新欄位文字與預設時間
+    function simOnKlineModeChange(scope) {
+        const isMsr = scope === 'msr';
+        const meta = simGetKlineMeta(scope);
+        if (!isMsr) {
+            const nbarsLbl = document.querySelector('#sim-nbars')?.previousElementSibling;
+            if (nbarsLbl) nbarsLbl.innerText = `漲跌判定：用前幾根 ${meta.is60m ? '60 分 K' : '5 分 K'}（0＝只看開盤價）`;
+            // 切換至 60分K 時，若買進時間仍為預設 09:05 / 0時5分，自動對齊至首根 09:00 / 0時0分
+            ['up', 'down'].forEach(side => {
+                const cm = document.getElementById(`sim-${side}-buy-cm`);
+                const ch = document.getElementById(`sim-${side}-buy-ch`);
+                const om = document.getElementById(`sim-${side}-buy-m`);
+                const oh = document.getElementById(`sim-${side}-buy-h`);
+                if (meta.is60m) {
+                    if (ch && cm && ch.value === '09' && cm.value === '05') cm.value = '00';
+                    if (oh && om && oh.value === '0' && om.value === '5') om.value = '0';
+                } else {
+                    if (ch && cm && ch.value === '09' && cm.value === '00') cm.value = '05';
+                    if (oh && om && oh.value === '0' && om.value === '0') om.value = '5';
+                }
+            });
+        } else {
+            const nbarsLbl = document.querySelector('#msr-nbars')?.previousElementSibling;
+            if (nbarsLbl) nbarsLbl.innerText = `漲跌判定：前幾根 ${meta.is60m ? '60 分 K' : '5 分 K'}（0＝只看開盤價）`;
+            const hintEl = document.getElementById('msr-kline-hint');
+            if (hintEl) {
+                hintEl.innerText = meta.is60m
+                    ? '目前為「60分K 粗略模式」，Yahoo 最高支援回溯 730 天（約 2 年），以每小時整點 K 棒進行快速長週期模擬與接力尋優。'
+                    : '目前為「5分K 精細模式」，Yahoo 僅提供最近約 60 天，起始日期請在 58 天內。';
+            }
+            const ch = document.getElementById('msr-tmin-ch'), cm = document.getElementById('msr-tmin-cm');
+            const oh = document.getElementById('msr-tmin-h'), om = document.getElementById('msr-tmin-m');
+            if (meta.is60m) {
+                if (ch && cm && ch.value === '09' && cm.value === '05') cm.value = '00';
+                if (oh && om && oh.value === '0' && om.value === '5') om.value = '0';
+            } else {
+                if (ch && cm && ch.value === '09' && cm.value === '00') cm.value = '05';
+                if (oh && om && oh.value === '0' && om.value === '0') om.value = '5';
+            }
+        }
+    }
+    window.simOnKlineModeChange = simOnKlineModeChange;
+
+    // 動態在「主模擬器」與「多檔接力尋優器」的日期區間下方插入 K 線模式選擇器與快速天數按鈕
+    (function simInjectKlineModeUI() {
+        const buildControlHTML = (scope) => `
+            <div style="margin-top:12px;">
+                <div class="sim-lbl">K 線粒度與最大回測跨度</div>
+                <select id="${scope}-kline-mode" class="sim-in" onchange="simOnKlineModeChange('${scope}')" style="text-align:left; padding:0 10px;">
+                    <option value="5m">精細：5 分鐘 K（最高約 60 天）</option>
+                    <option value="60m">粗略：60 分鐘 K（最高 730 天）</option>
+                </select>
+                <div style="display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:8px;">
+                    <span style="font-size:10.5px; color:#888;">快速區間：</span>
+                    <button type="button" class="msr-quick-btn" onclick="simSetQuickDays('${scope}', 20)">近 20 天</button>
+                    <button type="button" class="msr-quick-btn" onclick="simSetQuickDays('${scope}', 58)">近 58 天</button>
+                    <button type="button" class="msr-quick-btn" onclick="simSetQuickDays('${scope}', 180)">近半年</button>
+                    <button type="button" class="msr-quick-btn" onclick="simSetQuickDays('${scope}', 365)">近 1 年</button>
+                    <button type="button" class="msr-quick-btn" onclick="simSetQuickDays('${scope}', 725)">近 2 年</button>
+                </div>
+                ${scope === 'msr' ? '<div id="msr-kline-hint" style="font-size:10.5px; color:#666; margin-top:6px; line-height:1.5;">目前為「5分K 精細模式」，Yahoo 僅提供最近約 60 天，起始日期請在 58 天內。</div>' : '<div style="font-size:10.5px; color:#666; margin-top:6px; line-height:1.5;">近 58 天以內用 5 分 K；更長區間請用 60 分 K（粗略，最高 730 天），快速區間超過 58 天會自動切換。</div>'}
+            </div>
+        `;
+
+        const simStartBox = document.getElementById('sim-start')?.closest('.sim-grid2');
+        if (simStartBox && !document.getElementById('sim-kline-mode')) {
+            simStartBox.insertAdjacentHTML('afterend', buildControlHTML('sim'));
+        }
+
+        const msrStartBox = document.getElementById('msr-start')?.closest('.sim-grid2');
+        if (msrStartBox && !document.getElementById('msr-kline-mode')) {
+            const oldHint = msrStartBox.nextElementSibling;
+            if (oldHint && oldHint.innerText.includes('58 天內')) oldHint.style.display = 'none';
+            msrStartBox.insertAdjacentHTML('afterend', buildControlHTML('msr'));
+        }
+
+        // 擴充配置存取以記住 klineMode
+        const origGetCfg = window.simGetConfig || simGetConfig;
+        if (typeof origGetCfg === 'function') {
+            simGetConfig = function() {
+                const c = origGetCfg();
+                c.klineMode = document.getElementById('sim-kline-mode')?.value || '5m';
+                return c;
+            };
+        }
+        const origApplyCfg = window.simApplyConfig || simApplyConfig;
+        if (typeof origApplyCfg === 'function') {
+            simApplyConfig = function(c) {
+                origApplyCfg(c);
+                const el = document.getElementById('sim-kline-mode');
+                if (el && c && c.klineMode) {
+                    el.value = c.klineMode;
+                    simOnKlineModeChange('sim');
+                }
+            };
+        }
+    })();
+
+    // 覆寫資料抓取函式：支援 interval = '5m' | '60m'，並自動截斷 p1 防止超出 Yahoo 60天/730天硬上限報錯
+    async function simFetchIntraday(symbol, p1, p2, interval) {
+        const intv = interval || simGetKlineMeta('sim').interval || '5m';
+        const nowSec = Math.floor(Date.now() / 1000);
+        const maxBackSec = (intv === '60m' ? 729 : 59) * 86400 + 43200;
+        const safeP1 = Math.max(p1, nowSec - maxBackSec);
+        const safeP2 = Math.min(p2, nowSec + 86400);
+        const url = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?period1=${safeP1}&period2=${safeP2}&interval=${intv}`)}`;
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) throw new Error('http ' + res.status);
+        const j = await res.json(), r = j.chart && j.chart.result ? j.chart.result[0] : null;
+        if (!r || !(r.timestamp || []).length) return null;
+        return r;
+    }
+
+    // 覆寫主模擬器：支援 5分K（58天）與 60分K（730天）
+    async function runOpenSimulator() {
+        const errEl = document.getElementById('sim-error'), out = document.getElementById('sim-result'), btn = document.getElementById('sim-run-btn');
+        const fail = (m) => { errEl.style.display = 'block'; errEl.innerText = m; out.style.display = 'none'; };
+        errEl.style.display = 'none';
+        let ticker = (document.getElementById('sim-ticker').value || '').trim().toUpperCase();
+        const sv = document.getElementById('sim-start').value, ev = document.getElementById('sim-end').value;
+        if (!ticker) return fail('請輸入股票代號');
+        if (!sv || !ev) return fail('請選擇日期區間');
+        const startMs = Date.parse(sv + 'T00:00:00Z'), endMs = Date.parse(ev + 'T00:00:00Z');
+        if (endMs < startMs) return fail('結束日期不能早於起始日期');
+
+        const kMeta = simGetKlineMeta('sim');
+        if (Date.now() - startMs > kMeta.maxDays * 86400e3) {
+            return fail(kMeta.is60m
+                ? '60 分鐘 K 線（粗略模式）Yahoo 最多提供最近 730 天，請把起始日期改為 730 天內'
+                : '5 分鐘 K 線（精細模式）Yahoo 只提供最近約 60 天，請把起始日期改為 58 天內，或切換為「60分K 粗略模式（最高 730 天）」');
+        }
+
+        const offMode = !simIsTW(ticker);
+        const readT = (id) => {
+            if (!offMode) {
+                const h = parseInt(document.getElementById(id + '-ch').value, 10), m = parseInt(document.getElementById(id + '-cm').value, 10);
+                return (isNaN(h) || isNaN(m) || h > 23 || m > 59) ? null : h * 60 + m;
+            }
+            const h = parseInt(document.getElementById(id + '-h').value, 10), m = parseInt(document.getElementById(id + '-m').value, 10);
+            return (isNaN(h) && isNaN(m)) ? null : (h || 0) * 60 + (m || 0);
+        };
+        const nDecide = Math.max(0, Math.min(30, parseInt(document.getElementById('sim-nbars').value, 10) || 0));
+        const hold = document.getElementById('sim-mode').value === 'holding', nShares = hold ? (parseFloat(document.getElementById('sim-shares').value) || 0) : 0;
+        const cfg = {};
+        for (const side of ['up', 'down']) {
+            cfg[side] = { on: document.getElementById(`sim-${side}-on`).checked, buy: readT(`sim-${side}-buy`), sell: readT(`sim-${side}-sell`) };
+            if (cfg[side].on) {
+                if (cfg[side].buy === null || cfg[side].sell === null) return fail('請設定完整的買進與賣出時間');
+                if (cfg[side].sell <= cfg[side].buy) return fail(`「${side === 'up' ? '開盤漲' : '開盤跌'}」的${hold ? '買回' : '賣出'}時間必須晚於${hold ? '賣出' : '買進'}時間`);
+            }
+        }
+        const rangeOf = (id) => {
+            const th = parseFloat(document.getElementById(`sim-${id}-th`).value), toRaw = (document.getElementById(`sim-${id}-to`).value || '').trim(), to = toRaw === '' ? null : parseFloat(toRaw);
+            return { th, to, dir: document.getElementById(`sim-${id}-dir`).value, label: to === null ? `≥${th}%` : `${th}~${to}%` };
+        };
+        const rangeErr = (r, what) => !(r.th >= 0) ? `${what}的下限（%）請填入有效數字` : (r.to !== null && !(r.to > r.th)) ? `${what}的上限必須大於下限` : null;
+        const tiers = [];
+        for (const id of simTierIds) {
+            const r = rangeOf(id), e = rangeErr(r, '幅度規則'); if (e) return fail(e);
+            const t = { ...r, on: document.getElementById(`sim-${id}-on`).checked, buy: readT(`sim-${id}-buy`), sell: readT(`sim-${id}-sell`) };
+            if (t.on) {
+                if (t.buy === null || t.sell === null) return fail(`幅度規則「${t.label}」請設定完整的買賣時間`);
+                if (t.sell <= t.buy) return fail(`幅度規則「${t.label}」的${hold ? '買回' : '賣出'}時間必須晚於${hold ? '賣出' : '買進'}時間`);
+            }
+            tiers.push(t);
+        }
+        const blacklist = [];
+        for (const id of simBlIds) { const r = rangeOf(id), e = rangeErr(r, '黑名單'); if (e) return fail(e); blacklist.push(r); }
+        let blSkipped = 0;
+        tiers.sort((a, b) => (b.th - a.th) || ((a.to ?? Infinity) - (b.to ?? Infinity)));
+        if (!cfg.up.on && !cfg.down.on && !tiers.some(t => t.on)) return fail('至少要啟用一組規則進行交易');
+        const feeOn = document.getElementById('sim-fee-on').checked;
+        btn.disabled = true; btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 讀取 ${kMeta.label} 歷史資料中...`;
+        try {
+            const p1 = Math.floor(startMs / 1000) - 8 * 86400, p2 = Math.floor(endMs / 1000) + 2 * 86400;
+            const cands = /^\d{4,6}[A-Z]?$/.test(ticker) ? [ticker + '.TW', ticker + '.TWO'] : [ticker];
+            let r = null;
+            for (const c of cands) { try { r = await simFetchIntraday(c, p1, p2, kMeta.interval); } catch (e) {} if (r) { ticker = c; break; } }
+            if (!r) throw new Error(`查無此代號的 ${kMeta.label} 資料（可能代號有誤，或該區間沒有交易）`);
+            const off = (r.meta && r.meta.gmtoffset) || 0, q = r.indicators.quote[0] || {};
+            const days = new Map();
+            r.timestamp.forEach((t, i) => {
+                if (q.open[i] == null || q.close[i] == null) return;
+                const d = new Date((t + off) * 1000), key = d.toISOString().slice(0, 10);
+                if (!days.has(key)) days.set(key, []);
+                days.get(key).push({ m: d.getUTCHours() * 60 + d.getUTCMinutes(), o: q.open[i], c: q.close[i] });
+            });
+            const keys = [...days.keys()].sort();
+            const trades = []; let baseFirst = null, baseLast = null;
+            for (let i = 1; i < keys.length; i++) {
+                const key = keys[i];
+                if (Date.parse(key + 'T00:00:00Z') < startMs || Date.parse(key + 'T00:00:00Z') > endMs) continue;
+                const bars = days.get(key).sort((a, b) => a.m - b.m), prevBars = days.get(keys[i - 1]);
+                const prevClose = prevBars[prevBars.length - 1].c, open = nDecide > 0 ? bars[Math.min(nDecide, bars.length) - 1].c : bars[0].o;
+                if (baseFirst === null && prevClose > 0) baseFirst = prevClose; baseLast = bars[bars.length - 1].c;
+                if (!(prevClose > 0) || open === prevClose) continue;
+                const side = open > prevClose ? 'up' : 'down', gapAbs = Math.abs(open / prevClose - 1) * 100;
+                const inRange = (r) => gapAbs >= r.th && (r.to === null || gapAbs < r.to) && (r.dir === 'both' || r.dir === side);
+                if (blacklist.some(inRange)) { blSkipped++; continue; }
+                const hit = tiers.find(inRange);
+                const c = hit || cfg[side], ruleLabel = hit ? hit.label : '基本';
+                if (!c.on) continue;
+                const t0 = offMode ? bars[0].m : 0;
+                // 60分K 下若買進時間落在第一根起算 5 分鐘內（如預設 09:05），允許匹配首根 09:00 K 棒
+                const buyTarget = (kMeta.is60m && c.buy <= (bars[0].m - t0) + 5) ? (bars[0].m - t0) : c.buy;
+                const bi = bars.findIndex((b, k) => k >= nDecide && b.m - t0 >= buyTarget);
+                if (bi < 0) continue;
+                let si = bars.findIndex((b, k) => k > bi && b.m - t0 >= c.sell);
+                const buyP = bars[bi].o, sellP = si >= 0 ? bars[si].o : bars[bars.length - 1].c;
+                if (si < 0 && bars.length - 1 <= bi) continue;
+                let ret, amt = null;
+                if (!hold) {
+                    ret = sellP / buyP - 1;
+                    if (feeOn) { const N = 1000, bc = computeTradeCosts(ticker, buyP * N, N, 'BUY'), sc = computeTradeCosts(ticker, sellP * N, N, 'SELL'); ret = (sellP * N - sc.fee - sc.tax) / (buyP * N + bc.fee + (bc.tax || 0)) - 1; }
+                } else {
+                    ret = buyP / sellP - 1;
+                    if (feeOn) { const N = 1000, sc = computeTradeCosts(ticker, buyP * N, N, 'SELL'), bc = computeTradeCosts(ticker, sellP * N, N, 'BUY'); ret = (buyP * N - sc.fee - sc.tax) / (sellP * N + bc.fee + (bc.tax || 0)) - 1; }
+                    if (nShares > 0) { let g = nShares * (buyP - sellP); if (feeOn) { const sc = computeTradeCosts(ticker, buyP * nShares, nShares, 'SELL'), bc = computeTradeCosts(ticker, sellP * nShares, nShares, 'BUY'); g -= sc.fee + sc.tax + bc.fee + (bc.tax || 0); } amt = g; }
+                }
+                trades.push({ key, side, gap: open / prevClose - 1, buyP, sellP, ret, amt, exitLate: si < 0, rule: ruleLabel });
+            }
+            if (!trades.length) throw new Error('這段期間沒有符合條件的交易日（可能全是平盤開、被設定排除，或買進時間超過收盤）');
+            renderOpenSimulator(`${ticker} [${kMeta.label}]`, trades, cfg, feeOn, { hold, nShares, nDecide, blSkipped, holdRet: (baseFirst && baseLast) ? baseLast / baseFirst - 1 : null });
+        } catch (e) { fail(e.message || '模擬失敗'); }
+        finally { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-play"></i> 開始模擬'; }
+    }
+    window.runOpenSimulator = runOpenSimulator;
+
+    // 第一階段：同時建立「做多(先買後賣)」與「反手(先賣後買回)」雙向三維報酬張量 (D x T x T)（支援 5m 與 60m）
+    function simBuildDualReturnTensor(dayRecords, nDecide, offMode, feeOn, ticker, noLateExit, minStartMin, maxFinishMin, is60m) {
         const timeSet = new Set();
         dayRecords.forEach(d => {
             const t0 = offMode ? d.bars[0].m : 0;
@@ -5628,14 +5909,15 @@
         if (!gridTimes.length) return null;
 
         const disallowLate = noLateExit || (maxFinishMin !== null);
-        const lateTime = gridTimes[gridTimes.length - 1] + 5;
+        const lateTime = !offMode
+            ? Math.max(810, gridTimes[gridTimes.length - 1] + (is60m ? 30 : 5))
+            : (gridTimes[gridTimes.length - 1] + (is60m ? 30 : 5));
         if (!disallowLate) gridTimes.push(lateTime);
 
         const T = gridTimes.length;
         const D = dayRecords.length;
         const baseOpenClock = gridTimes[0];
 
-        // 雙張量：tensorLong = 先買後賣, tensorShort = 先賣後買回
         const tensorLong = new Float64Array(D * T * T).fill(NaN);
         const tensorShort = new Float64Array(D * T * T).fill(NaN);
         const buyPriceMat = new Float64Array(D * T).fill(NaN);
@@ -5713,7 +5995,7 @@
     // 第二階段：在單一互斥分區（開盤漲 或 開盤跌）內獨立進行 K = 0..maxWaves 多波段動態規劃尋優
     function simSolvePartitionMultiWave(dayIndices, tensorObj, opts) {
         const { tensorLong, tensorShort, gridTimes, T, D, lateTime, baseOpenClock } = tensorObj;
-        const { hold, allowRev, maxWaves, splitHurdleDec, minHoldMin, waveBufMin, maxLossDec, minStartMin, maxFinishMin, offMode } = opts;
+        const { hold, allowRev, maxWaves, splitHurdleDec, minHoldMin, waveBufMin, maxLossDec, minStartMin, maxFinishMin, offMode, is60m } = opts;
         const nSub = dayIndices.length;
 
         const emptyChain = {
@@ -5724,7 +6006,6 @@
         };
         if (nSub === 0) return [emptyChain];
 
-        // 決定可使用的動作方向：預設當沖模式走 long，持股模式走 short；若勾選 allowRev 則兩者皆可排入波段
         const primaryAct = hold ? 'short' : 'long';
         const actionModes = [{ act: primaryAct, tensor: hold ? tensorShort : tensorLong }];
         if (allowRev) {
@@ -5732,8 +6013,8 @@
             actionModes.push({ act: revAct, tensor: hold ? tensorLong : tensorShort });
         }
 
+        const effMinHold = is60m ? Math.min(minHoldMin, 25) : minHoldMin;
         const singleWaves = [];
-        // 儲存主方向的一波到底累計報酬，用於「鐵律 B：拆段必須勝過從頭抱到尾」檢驗
         const primaryCumGrid = new Float64Array(T * T).fill(NaN);
 
         for (const mObj of actionModes) {
@@ -5751,7 +6032,7 @@
                     const sellMin = gridTimes[si];
                     const sellElapsed = offMode ? sellMin : (sellMin - baseOpenClock);
                     if (maxFinishMin !== null && sellElapsed > maxFinishMin) break;
-                    if (sellMin - buyMin < minHoldMin) continue;
+                    if (sellMin - buyMin < effMinHold) continue;
 
                     let wins = 0, logCum = 0, sumRet = 0, posSum = 0, negSum = 0, worst = Infinity;
                     let validAll = true;
@@ -5783,12 +6064,12 @@
                 }
             }
 
-            // 計算 5x5 鄰域高原穩定度
+            const nbRadius = is60m ? 1 : 2;
             for (let i = 0; i < rawList.length; i++) {
                 const c = rawList[i];
                 let nbCount = 0, nbPos = 0, nbSum = 0, nbSqSum = 0;
-                for (let dbi = -2; dbi <= 2; dbi++) {
-                    for (let dsi = -2; dsi <= 2; dsi++) {
+                for (let dbi = -nbRadius; dbi <= nbRadius; dbi++) {
+                    for (let dsi = -nbRadius; dsi <= nbRadius; dsi++) {
                         const nbi = c.bi + dbi, nsi = c.si + dsi;
                         if (nbi >= 0 && nbi < nsi && nsi < T) {
                             const val = cumGrid[nbi * T + nsi];
@@ -5812,7 +6093,6 @@
             }
         }
 
-        // 先整理 K = 1 的帕累托候選鏈（完整保留單波段頂尖解，確保 K=1 絕對不會退化）
         const makeK1Chain = (w) => {
             const df = new Float64Array(D).fill(1.0);
             for (let k = 0; k < nSub; k++) {
@@ -5850,11 +6130,11 @@
 
         if (maxWaves <= 1) return [emptyChain, ...k1Chains];
 
-        // 為 K >= 2 準備正報酬菁英原子波段池 (按 15 分鐘時間桶剪枝)
+        const bDiv = is60m ? 1 : 3;
         const bucketMap = new Map();
         for (const w of singleWaves) {
             if (w.cum <= 0.003 || w.winRate < 0.50) continue;
-            const bKey = `${w.act}_${Math.floor(w.bi / 3)}_${Math.floor(w.si / 3)}`;
+            const bKey = `${w.act}_${Math.floor(w.bi / bDiv)}_${Math.floor(w.si / bDiv)}`;
             if (!bucketMap.has(bKey)) bucketMap.set(bKey, []);
             bucketMap.get(bKey).push(w);
         }
@@ -5866,8 +6146,8 @@
         eliteWaves.sort((a, b) => (a.bi - b.bi) || (a.si - b.si));
 
         const chainsByK = { 1: eliteWaves.map(makeK1Chain) };
+        const effWaveBuf = is60m && waveBufMin < 60 ? 0 : waveBufMin;
 
-        // 動態規劃擴展 K = 2 .. maxWaves
         for (let k = 2; k <= maxWaves; k++) {
             const prevList = chainsByK[k - 1] || [];
             const bySi = new Map();
@@ -5886,11 +6166,15 @@
             const nextChains = [];
             for (const ch of frontier) {
                 const prevSellMin = gridTimes[ch.lastSi];
+                const lastAct = ch.waves[ch.waves.length - 1].act;
                 for (const w of eliteWaves) {
-                    if (w.bi <= ch.lastSi) continue;
-                    if (w.buyMin - prevSellMin < waveBufMin) continue; // 波段間冷卻緩衝
+                    if (is60m && w.act !== lastAct) {
+                        if (w.bi < ch.lastSi) continue;
+                    } else {
+                        if (w.bi <= ch.lastSi) continue;
+                    }
+                    if (w.buyMin - prevSellMin < effWaveBuf) continue;
 
-                    // 合成逐日複利因子
                     const nextDf = new Float64Array(D).fill(1.0);
                     let totalCumProd = 1.0;
                     for (let i = 0; i < nSub; i++) {
@@ -5901,10 +6185,8 @@
                     }
                     const nextCum = totalCumProd - 1.0;
 
-                    // 【鐵律 A】增量正貢獻檢驗：多加這一波，分區累計報酬必須比前 (k-1) 波多賺至少 splitHurdleDec
                     if (nextCum < ch.cum + splitHurdleDec) continue;
 
-                    // 【鐵律 B】勝過一波到底檢驗：若全部波段皆為同方向，拆段報酬必須比「從第一波買點直接抱到本波賣點」高出至少 splitHurdleDec
                     const allPrimary = ch.waves.every(x => x.act === primaryAct) && w.act === primaryAct;
                     if (allPrimary) {
                         const holdThroughCum = primaryCumGrid[ch.firstBi * T + w.si];
@@ -5932,7 +6214,6 @@
             chainsByK[k] = nextChains.slice(0, 35);
         }
 
-        // 匯總 K = 0, 1, .. maxWaves 的分區帕累托候選鏈
         const finalPartitionChains = [emptyChain, ...k1Chains];
         for (let k = 2; k <= maxWaves; k++) {
             finalPartitionChains.push(...(chainsByK[k] || []).slice(0, 25));
@@ -5940,7 +6221,7 @@
         return finalPartitionChains;
     }
 
-    // 主尋優入口函式
+    // 主尋優入口函式（支援 5m 精細 60天 與 60m 粗略 730天）
     async function runOpenOptimizer() {
         const errEl = document.getElementById('sim-error'), boardEl = document.getElementById('sim-opt-board'), btn = document.getElementById('sim-opt-btn');
         const fail = (m) => { errEl.style.display = 'block'; errEl.innerText = m; boardEl.style.display = 'none'; };
@@ -5952,7 +6233,13 @@
         if (!sv || !ev) return fail('請選擇日期區間');
         const startMs = Date.parse(sv + 'T00:00:00Z'), endMs = Date.parse(ev + 'T00:00:00Z');
         if (endMs < startMs) return fail('結束日期不能早於起始日期');
-        if (Date.now() - startMs > 58 * 86400e3) return fail('5 分鐘 K 線 Yahoo 只提供最近約 60 天，請把起始日期改為 58 天內');
+
+        const kMeta = simGetKlineMeta('sim');
+        if (Date.now() - startMs > kMeta.maxDays * 86400e3) {
+            return fail(kMeta.is60m
+                ? '60 分鐘 K 線（粗略模式）Yahoo 最多提供最近 730 天，請把起始日期改為 730 天內'
+                : '5 分鐘 K 線（精細模式）Yahoo 只提供最近約 60 天，請把起始日期改為 58 天內，或切換為「60分K 粗略模式（最高 730 天）」');
+        }
 
         const minWinPct = parseFloat(document.getElementById('sim-opt-min-win').value) || 0;
         const winMode = document.getElementById('sim-opt-win-mode').value;
@@ -5996,15 +6283,15 @@
         }
 
         btn.disabled = true;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在進行漲跌解耦之多波段動態規劃尋優...';
+        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 正在讀取 ${kMeta.label} 並進行多波段動態規劃尋優...`;
 
         try {
             const tStart = performance.now();
             const p1 = Math.floor(startMs / 1000) - 8 * 86400, p2 = Math.floor(endMs / 1000) + 2 * 86400;
             const cands = /^\d{4,6}[A-Z]?$/.test(ticker) ? [ticker + '.TW', ticker + '.TWO'] : [ticker];
             let r = null;
-            for (const c of cands) { try { r = await simFetchIntraday(c, p1, p2); } catch (e) {} if (r) { ticker = c; break; } }
-            if (!r) throw new Error('查無此代號的 5 分鐘資料');
+            for (const c of cands) { try { r = await simFetchIntraday(c, p1, p2, kMeta.interval); } catch (e) {} if (r) { ticker = c; break; } }
+            if (!r) throw new Error(`查無此代號的 ${kMeta.label} 資料`);
 
             const off = (r.meta && r.meta.gmtoffset) || 0, q = r.indicators.quote[0] || {};
             const days = new Map();
@@ -6025,8 +6312,9 @@
             }
             if (rawDays.length < 3) throw new Error('有效交易日過少，請拉長日期區間');
 
-            const nDecideList = (autoNbars ? [...new Set([baseNDecide, 0, 1, 2, 3, 6])] : [baseNDecide])
-                .filter(nd => maxFinishMin === null || (Math.max(effectiveStart, nd * 5) + minHoldMin) <= maxFinishMin);
+            const candNbars = kMeta.is60m ? [baseNDecide, 0, 1, 2] : [baseNDecide, 0, 1, 2, 3, 6];
+            const nDecideList = (autoNbars ? [...new Set(candNbars)] : [baseNDecide])
+                .filter(nd => maxFinishMin === null || (Math.max(effectiveStart, nd * kMeta.stepMin) + minHoldMin) <= maxFinishMin);
 
             const blTemplates = [{ label: '無新增', rules: [] }];
             if (autoBl) {
@@ -6043,7 +6331,7 @@
             const allSolutions = [];
 
             for (const nd of nDecideList) {
-                const tensorObj = simBuildDualReturnTensor(rawDays, nd, offMode, feeOn, ticker, noLateExit, minStartMin, maxFinishMin);
+                const tensorObj = simBuildDualReturnTensor(rawDays, nd, offMode, feeOn, ticker, noLateExit, minStartMin, maxFinishMin, kMeta.is60m);
                 if (!tensorObj) continue;
 
                 const dayMeta = rawDays.map((d, idx) => {
@@ -6069,11 +6357,10 @@
 
                     if (upIdx.length + dnIdx.length < minDays) continue;
 
-                    const solveOpts = { hold, allowRev, maxWaves, splitHurdleDec, minHoldMin, waveBufMin, maxLossDec, minStartMin, maxFinishMin, offMode };
+                    const solveOpts = { hold, allowRev, maxWaves, splitHurdleDec, minHoldMin, waveBufMin, maxLossDec, minStartMin, maxFinishMin, offMode, is60m: kMeta.is60m };
                     const upChains = simSolvePartitionMultiWave(upIdx, tensorObj, solveOpts);
                     const dnChains = simSolvePartitionMultiWave(dnIdx, tensorObj, solveOpts);
 
-                    // 耦合合成開盤漲波段鏈 (K_up = 0..3) 與開盤跌波段鏈 (K_down = 0..3)
                     for (let u = 0; u < upChains.length; u++) {
                         const uc = upChains[u];
                         if (winMode === 'strict' && uc.on && (uc.winRate * 100) < minWinPct) continue;
@@ -6100,7 +6387,7 @@
                             const stability = ((uc.on ? uc.stability * uc.nTrades : 0) + (dc.on ? dc.stability * dc.nTrades : 0)) / totTrades;
 
                             allSolutions.push({
-                                ticker, offMode, hold, feeOn, nDecide: nd,
+                                ticker, offMode, hold, feeOn, nDecide: nd, klineLabel: kMeta.label,
                                 blLabel: blTpl.label, extraBls: blTpl.rules, blSkipped,
                                 up: uc, down: dc,
                                 nDays: totDays, nTrades: totTrades, wins: totWins, winRate: totWinRate,
@@ -6113,7 +6400,7 @@
             }
 
             if (!allSolutions.length) {
-                throw new Error(`在目前條件下（勝率 ≥ ${minWinPct}%、最低 ${minDays} 天）找不到合規解。建議調降最低勝率或放寬時間窗。`);
+                throw new Error(`在目前條件下（${kMeta.label}・勝率 ≥ ${minWinPct}%、最低 ${minDays} 天）找不到合規解。建議調降最低勝率或放寬時間窗。`);
             }
 
             const maxCum = Math.max(0.01, ...allSolutions.map(s => s.cum));
@@ -6125,7 +6412,6 @@
                 s.score = (normCum * 38 + normWin * 22 + s.stability * 22 + normPf * 10 + normTail * 8);
             });
 
-            // 簽章去重
             const uniqueMap = new Map();
             allSolutions.forEach(s => {
                 const upSig = s.up.on ? s.up.waves.map(w => `${w.act}:${w.buyMin}-${w.sellMin}`).join(',') : 'off';
@@ -6162,6 +6448,7 @@
         const boardEl = document.getElementById('sim-opt-board');
         const pct = (x) => (x >= 0 ? '+' : '') + (x * 100).toFixed(2) + '%';
         const col = (x) => x >= 0 ? 'var(--color-up)' : 'var(--color-down)';
+        const kLbl = list[0]?.klineLabel || simGetKlineMeta('sim').label;
 
         const formatChain = (chain, offMode, defaultHold) => {
             if (!chain.on || !chain.waves.length) return '<span style="color:#666;">空手不交易</span>';
@@ -6175,7 +6462,7 @@
 
         boardEl.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; color:#aaa; padding:4px 2px;">
-                <span>共篩選出 <b style="color:#fff;">${totalValid.toLocaleString()}</b> 組單次／多波段合規方案</span>
+                <span>[${escapeHtml(kLbl)}] 共篩選出 <b style="color:#fff;">${totalValid.toLocaleString()}</b> 組單次／多波段合規方案</span>
                 <span style="font-family:monospace; color:var(--color-acc);">耗時 ${elapsedMs} ms</span>
             </div>
             <div style="display:flex; flex-direction:column; gap:8px; max-height:440px; overflow-y:auto; padding-right:2px;">
@@ -6214,7 +6501,6 @@
         boardEl.style.display = 'flex';
     }
 
-    // 點擊「套用並繪圖」：將第 1 波寫回主表單，並直接完整渲染單波／多波段合併的曲線與逐筆明細！
     function simApplyOptSolution(idx) {
         const sol = simOptCacheResults[idx];
         if (!sol) return;
@@ -6257,7 +6543,6 @@
 
         simSyncMarket();
 
-        // 若為純 1 波段且無反手，直接呼叫原本的 runOpenSimulator()
         const isSimple1Wave = (sol.up.k <= 1 && sol.down.k <= 1) &&
             sol.up.waves.every(w => w.act === (sol.hold ? 'short' : 'long')) &&
             sol.down.waves.every(w => w.act === (sol.hold ? 'short' : 'long'));
@@ -6267,7 +6552,6 @@
             return;
         }
 
-        // 若包含單日多波段（K >= 2）或盤中反手，組裝逐波段成交紀錄並直接呼叫 renderOpenSimulator 繪製完整曲線與明細！
         const { tensorLong, tensorShort, buyPriceMat, sellPriceMat, T } = sol.tensorObj;
         const upSet = new Set(sol.up.dayIndices || []);
         const dnSet = new Set(sol.down.dayIndices || []);
@@ -6292,7 +6576,7 @@
         });
 
         if (trades.length) {
-            renderOpenSimulator(sol.ticker, trades, {}, sol.feeOn, {
+            renderOpenSimulator(`${sol.ticker} [${sol.klineLabel || ''}]`, trades, {}, sol.feeOn, {
                 hold: sol.hold, nShares: 0, nDecide: sol.nDecide, blSkipped: sol.blSkipped, holdRet: null
             });
         }
