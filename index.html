@@ -5279,7 +5279,8 @@
                 topRanked, bestSingle, commonDates, elapsedMs,
                 rawCount: rawCandidates.length, eliteCount: allSlotUnits.length,
                 evalCount: allValid.length, feeOn, hold, compoundMode,
-                R_tensor, P_buy_tensor, P_sell_tensor, gapsAll, resolvedTickers
+                R_tensor, P_buy_tensor, P_sell_tensor, gapsAll, resolvedTickers,
+                gridTimes: msrGridTimes.slice(), offMode: msrOffMode
             });
         } catch (err) {
             fail(err.message || '尋優過程發生錯誤');
@@ -5340,6 +5341,7 @@
             <div id="msr-detail-view" style="display:flex; flex-direction:column; gap:12px;"></div>
         `;
         outEl.style.display = 'flex';
+        window.msrLastCtx = ctx; // 供「匯出純文字」使用
         window.msrSelectSchedule = (idx) => renderSelectedScheduleDetail(idx, ctx);
         renderSelectedScheduleDetail(0, ctx);
     }
@@ -7844,6 +7846,188 @@
         }
     }
 })();
+
+// ════════════════════════════════════════════════════════════════
+// ⑦ 匯出完整策略結果與交易紀錄（純文字 .txt）
+//    三個模擬器（開盤方向／多檔資金接力／中線波段）各自在面板底部加一顆「匯出」按鈕。
+//    匯出內容＝(1) 最近一次執行當下的參數快照 (2) 目前畫面上顯示的完整結果（含排行榜、統計、逐筆交易明細表）
+//    資金接力另外附上「排行榜前 10 名每一組」的逐日成交明細（畫面上只會展開選中的那一組）。
+//    設計：不依賴各模擬器內部資料結構，直接把畫面上的 DOM 轉成純文字，因此日後欄位或版面增減也會自動跟上。
+// ════════════════════════════════════════════════════════════════
+(function initTextExport() {
+    const snap = { gap: null, relay: null, swing: null };   // 各模擬器「最近一次執行」的參數快照
+    const nowStamp = () => { const d = new Date(), p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; };
+    const q = (id) => document.getElementById(id);
+
+    // ── 面板定位（主程式與獨立版通用） ──
+    function panelOf(kind) {
+        if (kind === 'gap') return q('sim-panel-gap') || (q('sim-result') && q('sim-result').closest('.glass-panel'));
+        if (kind === 'relay') return q('msr-panel') || (q('msr-run-btn') && q('msr-run-btn').closest('.glass-panel'));
+        return q('swg-main-panel');
+    }
+
+    // ── 參數快照：把面板內所有可見的輸入欄位轉成「標籤: 值」 ──
+    function labelFor(el, panel) {
+        if (el.type === 'checkbox' || el.type === 'radio') {
+            const l = el.closest('label');
+            return l ? l.textContent.replace(/\s+/g, ' ').trim() : el.id;
+        }
+        let n = el;
+        for (let i = 0; i < 4 && n && n !== panel; i++) {
+            let p = n.previousElementSibling;
+            while (p) { if (p.classList && p.classList.contains('sim-lbl')) return p.textContent.replace(/\s+/g, ' ').trim(); p = p.previousElementSibling; }
+            n = n.parentElement;
+        }
+        return el.id;
+    }
+    function valueOf(el) {
+        if (el.type === 'checkbox' || el.type === 'radio') return el.checked ? '是' : '否';
+        if (el.tagName === 'SELECT') return el.options[el.selectedIndex] ? el.options[el.selectedIndex].text.trim() : '';
+        return String(el.value || '').trim();
+    }
+    function collectSettings(panel) {
+        if (!panel) return [];
+        const rows = [];
+        panel.querySelectorAll('input, select').forEach(el => {
+            if (!el.id || el.type === 'button' || el.type === 'hidden') return;
+            if (el.closest('#sim-result, #sim-opt-board, #msr-result, #swg-sim-result, #swg-opt-board')) return;
+            if (el.closest('[style*="display:none"], [style*="display: none"]')) return;   // 台股／海外時間欄位二擇一，只留顯示中的
+            if (el.id === 'msr-ticker-input') return;   // 搜尋輸入框不屬於參數
+            let label = labelFor(el, panel); const v = valueOf(el), id = el.id;
+            const side = /^sim-(up|down)-/.exec(id);   // 開盤漲／開盤跌兩組規則的欄位標籤相同，加上前綴區分
+            if (side) label = (side[1] === 'up' ? '【開盤漲】' : '【開盤跌】') + label;
+            const last = rows[rows.length - 1];
+            if (last && last.label === label && /-(ch|h)$/.test(last.id) && /-(cm|m)$/.test(id)) {   // 時、分兩欄合併成 HH:MM／X時Y分
+                last.val = /-ch$/.test(last.id) ? `${last.val}:${v}` : `${last.val}時${v}分`;
+                last.id = id;
+                return;
+            }
+            rows.push({ label, val: v === '' ? '（空白）' : v, id });
+        });
+        return rows.map(r => `${r.label}: ${r.val}`);
+    }
+
+    // ── DOM → 純文字（表格轉成「欄 | 欄」，略過按鈕與圖表） ──
+    function domToText(root) {
+        const out = [];
+        const BLOCK = new Set(['DIV', 'P', 'LI', 'UL', 'DETAILS', 'SUMMARY', 'SECTION', 'H1', 'H2', 'H3', 'H4']);
+        (function walk(n) {
+            if (n.nodeType === 3) { out.push(n.textContent.replace(/\s+/g, ' ')); return; }
+            if (n.nodeType !== 1) return;
+            const tag = n.tagName;
+            if (tag === 'BUTTON' || tag === 'CANVAS' || tag === 'STYLE' || tag === 'SCRIPT' || tag === 'SELECT' || tag === 'INPUT') return;
+            if (tag === 'TABLE') {
+                out.push('\n');
+                n.querySelectorAll('tr').forEach(tr => {
+                    const cells = [...tr.children].map(c => c.textContent.replace(/\s+/g, ' ').trim());
+                    out.push(cells.join(' | ') + '\n');
+                });
+                return;
+            }
+            if (tag === 'BR') { out.push('\n'); return; }
+            const block = BLOCK.has(tag) && getComputedStyle(n).display !== 'inline';
+            if (block) out.push('\n');
+            n.childNodes.forEach(walk);
+            if (block) out.push('\n');
+        })(root);
+        return out.join('').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').replace(/[ \t]{2,}/g, ' ').trim();
+    }
+    function visibleText(id) {
+        const el = q(id);
+        if (!el || el.style.display === 'none' || !el.innerHTML.trim()) return '';
+        return domToText(el);
+    }
+
+    // ── 資金接力：排行榜前 N 名每一組的逐日成交明細 ──
+    function relayFullLogs() {
+        const ctx = window.msrLastCtx;
+        if (!ctx || !ctx.topRanked || !ctx.gridTimes) return '';
+        const pct = (x) => (x >= 0 ? '+' : '') + (x * 100).toFixed(2) + '%';
+        const fmt = (m) => ctx.offMode ? `+${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}m` : `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+        const G = ctx.gridTimes, D = ctx.commonDates.length, lines = [];
+        ctx.topRanked.forEach((sch, idx) => {
+            lines.push(`【TOP ${idx + 1}】${sch.k} 棒接力｜累計 ${pct(sch.cum)}｜勝率 ${(sch.win_rate * 100).toFixed(1)}%（${sch.wins}/${sch.n_trades} 筆）｜穩定度 ${(sch.stability * 100).toFixed(1)}`);
+            sch.legs.forEach((l, k) => {
+                const fb = l.fb_ticker ? `＋候補 ${l.fb_ticker}（${l.fb_modeLabel} ${fmt(G[l.fb_bi])}→${fmt(G[l.fb_si])}）` : '';
+                lines.push(`  第${k + 1}棒 ${l.ticker}（${l.modeLabel} ${fmt(G[l.pri_bi ?? l.bi])} 買 → ${fmt(G[l.pri_si ?? l.si])} 賣）單棒累計 ${pct(l.cum)} 勝率 ${(l.win_rate * 100).toFixed(0)}%（${l.wins}/${l.n}）${fb}`);
+            });
+            lines.push('  逐日明細：日期 | 單日損益 | 累計複利 | 各棒成交');
+            let cum = 1;
+            for (let d = 0; d < D; d++) {
+                const dayRet = ctx.compoundMode === 'compound' ? (sch.dailyFactor[d] - 1) : sch.dailySimple[d];
+                cum *= (1 + dayRet);
+                const legs = [];
+                sch.legs.forEach((l, k) => {
+                    const code = l.dailyTraded[d];
+                    if (!code) return;
+                    const fb = code === 2, s = fb ? l.fb_s : l.s, bi = fb ? l.fb_bi : (l.pri_bi ?? l.bi), si = fb ? l.fb_si : (l.pri_si ?? l.si);
+                    legs.push(`#${k + 1} ${fb ? l.fb_ticker + '(候補)' : l.ticker} ${fmt(G[bi])}-${fmt(G[si])} ${ctx.P_buy_tensor[s][d][bi].toFixed(2)}➔${ctx.P_sell_tensor[s][d][si].toFixed(2)} (${pct(l.dailyRet[d])})`);
+                });
+                if (legs.length) lines.push(`  ${ctx.commonDates[d]} | ${pct(dayRet)} | ${pct(cum - 1)} | ${legs.join('； ')}`);
+            }
+            lines.push('');
+        });
+        return lines.join('\n');
+    }
+
+    // ── 組裝並下載 ──
+    function download(filename, text) {
+        const blob = new Blob(['﻿' + text], { type: 'text/plain;charset=utf-8' });   // BOM：讓 Windows 記事本正確顯示中文
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob); a.download = filename;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    }
+    const DEFS = {
+        gap:   { title: '開盤方向策略模擬器', file: 'gap', results: [['策略結果與交易紀錄（目前畫面）', 'sim-result'], ['智慧尋優排行榜', 'sim-opt-board']] },
+        relay: { title: '多檔股票日內資金接力與運用順序尋優器', file: 'relay', results: [['排行榜與選中方案明細（目前畫面）', 'msr-result']] },
+        swing: { title: '正常中線（跨日波段）策略模擬與尋優', file: 'swing', results: [['波段模擬結果與逐筆交易明細', 'swg-sim-result'], ['長週期規律尋優排行榜', 'swg-opt-board']] }
+    };
+    function exportText(kind) {
+        const def = DEFS[kind], panel = panelOf(kind);
+        const parts = [];
+        for (const [name, id] of def.results) { const t = visibleText(id); if (t) parts.push(`■ ${name}\n${'─'.repeat(40)}\n${t}`); }
+        if (!parts.length) { alert('目前沒有可匯出的結果，請先執行一次模擬或尋優。'); return; }
+        const settings = snap[kind] || collectSettings(panel);
+        const head = [`AcornTrade｜${def.title}｜匯出純文字報告`, `匯出時間：${new Date().toLocaleString('zh-TW', { hour12: false })}`, '※ 回測結果僅供研究，不代表未來績效；已含/未含手續費與稅依下方「扣除手續費」設定。', ''];
+        const sec = [head.join('\n'), `■ 執行參數（最近一次執行當下）\n${'─'.repeat(40)}\n${settings.join('\n')}`];
+        if (kind === 'relay') { const tk = q('msr-ticker-chips'); if (tk) sec[1] += `\n參與股票: ${tk.textContent.replace(/\s+/g, ' ').trim()}`; }
+        sec.push(...parts);
+        if (kind === 'relay') { const full = relayFullLogs(); if (full) sec.push(`■ 排行榜每一組的完整逐日成交明細\n${'─'.repeat(40)}\n${full}`); }
+        let tag = '';
+        if (kind === 'gap') tag = (q('sim-ticker') && q('sim-ticker').value || '').trim().toUpperCase();
+        if (kind === 'swing') tag = (q('swg-ticker') && q('swg-ticker').value || '').trim().toUpperCase();
+        if (kind === 'relay' && window.msrLastCtx) tag = (window.msrLastCtx.resolvedTickers || []).join('_');
+        download(`acorntrade_${def.file}${tag ? '_' + tag.replace(/[^\w.\-]+/g, '') : ''}_${nowStamp()}.txt`, sec.join('\n\n') + '\n');
+    }
+    window.simExportText = exportText;
+
+    // ── 每次執行前後記錄參數快照（包裝既有的執行函式，不改動其內部邏輯） ──
+    function wrap(name, kind, after) {
+        const orig = window[name];
+        if (typeof orig !== 'function') return;
+        window[name] = function () {
+            if (!after) snap[kind] = collectSettings(panelOf(kind));
+            const r = orig.apply(this, arguments);
+            if (after) snap[kind] = collectSettings(panelOf(kind));
+            return r;
+        };
+    }
+    wrap('runOpenSimulator', 'gap'); wrap('runOpenOptimizer', 'gap'); wrap('simApplyOptSolution', 'gap', true);
+    wrap('runMultiStockRelayOptimizer', 'relay');
+    wrap('runSwingSimulator', 'swing'); wrap('runSwingOptimizer', 'swing'); wrap('swgApplyOptSolution', 'swing', true);
+
+    // ── 在各面板最底部加上匯出按鈕 ──
+    ['gap', 'relay', 'swing'].forEach(kind => {
+        const panel = panelOf(kind);
+        if (!panel || panel.querySelector('.sim-export-btn')) return;
+        const box = document.createElement('div');
+        box.className = 'sim-card glow-divide-top';
+        box.innerHTML = `<button type="button" class="sim-in sim-export-btn" style="width:100%; cursor:pointer; color:var(--color-acc); font-weight:bold;" onclick="simExportText('${kind}')"><i class="fa-solid fa-file-arrow-down"></i> 匯出完整策略結果與交易紀錄（.txt）</button>`;
+        panel.appendChild(box);
+    });
+})();
+
 
 
     // --- 開始演練 ---
