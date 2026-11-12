@@ -340,63 +340,35 @@
         .sim-view #sim-wrap > .glass-panel { padding-bottom: 8px !important; }
         .sim-view .sim-cards { gap: 0 22px; }
         .sim-view .swg-subbox, .sim-view .swg-check-card { background: none !important; border: none !important; border-radius: 0 !important; padding: 6px 0 !important; }
-        /* ═══ 🧪 AI 策略推演實驗室（三合一模擬頁） ═══ */
-        .hub-hero { position:relative; margin:0 0 14px; padding:22px 18px 18px; border-radius:16px; overflow:hidden; border:1px solid rgba(0,212,255,0.22); background:radial-gradient(120% 140% at 0% 0%, rgba(0,212,255,0.16), transparent 55%), radial-gradient(100% 120% at 100% 100%, rgba(124,92,255,0.20), transparent 55%), #070b12; }
-        .hub-hero::before { content:''; position:absolute; inset:0; background-image:linear-gradient(rgba(0,212,255,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,0.07) 1px, transparent 1px); background-size:26px 26px; -webkit-mask-image:linear-gradient(180deg, #000, transparent 90%); mask-image:linear-gradient(180deg, #000, transparent 90%); animation:hubGrid 14s linear infinite; }
-        .hub-hero::after { content:''; position:absolute; left:0; right:0; top:-40%; height:40%; background:linear-gradient(180deg, transparent, rgba(0,212,255,0.14), transparent); animation:hubScan 5s ease-in-out infinite; pointer-events:none; }
-        @keyframes hubGrid { to { background-position:26px 26px, 26px 26px; } }
-        @keyframes hubScan { 0% { top:-40%; } 100% { top:110%; } }
-        .hub-hero > * { position:relative; z-index:1; }
-        .hub-eyebrow { font-size:10px; letter-spacing:3px; color:var(--color-acc); font-weight:bold; display:flex; align-items:center; gap:8px; }
-        .hub-eyebrow i { width:7px; height:7px; border-radius:50%; background:var(--color-up); box-shadow:0 0 10px var(--color-up); animation:hubBlink 1.6s ease-in-out infinite; }
-        @keyframes hubBlink { 50% { opacity:.25; } }
-        .hub-title { font-size:24px; font-weight:900; margin:6px 0 4px; letter-spacing:1px; background:linear-gradient(90deg,#fff,#7fe9ff 40%,#a78bfa 75%,#00ffaa); background-size:200% 100%; -webkit-background-clip:text; background-clip:text; color:transparent; animation:aiShiftText 8s linear infinite; }
-        @keyframes aiShiftText { to { background-position:200% 0; } }
-        .hub-sub { font-size:11.5px; color:#8a94a6; line-height:1.6; }
-        .hub-tabs { position:relative; display:grid; grid-template-columns:repeat(3,1fr); gap:0; padding:4px; margin-bottom:14px; border-radius:14px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); }
-        .hub-tab { position:relative; z-index:1; background:none; border:none; color:#8a94a6; padding:10px 4px 9px; font-size:12.5px; font-weight:bold; cursor:pointer; border-radius:10px; display:flex; flex-direction:column; align-items:center; gap:3px; transition:color .25s; font-family:inherit; }
-        .hub-tab small { font-size:9.5px; font-weight:normal; opacity:.7; letter-spacing:.5px; }
-        .hub-tab i { font-size:14px; }
+        /* 🧪 三合一模擬頁：低調極簡 */
+        .hub-tabs { position:relative; display:grid; grid-template-columns:repeat(3,1fr); margin:0 0 14px; border-bottom:1px solid rgba(255,255,255,0.1); }
+        .hub-tab { background:none; border:none; color:#777; padding:10px 4px; font-size:13px; font-weight:bold; cursor:pointer; font-family:inherit; transition:color .2s; }
+        .hub-tab small, .hub-tab i { display:none; }
         .hub-tab.on { color:#fff; }
-        .hub-ind { position:absolute; z-index:0; top:4px; bottom:4px; left:4px; width:calc((100% - 8px) / 3); border-radius:10px; background:linear-gradient(135deg, rgba(0,212,255,0.28), rgba(124,92,255,0.30)); box-shadow:0 0 18px rgba(0,212,255,0.35), inset 0 0 0 1px rgba(0,212,255,0.55); transition:transform .38s cubic-bezier(.22,1,.36,1); }
-        .hub-shared { position:relative; margin-bottom:16px; padding:14px 14px 12px; border-radius:14px; background:#080c14; isolation:isolate; }
-        .hub-shared::before { content:''; position:absolute; inset:-1px; border-radius:15px; padding:1px; z-index:-1; background:conic-gradient(from var(--hubAng,0deg), rgba(0,212,255,0.7), rgba(124,92,255,0.15), rgba(0,255,170,0.6), rgba(124,92,255,0.15), rgba(0,212,255,0.7)); -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask-composite:exclude; animation:hubSpin 7s linear infinite; }
-        @property --hubAng { syntax:'<angle>'; inherits:false; initial-value:0deg; }
-        @keyframes hubSpin { to { --hubAng:360deg; } }
-        .hub-shared-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
-        .hub-shared-head b { font-size:12.5px; color:var(--color-acc); }
-        .hub-shared-head span { font-size:10.5px; color:#667; }
+        .hub-ind { position:absolute; bottom:-1px; left:0; width:calc(100% / 3); height:2px; background:var(--color-acc); transition:transform .3s cubic-bezier(.22,1,.36,1); }
+        .hub-shared { margin-bottom:16px; padding:0 0 14px; border-bottom:1px solid rgba(255,255,255,0.08); }
+        .hub-shared-head { display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:10px; }
+        .hub-shared-head b { font-size:12px; color:#bbb; }
+        .hub-shared-head span { font-size:10.5px; color:#666; }
         .hub-shared-grid { display:flex; flex-direction:column; gap:10px; }
         .hub-shared-grid > div { min-width:0; }
         @media (min-width:900px) { .hub-shared-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px 22px; } .hub-shared-grid .hub-wide { grid-column:1 / -1; } }
         .hub-dup { display:none !important; }
         .hub-pane { display:none; }
-        .hub-pane.on { display:block; animation:hubPane .32s cubic-bezier(.22,1,.36,1); }
-        @keyframes hubPane { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
-        /* AI 推演按鈕 */
-        .ai-btn { position:relative; overflow:hidden; background:linear-gradient(110deg,#00d4ff,#7c5cff,#00ffaa,#00d4ff) !important; background-size:300% 100% !important; animation:aiShiftBg 7s linear infinite, aiGlow 2.6s ease-in-out infinite; color:#04121a !important; letter-spacing:.5px; }
-        .ai-btn::after { content:''; position:absolute; top:0; bottom:0; width:40%; left:-60%; background:linear-gradient(100deg, transparent, rgba(255,255,255,0.55), transparent); transform:skewX(-20deg); animation:aiSweep 3.2s ease-in-out infinite; pointer-events:none; }
-        .ai-btn:disabled { animation:aiShiftBg 2s linear infinite; opacity:.75; }
-        @keyframes aiShiftBg { to { background-position:300% 0; } }
-        @keyframes aiGlow { 0%,100% { box-shadow:0 0 10px rgba(0,212,255,0.35); } 50% { box-shadow:0 0 24px rgba(124,92,255,0.65); } }
-        @keyframes aiSweep { 0% { left:-60%; } 60%,100% { left:130%; } }
-        /* AI 推演全螢幕覆層 */
-        #ai-overlay { position:fixed; inset:0; z-index:99999; display:none; align-items:center; justify-content:center; background:rgba(3,6,12,0.78); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
-        #ai-overlay.on { display:flex; animation:hubPane .3s ease; }
-        .ai-core { width:min(92vw,440px); border-radius:18px; padding:18px 16px 16px; background:linear-gradient(160deg, rgba(10,18,32,0.96), rgba(14,10,30,0.96)); border:1px solid rgba(0,212,255,0.35); box-shadow:0 0 60px rgba(0,212,255,0.22), 0 0 120px rgba(124,92,255,0.18); text-align:center; }
-        .ai-core canvas { width:100%; height:190px; display:block; border-radius:12px; background:radial-gradient(circle at 50% 50%, rgba(0,212,255,0.10), transparent 70%); }
-        .ai-core h3 { margin:12px 0 2px; font-size:16px; letter-spacing:2px; background:linear-gradient(90deg,#7fe9ff,#a78bfa,#00ffaa); -webkit-background-clip:text; background-clip:text; color:transparent; }
-        .ai-stage { font-size:12px; color:#9fb0c8; min-height:18px; margin-top:4px; font-family:monospace; }
-        .ai-stage::after { content:'▋'; margin-left:3px; color:var(--color-acc); animation:hubBlink 1s steps(2) infinite; }
-        .ai-bar { height:3px; border-radius:3px; background:rgba(255,255,255,0.08); margin:12px 6px 6px; overflow:hidden; }
-        .ai-bar i { display:block; height:100%; width:35%; background:linear-gradient(90deg,transparent,#00d4ff,#a78bfa,#00ffaa,transparent); animation:aiBar 1.4s ease-in-out infinite; }
+        .hub-pane.on { display:block; animation:hubPane .22s ease; }
+        @keyframes hubPane { from { opacity:0; } to { opacity:1; } }
+        /* 推演中：沿用原本版面，僅在按鈕與其下方狀態列做細微變化 */
+        .ai-btn { position:relative; overflow:hidden; }
+        .ai-btn.ai-running::after { content:''; position:absolute; left:0; bottom:0; height:2px; width:35%; background:rgba(0,0,0,0.55); animation:aiBar 1.3s ease-in-out infinite; }
         @keyframes aiBar { from { transform:translateX(-100%); } to { transform:translateX(300%); } }
-        .ai-time { font-size:10.5px; color:#667; font-family:monospace; }
-        /* 最優解揭曉 */
-        .ai-reveal { animation:aiReveal .55s cubic-bezier(.22,1,.36,1) both; }
-        @keyframes aiReveal { from { opacity:0; transform:translateY(14px) scale(.985); filter:blur(4px); } to { opacity:1; transform:none; filter:none; } }
-        .ai-top { position:relative; box-shadow:0 0 0 1px rgba(0,212,255,0.55), 0 0 22px rgba(124,92,255,0.35) !important; }
-        .ai-top::before { content:'✦ AI 最優推薦'; position:absolute; top:-9px; right:10px; font-size:9.5px; font-weight:bold; padding:2px 8px; border-radius:10px; color:#04121a; background:linear-gradient(90deg,#00d4ff,#a78bfa,#00ffaa); background-size:200% 100%; animation:aiShiftBg 4s linear infinite; z-index:2; }
+        .ai-status { display:none; font-size:11px; color:#888; font-family:monospace; margin-top:6px; }
+        .ai-status.on { display:block; }
+        .ai-status::after { content:'…'; animation:aiDots 1.2s steps(3) infinite; }
+        @keyframes aiDots { 0% { content:'.'; } 33% { content:'..'; } 66% { content:'...'; } }
+        .ai-reveal { animation:aiReveal .4s ease both; }
+        @keyframes aiReveal { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+        .ai-top { position:relative; border-color:var(--color-acc) !important; }
+        .ai-top::before { content:'AI 推薦'; position:absolute; top:8px; right:10px; font-size:9.5px; color:var(--color-acc); letter-spacing:.5px; pointer-events:none; }
         .sub-toggle { display:flex; align-items:center; gap:8px; padding:0 16px; height:14px; margin:-2px 0 6px; cursor:pointer; color:#555; transition:color 0.2s; }
         .sub-toggle:hover { color:#bbb; }
         .sub-toggle-line { flex:1; height:1px; background:rgba(255,255,255,0.12); }
@@ -2227,11 +2199,6 @@
 
     <!-- 🧪 模擬：開盤方向策略模擬器／多檔股票日內資金接力尋優器（由側邊選單「模擬」群組進入） -->
     <main id="view-sim-hub" class="view-section sim-view">
-        <div class="hub-hero">
-            <div class="hub-eyebrow"><i></i> AI STRATEGY LAB</div>
-            <div class="hub-title">AI 策略推演實驗室</div>
-            <div class="hub-sub">三種推演引擎、同一組共用設定。切換分頁時，代號、日期、K 線、模式與費率都不會被重置。</div>
-        </div>
         <div class="hub-tabs" id="hub-tabs">
             <div class="hub-ind" id="hub-ind"></div>
             <button type="button" class="hub-tab on" id="hub-tab-gap"><i class="fa-solid fa-arrows-up-down"></i>開盤方向<small>GAP</small></button>
@@ -16613,54 +16580,27 @@ ${summaryText}
     let saved = 'gap'; try { saved = localStorage.getItem('acorn_sim_hub_tab') || 'gap'; } catch (e) {}
     setTab(saved);
 
-    /* ── AI 推演覆層（神經網路動畫） ── */
-    const ov = document.createElement('div');
-    ov.id = 'ai-overlay';
-    ov.innerHTML = '<div class="ai-core"><canvas id="ai-canvas" width="440" height="190"></canvas><h3>AI 推演中</h3><div class="ai-stage" id="ai-stage"></div><div class="ai-bar"><i></i></div><div class="ai-time" id="ai-time"></div></div>';
-    document.body.appendChild(ov);
-    const cv = $('ai-canvas'), cx = cv.getContext('2d');
-    const layers = [4, 6, 6, 3]; let nodes = [], raf = 0, t0 = 0;
-    function layout() {
-      const W = cv.width, H = cv.height; nodes = [];
-      layers.forEach((n, li) => { for (let i = 0; i < n; i++) nodes.push({ l: li, x: 40 + li * (W - 80) / (layers.length - 1), y: (i + 1) * H / (n + 1), p: Math.random() * 6.28 }); });
-    }
-    layout();
-    function frame(ts) {
-      const W = cv.width, H = cv.height, t = ts / 1000;
-      cx.clearRect(0, 0, W, H);
-      for (const a of nodes) for (const b of nodes) {
-        if (b.l !== a.l + 1) continue;
-        const ph = (t * 1.1 + a.p + b.p) % 1;
-        cx.strokeStyle = 'rgba(0,212,255,0.14)'; cx.lineWidth = 1;
-        cx.beginPath(); cx.moveTo(a.x, a.y); cx.lineTo(b.x, b.y); cx.stroke();
-        const px = a.x + (b.x - a.x) * ph, py = a.y + (b.y - a.y) * ph;
-        cx.fillStyle = 'rgba(0,255,170,' + (0.85 * Math.sin(ph * Math.PI)) + ')';
-        cx.beginPath(); cx.arc(px, py, 1.8, 0, 6.28); cx.fill();
-      }
-      for (const n of nodes) {
-        const g = 0.5 + 0.5 * Math.sin(t * 2.4 + n.p);
-        cx.fillStyle = n.l === layers.length - 1 ? 'rgba(167,139,250,' + (0.55 + 0.45 * g) + ')' : 'rgba(0,212,255,' + (0.4 + 0.6 * g) + ')';
-        cx.shadowColor = cx.fillStyle; cx.shadowBlur = 10;
-        cx.beginPath(); cx.arc(n.x, n.y, 4 + 2 * g, 0, 6.28); cx.fill(); cx.shadowBlur = 0;
-      }
-      const el = (Date.now() - t0) / 1000; const te = $('ai-time'); if (te) te.textContent = 'T+' + el.toFixed(1) + 's';
-      raf = requestAnimationFrame(frame);
-    }
+    /* ── 推演中：原有版面內的低調狀態列（無覆蓋視窗） ── */
     const STAGES = {
-      gap: ['建立漲跌解耦報酬張量…', '掃描所有買賣時間組合…', 'Pareto 剪枝淘汰劣解…', '5×5 高原穩定性檢驗…', '動態規劃拆分最佳波段…', '排序並萃取最優解…'],
-      relay: ['載入多檔標的日內走勢…', '建立各棒資金運用節點…', '四階段 DAG 束搜尋展開…', '評估跨棒換股組合…', '逐日回測並計算接力報酬…', '排序並萃取最優排程…'],
-      swing: ['偵測長週期箱體與高低轉折…', '兩階段向量化尋優展開…', '往前推演規律並應證吻合率…', '5×5 穩定性檢驗…', '計算獲利因子與勝率…', '排序並萃取最優波段…']
+      gap: ['建立報酬張量', '掃描買賣時間組合', 'Pareto 剪枝', '高原穩定性檢驗', '拆分最佳波段', '排序最優解'],
+      relay: ['載入多檔日內走勢', '建立資金運用節點', 'DAG 束搜尋', '評估換股組合', '逐日回測', '排序最優排程'],
+      swing: ['偵測箱體與轉折', '向量化尋優', '往前推演應證', '穩定性檢驗', '計算獲利因子', '排序最優波段']
     };
-    let stTimer = 0;
+    const BTN = { gap: 'sim-opt-btn', relay: 'msr-run-btn', swing: 'swg-opt-btn' };
+    let stTimer = 0, curStatus = null;
     function showAI(tab) {
-      ov.classList.add('on'); t0 = Date.now(); layout();
-      cancelAnimationFrame(raf); raf = requestAnimationFrame(frame);
-      const arr = STAGES[tab] || STAGES.gap; let i = 0; const s = $('ai-stage');
-      s.textContent = arr[0];
-      clearInterval(stTimer); stTimer = setInterval(() => { i = (i + 1) % arr.length; s.textContent = arr[i]; }, 1100);
-      clearTimeout(showAI._guard); showAI._guard = setTimeout(hideAI, 180000);
+      const btn = $(BTN[tab]); if (!btn) return;
+      btn.classList.add('ai-running');
+      let st = btn.nextElementSibling;
+      if (!st || !st.classList.contains('ai-status')) { st = document.createElement('div'); st.className = 'ai-status'; btn.insertAdjacentElement('afterend', st); }
+      const arr = STAGES[tab]; let i = 0; st.textContent = arr[0]; st.classList.add('on'); curStatus = st;
+      clearInterval(stTimer); stTimer = setInterval(() => { i = (i + 1) % arr.length; st.textContent = arr[i]; }, 1100);
     }
-    function hideAI() { ov.classList.remove('on'); cancelAnimationFrame(raf); clearInterval(stTimer); }
+    function hideAI(tab) {
+      clearInterval(stTimer);
+      const btn = $(BTN[tab]); if (btn) btn.classList.remove('ai-running');
+      if (curStatus) curStatus.classList.remove('on');
+    }
 
     function reveal(tab) {
       let items = [];
@@ -16682,8 +16622,7 @@ ${summaryText}
         try { return await o.apply(this, arguments); }
         finally {
           const er = $(ERR[tab]); const bad = er && er.style.display !== 'none' && er.textContent.trim();
-          if (!bad) await sleep(Math.max(0, 1500 - (Date.now() - t)));
-          hideAI(); if (!bad) reveal(tab);
+          if (!bad) hideAI(tab); if (!bad) reveal(tab);
         }
       };
       f._ai = true; window[name] = f;
