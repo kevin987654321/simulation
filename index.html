@@ -340,6 +340,63 @@
         .sim-view #sim-wrap > .glass-panel { padding-bottom: 8px !important; }
         .sim-view .sim-cards { gap: 0 22px; }
         .sim-view .swg-subbox, .sim-view .swg-check-card { background: none !important; border: none !important; border-radius: 0 !important; padding: 6px 0 !important; }
+        /* ═══ 🧪 AI 策略推演實驗室（三合一模擬頁） ═══ */
+        .hub-hero { position:relative; margin:0 0 14px; padding:22px 18px 18px; border-radius:16px; overflow:hidden; border:1px solid rgba(0,212,255,0.22); background:radial-gradient(120% 140% at 0% 0%, rgba(0,212,255,0.16), transparent 55%), radial-gradient(100% 120% at 100% 100%, rgba(124,92,255,0.20), transparent 55%), #070b12; }
+        .hub-hero::before { content:''; position:absolute; inset:0; background-image:linear-gradient(rgba(0,212,255,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,0.07) 1px, transparent 1px); background-size:26px 26px; -webkit-mask-image:linear-gradient(180deg, #000, transparent 90%); mask-image:linear-gradient(180deg, #000, transparent 90%); animation:hubGrid 14s linear infinite; }
+        .hub-hero::after { content:''; position:absolute; left:0; right:0; top:-40%; height:40%; background:linear-gradient(180deg, transparent, rgba(0,212,255,0.14), transparent); animation:hubScan 5s ease-in-out infinite; pointer-events:none; }
+        @keyframes hubGrid { to { background-position:26px 26px, 26px 26px; } }
+        @keyframes hubScan { 0% { top:-40%; } 100% { top:110%; } }
+        .hub-hero > * { position:relative; z-index:1; }
+        .hub-eyebrow { font-size:10px; letter-spacing:3px; color:var(--color-acc); font-weight:bold; display:flex; align-items:center; gap:8px; }
+        .hub-eyebrow i { width:7px; height:7px; border-radius:50%; background:var(--color-up); box-shadow:0 0 10px var(--color-up); animation:hubBlink 1.6s ease-in-out infinite; }
+        @keyframes hubBlink { 50% { opacity:.25; } }
+        .hub-title { font-size:24px; font-weight:900; margin:6px 0 4px; letter-spacing:1px; background:linear-gradient(90deg,#fff,#7fe9ff 40%,#a78bfa 75%,#00ffaa); background-size:200% 100%; -webkit-background-clip:text; background-clip:text; color:transparent; animation:aiShiftText 8s linear infinite; }
+        @keyframes aiShiftText { to { background-position:200% 0; } }
+        .hub-sub { font-size:11.5px; color:#8a94a6; line-height:1.6; }
+        .hub-tabs { position:relative; display:grid; grid-template-columns:repeat(3,1fr); gap:0; padding:4px; margin-bottom:14px; border-radius:14px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); }
+        .hub-tab { position:relative; z-index:1; background:none; border:none; color:#8a94a6; padding:10px 4px 9px; font-size:12.5px; font-weight:bold; cursor:pointer; border-radius:10px; display:flex; flex-direction:column; align-items:center; gap:3px; transition:color .25s; font-family:inherit; }
+        .hub-tab small { font-size:9.5px; font-weight:normal; opacity:.7; letter-spacing:.5px; }
+        .hub-tab i { font-size:14px; }
+        .hub-tab.on { color:#fff; }
+        .hub-ind { position:absolute; z-index:0; top:4px; bottom:4px; left:4px; width:calc((100% - 8px) / 3); border-radius:10px; background:linear-gradient(135deg, rgba(0,212,255,0.28), rgba(124,92,255,0.30)); box-shadow:0 0 18px rgba(0,212,255,0.35), inset 0 0 0 1px rgba(0,212,255,0.55); transition:transform .38s cubic-bezier(.22,1,.36,1); }
+        .hub-shared { position:relative; margin-bottom:16px; padding:14px 14px 12px; border-radius:14px; background:#080c14; isolation:isolate; }
+        .hub-shared::before { content:''; position:absolute; inset:-1px; border-radius:15px; padding:1px; z-index:-1; background:conic-gradient(from var(--hubAng,0deg), rgba(0,212,255,0.7), rgba(124,92,255,0.15), rgba(0,255,170,0.6), rgba(124,92,255,0.15), rgba(0,212,255,0.7)); -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask-composite:exclude; animation:hubSpin 7s linear infinite; }
+        @property --hubAng { syntax:'<angle>'; inherits:false; initial-value:0deg; }
+        @keyframes hubSpin { to { --hubAng:360deg; } }
+        .hub-shared-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+        .hub-shared-head b { font-size:12.5px; color:var(--color-acc); }
+        .hub-shared-head span { font-size:10.5px; color:#667; }
+        .hub-shared-grid { display:flex; flex-direction:column; gap:10px; }
+        .hub-shared-grid > div { min-width:0; }
+        @media (min-width:900px) { .hub-shared-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px 22px; } .hub-shared-grid .hub-wide { grid-column:1 / -1; } }
+        .hub-dup { display:none !important; }
+        .hub-pane { display:none; }
+        .hub-pane.on { display:block; animation:hubPane .32s cubic-bezier(.22,1,.36,1); }
+        @keyframes hubPane { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+        /* AI 推演按鈕 */
+        .ai-btn { position:relative; overflow:hidden; background:linear-gradient(110deg,#00d4ff,#7c5cff,#00ffaa,#00d4ff) !important; background-size:300% 100% !important; animation:aiShiftBg 7s linear infinite, aiGlow 2.6s ease-in-out infinite; color:#04121a !important; letter-spacing:.5px; }
+        .ai-btn::after { content:''; position:absolute; top:0; bottom:0; width:40%; left:-60%; background:linear-gradient(100deg, transparent, rgba(255,255,255,0.55), transparent); transform:skewX(-20deg); animation:aiSweep 3.2s ease-in-out infinite; pointer-events:none; }
+        .ai-btn:disabled { animation:aiShiftBg 2s linear infinite; opacity:.75; }
+        @keyframes aiShiftBg { to { background-position:300% 0; } }
+        @keyframes aiGlow { 0%,100% { box-shadow:0 0 10px rgba(0,212,255,0.35); } 50% { box-shadow:0 0 24px rgba(124,92,255,0.65); } }
+        @keyframes aiSweep { 0% { left:-60%; } 60%,100% { left:130%; } }
+        /* AI 推演全螢幕覆層 */
+        #ai-overlay { position:fixed; inset:0; z-index:99999; display:none; align-items:center; justify-content:center; background:rgba(3,6,12,0.78); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
+        #ai-overlay.on { display:flex; animation:hubPane .3s ease; }
+        .ai-core { width:min(92vw,440px); border-radius:18px; padding:18px 16px 16px; background:linear-gradient(160deg, rgba(10,18,32,0.96), rgba(14,10,30,0.96)); border:1px solid rgba(0,212,255,0.35); box-shadow:0 0 60px rgba(0,212,255,0.22), 0 0 120px rgba(124,92,255,0.18); text-align:center; }
+        .ai-core canvas { width:100%; height:190px; display:block; border-radius:12px; background:radial-gradient(circle at 50% 50%, rgba(0,212,255,0.10), transparent 70%); }
+        .ai-core h3 { margin:12px 0 2px; font-size:16px; letter-spacing:2px; background:linear-gradient(90deg,#7fe9ff,#a78bfa,#00ffaa); -webkit-background-clip:text; background-clip:text; color:transparent; }
+        .ai-stage { font-size:12px; color:#9fb0c8; min-height:18px; margin-top:4px; font-family:monospace; }
+        .ai-stage::after { content:'▋'; margin-left:3px; color:var(--color-acc); animation:hubBlink 1s steps(2) infinite; }
+        .ai-bar { height:3px; border-radius:3px; background:rgba(255,255,255,0.08); margin:12px 6px 6px; overflow:hidden; }
+        .ai-bar i { display:block; height:100%; width:35%; background:linear-gradient(90deg,transparent,#00d4ff,#a78bfa,#00ffaa,transparent); animation:aiBar 1.4s ease-in-out infinite; }
+        @keyframes aiBar { from { transform:translateX(-100%); } to { transform:translateX(300%); } }
+        .ai-time { font-size:10.5px; color:#667; font-family:monospace; }
+        /* 最優解揭曉 */
+        .ai-reveal { animation:aiReveal .55s cubic-bezier(.22,1,.36,1) both; }
+        @keyframes aiReveal { from { opacity:0; transform:translateY(14px) scale(.985); filter:blur(4px); } to { opacity:1; transform:none; filter:none; } }
+        .ai-top { position:relative; box-shadow:0 0 0 1px rgba(0,212,255,0.55), 0 0 22px rgba(124,92,255,0.35) !important; }
+        .ai-top::before { content:'✦ AI 最優推薦'; position:absolute; top:-9px; right:10px; font-size:9.5px; font-weight:bold; padding:2px 8px; border-radius:10px; color:#04121a; background:linear-gradient(90deg,#00d4ff,#a78bfa,#00ffaa); background-size:200% 100%; animation:aiShiftBg 4s linear infinite; z-index:2; }
         .sub-toggle { display:flex; align-items:center; gap:8px; padding:0 16px; height:14px; margin:-2px 0 6px; cursor:pointer; color:#555; transition:color 0.2s; }
         .sub-toggle:hover { color:#bbb; }
         .sub-toggle-line { flex:1; height:1px; background:rgba(255,255,255,0.12); }
@@ -1190,9 +1247,9 @@
     <div id="sim-nav-group" class="sub-group">
         <div class="sub-group-inner">
             <div class="sub-group-label">模擬</div>
-            <div class="menu-item sub-item" id="menu-item-sim-gap" data-view="view-sim-gap" onclick="switchView('view-sim-gap', this)"><span class="nav-line"></span> 開盤方向策略模擬器</div>
-            <div class="menu-item sub-item" id="menu-item-sim-relay" data-view="view-sim-relay" onclick="switchView('view-sim-relay', this)"><span class="nav-line"></span> 多檔股票日內資金接力與運用順序尋優器</div>
-            <div class="menu-item sub-item" id="menu-item-sim-swing" data-view="view-sim-swing" onclick="switchView('view-sim-swing', this)"><span class="nav-line"></span> 正常中線波段規律推演</div>
+            <div class="menu-item sub-item" id="menu-item-sim-gap" data-view="view-sim-hub" onclick="openSimHub('gap', this)"><span class="nav-line"></span> 開盤方向策略模擬器</div>
+            <div class="menu-item sub-item" id="menu-item-sim-relay" data-view="view-sim-hub" onclick="openSimHub('relay', this)"><span class="nav-line"></span> 多檔股票日內資金接力與運用順序尋優器</div>
+            <div class="menu-item sub-item" id="menu-item-sim-swing" data-view="view-sim-hub" onclick="openSimHub('swing', this)"><span class="nav-line"></span> 正常中線波段規律推演</div>
         </div>
     </div>
     <div class="menu-item" id="menu-item-settings" data-view="view-settings" style="margin-top: auto;" onclick="switchView('view-settings', this)"><i class="fa-solid fa-sliders"></i></div>
@@ -2169,11 +2226,24 @@
     </main>
 
     <!-- 🧪 模擬：開盤方向策略模擬器／多檔股票日內資金接力尋優器（由側邊選單「模擬」群組進入） -->
-    <main id="view-sim-gap" class="view-section sim-view">
-        <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px; padding:0 4px;">
-            <span style="font-size:16px; font-weight:bold;"><i class="fa-solid fa-flask" style="color:var(--color-acc)"></i> 開盤方向策略模擬器</span>
+    <main id="view-sim-hub" class="view-section sim-view">
+        <div class="hub-hero">
+            <div class="hub-eyebrow"><i></i> AI STRATEGY LAB</div>
+            <div class="hub-title">AI 策略推演實驗室</div>
+            <div class="hub-sub">三種推演引擎、同一組共用設定。切換分頁時，代號、日期、K 線、模式與費率都不會被重置。</div>
         </div>
-        <div class="fx-wrap" id="sim-wrap">
+        <div class="hub-tabs" id="hub-tabs">
+            <div class="hub-ind" id="hub-ind"></div>
+            <button type="button" class="hub-tab on" id="hub-tab-gap"><i class="fa-solid fa-arrows-up-down"></i>開盤方向<small>GAP</small></button>
+            <button type="button" class="hub-tab" id="hub-tab-relay"><i class="fa-solid fa-diagram-project"></i>資金接力<small>RELAY</small></button>
+            <button type="button" class="hub-tab" id="hub-tab-swing"><i class="fa-solid fa-wave-square"></i>中線波段<small>SWING</small></button>
+        </div>
+        <div class="hub-shared">
+            <div class="hub-shared-head"><b><i class="fa-solid fa-link"></i> 共用設定</b><span>三個分頁同步套用</span></div>
+            <div class="hub-shared-grid" id="hub-shared-grid"></div>
+        </div>
+        <div class="hub-pane-wrap">
+<div class="fx-wrap hub-pane on" id="sim-wrap">
             <div class="glass-panel" id="sim-panel-gap" style="padding:16px; margin-bottom:16px; overflow:hidden;">
                     <div class="fx-card-title" style="margin-bottom:4px;"><i class="fa-solid fa-flask" style="color:var(--color-acc);"></i> 開盤方向策略模擬器</div>
                     <div style="font-size:11px; color:#777; margin-bottom:12px; line-height:1.6;">選一檔股票與日期區間，分別設定「開盤價高於昨收（開高）」與「低於昨收（開低）」時，當天幾點買進、幾點賣出，看回測的損益百分比。使用 5 分鐘 K 線（Yahoo 僅提供最近約 60 天）。台股填當地時間；美股等其他市場因冬令／夏令不同，改填「開盤後幾小時幾分鐘」。買賣價取該時間那根 K 棒的開盤價。</div>
@@ -2356,22 +2426,9 @@
                     </div>
                 </div>
         </div>
-    </main>
-
-    <!-- 🧪 多檔股票日內資金接力尋優器：面板由下方腳本在載入時插入 #msr-wrap -->
-    <main id="view-sim-relay" class="view-section sim-view">
-        <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px; padding:0 4px;">
-            <span style="font-size:16px; font-weight:bold;"><i class="fa-solid fa-flask" style="color:var(--color-acc)"></i> 多檔股票日內資金接力尋優</span>
+            <div class="fx-wrap hub-pane" id="msr-wrap"></div>
+            <div class="fx-wrap hub-pane" id="swg-wrap"></div>
         </div>
-        <div class="fx-wrap" id="msr-wrap"></div>
-    </main>
-
-    <!-- 🧪 中線波段規律推演：面板由下方腳本在載入時插入 #swg-wrap -->
-    <main id="view-sim-swing" class="view-section sim-view">
-        <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px; padding:0 4px;">
-            <span style="font-size:16px; font-weight:bold;"><i class="fa-solid fa-flask" style="color:var(--color-acc)"></i> 中線波段規律推演</span>
-        </div>
-        <div class="fx-wrap" id="swg-wrap"></div>
     </main>
 
 </div>
@@ -5583,8 +5640,8 @@
         document.getElementById('sim-mode').value = document.getElementById('msr-mode').value;
         if (typeof simSetMode === 'function') simSetMode();
         document.getElementById('sim-fee-on').checked = document.getElementById('msr-fee-on').checked;
-        if (typeof switchView === 'function' && document.getElementById('view-sim-gap')) {
-            switchView('view-sim-gap', document.getElementById('menu-item-sim-gap'));
+        if (typeof openSimHub === 'function') {
+            openSimHub('gap');
         } else {
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
@@ -16466,5 +16523,176 @@ ${summaryText}
     });
 
 </script>
+<script>
+/* ═══ AI 策略推演實驗室：三合一分頁、共用設定、AI 特效 ═══ */
+(function initSimHub() {
+  try {
+    const $ = (id) => document.getElementById(id);
+    const TABS = ['gap', 'relay', 'swing'];
+    const PANE = { gap: 'sim-wrap', relay: 'msr-wrap', swing: 'swg-wrap' };
+    const NAV = { gap: 'menu-item-sim-gap', relay: 'menu-item-sim-relay', swing: 'menu-item-sim-swing' };
+    const view = $('view-sim-hub');
+    if (!view) return;
+
+    /* ── 共用設定列：把「開盤方向」面板上的欄位整組搬進來（id 與事件不變） ── */
+    const shared = $('hub-shared-grid');
+    const mv = (el, cls) => { if (el && shared) { if (cls) el.classList.add(cls); shared.appendChild(el); } };
+    const tickerDiv = $('sim-ticker-wrapper') && $('sim-ticker-wrapper').parentElement;
+    mv(tickerDiv);
+    mv($('sim-start') && $('sim-start').closest('.sim-grid2'));
+    mv($('sim-kline-mode') && $('sim-kline-mode').parentElement, 'hub-wide');
+    mv($('sim-nbars') && $('sim-nbars').parentElement);
+    mv($('sim-mode') && $('sim-mode').parentElement);
+    mv($('sim-fee-on') && $('sim-fee-on').parentElement, 'hub-wide');
+
+    /* ── 其他兩個面板的重複欄位隱藏（欄位仍在，引擎照常讀取，由共用值自動同步） ── */
+    const hide = (el) => { if (el) el.classList.add('hub-dup'); };
+    hide($('msr-start') && $('msr-start').closest('.sim-grid2'));
+    hide($('msr-kline-mode') && $('msr-kline-mode').parentElement);
+    const mh = $('msr-start') && $('msr-start').closest('.sim-grid2');
+    if (mh && mh.nextElementSibling && /58 天內/.test(mh.nextElementSibling.innerText || mh.nextElementSibling.textContent)) hide(mh.nextElementSibling);
+    hide($('msr-nbars') && $('msr-nbars').closest('.sim-grid2'));
+    hide($('msr-fee-on') && $('msr-fee-on').parentElement);
+    const swgG = $('swg-ticker') && $('swg-ticker').closest('.sim-grid2');
+    hide(swgG);
+    const swgD = $('swg-start') && $('swg-start').closest('.sim-grid2');
+    hide(swgD);
+    if (swgD && swgD.nextElementSibling) hide(swgD.nextElementSibling);
+    hide($('swg-mode') && $('swg-mode').parentElement);
+    hide($('swg-fee-on') && $('swg-fee-on').closest('label'));
+    const sync = document.querySelector('#swg-main-panel button[onclick="swgSyncFromTop()"]');
+    hide(sync);
+
+    /* ── 共用值同步：來源為搬進共用列的欄位 ── */
+    const val = (id) => { const e = $(id); return e ? e.value : ''; };
+    const last = {};
+    const setV = (id, v) => { const e = $(id); if (e && e.value !== v) e.value = v; };
+    function push(force) {
+      const cur = {
+        ticker: (val('sim-ticker') || '').trim().toUpperCase(), start: val('sim-start'), end: val('sim-end'),
+        kline: val('sim-kline-mode'), mode: val('sim-mode'), nbars: val('sim-nbars'),
+        fee: $('sim-fee-on') ? $('sim-fee-on').checked : true
+      };
+      const ch = (k) => force || last[k] !== cur[k];
+      if (ch('ticker') && cur.ticker) { setV('swg-ticker', cur.ticker); try { swgSyncMarketUI(); } catch (e) {} }
+      if (ch('start')) { setV('msr-start', cur.start); setV('swg-start', cur.start); }
+      if (ch('end')) { setV('msr-end', cur.end); setV('swg-end', cur.end); }
+      if (ch('kline')) {
+        setV('msr-kline-mode', cur.kline); setV('swg-kline-mode', cur.kline);
+        try { simOnKlineModeChange('msr'); } catch (e) {}
+      }
+      if (ch('mode')) { setV('msr-mode', cur.mode); setV('swg-mode', cur.mode); try { swgSyncMarketUI(); } catch (e) {} }
+      if (ch('nbars')) setV('msr-nbars', cur.nbars);
+      if (ch('fee')) { if ($('msr-fee-on')) $('msr-fee-on').checked = cur.fee; if ($('swg-fee-on')) $('swg-fee-on').checked = cur.fee; }
+      Object.assign(last, cur);
+    }
+    push(true);
+    setInterval(() => { try { push(false); } catch (e) {} }, 300);
+    window.hubPushShared = () => push(true);
+
+    /* ── 分頁 ── */
+    let cur = 'gap';
+    function setTab(t) {
+      if (!TABS.includes(t)) t = 'gap';
+      cur = t;
+      TABS.forEach((k, i) => {
+        const p = $(PANE[k]); if (p) p.classList.toggle('on', k === t);
+        const b = $('hub-tab-' + k); if (b) b.classList.toggle('on', k === t);
+        if (k === t) { const ind = $('hub-ind'); if (ind) ind.style.transform = 'translateX(' + (i * 100) + '%)'; }
+      });
+      document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
+      if (view.classList.contains('active') && $(NAV[t])) $(NAV[t]).classList.add('active');
+      try { localStorage.setItem('acorn_sim_hub_tab', t); } catch (e) {}
+    }
+    window.hubSetTab = (t) => { setTab(t); };
+    window.openSimHub = function (t, el) {
+      setTab(t);
+      switchView('view-sim-hub', el || $(NAV[t]));
+    };
+    TABS.forEach(k => { const b = $('hub-tab-' + k); if (b) b.addEventListener('click', () => { setTab(k); const n = $(NAV[k]); if (n) { document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active')); n.classList.add('active'); } }); });
+    let saved = 'gap'; try { saved = localStorage.getItem('acorn_sim_hub_tab') || 'gap'; } catch (e) {}
+    setTab(saved);
+
+    /* ── AI 推演覆層（神經網路動畫） ── */
+    const ov = document.createElement('div');
+    ov.id = 'ai-overlay';
+    ov.innerHTML = '<div class="ai-core"><canvas id="ai-canvas" width="440" height="190"></canvas><h3>AI 推演中</h3><div class="ai-stage" id="ai-stage"></div><div class="ai-bar"><i></i></div><div class="ai-time" id="ai-time"></div></div>';
+    document.body.appendChild(ov);
+    const cv = $('ai-canvas'), cx = cv.getContext('2d');
+    const layers = [4, 6, 6, 3]; let nodes = [], raf = 0, t0 = 0;
+    function layout() {
+      const W = cv.width, H = cv.height; nodes = [];
+      layers.forEach((n, li) => { for (let i = 0; i < n; i++) nodes.push({ l: li, x: 40 + li * (W - 80) / (layers.length - 1), y: (i + 1) * H / (n + 1), p: Math.random() * 6.28 }); });
+    }
+    layout();
+    function frame(ts) {
+      const W = cv.width, H = cv.height, t = ts / 1000;
+      cx.clearRect(0, 0, W, H);
+      for (const a of nodes) for (const b of nodes) {
+        if (b.l !== a.l + 1) continue;
+        const ph = (t * 1.1 + a.p + b.p) % 1;
+        cx.strokeStyle = 'rgba(0,212,255,0.14)'; cx.lineWidth = 1;
+        cx.beginPath(); cx.moveTo(a.x, a.y); cx.lineTo(b.x, b.y); cx.stroke();
+        const px = a.x + (b.x - a.x) * ph, py = a.y + (b.y - a.y) * ph;
+        cx.fillStyle = 'rgba(0,255,170,' + (0.85 * Math.sin(ph * Math.PI)) + ')';
+        cx.beginPath(); cx.arc(px, py, 1.8, 0, 6.28); cx.fill();
+      }
+      for (const n of nodes) {
+        const g = 0.5 + 0.5 * Math.sin(t * 2.4 + n.p);
+        cx.fillStyle = n.l === layers.length - 1 ? 'rgba(167,139,250,' + (0.55 + 0.45 * g) + ')' : 'rgba(0,212,255,' + (0.4 + 0.6 * g) + ')';
+        cx.shadowColor = cx.fillStyle; cx.shadowBlur = 10;
+        cx.beginPath(); cx.arc(n.x, n.y, 4 + 2 * g, 0, 6.28); cx.fill(); cx.shadowBlur = 0;
+      }
+      const el = (Date.now() - t0) / 1000; const te = $('ai-time'); if (te) te.textContent = 'T+' + el.toFixed(1) + 's';
+      raf = requestAnimationFrame(frame);
+    }
+    const STAGES = {
+      gap: ['建立漲跌解耦報酬張量…', '掃描所有買賣時間組合…', 'Pareto 剪枝淘汰劣解…', '5×5 高原穩定性檢驗…', '動態規劃拆分最佳波段…', '排序並萃取最優解…'],
+      relay: ['載入多檔標的日內走勢…', '建立各棒資金運用節點…', '四階段 DAG 束搜尋展開…', '評估跨棒換股組合…', '逐日回測並計算接力報酬…', '排序並萃取最優排程…'],
+      swing: ['偵測長週期箱體與高低轉折…', '兩階段向量化尋優展開…', '往前推演規律並應證吻合率…', '5×5 穩定性檢驗…', '計算獲利因子與勝率…', '排序並萃取最優波段…']
+    };
+    let stTimer = 0;
+    function showAI(tab) {
+      ov.classList.add('on'); t0 = Date.now(); layout();
+      cancelAnimationFrame(raf); raf = requestAnimationFrame(frame);
+      const arr = STAGES[tab] || STAGES.gap; let i = 0; const s = $('ai-stage');
+      s.textContent = arr[0];
+      clearInterval(stTimer); stTimer = setInterval(() => { i = (i + 1) % arr.length; s.textContent = arr[i]; }, 1100);
+      clearTimeout(showAI._guard); showAI._guard = setTimeout(hideAI, 180000);
+    }
+    function hideAI() { ov.classList.remove('on'); cancelAnimationFrame(raf); clearInterval(stTimer); }
+
+    function reveal(tab) {
+      let items = [];
+      if (tab === 'gap') items = $('sim-opt-board') ? Array.from($('sim-opt-board').children) : [];
+      if (tab === 'swing') items = $('swg-opt-board') ? Array.from($('swg-opt-board').children) : [];
+      if (tab === 'relay') items = Array.from(document.querySelectorAll('#msr-result .msr-rank-card'));
+      items.forEach((el, i) => {
+        el.classList.remove('ai-reveal', 'ai-top'); void el.offsetWidth;
+        el.style.animationDelay = (i * 70) + 'ms'; el.classList.add('ai-reveal');
+        if (i === 0 && !/暫無|沒有|無符合/.test(el.textContent || '')) el.classList.add('ai-top');
+      });
+    }
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    const ERR = { gap: 'sim-error', relay: 'msr-error', swing: 'swg-error' };
+    function wrap(name, tab) {
+      const o = window[name]; if (typeof o !== 'function' || o._ai) return;
+      const f = async function () {
+        const t = Date.now(); showAI(tab);
+        try { return await o.apply(this, arguments); }
+        finally {
+          const er = $(ERR[tab]); const bad = er && er.style.display !== 'none' && er.textContent.trim();
+          if (!bad) await sleep(Math.max(0, 1500 - (Date.now() - t)));
+          hideAI(); if (!bad) reveal(tab);
+        }
+      };
+      f._ai = true; window[name] = f;
+    }
+    wrap('runOpenOptimizer', 'gap'); wrap('runMultiStockRelayOptimizer', 'relay'); wrap('runSwingOptimizer', 'swing');
+    ['sim-opt-btn', 'msr-run-btn', 'swg-opt-btn'].forEach(id => { const b = $(id); if (b) b.classList.add('ai-btn'); });
+  } catch (e) { console.error('initSimHub', e); }
+})();
+</script>
+
 </body>
 </html>
