@@ -354,6 +354,8 @@
         .hub-shared-grid > div { min-width:0; }
         @media (min-width:900px) { .hub-shared-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px 22px; } .hub-shared-grid .hub-wide { grid-column:1 / -1; } }
         .hub-dup { display:none !important; }
+        #alpaca-config-panel > summary::-webkit-details-marker { display:none; }
+        #alpaca-config-panel[open] .alpaca-chev { transform:rotate(90deg); }
         .hub-pane { display:none; }
         .hub-pane.on { display:block; animation:hubPane .22s ease; }
         @keyframes hubPane { from { opacity:0; } to { opacity:1; } }
@@ -4893,13 +4895,17 @@
             }
             const D = commonDates.length;
 
-            // 建立統一時間網格：5m 精細模式用 5 分鐘步進；60m 粗略模式由實際小時 K 棒時間點聯集建立並補上收盤點
+            // 建立統一時間網格：支援 1m / 5m 步進（長天期多檔 1m 時自動調整步進防記憶體溢位）；60m 由實際小時 K 棒建立
             msrGridTimes = [];
+            let gridStep = kMeta.stepMin;
             if (!isCoarse) {
+                if (kMeta.is1m && S * D > 65) {
+                    gridStep = Math.min(5, Math.max(2, Math.ceil(Math.sqrt((S * D) / 45))));
+                }
                 if (!msrOffMode) {
-                    for (let m = 540; m <= 810; m += 5) msrGridTimes.push(m);
+                    for (let m = 540; m <= 810; m += gridStep) msrGridTimes.push(m);
                 } else {
-                    for (let m = 0; m <= 385; m += 5) msrGridTimes.push(m);
+                    for (let m = 0; m <= 389; m += gridStep) msrGridTimes.push(m);
                 }
             } else {
                 const tSet = new Set();
@@ -4928,8 +4934,8 @@
             for (let k = T - 1; k >= 0; k--) {
                 if (msrGridTimes[k] <= effTMax) { maxFinishIdx = k; break; }
             }
-            const minHoldBars = Math.max(1, Math.round(minHoldMin / kMeta.stepMin));
-            const bufferBars = isCoarse ? Math.floor(bufferMin / 60) : Math.max(0, Math.round(bufferMin / 5));
+            const minHoldBars = Math.max(1, Math.round(minHoldMin / gridStep));
+            const bufferBars = isCoarse ? Math.floor(bufferMin / 60) : Math.max(0, Math.round(bufferMin / gridStep));
 
             if (maxFinishIdx - minStartIdx < minHoldBars) {
                 throw new Error('最早開始與最晚完畢時間區間過窄，無法容納最短持倉時間');
@@ -5671,24 +5677,76 @@
         return `${String(Math.floor(minVal / 60)).padStart(2, '0')}:${String(minVal % 60).padStart(2, '0')}`;
     }
 
-    // 第一階段：同時建立「做多(先買後賣)」與「反手(先賣後買回)」雙向三維報酬張量 (D x T x T)
     // ════════════════════════════════════════════════════════════════
-    // ⑤ 精細（5分K・60天）／粗略（60分K・730天）雙模式核心與自動介面掛載
+    // ⑤ 1分K / 5分K / 60分K 三模式核心 ＆ Alpaca / Yahoo 自動切換引擎
     // ════════════════════════════════════════════════════════════════
-    function simGetKlineMeta(scope) {
-        const el = document.getElementById(scope === 'msr' ? 'msr-kline-mode' : 'sim-kline-mode');
-        const is60m = el && el.value === '60m';
+    const SIM_ALPACA_STORAGE_KEY = 'SIM_ALPACA_API_CONFIG_V1';
+    const simAlpacaMemCache = new Map(); // 記憶體快取，避免同區間重複請求
+
+    function simGetAlpacaConfig() {
+        try {
+            const raw = JSON.parse(localStorage.getItem(SIM_ALPACA_STORAGE_KEY) || '{}') || {};
+            return {
+                keyId: String(raw.keyId || '').trim(),
+                secretKey: String(raw.secretKey || '').trim(),
+                adjustment: raw.adjustment || 'split',
+                rthOnly: raw.rthOnly !== false
+            };
+        } catch (e) {
+            return { keyId: '', secretKey: '', adjustment: 'split', rthOnly: true };
+        }
+    }
+
+    function simHasAlpacaKey() {
+        const cfg = simGetAlpacaConfig();
+        return !!(cfg.keyId && cfg.secretKey);
+    }
+
+    // 判斷該代號是否應使用 Alpaca（已填寫 Key 且非台股代號）
+    function simShouldUseAlpaca(ticker) {
+        if (!simHasAlpacaKey()) return false;
+        if (ticker && simIsTW(ticker)) return false; // 台股自動退回 Yahoo Finance
+        return true;
+    }
+    window.simGetAlpacaConfig = simGetAlpacaConfig;
+    window.simHasAlpacaKey = simHasAlpacaKey;
+    window.simShouldUseAlpaca = simShouldUseAlpaca;
+
+    function simGetKlineMeta(scope, tickerOverride) {
+        const elId = scope === 'msr' ? 'msr-kline-mode' : (scope === 'swg' ? 'swg-kline-mode' : 'sim-kline-mode');
+        const el = document.getElementById(elId);
+        const val = (el && el.value) ? el.value : '5m';
+        const is1m = val === '1m';
+        const is60m = val === '60m';
+
+        let refTicker = tickerOverride;
+        if (!refTicker) {
+            if (scope === 'msr') {
+                const chips = document.querySelectorAll('#msr-ticker-chips .msr-chip');
+                refTicker = chips.length ? chips[0].textContent.replace(/#\d+\s*/, '').trim() : '';
+            } else if (scope === 'swg') {
+                refTicker = (document.getElementById('swg-ticker')?.value || '').trim();
+            } else {
+                refTicker = (document.getElementById('sim-ticker')?.value || '').trim();
+            }
+        }
+        const useAlpaca = simShouldUseAlpaca(refTicker);
+        const srcTag = useAlpaca ? 'Alpaca' : 'Yahoo';
+        const maxDays = useAlpaca ? 3800 : (is60m ? 730 : (is1m ? 29 : 58));
+
         return {
-            interval: is60m ? '60m' : '5m',
-            is60m: !!is60m,
-            stepMin: is60m ? 60 : 5,
-            maxDays: is60m ? 730 : 58,
-            label: is60m ? '60分K(粗略)' : '5分K(精細)'
+            interval: is1m ? '1m' : (is60m ? '60m' : '5m'),
+            is1m,
+            is60m,
+            useAlpaca,
+            stepMin: is1m ? 1 : (is60m ? 60 : 5),
+            maxDays,
+            label: is1m ? `1分K(${srcTag})` : (is60m ? `60分K(${srcTag})` : `5分K(${srcTag})`)
         };
     }
     window.simGetKlineMeta = simGetKlineMeta;
 
-    // 快速設定近 N 天日期區間（若 N > 58 天自動切換為 60分K 粗略模式）
+    // 快速設定近 N 天日期區間（若未填 Alpaca Key 且超過 Yahoo 上限，才自動切換粒度）
     function simSetQuickDays(scope, days) {
         const isMsr = scope === 'msr';
         const stEl = document.getElementById(isMsr ? 'msr-start' : 'sim-start');
@@ -5700,28 +5758,41 @@
         edEl.value = iso(now);
         stEl.value = iso(new Date(now.getTime() - days * 86400e3));
         if (modeEl) {
-            modeEl.value = days > 58 ? '60m' : modeEl.value;
+            const meta = simGetKlineMeta(scope);
+            if (!meta.useAlpaca) {
+                if (days > 58) modeEl.value = '60m';
+                else if (days > 29 && modeEl.value === '1m') modeEl.value = '5m';
+            }
             simOnKlineModeChange(scope);
         }
     }
     window.simSetQuickDays = simSetQuickDays;
 
-    // 當切換 5分K / 60分K 時，同步更新欄位文字與預設時間
+    // 當切換 1分K / 5分K / 60分K 時，同步更新欄位文字與預設時間
     function simOnKlineModeChange(scope) {
         const isMsr = scope === 'msr';
         const meta = simGetKlineMeta(scope);
+        const unitLabel = meta.is1m ? '1 分 K' : (meta.is60m ? '60 分 K' : '5 分 K');
         if (!isMsr) {
             const nbarsLbl = document.querySelector('#sim-nbars')?.previousElementSibling;
-            if (nbarsLbl) nbarsLbl.innerText = `漲跌判定：用前幾根 ${meta.is60m ? '60 分 K' : '5 分 K'}（0＝只看開盤價）`;
-            // 切換至 60分K 時，若買進時間仍為預設 09:05 / 0時5分，自動對齊至首根 09:00 / 0時0分
+            if (nbarsLbl) nbarsLbl.innerText = `漲跌判定：用前幾根 ${unitLabel}（0＝只看開盤價）`;
+            const hintEl = document.getElementById('sim-kline-hint');
+            if (hintEl) {
+                hintEl.innerHTML = meta.useAlpaca
+                    ? `<span style="color:var(--color-up);">✓ 已啟用 Alpaca API：</span>支援美股 <b>1分K / 5分K / 60分K</b> 最遠回溯至 <b>2016 年（約 10 年）</b>。`
+                    : `目前使用 Yahoo 資料源：1分K 最高約 30 天、5分K 最高 58 天、60分K 最高 730 天（於最下方填寫 Alpaca Key 即可解鎖美股 10 年 1分K）。`;
+            }
             ['up', 'down'].forEach(side => {
                 const cm = document.getElementById(`sim-${side}-buy-cm`);
                 const ch = document.getElementById(`sim-${side}-buy-ch`);
                 const om = document.getElementById(`sim-${side}-buy-m`);
                 const oh = document.getElementById(`sim-${side}-buy-h`);
                 if (meta.is60m) {
-                    if (ch && cm && ch.value === '09' && cm.value === '05') cm.value = '00';
-                    if (oh && om && oh.value === '0' && om.value === '5') om.value = '0';
+                    if (ch && cm && ch.value === '09' && (cm.value === '05' || cm.value === '01')) cm.value = '00';
+                    if (oh && om && oh.value === '0' && (om.value === '5' || om.value === '1')) om.value = '0';
+                } else if (meta.is1m) {
+                    if (ch && cm && ch.value === '09' && cm.value === '00') cm.value = '01';
+                    if (oh && om && oh.value === '0' && om.value === '0') om.value = '1';
                 } else {
                     if (ch && cm && ch.value === '09' && cm.value === '00') cm.value = '05';
                     if (oh && om && oh.value === '0' && om.value === '0') om.value = '5';
@@ -5729,12 +5800,12 @@
             });
         } else {
             const nbarsLbl = document.querySelector('#msr-nbars')?.previousElementSibling;
-            if (nbarsLbl) nbarsLbl.innerText = `漲跌判定：前幾根 ${meta.is60m ? '60 分 K' : '5 分 K'}（0＝只看開盤價）`;
+            if (nbarsLbl) nbarsLbl.innerText = `漲跌判定：前幾根 ${unitLabel}（0＝只看開盤價）`;
             const hintEl = document.getElementById('msr-kline-hint');
             if (hintEl) {
-                hintEl.innerText = meta.is60m
-                    ? '目前為「60分K 粗略模式」，Yahoo 最高支援回溯 730 天（約 2 年），以每小時整點 K 棒進行快速長週期模擬與接力尋優。'
-                    : '目前為「5分K 精細模式」，Yahoo 僅提供最近約 60 天，起始日期請在 58 天內。';
+                hintEl.innerHTML = meta.useAlpaca
+                    ? `<span style="color:var(--color-up);">✓ 已啟用 Alpaca API：</span>目前為「${meta.label}」，支援美股最長 10 年歷史回溯。`
+                    : `目前為「${meta.label}」，Yahoo 上限：1分K 29天 / 5分K 58天 / 60分K 730天。`;
             }
             const ch = document.getElementById('msr-tmin-ch'), cm = document.getElementById('msr-tmin-cm');
             const oh = document.getElementById('msr-tmin-h'), om = document.getElementById('msr-tmin-m');
@@ -5749,24 +5820,28 @@
     }
     window.simOnKlineModeChange = simOnKlineModeChange;
 
-    // 動態在「主模擬器」與「多檔接力尋優器」的日期區間下方插入 K 線模式選擇器與快速天數按鈕
+    // 動態在「主模擬器」與「多檔接力尋優器」插入 1分K / 5分K / 60分K 選擇器與快速天數按鈕
     (function simInjectKlineModeUI() {
         const buildControlHTML = (scope) => `
             <div style="margin-top:12px;">
-                <div class="sim-lbl">K 線粒度與最大回測跨度</div>
+                <div class="sim-lbl">K 線粒度與最大回測跨度（填寫最下方 Alpaca Key 可解鎖 10 年 1分K）</div>
                 <select id="${scope}-kline-mode" class="sim-in" onchange="simOnKlineModeChange('${scope}')" style="text-align:left; padding:0 10px;">
-                    <option value="5m">精細：5 分鐘 K（最高約 60 天）</option>
-                    <option value="60m">粗略：60 分鐘 K（最高 730 天）</option>
+                    <option value="1m">極精細：1 分鐘 K（Alpaca 10 年 ／ Yahoo 30 天）</option>
+                    <option value="5m" selected>精細：5 分鐘 K（Alpaca 10 年 ／ Yahoo 60 天）</option>
+                    <option value="60m">粗略：60 分鐘 K（Alpaca 10 年 ／ Yahoo 730 天）</option>
                 </select>
                 <div style="display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:8px;">
                     <span style="font-size:10.5px; color:#888;">快速區間：</span>
-                    <button type="button" class="msr-quick-btn" onclick="simSetQuickDays('${scope}', 20)">近 20 天</button>
+                    <button type="button" class="msr-quick-btn" onclick="simSetQuickDays('${scope}', 7)">近 7 天</button>
+                    <button type="button" class="msr-quick-btn" onclick="simSetQuickDays('${scope}', 28)">近 28 天</button>
                     <button type="button" class="msr-quick-btn" onclick="simSetQuickDays('${scope}', 57)">近 57 天</button>
                     <button type="button" class="msr-quick-btn" onclick="simSetQuickDays('${scope}', 180)">近半年</button>
                     <button type="button" class="msr-quick-btn" onclick="simSetQuickDays('${scope}', 365)">近 1 年</button>
                     <button type="button" class="msr-quick-btn" onclick="simSetQuickDays('${scope}', 725)">近 2 年</button>
+                    <button type="button" class="msr-quick-btn" style="color:var(--color-acc);" onclick="simSetQuickDays('${scope}', 1825)">近 5 年(Alpaca)</button>
+                    <button type="button" class="msr-quick-btn" style="color:var(--color-up);" onclick="simSetQuickDays('${scope}', 3650)">近 10 年(Alpaca)</button>
                 </div>
-                ${scope === 'msr' ? '<div id="msr-kline-hint" style="font-size:10.5px; color:#666; margin-top:6px; line-height:1.5;">目前為「5分K 精細模式」，Yahoo 僅提供最近約 60 天，起始日期請在 58 天內。</div>' : '<div style="font-size:10.5px; color:#666; margin-top:6px; line-height:1.5;">近 58 天以內用 5 分 K；更長區間請用 60 分 K（粗略，最高 730 天），快速區間超過 58 天會自動切換。</div>'}
+                <div id="${scope}-kline-hint" style="font-size:10.5px; color:#666; margin-top:6px; line-height:1.5;"></div>
             </div>
         `;
 
@@ -5782,7 +5857,16 @@
             msrStartBox.insertAdjacentHTML('afterend', buildControlHTML('msr'));
         }
 
-        // 擴充配置存取以記住 klineMode
+        // 讓多檔接力的「單棒最短持倉」與「交割緩衝」支援 1 分鐘選項
+        const msrHoldSel = document.getElementById('msr-minhold-min');
+        if (msrHoldSel && !msrHoldSel.querySelector('option[value="1"]')) {
+            msrHoldSel.insertAdjacentHTML('afterbegin', '<option value="1">1 分鐘（1 根 1分K）</option><option value="3">3 分鐘（3 根 1分K）</option>');
+        }
+        const msrBufSel = document.getElementById('msr-buffer-min');
+        if (msrBufSel && !msrBufSel.querySelector('option[value="1"]')) {
+            msrBufSel.querySelector('option[value="0"]')?.insertAdjacentHTML('afterend', '<option value="1">1 分鐘（1 根 1分K 緩衝）</option><option value="2">2 分鐘（2 根 1分K 緩衝）</option>');
+        }
+
         const origGetCfg = window.simGetConfig || simGetConfig;
         if (typeof origGetCfg === 'function') {
             simGetConfig = function() {
@@ -5802,15 +5886,186 @@
                 }
             };
         }
+        simOnKlineModeChange('sim');
+        simOnKlineModeChange('msr');
     })();
 
-    // 覆寫資料抓取函式：支援 interval = '5m' | '60m'，並自動截斷 p1 防止超出 Yahoo 60天/730天硬上限報錯
-    async function simFetchIntraday(symbol, p1, p2, interval) {
-        const intv = interval || simGetKlineMeta('sim').interval || '5m';
+    // 快速計算指定 UTC 秒數在 America/New_York 的時區偏移秒數（以單日快取加速百萬筆 K 棒轉換）
+    const simNyOffsetDayCache = new Map();
+    const simNyFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/New_York',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+    });
+    function simGetNyOffsetSec(utcSec) {
+        const dayBucket = Math.floor(utcSec / 86400);
+        if (simNyOffsetDayCache.has(dayBucket)) return simNyOffsetDayCache.get(dayBucket);
+        const refSec = dayBucket * 86400 + 57600; // 取當日 16:00 UTC (美東交易時段中間)
+        const parts = simNyFormatter.formatToParts(new Date(refSec * 1000));
+        const mp = {};
+        for (const p of parts) mp[p.type] = p.value;
+        const hr = parseInt(mp.hour, 10) === 24 ? 0 : parseInt(mp.hour, 10);
+        const nyAsUtcSec = Date.UTC(+mp.year, +mp.month - 1, +mp.day, hr, +mp.minute, +mp.second) / 1000;
+        const offsetSec = Math.round((nyAsUtcSec - refSec) / 900) * 900;
+        simNyOffsetDayCache.set(dayBucket, offsetSec);
+        return offsetSec;
+    }
+
+    // 使用 Alpaca Market Data API v2 抓取 1Min / 5Min / 1Hour K線（自動處理 next_page_token 分頁與美東時區對齊）
+    async function simFetchAlpacaIntraday(symbol, p1, p2, interval) {
+        const cfg = simGetAlpacaConfig();
+        const tfMap = { '1m': '1Min', '5m': '5Min', '15m': '15Min', '30m': '30Min', '60m': '1Hour', '1h': '1Hour' };
+        const tf = tfMap[interval] || '5Min';
+        const cleanSym = String(symbol || '').trim().toUpperCase();
+
+        // Alpaca 歷史數據自 2016-01-01 起；免費版查詢 SIP 全美數據時 end 須早於當下至少 15 分鐘
+        const minAlpacaSec = 1451606400; // 2016-01-01T00:00:00Z
+        const maxDelayedSec = Math.floor((Date.now() - 16 * 60 * 1000) / 1000);
+        const safeP2 = Math.min(p2, maxDelayedSec);
+        const safeP1 = Math.max(minAlpacaSec, Math.min(p1, safeP2 - 3600));
+
+        const cacheKey = `${cleanSym}|${tf}|${safeP1}|${Math.floor(safeP2 / 300)}|${cfg.adjustment}|${cfg.rthOnly ? 1 : 0}`;
+        if (simAlpacaMemCache.has(cacheKey)) return simAlpacaMemCache.get(cacheKey);
+
+        const startIso = new Date(safeP1 * 1000).toISOString();
+        const endIso = new Date(safeP2 * 1000).toISOString();
+
+        let feed = 'sip';
+        let pageToken = null;
+        let pageCount = 0;
+        const maxPages = 150; // 最高 150 萬根 K 棒
+        const rawBars = [];
+
+        while (pageCount < maxPages) {
+            pageCount++;
+            const url = `https://data.alpaca.markets/v2/stocks/${encodeURIComponent(cleanSym)}/bars?timeframe=${tf}&start=${encodeURIComponent(startIso)}&end=${encodeURIComponent(endIso)}&limit=10000&adjustment=${encodeURIComponent(cfg.adjustment)}&feed=${feed}${pageToken ? '&page_token=' + encodeURIComponent(pageToken) : ''}`;
+            const res = await fetch(url, {
+                cache: 'no-store',
+                headers: {
+                    'APCA-API-KEY-ID': cfg.keyId,
+                    'APCA-API-SECRET-KEY': cfg.secretKey,
+                    'Accept': 'application/json'
+                }
+            });
+
+            if (!res.ok) {
+                if ((res.status === 403 || res.status === 422) && feed === 'sip') {
+                    feed = 'iex';
+                    pageCount--;
+                    continue;
+                }
+                if (res.status === 401 || res.status === 403) {
+                    throw new Error(`Alpaca API Key 驗證失敗 (HTTP ${res.status})，請檢查頁面最下方的 Key ID 與 Secret Key 是否正確`);
+                }
+                throw new Error(`Alpaca API 請求失敗 (HTTP ${res.status})`);
+            }
+
+            const j = await res.json();
+            const bars = j.bars || [];
+            for (let i = 0; i < bars.length; i++) rawBars.push(bars[i]);
+
+            pageToken = j.next_page_token || null;
+            if (!pageToken || !bars.length) break;
+        }
+
+        if (!rawBars.length) return null;
+
+        const timestamps = [];
+        const opens = [], highs = [], lows = [], closes = [], volumes = [];
+        const is60m = (interval === '60m' || interval === '1h');
+
+        for (let i = 0; i < rawBars.length; i++) {
+            const b = rawBars[i];
+            const utcSec = Math.floor(Date.parse(b.t) / 1000);
+            const nyLocalSec = utcSec + simGetNyOffsetSec(utcSec);
+
+            if (cfg.rthOnly) {
+                const modSec = ((nyLocalSec % 86400) + 86400) % 86400;
+                const nyMin = Math.floor(modSec / 60);
+                // 1m/5m 美股正規交易時段為 09:30~15:59 (570~959分)；60m 整點時間戳記則涵蓋 09:00~15:00 (540~900分)
+                if (is60m) {
+                    if (nyMin < 540 || nyMin > 900) continue;
+                } else {
+                    if (nyMin < 570 || nyMin >= 960) continue;
+                }
+            }
+
+            timestamps.push(nyLocalSec);
+            opens.push(b.o);
+            highs.push(b.h);
+            lows.push(b.l);
+            closes.push(b.c);
+            volumes.push(b.v || 0);
+        }
+
+        if (!timestamps.length) return null;
+
+        const resultObj = {
+            meta: { gmtoffset: 0, symbol: cleanSym, dataGranularity: interval, source: 'Alpaca' },
+            timestamp: timestamps,
+            indicators: { quote: [{ open: opens, high: highs, low: lows, close: closes, volume: volumes }] }
+        };
+
+        if (simAlpacaMemCache.size >= 15) {
+            const firstKey = simAlpacaMemCache.keys().next().value;
+            simAlpacaMemCache.delete(firstKey);
+        }
+        simAlpacaMemCache.set(cacheKey, resultObj);
+        return resultObj;
+    }
+
+    // Yahoo Finance 抓取函式（支援 1m 自動以 7 天分段合併，最高回溯 30 天）
+    async function simFetchYahooIntraday(symbol, p1, p2, intv) {
         const nowSec = Math.floor(Date.now() / 1000);
-        const maxBackSec = (intv === '60m' ? 729 : 59) * 86400 + 43200;
+        const maxBackSec = (intv === '60m' ? 729 : (intv === '1m' ? 29 : 59)) * 86400 + 43200;
         const safeP1 = Math.max(p1, nowSec - maxBackSec);
         const safeP2 = Math.min(p2, nowSec + 86400);
+
+        if (intv === '1m' && (safeP2 - safeP1) > 6.8 * 86400) {
+            const stepSec = Math.floor(6.8 * 86400);
+            const tsMap = new Map();
+            let gmtoffset = 0;
+            for (let cur = safeP1; cur < safeP2; cur += stepSec) {
+                const segEnd = Math.min(safeP2, cur + stepSec);
+                const url = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?period1=${cur}&period2=${segEnd}&interval=1m`)}`;
+                try {
+                    const res = await fetch(url, { cache: 'no-store' });
+                    if (!res.ok) continue;
+                    const j = await res.json();
+                    const r = j.chart && j.chart.result ? j.chart.result[0] : null;
+                    if (!r || !(r.timestamp || []).length) continue;
+                    gmtoffset = (r.meta && r.meta.gmtoffset) || gmtoffset;
+                    const q = r.indicators.quote[0] || {};
+                    r.timestamp.forEach((t, idx) => {
+                        if (q.open[idx] != null && q.close[idx] != null) {
+                            tsMap.set(t, {
+                                o: q.open[idx],
+                                h: q.high ? q.high[idx] : Math.max(q.open[idx], q.close[idx]),
+                                l: q.low ? q.low[idx] : Math.min(q.open[idx], q.close[idx]),
+                                c: q.close[idx],
+                                v: q.volume ? q.volume[idx] : 0
+                            });
+                        }
+                    });
+                } catch (e) {}
+            }
+            const sortedTs = [...tsMap.keys()].sort((a, b) => a - b);
+            if (!sortedTs.length) return null;
+            return {
+                meta: { gmtoffset, symbol, dataGranularity: '1m', source: 'Yahoo' },
+                timestamp: sortedTs,
+                indicators: {
+                    quote: [{
+                        open: sortedTs.map(t => tsMap.get(t).o),
+                        high: sortedTs.map(t => tsMap.get(t).h),
+                        low: sortedTs.map(t => tsMap.get(t).l),
+                        close: sortedTs.map(t => tsMap.get(t).c),
+                        volume: sortedTs.map(t => tsMap.get(t).v)
+                    }]
+                }
+            };
+        }
+
         const url = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?period1=${safeP1}&period2=${safeP2}&interval=${intv}`)}`;
         const res = await fetch(url, { cache: 'no-store' });
         if (!res.ok) throw new Error('http ' + res.status);
@@ -5819,7 +6074,17 @@
         return r;
     }
 
-    // 覆寫主模擬器：支援 5分K（58天）與 60分K（730天）
+    // 統一入口：若已填寫 Alpaca Key 且為美股，自動改用 Alpaca API；否則使用 Yahoo Finance
+    async function simFetchIntraday(symbol, p1, p2, interval) {
+        const intv = interval || simGetKlineMeta('sim', symbol).interval || '5m';
+        if (simShouldUseAlpaca(symbol)) {
+            return await simFetchAlpacaIntraday(symbol, p1, p2, intv);
+        }
+        return await simFetchYahooIntraday(symbol, p1, p2, intv);
+    }
+    window.simFetchIntraday = simFetchIntraday;
+
+    // 覆寫主模擬器：支援 1分K / 5分K / 60分K 與 Alpaca 10 年歷史區間
     async function runOpenSimulator() {
         const errEl = document.getElementById('sim-error'), out = document.getElementById('sim-result'), btn = document.getElementById('sim-run-btn');
         const fail = (m) => { errEl.style.display = 'block'; errEl.innerText = m; out.style.display = 'none'; };
@@ -5831,11 +6096,11 @@
         const startMs = Date.parse(sv + 'T00:00:00Z'), endMs = Date.parse(ev + 'T00:00:00Z');
         if (endMs < startMs) return fail('結束日期不能早於起始日期');
 
-        const kMeta = simGetKlineMeta('sim');
+        const kMeta = simGetKlineMeta('sim', ticker);
         if (Date.now() - startMs > kMeta.maxDays * 86400e3) {
-            return fail(kMeta.is60m
-                ? '60 分鐘 K 線（粗略模式）Yahoo 最多提供最近 730 天，請把起始日期改為 730 天內'
-                : '5 分鐘 K 線（精細模式）Yahoo 只提供最近約 60 天，請把起始日期改為 58 天內，或切換為「60分K 粗略模式（最高 730 天）」');
+            return fail(kMeta.useAlpaca
+                ? `Alpaca 歷史資料支援自 2016 年起（約 ${kMeta.maxDays} 天內），請將起始日期設於 2016 年之後`
+                : `目前使用 Yahoo 資料源，${kMeta.label} 最多提供最近 ${kMeta.maxDays} 天資料；若需回測美股長天期 1分K/5分K，請於頁面最下方填寫 Alpaca API Key`);
         }
 
         const offMode = !simIsTW(ticker);
@@ -5847,7 +6112,7 @@
             const h = parseInt(document.getElementById(id + '-h').value, 10), m = parseInt(document.getElementById(id + '-m').value, 10);
             return (isNaN(h) && isNaN(m)) ? null : (h || 0) * 60 + (m || 0);
         };
-        const nDecide = Math.max(0, Math.min(30, parseInt(document.getElementById('sim-nbars').value, 10) || 0));
+        const nDecide = Math.max(0, Math.min(60, parseInt(document.getElementById('sim-nbars').value, 10) || 0));
         const hold = document.getElementById('sim-mode').value === 'holding', nShares = hold ? (parseFloat(document.getElementById('sim-shares').value) || 0) : 0;
         const cfg = {};
         for (const side of ['up', 'down']) {
@@ -5883,7 +6148,7 @@
             const p1 = Math.floor(startMs / 1000) - 8 * 86400, p2 = Math.floor(endMs / 1000) + 2 * 86400;
             const cands = /^\d{4,6}[A-Z]?$/.test(ticker) ? [ticker + '.TW', ticker + '.TWO'] : [ticker];
             let r = null;
-            for (const c of cands) { try { r = await simFetchIntraday(c, p1, p2, kMeta.interval); } catch (e) {} if (r) { ticker = c; break; } }
+            for (const c of cands) { try { r = await simFetchIntraday(c, p1, p2, kMeta.interval); } catch (e) { if (kMeta.useAlpaca) throw e; } if (r) { ticker = c; break; } }
             if (!r) throw new Error(`查無此代號的 ${kMeta.label} 資料（可能代號有誤，或該區間沒有交易）`);
             const off = (r.meta && r.meta.gmtoffset) || 0, q = r.indicators.quote[0] || {};
             const days = new Map();
@@ -5909,7 +6174,6 @@
                 const c = hit || cfg[side], ruleLabel = hit ? hit.label : '基本';
                 if (!c.on) continue;
                 const t0 = offMode ? bars[0].m : 0;
-                // 60分K 下若買進時間落在第一根起算 5 分鐘內（如預設 09:05），允許匹配首根 09:00 K 棒
                 const buyTarget = (kMeta.is60m && c.buy <= (bars[0].m - t0) + 5) ? (bars[0].m - t0) : c.buy;
                 const bi = bars.findIndex((b, k) => k >= nDecide && b.m - t0 >= buyTarget);
                 if (bi < 0) continue;
@@ -5934,15 +6198,22 @@
     }
     window.runOpenSimulator = runOpenSimulator;
 
-    // 第一階段：同時建立「做多(先買後賣)」與「反手(先賣後買回)」雙向三維報酬張量 (D x T x T)（支援 5m 與 60m）
+    // 第一階段：同時建立「做多(先買後賣)」與「反手(先賣後買回)」雙向三維報酬張量 (支援 1m / 5m / 60m 與長天期防爆記憶體步進)
     function simBuildDualReturnTensor(dayRecords, nDecide, offMode, feeOn, ticker, noLateExit, minStartMin, maxFinishMin, is60m) {
         const timeSet = new Set();
         dayRecords.forEach(d => {
             const t0 = offMode ? d.bars[0].m : 0;
             d.bars.forEach(b => timeSet.add(b.m - t0));
         });
-        const gridTimes = [...timeSet].sort((a, b) => a - b);
+        let gridTimes = [...timeSet].sort((a, b) => a - b);
         if (!gridTimes.length) return null;
+
+        const D = dayRecords.length;
+        // 若在 1分K 下回測數百至數千天，自動調整尋優候選時間網格步進以確保瀏覽器記憶體安全且毫秒級運算
+        if (D * gridTimes.length * gridTimes.length > 14000000 && gridTimes.length > 90) {
+            const stride = Math.max(2, Math.ceil(Math.sqrt((D * gridTimes.length * gridTimes.length) / 10000000)));
+            gridTimes = gridTimes.filter((_, idx) => idx % stride === 0 || idx === gridTimes.length - 1);
+        }
 
         const disallowLate = noLateExit || (maxFinishMin !== null);
         const lateTime = !offMode
@@ -5951,7 +6222,6 @@
         if (!disallowLate) gridTimes.push(lateTime);
 
         const T = gridTimes.length;
-        const D = dayRecords.length;
         const baseOpenClock = gridTimes[0];
 
         const tensorLong = new Float64Array(D * T * T).fill(NaN);
@@ -6013,7 +6283,7 @@
                     if (feeOn) {
                         const bc1 = computeTradeCosts(ticker, p1 * N, N, 'BUY');
                         const sc2 = computeTradeCosts(ticker, p2 * N, N, 'SELL');
-                        rLong = (p2 * N - sc2.fee - sc2.tax) / (p1 * N + bc1.fee + (bc1.tax || 0)) - 1;
+                        rLong = (p2 * N - sc2.fee - sc2.tax) / (p1 * N + bc1.fee + (bc.tax || 0)) - 1;
 
                         const sc1 = computeTradeCosts(ticker, p1 * N, N, 'SELL');
                         const bc2 = computeTradeCosts(ticker, p2 * N, N, 'BUY');
@@ -6257,7 +6527,7 @@
         return finalPartitionChains;
     }
 
-    // 主尋優入口函式（支援 5m 精細 60天 與 60m 粗略 730天）
+    // 主尋優入口函式（支援 1m / 5m / 60m 與 Alpaca 10 年歷史資料）
     async function runOpenOptimizer() {
         const errEl = document.getElementById('sim-error'), boardEl = document.getElementById('sim-opt-board'), btn = document.getElementById('sim-opt-btn');
         const fail = (m) => { errEl.style.display = 'block'; errEl.innerText = m; boardEl.style.display = 'none'; };
@@ -6270,11 +6540,11 @@
         const startMs = Date.parse(sv + 'T00:00:00Z'), endMs = Date.parse(ev + 'T00:00:00Z');
         if (endMs < startMs) return fail('結束日期不能早於起始日期');
 
-        const kMeta = simGetKlineMeta('sim');
+        const kMeta = simGetKlineMeta('sim', ticker);
         if (Date.now() - startMs > kMeta.maxDays * 86400e3) {
-            return fail(kMeta.is60m
-                ? '60 分鐘 K 線（粗略模式）Yahoo 最多提供最近 730 天，請把起始日期改為 730 天內'
-                : '5 分鐘 K 線（精細模式）Yahoo 只提供最近約 60 天，請把起始日期改為 58 天內，或切換為「60分K 粗略模式（最高 730 天）」');
+            return fail(kMeta.useAlpaca
+                ? `Alpaca 歷史資料支援自 2016 年起（約 ${kMeta.maxDays} 天內），請將起始日期設於 2016 年之後`
+                : `目前使用 Yahoo 資料源，${kMeta.label} 最多提供最近 ${kMeta.maxDays} 天資料；若需回測美股長天期 1分K/5分K，請於頁面最下方填寫 Alpaca API Key`);
         }
 
         const minWinPct = parseFloat(document.getElementById('sim-opt-min-win').value) || 0;
@@ -6284,7 +6554,7 @@
         const minDays = Math.max(1, parseInt(document.getElementById('sim-opt-min-days').value, 10) || 1);
         const maxLossRaw = (document.getElementById('sim-opt-max-loss').value || '').trim();
         const maxLossDec = maxLossRaw === '' ? null : Math.abs(parseFloat(maxLossRaw)) / 100;
-        const minHoldMin = Math.max(5, parseInt(document.getElementById('sim-opt-min-hold').value, 10) || 5);
+        const minHoldMin = Math.max(kMeta.stepMin, parseInt(document.getElementById('sim-opt-min-hold').value, 10) || kMeta.stepMin);
         const waveBufMin = Math.max(0, parseInt(document.getElementById('sim-opt-wave-buf').value, 10) || 0);
 
         const minStartRaw = (document.getElementById('sim-opt-min-start').value || '').trim();
@@ -6306,7 +6576,7 @@
         const offMode = !simIsTW(ticker);
         const hold = document.getElementById('sim-mode').value === 'holding';
         const feeOn = document.getElementById('sim-fee-on').checked;
-        const baseNDecide = Math.max(0, Math.min(30, parseInt(document.getElementById('sim-nbars').value, 10) || 0));
+        const baseNDecide = Math.max(0, Math.min(60, parseInt(document.getElementById('sim-nbars').value, 10) || 0));
 
         const userBls = [];
         for (const id of simBlIds) {
@@ -6326,7 +6596,7 @@
             const p1 = Math.floor(startMs / 1000) - 8 * 86400, p2 = Math.floor(endMs / 1000) + 2 * 86400;
             const cands = /^\d{4,6}[A-Z]?$/.test(ticker) ? [ticker + '.TW', ticker + '.TWO'] : [ticker];
             let r = null;
-            for (const c of cands) { try { r = await simFetchIntraday(c, p1, p2, kMeta.interval); } catch (e) {} if (r) { ticker = c; break; } }
+            for (const c of cands) { try { r = await simFetchIntraday(c, p1, p2, kMeta.interval); } catch (e) { if (kMeta.useAlpaca) throw e; } if (r) { ticker = c; break; } }
             if (!r) throw new Error(`查無此代號的 ${kMeta.label} 資料`);
 
             const off = (r.meta && r.meta.gmtoffset) || 0, q = r.indicators.quote[0] || {};
@@ -6348,7 +6618,7 @@
             }
             if (rawDays.length < 3) throw new Error('有效交易日過少，請拉長日期區間');
 
-            const candNbars = kMeta.is60m ? [baseNDecide, 0, 1, 2] : [baseNDecide, 0, 1, 2, 3, 6];
+            const candNbars = kMeta.is60m ? [baseNDecide, 0, 1, 2] : (kMeta.is1m ? [baseNDecide, 0, 1, 3, 5, 15] : [baseNDecide, 0, 1, 2, 3, 6]);
             const nDecideList = (autoNbars ? [...new Set(candNbars)] : [baseNDecide])
                 .filter(nd => maxFinishMin === null || (Math.max(effectiveStart, nd * kMeta.stepMin) + minHoldMin) <= maxFinishMin);
 
@@ -7038,7 +7308,9 @@
     // 1. 抓取 K 線並保留「起始日前之往前推演區間 (Pre-Window Days)」＋「模擬區間 (Sim Days)」
     async function swgFetchPatternDataset(rawTicker, startMs, endMs, interval, extraLookbackCalDays) {
         const nowSec = Math.floor(Date.now() / 1000);
-        const maxBackSec = (interval === '60m' ? 729 : 59) * 86400 + 43200;
+        const useAlpaca = window.simShouldUseAlpaca && window.simShouldUseAlpaca(rawTicker);
+        const maxDays = useAlpaca ? 3800 : (interval === '60m' ? 729 : (interval === '1m' ? 29 : 59));
+        const maxBackSec = maxDays * 86400 + 43200;
         // 往前多抓 extraLookbackCalDays 供「往前推演尋找規律」使用
         const p1 = Math.max(Math.floor(startMs / 1000) - extraLookbackCalDays * 86400, nowSec - maxBackSec);
         const p2 = Math.min(Math.floor(endMs / 1000) + 2 * 86400, nowSec + 86400);
@@ -7047,14 +7319,11 @@
         let chart = null, resolvedTicker = rawTicker;
         for (const c of cands) {
             try {
-                const url = `${myProxy}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${c}?period1=${p1}&period2=${p2}&interval=${interval}`)}`;
-                const res = await fetch(url, { cache: 'no-store' });
-                if (res.ok) {
-                    const j = await res.json();
-                    const r = j.chart && j.chart.result ? j.chart.result[0] : null;
-                    if (r && (r.timestamp || []).length) { chart = r; resolvedTicker = c; break; }
-                }
-            } catch (e) {}
+                const r = await simFetchIntraday(c, p1, p2, interval);
+                if (r && (r.timestamp || []).length) { chart = r; resolvedTicker = c; break; }
+            } catch (e) {
+                if (useAlpaca) throw e;
+            }
         }
         if (!chart) throw new Error(`查無 ${rawTicker} 的 ${interval} K 線資料`);
 
@@ -16622,7 +16891,7 @@ ${summaryText}
         try { return await o.apply(this, arguments); }
         finally {
           const er = $(ERR[tab]); const bad = er && er.style.display !== 'none' && er.textContent.trim();
-          if (!bad) hideAI(tab); if (!bad) reveal(tab);
+          hideAI(tab); if (!bad) reveal(tab);
         }
       };
       f._ai = true; window[name] = f;
@@ -16630,6 +16899,193 @@ ${summaryText}
     wrap('runOpenOptimizer', 'gap'); wrap('runMultiStockRelayOptimizer', 'relay'); wrap('runSwingOptimizer', 'swing');
     ['sim-opt-btn', 'msr-run-btn', 'swg-opt-btn'].forEach(id => { const b = $(id); if (b) b.classList.add('ai-btn'); });
   } catch (e) { console.error('initSimHub', e); }
+})();
+
+// ════════════════════════════════════════════════════════════════
+// ⑧ 頁面最下方：Alpaca Market Data API 金鑰設定面板（儲存於本機瀏覽器 localStorage）
+// ════════════════════════════════════════════════════════════════
+(function initAlpacaKeyBottomPanel() {
+    // 1. 讓「⑥ 中線波段模擬器」的選單與快速按鈕也支援 1分K 與 Alpaca 長週期
+    const swgModeSel = document.getElementById('swg-kline-mode');
+    if (swgModeSel && !swgModeSel.querySelector('option[value="1m"]')) {
+        swgModeSel.insertAdjacentHTML('afterbegin', '<option value="1m">1分K 模式（Alpaca 最高 10 年 ／ Yahoo 30 天）</option>');
+    }
+    const origSwgQuick = window.swgSetQuickDays;
+    if (typeof origSwgQuick === 'function') {
+        window.swgSetQuickDays = function(days) {
+            const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+            const now = new Date();
+            document.getElementById('swg-end').value = iso(now);
+            document.getElementById('swg-start').value = iso(new Date(now.getTime() - days * 86400e3));
+            const rawT = (document.getElementById('swg-ticker')?.value || '').trim();
+            const useAlpaca = window.simShouldUseAlpaca && window.simShouldUseAlpaca(rawT);
+            if (!useAlpaca) {
+                document.getElementById('swg-kline-mode').value = days > 58 ? '60m' : (days > 29 ? '5m' : document.getElementById('swg-kline-mode').value);
+            }
+        };
+    }
+
+    // 2. 在 .wrap 最底部插入 Alpaca API Key 設定卡片
+    const wrap = document.querySelector('.hub-shared') || document.querySelector('.wrap');
+    if (!wrap) return;
+
+    const panel = document.createElement('details');
+    panel.className = 'glass-panel';
+    panel.id = 'alpaca-config-panel';
+    panel.style.cssText = 'margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.08) !important;';
+    panel.innerHTML = `
+        <summary style="cursor:pointer; list-style:none; display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+            <div style="font-weight:bold; font-size:12.5px; color:#bbb;">
+                <i class="fa-solid fa-chevron-right alpaca-chev" style="font-size:10px; margin-right:4px; transition:transform .2s;"></i><i class="fa-solid fa-key" style="color:var(--color-acc);"></i> Alpaca Market Data API 金鑰設定
+            </div>
+            <span id="alpaca-status-badge" style="display:inline-block; padding:3px 8px; border-radius:6px; font-size:10.5px; font-family:monospace; font-weight:bold;"></span>
+        </summary>
+        <div style="font-size:11px; color:#888; line-height:1.6; margin:10px 0 12px;">
+            填寫免費申請的 <b>Alpaca Paper Trading API Key</b> 並儲存後，本系統針對美股將自動改由 <b>Alpaca API v2</b> 抓取歷史 K 線，支援<b>最遠自 2016 年起（10 年以上）的 1 分 K、5 分 K 與 60 分 K</b>（自動處理 10,000 筆分頁與美東冬夏令時差）；若留空或查詢台股（.TW/.TWO），則自動使用 Yahoo Finance（1分K 自動以 7 天分段合併最多抓 30 天）。金鑰僅保存在您這台裝置的瀏覽器 <code>localStorage</code> 中。
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:10px;">
+            <div class="sim-grid2">
+                <div>
+                    <div class="sim-lbl">API Key ID</div>
+                    <input type="text" id="alpaca-key-id" class="sim-in" placeholder="例如 PKXXXXXXXXXXXXXXXXXX" autocomplete="off" spellcheck="false" style="text-align:left; padding:0 10px; font-family:monospace;">
+                </div>
+                <div>
+                    <div class="sim-lbl">Secret Key</div>
+                    <div style="display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px;">
+                        <input type="password" id="alpaca-secret-key" class="sim-in" placeholder="輸入 Alpaca Secret Key" autocomplete="off" spellcheck="false" style="text-align:left; padding:0 10px; font-family:monospace;">
+                        <button type="button" class="sim-in" onclick="simToggleAlpacaSecret()" style="width:40px; padding:0; cursor:pointer; color:#aaa;" title="顯示／隱藏 Secret Key">
+                            <i id="alpaca-eye-icon" class="fa-solid fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sim-grid2">
+                <div>
+                    <div class="sim-lbl">除權息與股票分割還原（Adjustment）</div>
+                    <select id="alpaca-adjustment" class="sim-in" style="text-align:left; padding:0 10px;">
+                        <option value="split" selected>Split（自動還原股票拆股，推薦）</option>
+                        <option value="all">All（同時還原股票拆股與現金股息）</option>
+                        <option value="raw">Raw（未還原原始歷史價格）</option>
+                    </select>
+                </div>
+                <div style="display:flex; align-items:flex-end; padding-bottom:4px;">
+                    <label style="font-size:11px; color:#ccc; display:flex; align-items:center; gap:6px; cursor:pointer;">
+                        <input type="checkbox" id="alpaca-rth-only" checked>
+                        僅保留美股正規盤 (09:30–16:00 ET，過濾盤前盤後)
+                    </label>
+                </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr auto auto; gap:8px;">
+                <button type="button" onclick="simSaveAlpacaKeys()" class="sim-in" style="background:var(--color-acc); color:#000; border:none; font-weight:bold; cursor:pointer;">
+                    <i class="fa-solid fa-floppy-disk"></i> 儲存 Key 至本機瀏覽器並啟用
+                </button>
+                <button type="button" id="alpaca-test-btn" onclick="simTestAlpacaConnection()" class="sim-in" style="width:auto; padding:0 14px; cursor:pointer; color:var(--color-up); border-color:rgba(0,255,170,0.35);">
+                    <i class="fa-solid fa-plug-circle-check"></i> 測試連線
+                </button>
+                <button type="button" onclick="simClearAlpacaKeys()" class="sim-in" style="width:auto; padding:0 14px; cursor:pointer; color:var(--color-sell);" title="清除本機儲存的 Key">
+                    <i class="fa-solid fa-trash"></i> 清除
+                </button>
+            </div>
+            <div id="alpaca-msg" style="display:none; font-size:11px; font-family:monospace; padding:6px 10px; border-radius:6px; background:rgba(0,0,0,0.4);"></div>
+        </div>
+    `;
+    wrap.appendChild(panel);
+
+    function refreshAlpacaUI() {
+        const cfg = simGetAlpacaConfig();
+        document.getElementById('alpaca-key-id').value = cfg.keyId;
+        document.getElementById('alpaca-secret-key').value = cfg.secretKey;
+        document.getElementById('alpaca-adjustment').value = cfg.adjustment || 'split';
+        document.getElementById('alpaca-rth-only').checked = cfg.rthOnly !== false;
+
+        const badge = document.getElementById('alpaca-status-badge');
+        if (cfg.keyId && cfg.secretKey) {
+            badge.style.background = 'rgba(0,255,170,0.15)';
+            badge.style.color = 'var(--color-up)';
+            badge.style.border = '1px solid rgba(0,255,170,0.35)';
+            badge.innerText = `✓ 已啟用 Alpaca (${cfg.keyId.slice(0, 4)}...${cfg.keyId.slice(-3)})`;
+        } else {
+            badge.style.background = 'rgba(255,255,255,0.08)';
+            badge.style.color = '#aaa';
+            badge.style.border = '1px solid rgba(255,255,255,0.15)';
+            badge.innerText = '未填寫 Key（預設使用 Yahoo）';
+        }
+        if (typeof simOnKlineModeChange === 'function') {
+            simOnKlineModeChange('sim');
+            simOnKlineModeChange('msr');
+        }
+    }
+
+    function showAlpacaMsg(text, isErr) {
+        const el = document.getElementById('alpaca-msg');
+        if (!el) return;
+        el.style.display = 'block';
+        el.style.color = isErr ? 'var(--color-sell)' : 'var(--color-up)';
+        el.style.border = `1px solid ${isErr ? 'rgba(255,69,96,0.35)' : 'rgba(0,255,170,0.35)'}`;
+        el.innerText = text;
+    }
+
+    window.simToggleAlpacaSecret = function() {
+        const inp = document.getElementById('alpaca-secret-key');
+        const icon = document.getElementById('alpaca-eye-icon');
+        if (!inp) return;
+        const toShow = inp.type === 'password';
+        inp.type = toShow ? 'text' : 'password';
+        if (icon) icon.className = toShow ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye';
+    };
+
+    window.simSaveAlpacaKeys = function() {
+        const keyId = (document.getElementById('alpaca-key-id').value || '').trim();
+        const secretKey = (document.getElementById('alpaca-secret-key').value || '').trim();
+        const adjustment = document.getElementById('alpaca-adjustment').value || 'split';
+        const rthOnly = document.getElementById('alpaca-rth-only').checked;
+
+        try {
+            localStorage.setItem(SIM_ALPACA_STORAGE_KEY, JSON.stringify({ keyId, secretKey, adjustment, rthOnly }));
+            simAlpacaMemCache.clear();
+            refreshAlpacaUI();
+            if (keyId && secretKey) {
+                showAlpacaMsg('✓ 已成功儲存至本機瀏覽器！現在模擬美股時將自動採用 Alpaca 資料源（支援 10 年 1分K / 5分K / 60分K）。', false);
+            } else {
+                showAlpacaMsg('Key 欄位為空白，已切換回預設 Yahoo Finance 資料源。', false);
+            }
+        } catch (e) {
+            showAlpacaMsg('儲存失敗：瀏覽器可能封鎖了本機儲存空間 (localStorage)。', true);
+        }
+    };
+
+    window.simClearAlpacaKeys = function() {
+        try { localStorage.removeItem(SIM_ALPACA_STORAGE_KEY); } catch (e) {}
+        simAlpacaMemCache.clear();
+        refreshAlpacaUI();
+        showAlpacaMsg('已清除本機 Alpaca API Key，目前回復使用 Yahoo Finance 資料源。', false);
+    };
+
+    window.simTestAlpacaConnection = async function() {
+        window.simSaveAlpacaKeys();
+        if (!simHasAlpacaKey()) {
+            return showAlpacaMsg('請先填寫 API Key ID 與 Secret Key 再測試連線。', true);
+        }
+        const btn = document.getElementById('alpaca-test-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 測試中...';
+        try {
+            const nowSec = Math.floor(Date.now() / 1000);
+            const r = await simFetchIntraday('AAPL', nowSec - 7 * 86400, nowSec - 1200, '1m');
+            if (!r || !(r.timestamp || []).length) throw new Error('未收到 K 棒數據');
+            showAlpacaMsg(`✓ 連線成功！已從 Alpaca 驗證取得 AAPL 最近 ${r.timestamp.length.toLocaleString()} 根 1 分 K 資料。`, false);
+        } catch (err) {
+            showAlpacaMsg(`✗ 連線失敗：${err.message || '請確認 Key 是否為有效的 Alpaca API Key'}`, true);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-plug-circle-check"></i> 測試連線';
+        }
+    };
+
+    refreshAlpacaUI();
 })();
 </script>
 
