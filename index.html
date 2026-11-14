@@ -6283,7 +6283,7 @@
                     if (feeOn) {
                         const bc1 = computeTradeCosts(ticker, p1 * N, N, 'BUY');
                         const sc2 = computeTradeCosts(ticker, p2 * N, N, 'SELL');
-                        rLong = (p2 * N - sc2.fee - sc2.tax) / (p1 * N + bc1.fee + (bc.tax || 0)) - 1;
+                        rLong = (p2 * N - sc2.fee - sc2.tax) / (p1 * N + bc1.fee + (bc1.tax || 0)) - 1;
 
                         const sc1 = computeTradeCosts(ticker, p1 * N, N, 'SELL');
                         const bc2 = computeTradeCosts(ticker, p2 * N, N, 'BUY');
