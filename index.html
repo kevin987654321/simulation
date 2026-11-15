@@ -2353,6 +2353,22 @@
                 <input type="text" id="sim-opt-max-loss" class="sim-in mobile-num" data-decimal="true" onfocus="this.select()" value="" placeholder="不限（例填 2.5 代表 -2.5%）" inputmode="decimal">
             </div>
         </div>
+        <div style="display:flex; flex-direction:column; gap:6px;">
+            <label style="font-size:11px; color:#aaa; display:flex; align-items:center; gap:6px;">
+                <input type="checkbox" id="sim-tp-on"> 啟用停利：買進後 X 分鐘內漲幅達 X% 就直接獲利了結
+            </label>
+            <div class="sim-grid2">
+                <div>
+                    <div class="sim-lbl">監控時間：買進後（分鐘）內</div>
+                    <input type="text" id="sim-tp-min" class="sim-in mobile-num" data-maxlen="3" onfocus="this.select()" value="30" inputmode="numeric">
+                </div>
+                <div>
+                    <div class="sim-lbl">漲幅達（%）≥ 即停利</div>
+                    <input type="text" id="sim-tp-pct" class="sim-in mobile-num" data-decimal="true" onfocus="this.select()" value="1.0" inputmode="decimal">
+                </div>
+            </div>
+            <div style="font-size:10.5px; color:#777; line-height:1.55;">以 K 棒收盤價判定，下一根 K 棒開盤價出場。「持有模式（先賣後買回）」則改為判定跌幅。此設定同時套用於上方「開始模擬」與本尋優。</div>
+        </div>
         <div>
             <div class="sim-lbl">排行榜排序依據</div>
             <select id="sim-opt-sort" class="sim-in" style="padding:0 10px; text-align:left;">
@@ -2381,6 +2397,29 @@
             <i class="fa-solid fa-ranking-star"></i> 計算單股單次／多波段當沖最優解排行
         </button>
         <div id="sim-opt-board" style="display:none; flex-direction:column; gap:8px; margin-top:4px;"></div>
+        <details id="sim-wf-panel" class="sim-card" style="margin-top:6px;">
+            <summary style="cursor:pointer; font-size:12px; font-weight:bold; color:var(--color-acc);">
+                <i class="fa-solid fa-forward-fast"></i> 滾動回溯（Walk-Forward）：每天採用「釘選起點～前一天」的 TOP 1 最優解
+            </summary>
+            <div style="font-size:11px; color:#888; line-height:1.6; margin:8px 0;">
+                先釘選一個固定起點，再指定回測區間。回測區間內的<b>每一天</b>，都只用「釘選起點 ～ 當天的前一天」的資料重新尋優，取排行榜第 1 名（沿用上方所有尋優條件與停利設定）在當天實際交易，完全不偷看未來。K 線來源同上方設定。
+            </div>
+            <div style="display:flex; flex-direction:column; gap:8px;">
+                <div class="sim-grid2">
+                    <div><div class="sim-lbl">釘選起點（訓練資料固定從此日起）</div><input type="date" id="sim-wf-pin" class="sim-in"></div>
+                    <div><div class="sim-lbl">最少訓練天數 ≥</div><input type="text" id="sim-wf-mintrain" class="sim-in mobile-num" data-maxlen="3" onfocus="this.select()" value="5" inputmode="numeric"></div>
+                </div>
+                <div class="sim-grid2">
+                    <div><div class="sim-lbl">回測起日（含）</div><input type="date" id="sim-wf-from" class="sim-in"></div>
+                    <div><div class="sim-lbl">回測迄日（含）</div><input type="date" id="sim-wf-to" class="sim-in"></div>
+                </div>
+                <div id="sim-wf-error" style="display:none; color:var(--color-sell); font-size:11px;"></div>
+                <button id="sim-wf-btn" type="button" onclick="simRunWalkForward()" style="background:var(--color-acc); border:none; color:#000; padding:10px; border-radius:8px; font-weight:bold; font-size:13px; cursor:pointer;">
+                    <i class="fa-solid fa-forward-fast"></i> 執行滾動回溯
+                </button>
+                <div id="sim-wf-summary" style="display:none; flex-direction:column; gap:6px; font-size:11px; color:#ccc;"></div>
+            </div>
+        </details>
     </div>
 </details>
                         <label style="font-size:11px; color:#aaa; display:flex; align-items:center; gap:6px;"><input type="checkbox" id="sim-fee-on" checked> 扣除手續費與交易稅（使用費率設定）</label>
@@ -4171,6 +4210,7 @@
     function simGetConfig() {
         return { ticker: document.getElementById('sim-ticker').value, start: document.getElementById('sim-start').value, end: document.getElementById('sim-end').value,
             nbars: document.getElementById('sim-nbars').value, mode: document.getElementById('sim-mode').value, shares: document.getElementById('sim-shares').value, fee: document.getElementById('sim-fee-on').checked,
+            tp: { on: document.getElementById('sim-tp-on').checked, min: document.getElementById('sim-tp-min').value, pct: document.getElementById('sim-tp-pct').value },
             up: simReadRule('up'), down: simReadRule('down'),
             tiers: simTierIds.map(id => ({ ...simReadRule(id), th: document.getElementById(`sim-${id}-th`).value, to: document.getElementById(`sim-${id}-to`).value, dir: document.getElementById(`sim-${id}-dir`).value })),
             blacklist: simBlIds.map(id => ({ th: document.getElementById(`sim-${id}-th`).value, to: document.getElementById(`sim-${id}-to`).value, dir: document.getElementById(`sim-${id}-dir`).value })) };
@@ -4179,6 +4219,7 @@
         document.getElementById('sim-ticker').value = c.ticker || ''; if (c.start) document.getElementById('sim-start').value = c.start; if (c.end) document.getElementById('sim-end').value = c.end;
         document.getElementById('sim-nbars').value = c.nbars || '0'; document.getElementById('sim-mode').value = c.mode || 'daytrade'; document.getElementById('sim-shares').value = c.shares || '';
         document.getElementById('sim-fee-on').checked = c.fee !== false;
+        { const tpc = c.tp || {}; document.getElementById('sim-tp-on').checked = !!tpc.on; document.getElementById('sim-tp-min').value = tpc.min || '30'; document.getElementById('sim-tp-pct').value = tpc.pct || '1.0'; }
         simWriteRule('up', c.up); simWriteRule('down', c.down);
         simClearTiers(); (c.tiers || []).forEach(t => simAddTier(t));
         if ((c.tiers || []).length) document.getElementById('sim-adv').open = true;
@@ -4628,6 +4669,35 @@
                 </div>
             </div>
 
+            <!-- 手動設定每一棒 -->
+            <details id="msr-manual" class="sim-card glow-divide-top">
+                <summary style="cursor:pointer; font-size:12px; font-weight:bold; color:var(--color-acc);">
+                    <i class="fa-solid fa-pen-ruler"></i> 手動設定每一棒（可新增、調整並儲存配置）
+                </summary>
+                <div style="font-size:11px; color:#888; line-height:1.6; margin:8px 0;">
+                    不經尋優，直接自己決定每一棒用哪檔股票、做哪種方向、幾點買幾點賣；可選擇為每棒加上一檔「候補」。日期、K 線、判定根數、模式、費率、黑名單、跨棒緩衝與資金滾動模式沿用本頁設定。時間格式：台股填時鐘時間（例 09:05）；美股／海外填開盤後經過時間（例 00:05＝開盤後 5 分）。
+                </div>
+                <datalist id="msr-man-dl"></datalist>
+                <div id="msr-man-legs" style="display:flex; flex-direction:column; gap:8px;"></div>
+                <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+                    <button type="button" class="msr-quick-btn" onclick="msrManAddLeg()"><i class="fa-solid fa-plus"></i> 新增一棒</button>
+                    <button type="button" class="msr-quick-btn" onclick="msrManClear()"><i class="fa-solid fa-eraser"></i> 清空</button>
+                </div>
+                <div id="msr-man-error" style="display:none; color:var(--color-sell); font-size:11px; margin-top:6px;"></div>
+                <button id="msr-man-run" type="button" onclick="msrRunManual()" style="margin-top:8px; width:100%; background:var(--color-acc); border:none; color:#000; padding:10px; border-radius:8px; font-weight:bold; font-size:13px; cursor:pointer;">
+                    <i class="fa-solid fa-play"></i> 執行手動接力模擬
+                </button>
+                <div style="border-top:1px solid rgba(255,255,255,0.1); margin-top:10px; padding-top:10px; display:flex; flex-direction:column; gap:8px;">
+                    <div class="sim-lbl" style="margin:0;"><i class="fa-solid fa-floppy-disk"></i> 接力配置（存在這台裝置的瀏覽器）</div>
+                    <div style="display:grid; grid-template-columns:minmax(0,1fr) auto auto auto; gap:8px;">
+                        <select id="msr-man-preset" class="sim-in" style="text-align:left; padding:0 10px;"></select>
+                        <button type="button" class="sim-in" onclick="msrManSavePreset()" style="cursor:pointer; color:#000; background:var(--color-acc); border:none; font-weight:bold; padding:0 12px;">儲存</button>
+                        <button type="button" class="sim-in" onclick="msrManLoadPreset()" style="cursor:pointer; padding:0 12px;">載入</button>
+                        <button type="button" class="sim-in" onclick="msrManDeletePreset()" style="cursor:pointer; color:var(--color-sell); padding:0 12px;">刪除</button>
+                    </div>
+                </div>
+            </details>
+
             <div id="msr-error" style="display:none; color:var(--color-sell); font-size:11px;"></div>
             <button id="msr-run-btn" type="button" onclick="runMultiStockRelayOptimizer()" style="background:linear-gradient(90deg, var(--color-acc), var(--color-up)); border:none; color:#000; padding:12px; border-radius:8px; font-weight:bold; font-size:13px; cursor:pointer;">
                 <i class="fa-solid fa-bolt"></i> 搜尋多檔日內資金接力最優解排行
@@ -4779,14 +4849,17 @@
     }
 
     // 3. 四階段多檔日內資金接力尋優主函式（支援 5分K 精細 60天 ／ 60分K 粗略 730天）
-    window.runMultiStockRelayOptimizer = async function() {
+    window.runMultiStockRelayOptimizer = async function(manualLegs) {
+        const isManual = Array.isArray(manualLegs);
+        const useTickers = isManual ? [...new Set(manualLegs.flatMap(l => [l.ticker, l.fbTicker].filter(Boolean)))] : msrTickers;
         const errEl = document.getElementById('msr-error');
         const outEl = document.getElementById('msr-result');
         const btn = document.getElementById('msr-run-btn');
         const fail = (msg) => { errEl.style.display = 'block'; errEl.innerText = msg; outEl.style.display = 'none'; };
         errEl.style.display = 'none';
 
-        if (msrTickers.length < 2) return fail('請至少加入 2 檔股票以進行跨股資金接力尋優');
+        if (!isManual && msrTickers.length < 2) return fail('請至少加入 2 檔股票以進行跨股資金接力尋優');
+        if (isManual && !useTickers.length) return fail('請至少為一棒填入標的');
         const sv = document.getElementById('msr-start').value;
         const ev = document.getElementById('msr-end').value;
         if (!sv || !ev) return fail('請先選擇起始與結束日期區間');
@@ -4801,8 +4874,8 @@
                 : '5 分鐘 K 線（精細模式）Yahoo 僅提供最近約 60 天，請將起始日期改為 58 天內，或切換為「60分K 粗略模式（最高 730 天）」');
         }
 
-        const isAllTW = msrTickers.every(t => simIsTW(t));
-        const isAllNonTW = msrTickers.every(t => !simIsTW(t));
+        const isAllTW = useTickers.every(t => simIsTW(t));
+        const isAllNonTW = useTickers.every(t => !simIsTW(t));
         if (!isAllTW && !isAllNonTW) {
             return fail('為確保日內交易時段網格一致，請選擇同為台股或同為美股／海外市場之標的組合');
         }
@@ -4810,7 +4883,7 @@
 
         const tMinVal = msrReadTimeMin('msr-tmin', msrOffMode);
         const tMaxVal = msrReadTimeMin('msr-tmax', msrOffMode);
-        if (tMinVal === null || tMaxVal === null || tMaxVal <= tMinVal + 10) {
+        if (!isManual && (tMinVal === null || tMaxVal === null || tMaxVal <= tMinVal + 10)) {
             return fail('請填入合法的最早開始與最晚完畢交易時間（最晚時間須晚於最早時間至少 15 分鐘）');
         }
 
@@ -4846,7 +4919,7 @@
             const p2 = Math.floor(endMs / 1000) + 2 * 86400;
 
             // ── Stage 1A: 平行抓取多檔股票 K 線（依模式帶入 5m 或 60m） ──
-            const fetchedList = await Promise.all(msrTickers.map(async (rawSym) => {
+            const fetchedList = await Promise.all(useTickers.map(async (rawSym) => {
                 const cands = /^\d{4,6}[A-Z]?$/.test(rawSym) ? [rawSym + '.TW', rawSym + '.TWO'] : [rawSym];
                 for (const c of cands) {
                     try {
@@ -4890,8 +4963,8 @@
             });
 
             const commonDates = [...perStockDays[0].keys()].filter(dKey => perStockDays.every(m => m.has(dKey))).sort();
-            if (commonDates.length < 5) {
-                throw new Error(`共同有效交易日僅 ${commonDates.length} 天（不足 5 天），請拉長日期區間`);
+            if (commonDates.length < (isManual ? 1 : 5)) {
+                throw new Error(`共同有效交易日僅 ${commonDates.length} 天（不足 ${isManual ? 1 : 5} 天），請拉長日期區間`);
             }
             const D = commonDates.length;
 
@@ -4934,8 +5007,9 @@
             for (let k = T - 1; k >= 0; k--) {
                 if (msrGridTimes[k] <= effTMax) { maxFinishIdx = k; break; }
             }
-            const minHoldBars = Math.max(1, Math.round(minHoldMin / gridStep));
+            const minHoldBars = isManual ? 1 : Math.max(1, Math.round(minHoldMin / gridStep));
             const bufferBars = isCoarse ? Math.floor(bufferMin / 60) : Math.max(0, Math.round(bufferMin / gridStep));
+            if (isManual) { minStartIdx = nDecide; maxFinishIdx = T - 1; }
 
             if (maxFinishIdx - minStartIdx < minHoldBars) {
                 throw new Error('最早開始與最晚完畢時間區間過窄，無法容納最短持倉時間');
@@ -5012,6 +5086,77 @@
                         }
                     }
                 }
+            }
+
+            // ── 手動模式：不做尋優，直接依使用者填寫的每一棒組成接力方案 ──
+            if (isManual) {
+                const modeName = { up: '只限開漲', down: '只限開跌', both: '漲跌皆可' };
+                const gIdx = (min) => { const k = msrGridTimes.findIndex(m => m >= min); return k < 0 ? T - 1 : k; };
+                const sOf = (t) => fetchedList.findIndex(x => x.raw === t);
+                const mkUnit = (s, mode, bi, si) => {
+                    const dailyRet = new Float64Array(D), dailyTraded = new Uint8Array(D);
+                    let n = 0, wins = 0, cum = 1.0;
+                    for (let d = 0; d < D; d++) {
+                        const sd = sidesAll[s][d];
+                        if (!(mode === 'up' ? sd === 1 : mode === 'down' ? sd === -1 : sd !== 0)) continue;
+                        const r = R_tensor[s][d][bi * T + si];
+                        if (isNaN(r)) continue;
+                        dailyRet[d] = r; dailyTraded[d] = 1; n++; cum *= (1.0 + r); if (r > 0) wins++;
+                    }
+                    return { s, mode, bi, si, n, wins, cum, dailyRet, dailyTraded };
+                };
+                const legs = [];
+                for (let k = 0; k < manualLegs.length; k++) {
+                    const ml = manualLegs[k];
+                    const bi = gIdx(ml.buy), si = gIdx(ml.sell);
+                    if (si <= bi) throw new Error(`第 ${k + 1} 棒：賣出時間（對齊到 ${msrFmtMin(msrGridTimes[si], msrOffMode)}）必須晚於買進時間（${msrFmtMin(msrGridTimes[bi], msrOffMode)}）`);
+                    if (bi < nDecide) throw new Error(`第 ${k + 1} 棒：買進時間早於「漲跌判定根數」所需的 ${nDecide} 根 K 棒`);
+                    const u1 = mkUnit(sOf(ml.ticker), ml.mode, bi, si);
+                    let leg;
+                    if (ml.fbTicker) {
+                        const fbBi = gIdx(ml.fbBuy), fbSi = gIdx(ml.fbSell);
+                        if (fbSi <= fbBi) throw new Error(`第 ${k + 1} 棒的候補：賣出時間必須晚於買進時間`);
+                        const u2 = mkUnit(sOf(ml.fbTicker), ml.fbMode, fbBi, fbSi);
+                        const dailyRet = new Float64Array(D), dailyTraded = new Uint8Array(D);
+                        let n = 0, wins = 0, cum = 1.0;
+                        for (let d = 0; d < D; d++) {
+                            if (u1.dailyTraded[d]) { dailyRet[d] = u1.dailyRet[d]; dailyTraded[d] = 1; }
+                            else if (u2.dailyTraded[d]) { dailyRet[d] = u2.dailyRet[d]; dailyTraded[d] = 2; }
+                            else continue;
+                            n++; if (dailyRet[d] > 0) wins++; cum *= (1.0 + dailyRet[d]);
+                        }
+                        leg = { type: 'dynamic_slot', s: u1.s, ticker: resolvedTickers[u1.s], mode: ml.mode, modeLabel: modeName[ml.mode], pri_bi: bi, pri_si: si,
+                            fb_s: u2.s, fb_ticker: resolvedTickers[u2.s], fb_mode: ml.fbMode, fb_modeLabel: modeName[ml.fbMode], fb_bi: fbBi, fb_si: fbSi,
+                            bi: Math.min(bi, fbBi), si: Math.max(si, fbSi), n, wins, win_rate: n ? wins / n : 0, cum: cum - 1.0, stability: 0, dailyRet, dailyTraded };
+                    } else {
+                        leg = { type: 'single', s: u1.s, ticker: resolvedTickers[u1.s], mode: ml.mode, modeLabel: modeName[ml.mode],
+                            fb_s: null, fb_ticker: null, fb_mode: null, fb_modeLabel: null, fb_bi: null, fb_si: null,
+                            bi, si, n: u1.n, wins: u1.wins, win_rate: u1.n ? u1.wins / u1.n : 0, cum: u1.cum - 1.0, stability: 0, dailyRet: u1.dailyRet, dailyTraded: u1.dailyTraded };
+                    }
+                    if (k > 0 && leg.bi < legs[k - 1].si + bufferBars) {
+                        throw new Error(`第 ${k + 1} 棒的買進時間（${msrFmtMin(msrGridTimes[leg.bi], msrOffMode)}）必須晚於第 ${k} 棒的賣出時間（${msrFmtMin(msrGridTimes[legs[k - 1].si], msrOffMode)}）加上交割緩衝`);
+                    }
+                    legs.push(leg);
+                }
+                const mkSch = (ls) => {
+                    const df = new Float64Array(D).fill(1.0), ds = new Float64Array(D);
+                    let nT = 0, wn = 0;
+                    ls.forEach(l => { nT += l.n; wn += l.wins; for (let d = 0; d < D; d++) { df[d] *= (1.0 + l.dailyRet[d]); ds[d] += l.dailyRet[d]; } });
+                    let cum = 1.0, worstDay = 0;
+                    for (let d = 0; d < D; d++) { const dr = compoundMode === 'compound' ? (df[d] - 1.0) : ds[d]; cum *= (1.0 + dr); if (dr < worstDay) worstDay = dr; }
+                    return { k: ls.length, legs: ls, last_si: ls[ls.length - 1].si, usedStocks: new Set(ls.map(l => l.s)), n_trades: nT, wins: wn, win_rate: nT ? wn / nT : 0,
+                        dailyFactor: df, dailySimple: ds, cum: cum - 1.0, worstDay, stability: 0, score: 0, calmar: (cum - 1.0) / (Math.abs(worstDay) + 0.005) };
+                };
+                const sch = mkSch(legs);
+                if (!sch.n_trades) throw new Error('依目前設定，這段期間沒有任何成交日（可能是方向條件不符、被黑名單排除，或時間早於判定根數）');
+                msrLastSchedules = [sch];
+                renderMsrResults({
+                    topRanked: [sch], bestSingle: mkSch([legs[0]]), commonDates, elapsedMs: (performance.now() - tPerfStart).toFixed(1),
+                    rawCount: 0, eliteCount: 0, evalCount: 1, feeOn, hold, compoundMode,
+                    R_tensor, P_buy_tensor, P_sell_tensor, gapsAll, resolvedTickers,
+                    gridTimes: msrGridTimes.slice(), offMode: msrOffMode, manual: true
+                });
+                return;
             }
 
             // ── Stage 2: 提取原子策略單元 (ASU) 並執行高原穩定度與時間桶剪枝 ──
@@ -5337,21 +5482,21 @@
 
         outEl.innerHTML = `
             <div style="font-size:11.5px; color:#aaa; display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px;">
-                <span>共對齊 <b style="color:#fff;">${ctx.commonDates.length}</b> 個交易日・評估 <b style="color:#fff;">${ctx.rawCount.toLocaleString()}</b> 組原子區間・精煉 <b style="color:var(--color-acc);">${ctx.eliteCount}</b> 組菁英槽位</span>
+                <span>共對齊 <b style="color:#fff;">${ctx.commonDates.length}</b> 個交易日${ctx.manual ? '・手動設定的接力方案' : `・評估 <b style="color:#fff;">${ctx.rawCount.toLocaleString()}</b> 組原子區間・精煉 <b style="color:var(--color-acc);">${ctx.eliteCount}</b> 組菁英槽位`}</span>
                 <span style="font-family:monospace; color:var(--color-up);">⚡ 耗時 ${ctx.elapsedMs} ms</span>
             </div>
 
             <!-- Top-N 最優資金接力排行榜 -->
             <div style="display:flex; flex-direction:column; gap:6px;">
-                <div class="sim-lbl" style="color:#ccc; font-weight:bold;">🏆 多檔日內資金接力最優解排行（點擊任一方案檢視時序圖與逐日明細）</div>
+                <div class="sim-lbl" style="color:#ccc; font-weight:bold;">${ctx.manual ? '✍️ 手動接力方案（時序圖與逐日明細如下）' : '🏆 多檔日內資金接力最優解排行（點擊任一方案檢視時序圖與逐日明細）'}</div>
                 <div id="msr-leaderboard" style="display:flex; flex-direction:column; gap:6px; max-height:310px; overflow-y:auto; padding-right:2px;">
                     ${ctx.topRanked.map((sch, idx) => `
                         <div class="msr-rank-card ${idx === 0 ? 'active' : ''}" id="msr-rank-item-${idx}" onclick="msrSelectSchedule(${idx})">
                             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; gap:8px; flex-wrap:wrap;">
                                 <div>
-                                    <span class="msr-badge" style="background:${idx === 0 ? 'var(--color-up)' : 'rgba(255,255,255,0.12)'}; color:${idx === 0 ? '#000' : '#fff'};">TOP ${idx + 1}</span>
+                                    <span class="msr-badge" style="background:${idx === 0 ? 'var(--color-up)' : 'rgba(255,255,255,0.12)'}; color:${idx === 0 ? '#000' : '#fff'};">${ctx.manual ? '手動' : 'TOP ' + (idx + 1)}</span>
                                     <span class="msr-badge" style="background:rgba(0,212,255,0.15); color:var(--color-acc);">${sch.k} 棒接力</span>
-                                    <span style="font-size:11px; color:#aaa; font-family:monospace; margin-left:4px;">穩定度 ${(sch.stability * 100).toFixed(1)}</span>
+                                    ${ctx.manual ? '' : `<span style="font-size:11px; color:#aaa; font-family:monospace; margin-left:4px;">穩定度 ${(sch.stability * 100).toFixed(1)}</span>`}
                                 </div>
                                 <div style="font-family:monospace; font-size:12.5px; font-weight:bold;">
                                     累計 <span style="color:${col(sch.cum)};">${pct(sch.cum)}</span>
@@ -5471,13 +5616,13 @@
                 ${cardHtml('資金動用天數比例', ((activeDaysCount / D) * 100).toFixed(1) + '% (' + activeDaysCount + '/' + D + '天)', 'var(--color-acc)')}
                 ${cardHtml('最佳單日接力損益', bestDayRet > -Infinity ? pct(bestDayRet) + ' ' + bestDayStr : '-', col(bestDayRet))}
                 ${cardHtml('最差單日接力損益', worstDayRet < Infinity ? pct(worstDayRet) + ' ' + worstDayStr : '-', col(worstDayRet))}
-                ${cardHtml('參數高原穩定度', (sch.stability * 100).toFixed(1) + ' / 100', 'var(--color-up)')}
+                ${cardHtml('參數高原穩定度', ctx.manual ? '—（手動）' : (sch.stability * 100).toFixed(1) + ' / 100', 'var(--color-up)')}
             </div>
 
             <!-- 日內資金接力時序甘特圖 -->
             <div class="sim-card" style="background:rgba(0,0,0,0.35);">
                 <div style="display:flex; justify-content:space-between; font-size:11px; color:#aaa; margin-bottom:4px;">
-                    <span><i class="fa-solid fa-timeline" style="color:var(--color-acc);"></i> 方案 #${idx + 1} 日內不重疊資金接力時序圖</span>
+                    <span><i class="fa-solid fa-timeline" style="color:var(--color-acc);"></i> 方案 #${idx + 1} 日內不重疊資金接力時序圖 <button type="button" class="msr-quick-btn" onclick="msrLoadScheduleToManual(${idx})" title="把這個方案的每一棒複製到下方「手動設定每一棒」，再自行微調">複製為手動棒次</button></span>
                     <span style="font-family:monospace;">${msrFmtMin(gMin, msrOffMode)} ──▶ ${msrFmtMin(gMax, msrOffMode)}</span>
                 </div>
                 <div class="msr-gantt-track">${ganttBarsHtml}</div>
@@ -5551,14 +5696,14 @@
                     labels,
                     datasets: [
                         {
-                            label: `TOP ${idx + 1} 多檔接力 (${sch.k}棒) 累計 %`,
+                            label: ctx.manual ? `手動接力 (${sch.k}棒) 累計 %` : `TOP ${idx + 1} 多檔接力 (${sch.k}棒) 累計 %`,
                             data: relayCurve,
                             borderColor: '#00ffaa',
                             backgroundColor: 'rgba(0,255,170,0.12)',
                             fill: true, borderWidth: 2, pointRadius: 2, tension: 0.15
                         },
                         {
-                            label: '最佳單一標的 (K=1) 基準 %',
+                            label: ctx.manual ? '僅第 1 棒（基準）%' : '最佳單一標的 (K=1) 基準 %',
                             data: singleCurve,
                             borderColor: '#00d4ff',
                             borderDash: [4, 4],
@@ -5620,6 +5765,160 @@
         }
         runOpenSimulator();
     };
+
+    // ════════════════════════════════════════════════════════════════
+    // 手動設定每一棒：新增／調整／存檔（localStorage）
+    // ════════════════════════════════════════════════════════════════
+    (function msrManualInit() {
+        const $ = (id) => document.getElementById(id);
+        const DRAFT_KEY = 'acorn_msr_manual_draft', PRESET_KEY = 'acorn_msr_manual_presets';
+        const box = $('msr-man-legs');
+        if (!box) return;
+        let seq = 0; const ids = [];
+        const modeOpts = (v) => [['up', '只限開漲'], ['down', '只限開跌'], ['both', '漲跌皆可']].map(([k, t]) => `<option value="${k}" ${k === v ? 'selected' : ''}>${t}</option>`).join('');
+        const timeHtml = (pre, h, m) => `<div class="sim-clock"><input type="text" id="${pre}-h" value="${h}" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric"><span>:</span><input type="text" id="${pre}-m" value="${m}" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric"></div>`;
+        const two = (n) => String(n).padStart(2, '0');
+        function refreshDl() {
+            const dl = $('msr-man-dl'); if (!dl) return;
+            let list = []; try { list = list.concat(msrPinnedTop10()); } catch (e) {}
+            try { list = list.concat(msrTickers); } catch (e) {}
+            dl.innerHTML = [...new Set(list)].map(t => `<option value="${escapeHtml(t)}"></option>`).join('');
+        }
+        function renumber() { ids.forEach((id, i) => { const t = $(`msr-man-${id}-title`); if (t) t.textContent = `第 ${i + 1} 棒`; }); }
+        function save() { try { localStorage.setItem(DRAFT_KEY, JSON.stringify(readRaw())); } catch (e) {} }
+        function addLeg(d) {
+            d = d || {};
+            const id = 'L' + (++seq); ids.push(id);
+            const el = document.createElement('div'); el.className = 'sim-card'; el.id = `msr-man-${id}`;
+            const pre = `msr-man-${id}`;
+            el.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <b id="${pre}-title" style="font-size:12px; color:var(--color-acc);"></b>
+                    <button type="button" class="msr-quick-btn" onclick="msrManRemoveLeg('${id}')" style="color:var(--color-sell);"><i class="fa-solid fa-trash"></i></button>
+                </div>
+                <div class="sim-grid2" style="margin-bottom:8px;">
+                    <div><div class="sim-lbl">標的</div><input type="text" id="${pre}-tk" class="sim-in" list="msr-man-dl" value="${escapeHtml(d.ticker || '')}" placeholder="例如 2330 或 TSLA" autocomplete="off" style="text-align:left; padding:0 10px;"></div>
+                    <div><div class="sim-lbl">做哪種開盤方向</div><select id="${pre}-md" class="sim-in" style="padding:0 8px;">${modeOpts(d.mode || 'both')}</select></div>
+                </div>
+                <div class="sim-grid2" style="margin-bottom:8px;">
+                    <div><div class="sim-lbl">買進時間</div>${timeHtml(pre + '-b', d.bh ?? '', d.bm ?? '')}</div>
+                    <div><div class="sim-lbl">賣出時間</div>${timeHtml(pre + '-s', d.sh ?? '', d.sm ?? '')}</div>
+                </div>
+                <label style="font-size:11px; color:#aaa; display:flex; align-items:center; gap:6px;"><input type="checkbox" id="${pre}-fb" ${d.fb ? 'checked' : ''}> 加一檔候補（主力當天方向不符、空手時由候補接手）</label>
+                <div id="${pre}-fbbox" style="display:${d.fb ? 'block' : 'none'}; margin-top:8px;">
+                    <div class="sim-grid2" style="margin-bottom:8px;">
+                        <div><div class="sim-lbl">候補標的</div><input type="text" id="${pre}-ft" class="sim-in" list="msr-man-dl" value="${escapeHtml(d.fbTicker || '')}" autocomplete="off" style="text-align:left; padding:0 10px;"></div>
+                        <div><div class="sim-lbl">候補方向</div><select id="${pre}-fm" class="sim-in" style="padding:0 8px;">${modeOpts(d.fbMode || 'both')}</select></div>
+                    </div>
+                    <div class="sim-grid2">
+                        <div><div class="sim-lbl">候補買進</div>${timeHtml(pre + '-fb', d.fbbh ?? '', d.fbbm ?? '')}</div>
+                        <div><div class="sim-lbl">候補賣出</div>${timeHtml(pre + '-fs', d.fbsh ?? '', d.fbsm ?? '')}</div>
+                    </div>
+                </div>`;
+            box.appendChild(el);
+            if (window.setupMobileNumInput) el.querySelectorAll('.mobile-num').forEach(window.setupMobileNumInput);
+            $(`${pre}-fb`).addEventListener('change', (e) => { $(`${pre}-fbbox`).style.display = e.target.checked ? 'block' : 'none'; save(); });
+            el.addEventListener('input', save); el.addEventListener('change', save);
+            renumber(); refreshDl(); save();
+        }
+        window.msrManAddLeg = () => addLeg({});
+        window.msrManRemoveLeg = (id) => { const i = ids.indexOf(id); if (i >= 0) ids.splice(i, 1); const el = $(`msr-man-${id}`); if (el) el.remove(); renumber(); save(); };
+        window.msrManClear = () => { [...ids].forEach(window.msrManRemoveLeg); };
+        function readRaw() {
+            return ids.map(id => {
+                const p = `msr-man-${id}`, v = (k) => ($(`${p}-${k}`) ? $(`${p}-${k}`).value : '');
+                return { ticker: v('tk').trim().toUpperCase(), mode: v('md'), bh: v('b-h'), bm: v('b-m'), sh: v('s-h'), sm: v('s-m'),
+                    fb: !!($(`${p}-fb`) && $(`${p}-fb`).checked), fbTicker: v('ft').trim().toUpperCase(), fbMode: v('fm'), fbbh: v('fb-h'), fbbm: v('fb-m'), fbsh: v('fs-h'), fbsm: v('fs-m') };
+            });
+        }
+        function parseLegs() {
+            const raw = readRaw();
+            if (!raw.length) return { err: '請先按「新增一棒」，至少設定一棒' };
+            const tmin = (h, m) => { const a = parseInt(h, 10), b = parseInt(m, 10); return (isNaN(a) || isNaN(b) || a < 0 || b < 0 || b > 59) ? null : a * 60 + b; };
+            const legs = [];
+            for (let i = 0; i < raw.length; i++) {
+                const r = raw[i], n = i + 1;
+                if (!r.ticker) return { err: `第 ${n} 棒請填入標的` };
+                const buy = tmin(r.bh, r.bm), sell = tmin(r.sh, r.sm);
+                if (buy === null || sell === null) return { err: `第 ${n} 棒請填入完整的買進與賣出時間` };
+                const leg = { ticker: r.ticker, mode: r.mode, buy, sell };
+                if (r.fb) {
+                    if (!r.fbTicker) return { err: `第 ${n} 棒已勾選候補，請填入候補標的` };
+                    const fb = tmin(r.fbbh, r.fbbm), fs = tmin(r.fbsh, r.fbsm);
+                    if (fb === null || fs === null) return { err: `第 ${n} 棒請填入完整的候補買賣時間` };
+                    Object.assign(leg, { fbTicker: r.fbTicker, fbMode: r.fbMode, fbBuy: fb, fbSell: fs });
+                }
+                legs.push(leg);
+            }
+            return { legs };
+        }
+        window.msrRunManual = function () {
+            const er = $('msr-man-error'); er.style.display = 'none';
+            const r = parseLegs();
+            if (r.err) { er.innerText = r.err; er.style.display = 'block'; return; }
+            return window.runMultiStockRelayOptimizer(r.legs);
+        };
+        // 把排行榜上的方案複製成手動棒次
+        window.msrLoadScheduleToManual = function (idx) {
+            const sch = msrLastSchedules[idx]; if (!sch) return;
+            const strip = (t) => String(t || '').replace(/\.(TWO?)$/i, '');
+            window.msrManClear();
+            sch.legs.forEach(l => {
+                const b = msrGridTimes[l.pri_bi ?? l.bi], sl = msrGridTimes[l.pri_si ?? l.si];
+                const d = { ticker: strip(l.ticker), mode: l.mode, bh: Math.floor(b / 60), bm: two(b % 60), sh: Math.floor(sl / 60), sm: two(sl % 60) };
+                if (l.fb_ticker) {
+                    const fb = msrGridTimes[l.fb_bi], fs = msrGridTimes[l.fb_si];
+                    Object.assign(d, { fb: true, fbTicker: strip(l.fb_ticker), fbMode: l.fb_mode, fbbh: Math.floor(fb / 60), fbbm: two(fb % 60), fbsh: Math.floor(fs / 60), fbsm: two(fs % 60) });
+                }
+                addLeg(d);
+            });
+            const det = $('msr-manual'); if (det) { det.open = true; det.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+        };
+        // 配置存檔
+        const loadAll = () => { try { return JSON.parse(localStorage.getItem(PRESET_KEY) || '{}') || {}; } catch (e) { return {}; } };
+        function refreshPresets(sel) {
+            const all = loadAll(), el = $('msr-man-preset'), names = Object.keys(all);
+            el.innerHTML = names.length ? names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('') : '<option value="">（尚無已存配置）</option>';
+            if (sel && names.includes(sel)) el.value = sel;
+        }
+        const getV = (id) => ($(id) ? $(id).value : '');
+        const hubOn = () => typeof window.hubPushShared === 'function';
+        window.msrManSavePreset = function () {
+            const all = loadAll();
+            const name = (prompt('請輸入接力配置名稱：', $('msr-man-preset').value || '我的接力') || '').trim();
+            if (!name) return;
+            if (all[name] && !confirm(`已有名為「${name}」的配置，要覆蓋嗎？`)) return;
+            const bl = msrBlIds.map(id => ({ th: getV(`msr-${id}-th`), to: getV(`msr-${id}-to`), dir: getV(`msr-${id}-dir`) }));
+            all[name] = { legs: readRaw(), compound: getV('msr-compound-mode'), buffer: getV('msr-buffer-min'),
+                nbars: hubOn() ? getV('sim-nbars') : getV('msr-nbars'), mode: hubOn() ? getV('sim-mode') : getV('msr-mode'),
+                fee: hubOn() ? $('sim-fee-on').checked : $('msr-fee-on').checked, blacklist: bl };
+            try { localStorage.setItem(PRESET_KEY, JSON.stringify(all)); } catch (e) { alert('儲存失敗（瀏覽器可能封鎖了儲存空間）'); return; }
+            refreshPresets(name);
+        };
+        window.msrManLoadPreset = function () {
+            const name = $('msr-man-preset').value, c = loadAll()[name];
+            if (!c) { alert('沒有可載入的配置'); return; }
+            window.msrManClear(); (c.legs || []).forEach(addLeg);
+            if (c.compound) $('msr-compound-mode').value = c.compound;
+            if (c.buffer) $('msr-buffer-min').value = c.buffer;
+            const nb = hubOn() ? 'sim-nbars' : 'msr-nbars', md = hubOn() ? 'sim-mode' : 'msr-mode', fe = hubOn() ? 'sim-fee-on' : 'msr-fee-on';
+            if (c.nbars !== undefined && $(nb)) $(nb).value = c.nbars;
+            if (c.mode && $(md)) { $(md).value = c.mode; if (hubOn() && typeof simSetMode === 'function') simSetMode(); }
+            if (c.fee !== undefined && $(fe)) $(fe).checked = !!c.fee;
+            [...msrBlIds].forEach(window.msrRemoveBl); (c.blacklist || []).forEach(b => window.msrAddBl(b));
+            if (hubOn()) window.hubPushShared();
+        };
+        window.msrManDeletePreset = function () {
+            const name = $('msr-man-preset').value, all = loadAll();
+            if (!all[name] || !confirm(`確定要刪除配置「${name}」嗎？`)) return;
+            delete all[name]; try { localStorage.setItem(PRESET_KEY, JSON.stringify(all)); } catch (e) {}
+            refreshPresets();
+        };
+        refreshPresets();
+        // 還原上次的草稿
+        try { const dr = JSON.parse(localStorage.getItem(DRAFT_KEY) || '[]'); if (Array.isArray(dr)) dr.forEach(addLeg); } catch (e) {}
+        setTimeout(refreshDl, 1500);
+    })();
 })();
 
     // ════════════════════════════════════════════════════════════════
@@ -6143,6 +6442,8 @@
         tiers.sort((a, b) => (b.th - a.th) || ((a.to ?? Infinity) - (b.to ?? Infinity)));
         if (!cfg.up.on && !cfg.down.on && !tiers.some(t => t.on)) return fail('至少要啟用一組規則進行交易');
         const feeOn = document.getElementById('sim-fee-on').checked;
+        if (simTpInvalid()) return fail('停利參數請填入大於 0 的「分鐘數」與「百分比」');
+        const tp = simGetTpParams();
         btn.disabled = true; btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 讀取 ${kMeta.label} 歷史資料中...`;
         try {
             const p1 = Math.floor(startMs / 1000) - 8 * 86400, p2 = Math.floor(endMs / 1000) + 2 * 86400;
@@ -6178,8 +6479,10 @@
                 const bi = bars.findIndex((b, k) => k >= nDecide && b.m - t0 >= buyTarget);
                 if (bi < 0) continue;
                 let si = bars.findIndex((b, k) => k > bi && b.m - t0 >= c.sell);
-                const buyP = bars[bi].o, sellP = si >= 0 ? bars[si].o : bars[bars.length - 1].c;
+                const buyP = bars[bi].o; let sellP = si >= 0 ? bars[si].o : bars[bars.length - 1].c;
                 if (si < 0 && bars.length - 1 <= bi) continue;
+                let tpHit = false;
+                if (tp) { const x = simTpExit(bars, bi, buyP, hold ? 'short' : 'long', tp); if (x && x.idx < (si >= 0 ? si : bars.length - 1)) { sellP = x.price; si = x.idx; tpHit = true; } }
                 let ret, amt = null;
                 if (!hold) {
                     ret = sellP / buyP - 1;
@@ -6189,7 +6492,7 @@
                     if (feeOn) { const N = 1000, sc = computeTradeCosts(ticker, buyP * N, N, 'SELL'), bc = computeTradeCosts(ticker, sellP * N, N, 'BUY'); ret = (buyP * N - sc.fee - sc.tax) / (sellP * N + bc.fee + (bc.tax || 0)) - 1; }
                     if (nShares > 0) { let g = nShares * (buyP - sellP); if (feeOn) { const sc = computeTradeCosts(ticker, buyP * nShares, nShares, 'SELL'), bc = computeTradeCosts(ticker, sellP * nShares, nShares, 'BUY'); g -= sc.fee + sc.tax + bc.fee + (bc.tax || 0); } amt = g; }
                 }
-                trades.push({ key, side, gap: open / prevClose - 1, buyP, sellP, ret, amt, exitLate: si < 0, rule: ruleLabel });
+                trades.push({ key, side, gap: open / prevClose - 1, buyP, sellP, ret, amt, exitLate: si < 0, rule: ruleLabel + (tpHit ? '·停利' : '') });
             }
             if (!trades.length) throw new Error('這段期間沒有符合條件的交易日（可能全是平盤開、被設定排除，或買進時間超過收盤）');
             renderOpenSimulator(`${ticker} [${kMeta.label}]`, trades, cfg, feeOn, { hold, nShares, nDecide, blSkipped, holdRet: (baseFirst && baseLast) ? baseLast / baseFirst - 1 : null });
@@ -6199,7 +6502,30 @@
     window.runOpenSimulator = runOpenSimulator;
 
     // 第一階段：同時建立「做多(先買後賣)」與「反手(先賣後買回)」雙向三維報酬張量 (支援 1m / 5m / 60m 與長天期防爆記憶體步進)
-    function simBuildDualReturnTensor(dayRecords, nDecide, offMode, feeOn, ticker, noLateExit, minStartMin, maxFinishMin, is60m) {
+    function simTpInvalid() {
+        const on = document.getElementById('sim-tp-on');
+        if (!on || !on.checked) return false;
+        return !(parseFloat(document.getElementById('sim-tp-min').value) > 0 && parseFloat(document.getElementById('sim-tp-pct').value) > 0);
+    }
+    function simGetTpParams() {
+        const on = document.getElementById('sim-tp-on');
+        if (!on || !on.checked || simTpInvalid()) return null;
+        return { min: parseFloat(document.getElementById('sim-tp-min').value), pct: parseFloat(document.getElementById('sim-tp-pct').value) / 100 };
+    }
+    // 停利：買進後 tp.min 分鐘內，若某根 K 棒收盤價達標，則於下一根 K 棒開盤價出場（避免偷看同根未來價）。side='long' 看漲幅；'short'（先賣後買回）看跌幅。
+    function simTpExit(bars, bi, p1, side, tp) {
+        const lim = bars[bi].m + tp.min;
+        for (let k = bi + 1; k < bars.length; k++) {
+            if (bars[k].m > lim) break;
+            const c = bars[k].c;
+            if (side === 'long' ? c >= p1 * (1 + tp.pct) : c <= p1 * (1 - tp.pct)) {
+                return k + 1 < bars.length ? { idx: k + 1, price: bars[k + 1].o } : { idx: k, price: c };
+            }
+        }
+        return null;
+    }
+
+    function simBuildDualReturnTensor(dayRecords, nDecide, offMode, feeOn, ticker, noLateExit, minStartMin, maxFinishMin, is60m, tp) {
         const timeSet = new Set();
         dayRecords.forEach(d => {
             const t0 = offMode ? d.bars[0].m : 0;
@@ -6262,6 +6588,7 @@
                 if (maxFinishMin !== null && actualBuyElapsed > maxFinishMin) continue;
 
                 const p1 = bars[realBi].o;
+                const tpL = tp ? simTpExit(bars, realBi, p1, 'long', tp) : null, tpS = tp ? simTpExit(bars, realBi, p1, 'short', tp) : null;
                 for (let si = bi + 1; si < T; si++) {
                     const sellElapsed = offMode ? gridTimes[si] : (gridTimes[si] - baseOpenClock);
                     if (maxFinishMin !== null && sellElapsed > maxFinishMin) break;
@@ -6278,16 +6605,18 @@
                         p2 = bars[bars.length - 1].c;
                     }
 
-                    let rLong = p2 / p1 - 1;
-                    let rShort = p1 / p2 - 1;
+                    const exitIdx = realSi >= 0 ? realSi : bars.length - 1;
+                    const p2L = (tpL && tpL.idx < exitIdx) ? tpL.price : p2, p2S = (tpS && tpS.idx < exitIdx) ? tpS.price : p2;
+                    let rLong = p2L / p1 - 1;
+                    let rShort = p1 / p2S - 1;
                     if (feeOn) {
                         const bc1 = computeTradeCosts(ticker, p1 * N, N, 'BUY');
-                        const sc2 = computeTradeCosts(ticker, p2 * N, N, 'SELL');
-                        rLong = (p2 * N - sc2.fee - sc2.tax) / (p1 * N + bc1.fee + (bc1.tax || 0)) - 1;
+                        const sc2 = computeTradeCosts(ticker, p2L * N, N, 'SELL');
+                        rLong = (p2L * N - sc2.fee - sc2.tax) / (p1 * N + bc1.fee + (bc1.tax || 0)) - 1;
 
                         const sc1 = computeTradeCosts(ticker, p1 * N, N, 'SELL');
-                        const bc2 = computeTradeCosts(ticker, p2 * N, N, 'BUY');
-                        rShort = (p1 * N - sc1.fee - sc1.tax) / (p2 * N + bc2.fee + (bc2.tax || 0)) - 1;
+                        const bc2 = computeTradeCosts(ticker, p2S * N, N, 'BUY');
+                        rShort = (p1 * N - sc1.fee - sc1.tax) / (p2S * N + bc2.fee + (bc2.tax || 0)) - 1;
                     }
                     const cellIdx = (d * T + bi) * T + si;
                     tensorLong[cellIdx] = rLong;
@@ -6528,25 +6857,8 @@
     }
 
     // 主尋優入口函式（支援 1m / 5m / 60m 與 Alpaca 10 年歷史資料）
-    async function runOpenOptimizer() {
-        const errEl = document.getElementById('sim-error'), boardEl = document.getElementById('sim-opt-board'), btn = document.getElementById('sim-opt-btn');
-        const fail = (m) => { errEl.style.display = 'block'; errEl.innerText = m; boardEl.style.display = 'none'; };
-        errEl.style.display = 'none';
-
-        let ticker = (document.getElementById('sim-ticker').value || '').trim().toUpperCase();
-        const sv = document.getElementById('sim-start').value, ev = document.getElementById('sim-end').value;
-        if (!ticker) return fail('請先在上方輸入股票代號');
-        if (!sv || !ev) return fail('請選擇日期區間');
-        const startMs = Date.parse(sv + 'T00:00:00Z'), endMs = Date.parse(ev + 'T00:00:00Z');
-        if (endMs < startMs) return fail('結束日期不能早於起始日期');
-
-        const kMeta = simGetKlineMeta('sim', ticker);
-        if (Date.now() - startMs > kMeta.maxDays * 86400e3) {
-            return fail(kMeta.useAlpaca
-                ? `Alpaca 歷史資料支援自 2016 年起（約 ${kMeta.maxDays} 天內），請將起始日期設於 2016 年之後`
-                : `目前使用 Yahoo 資料源，${kMeta.label} 最多提供最近 ${kMeta.maxDays} 天資料；若需回測美股長天期 1分K/5分K，請於頁面最下方填寫 Alpaca API Key`);
-        }
-
+    function simReadOptParams(kMeta, ticker) {
+        if (simTpInvalid()) return { err: '停利參數請填入大於 0 的「分鐘數」與「百分比」' };
         const minWinPct = parseFloat(document.getElementById('sim-opt-min-win').value) || 0;
         const winMode = document.getElementById('sim-opt-win-mode').value;
         const maxWaves = parseInt(document.getElementById('sim-opt-max-waves').value, 10) || 1;
@@ -6564,7 +6876,7 @@
 
         const effectiveStart = minStartMin || 0;
         if (maxFinishMin !== null && (effectiveStart + minHoldMin > maxFinishMin)) {
-            return fail(`時間窗衝突：「最早開始（${effectiveStart} 分）」＋「最短持倉（${minHoldMin} 分）」已超過「最晚完畢時間（${maxFinishMin} 分）」`);
+            return { err: `時間窗衝突：「最早開始（${effectiveStart} 分）」＋「最短持倉（${minHoldMin} 分）」已超過「最晚完畢時間（${maxFinishMin} 分）」` };
         }
 
         const sortBy = document.getElementById('sim-opt-sort').value;
@@ -6588,36 +6900,12 @@
             }
         }
 
-        btn.disabled = true;
-        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 正在讀取 ${kMeta.label} 並進行多波段動態規劃尋優...`;
+        const tp = simGetTpParams();
+        return { P: { minWinPct, winMode, maxWaves, splitHurdleDec, minDays, maxLossDec, minHoldMin, waveBufMin, minStartMin, maxFinishMin, effectiveStart, sortBy, autoBl, allowRev, autoNbars, noLateExit, offMode, hold, feeOn, baseNDecide, userBls, tp } };
+    }
 
-        try {
-            const tStart = performance.now();
-            const p1 = Math.floor(startMs / 1000) - 8 * 86400, p2 = Math.floor(endMs / 1000) + 2 * 86400;
-            const cands = /^\d{4,6}[A-Z]?$/.test(ticker) ? [ticker + '.TW', ticker + '.TWO'] : [ticker];
-            let r = null;
-            for (const c of cands) { try { r = await simFetchIntraday(c, p1, p2, kMeta.interval); } catch (e) { if (kMeta.useAlpaca) throw e; } if (r) { ticker = c; break; } }
-            if (!r) throw new Error(`查無此代號的 ${kMeta.label} 資料`);
-
-            const off = (r.meta && r.meta.gmtoffset) || 0, q = r.indicators.quote[0] || {};
-            const days = new Map();
-            r.timestamp.forEach((t, i) => {
-                if (q.open[i] == null || q.close[i] == null) return;
-                const d = new Date((t + off) * 1000), key = d.toISOString().slice(0, 10);
-                if (!days.has(key)) days.set(key, []);
-                days.get(key).push({ m: d.getUTCHours() * 60 + d.getUTCMinutes(), o: q.open[i], c: q.close[i] });
-            });
-            const keys = [...days.keys()].sort();
-            const rawDays = [];
-            for (let i = 1; i < keys.length; i++) {
-                const key = keys[i];
-                if (Date.parse(key + 'T00:00:00Z') < startMs || Date.parse(key + 'T00:00:00Z') > endMs) continue;
-                const bars = days.get(key).sort((a, b) => a.m - b.m), prevBars = days.get(keys[i - 1]);
-                const prevClose = prevBars[prevBars.length - 1].c;
-                if (prevClose > 0 && bars.length > 1) rawDays.push({ key, bars, prevClose });
-            }
-            if (rawDays.length < 3) throw new Error('有效交易日過少，請拉長日期區間');
-
+    function simOptCore(rawDays, P) {
+        const { kMeta, ticker, baseNDecide, autoNbars, minHoldMin, effectiveStart, maxFinishMin, autoBl, userBls, offMode, hold, allowRev, maxWaves, splitHurdleDec, waveBufMin, maxLossDec, minStartMin, winMode, minWinPct, minDays, sortBy, feeOn, noLateExit, tp } = P;
             const candNbars = kMeta.is60m ? [baseNDecide, 0, 1, 2] : (kMeta.is1m ? [baseNDecide, 0, 1, 3, 5, 15] : [baseNDecide, 0, 1, 2, 3, 6]);
             const nDecideList = (autoNbars ? [...new Set(candNbars)] : [baseNDecide])
                 .filter(nd => maxFinishMin === null || (Math.max(effectiveStart, nd * kMeta.stepMin) + minHoldMin) <= maxFinishMin);
@@ -6637,7 +6925,7 @@
             const allSolutions = [];
 
             for (const nd of nDecideList) {
-                const tensorObj = simBuildDualReturnTensor(rawDays, nd, offMode, feeOn, ticker, noLateExit, minStartMin, maxFinishMin, kMeta.is60m);
+                const tensorObj = simBuildDualReturnTensor(rawDays, nd, offMode, feeOn, ticker, noLateExit, minStartMin, maxFinishMin, kMeta.is60m, tp);
                 if (!tensorObj) continue;
 
                 const dayMeta = rawDays.map((d, idx) => {
@@ -6693,21 +6981,19 @@
                             const stability = ((uc.on ? uc.stability * uc.nTrades : 0) + (dc.on ? dc.stability * dc.nTrades : 0)) / totTrades;
 
                             allSolutions.push({
-                                ticker, offMode, hold, feeOn, nDecide: nd, klineLabel: kMeta.label,
+                                ticker, offMode, hold, feeOn, tp, nDecide: nd, klineLabel: kMeta.label,
                                 blLabel: blTpl.label, extraBls: blTpl.rules, blSkipped,
                                 up: uc, down: dc,
                                 nDays: totDays, nTrades: totTrades, wins: totWins, winRate: totWinRate,
                                 cum: totCum, avg: totAvg, pf, worst, stability,
-                                rawDays, dayMeta, tensorObj
+                                rawDays, dayMeta, tensorObj, tp
                             });
                         }
                     }
                 }
             }
 
-            if (!allSolutions.length) {
-                throw new Error(`在目前條件下（${kMeta.label}・勝率 ≥ ${minWinPct}%、最低 ${minDays} 天）找不到合規解。建議調降最低勝率或放寬時間窗。`);
-            }
+            if (!allSolutions.length) return [];
 
             const maxCum = Math.max(0.01, ...allSolutions.map(s => s.cum));
             allSolutions.forEach(s => {
@@ -6737,6 +7023,67 @@
                 stability: (a, b) => b.stability - a.stability || b.cum - a.cum
             };
             deduped.sort(sorters[sortBy] || sorters.cum);
+
+        return deduped;
+    }
+
+    async function runOpenOptimizer() {
+        const errEl = document.getElementById('sim-error'), boardEl = document.getElementById('sim-opt-board'), btn = document.getElementById('sim-opt-btn');
+        const fail = (m) => { errEl.style.display = 'block'; errEl.innerText = m; boardEl.style.display = 'none'; };
+        errEl.style.display = 'none';
+
+        let ticker = (document.getElementById('sim-ticker').value || '').trim().toUpperCase();
+        const sv = document.getElementById('sim-start').value, ev = document.getElementById('sim-end').value;
+        if (!ticker) return fail('請先在上方輸入股票代號');
+        if (!sv || !ev) return fail('請選擇日期區間');
+        const startMs = Date.parse(sv + 'T00:00:00Z'), endMs = Date.parse(ev + 'T00:00:00Z');
+        if (endMs < startMs) return fail('結束日期不能早於起始日期');
+
+        const kMeta = simGetKlineMeta('sim', ticker);
+        if (Date.now() - startMs > kMeta.maxDays * 86400e3) {
+            return fail(kMeta.useAlpaca
+                ? `Alpaca 歷史資料支援自 2016 年起（約 ${kMeta.maxDays} 天內），請將起始日期設於 2016 年之後`
+                : `目前使用 Yahoo 資料源，${kMeta.label} 最多提供最近 ${kMeta.maxDays} 天資料；若需回測美股長天期 1分K/5分K，請於頁面最下方填寫 Alpaca API Key`);
+        }
+
+        const rp = simReadOptParams(kMeta, ticker);
+        if (rp.err) return fail(rp.err);
+        const { minWinPct, winMode, maxWaves, splitHurdleDec, minDays, maxLossDec, minHoldMin, waveBufMin, minStartMin, maxFinishMin, effectiveStart, sortBy, autoBl, allowRev, autoNbars, noLateExit, offMode, hold, feeOn, baseNDecide, userBls, tp } = rp.P;
+
+        btn.disabled = true;
+        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 正在讀取 ${kMeta.label} 並進行多波段動態規劃尋優...`;
+
+        try {
+            const tStart = performance.now();
+            const p1 = Math.floor(startMs / 1000) - 8 * 86400, p2 = Math.floor(endMs / 1000) + 2 * 86400;
+            const cands = /^\d{4,6}[A-Z]?$/.test(ticker) ? [ticker + '.TW', ticker + '.TWO'] : [ticker];
+            let r = null;
+            for (const c of cands) { try { r = await simFetchIntraday(c, p1, p2, kMeta.interval); } catch (e) { if (kMeta.useAlpaca) throw e; } if (r) { ticker = c; break; } }
+            if (!r) throw new Error(`查無此代號的 ${kMeta.label} 資料`);
+
+            const off = (r.meta && r.meta.gmtoffset) || 0, q = r.indicators.quote[0] || {};
+            const days = new Map();
+            r.timestamp.forEach((t, i) => {
+                if (q.open[i] == null || q.close[i] == null) return;
+                const d = new Date((t + off) * 1000), key = d.toISOString().slice(0, 10);
+                if (!days.has(key)) days.set(key, []);
+                days.get(key).push({ m: d.getUTCHours() * 60 + d.getUTCMinutes(), o: q.open[i], c: q.close[i] });
+            });
+            const keys = [...days.keys()].sort();
+            const rawDays = [];
+            for (let i = 1; i < keys.length; i++) {
+                const key = keys[i];
+                if (Date.parse(key + 'T00:00:00Z') < startMs || Date.parse(key + 'T00:00:00Z') > endMs) continue;
+                const bars = days.get(key).sort((a, b) => a.m - b.m), prevBars = days.get(keys[i - 1]);
+                const prevClose = prevBars[prevBars.length - 1].c;
+                if (prevClose > 0 && bars.length > 1) rawDays.push({ key, bars, prevClose });
+            }
+            if (rawDays.length < 3) throw new Error('有效交易日過少，請拉長日期區間');
+
+            const deduped = simOptCore(rawDays, { kMeta, ticker, baseNDecide, autoNbars, minHoldMin, effectiveStart, maxFinishMin, autoBl, userBls, offMode, hold, allowRev, maxWaves, splitHurdleDec, waveBufMin, maxLossDec, minStartMin, winMode, minWinPct, minDays, sortBy, feeOn, noLateExit, tp });
+            if (!deduped.length) {
+                throw new Error(`在目前條件下（${kMeta.label}・勝率 ≥ ${minWinPct}%、最低 ${minDays} 天）找不到合規解。建議調降最低勝率或放寬時間窗。`);
+            }
 
             const topList = deduped.slice(0, 10);
             simOptCacheResults = topList;
@@ -6799,7 +7146,7 @@
                         <div style="font-size:11px; font-family:monospace; line-height:1.55; color:#ccc;">
                             <div><span style="color:var(--color-up);">▲ 開盤漲 (${s.up.nDays}天):</span> ${formatChain(s.up, s.offMode, s.hold)}</div>
                             <div><span style="color:var(--color-down);">▼ 開盤跌 (${s.down.nDays}天):</span> ${formatChain(s.down, s.offMode, s.hold)}</div>
-                            <div style="color:#999; font-size:10.5px;">⚙️ 判定K棒: 前 <b>${s.nDecide}</b> 根 | 黑名單: <b style="color:${s.extraBls.length ? 'var(--color-warn)' : '#888'}">${escapeHtml(s.blLabel)}</b></div>
+                            <div style="color:#999; font-size:10.5px;">⚙️ 判定K棒: 前 <b>${s.nDecide}</b> 根 |${s.tp ? ` 停利: <b style="color:var(--color-warn)">${s.tp.min}分內${s.hold ? '跌' : '漲'}≥${(s.tp.pct * 100).toFixed(2).replace(/\.?0+$/, '')}%</b> |` : ''} 黑名單: <b style="color:${s.extraBls.length ? 'var(--color-warn)' : '#888'}">${escapeHtml(s.blLabel)}</b></div>
                         </div>
                     </div>`;
                 }).join('')}
@@ -6890,6 +7237,143 @@
 
     window.runOpenOptimizer = runOpenOptimizer;
     window.simApplyOptSolution = simApplyOptSolution;
+
+    // ════════════════════════════════════════════════════════════════
+    // ⑦ 滾動回溯（Walk-Forward）：每天用「釘選起點～前一天」的 TOP 1 最優解交易當天
+    // ════════════════════════════════════════════════════════════════
+    function simEvalSolutionOnDay(sol, day, P) {
+        const { bars, prevClose, key } = day, nd = sol.nDecide;
+        const open = nd > 0 ? bars[Math.min(nd, bars.length) - 1].c : bars[0].o;
+        if (!(prevClose > 0) || open === prevClose) return [];
+        const side = open > prevClose ? 'up' : 'down', gapAbs = Math.abs(open / prevClose - 1) * 100;
+        const bls = [...P.userBls, ...(sol.extraBls || [])];
+        if (bls.some(r => gapAbs >= r.th && (r.to === null || gapAbs < r.to) && (r.dir === 'both' || r.dir === side))) return [];
+        const chain = side === 'up' ? sol.up : sol.down;
+        if (!chain || !chain.on || !chain.waves.length) return [];
+        const t0 = sol.offMode ? bars[0].m : 0, N = 1000, out = [];
+        let prevExit = -1;
+        chain.waves.forEach((w, wi) => {
+            const bi = bars.findIndex(b => (b.m - t0) >= w.buyMin);
+            if (bi < 0 || bi < nd || bi <= prevExit) return;
+            let si = w.isLate ? -1 : bars.findIndex((b, k) => k > bi && (b.m - t0) >= w.sellMin);
+            if (si < 0 && bars.length - 1 <= bi) return;
+            const buyP = bars[bi].o;
+            let sellP = si >= 0 ? bars[si].o : bars[bars.length - 1].c;
+            let exitIdx = si >= 0 ? si : bars.length - 1, tpHit = false;
+            if (P.tp) {
+                const x = simTpExit(bars, bi, buyP, w.act, P.tp);
+                if (x && x.idx < exitIdx) { sellP = x.price; exitIdx = x.idx; si = x.idx; tpHit = true; }
+            }
+            let ret;
+            if (w.act === 'long') {
+                ret = sellP / buyP - 1;
+                if (P.feeOn) { const bc = computeTradeCosts(sol.ticker, buyP * N, N, 'BUY'), sc = computeTradeCosts(sol.ticker, sellP * N, N, 'SELL'); ret = (sellP * N - sc.fee - sc.tax) / (buyP * N + bc.fee + (bc.tax || 0)) - 1; }
+            } else {
+                ret = buyP / sellP - 1;
+                if (P.feeOn) { const sc = computeTradeCosts(sol.ticker, buyP * N, N, 'SELL'), bc = computeTradeCosts(sol.ticker, sellP * N, N, 'BUY'); ret = (buyP * N - sc.fee - sc.tax) / (sellP * N + bc.fee + (bc.tax || 0)) - 1; }
+            }
+            prevExit = exitIdx;
+            out.push({ key: chain.k > 1 ? `${key}#${wi + 1}` : key, side, gap: open / prevClose - 1, buyP, sellP, ret, amt: null, exitLate: si < 0, rule: '滾動 TOP 1' + (tpHit ? '·停利' : '') });
+        });
+        return out;
+    }
+
+    async function simRunWalkForward() {
+        const $ = (id) => document.getElementById(id);
+        const errEl = $('sim-wf-error'), sumEl = $('sim-wf-summary'), btn = $('sim-wf-btn');
+        const fail = (m) => { errEl.style.display = 'block'; errEl.innerText = m; sumEl.style.display = 'none'; };
+        errEl.style.display = 'none';
+        let ticker = ($('sim-ticker').value || '').trim().toUpperCase();
+        const pin = $('sim-wf-pin').value, from = $('sim-wf-from').value, to = $('sim-wf-to').value;
+        const minTrain = Math.max(3, parseInt($('sim-wf-mintrain').value, 10) || 3);
+        if (!ticker) return fail('請先在上方輸入股票代號');
+        if (!pin || !from || !to) return fail('請設定「釘選起點」與「回測起日／迄日」');
+        const pinMs = Date.parse(pin + 'T00:00:00Z'), fromMs = Date.parse(from + 'T00:00:00Z'), toMs = Date.parse(to + 'T00:00:00Z');
+        if (!(fromMs > pinMs)) return fail('回測起日必須晚於釘選起點');
+        if (toMs < fromMs) return fail('回測迄日不能早於回測起日');
+        const kMeta = simGetKlineMeta('sim', ticker);
+        if (Date.now() - pinMs > kMeta.maxDays * 86400e3) {
+            return fail(kMeta.useAlpaca
+                ? `Alpaca 歷史資料支援自 2016 年起（約 ${kMeta.maxDays} 天內），請將釘選起點設於 2016 年之後`
+                : `目前使用 Yahoo 資料源，${kMeta.label} 最多提供最近 ${kMeta.maxDays} 天資料，釘選起點太早；請改用 60分K，或於頁面最下方填寫 Alpaca API Key`);
+        }
+        const rp = simReadOptParams(kMeta, ticker);
+        if (rp.err) return fail(rp.err);
+        const idleLabel = btn.innerHTML;
+        btn.disabled = true; btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 讀取 ${kMeta.label} 歷史資料中...`;
+        try {
+            const p1 = Math.floor(pinMs / 1000) - 8 * 86400, p2 = Math.floor(toMs / 1000) + 2 * 86400;
+            const cands = /^\d{4,6}[A-Z]?$/.test(ticker) ? [ticker + '.TW', ticker + '.TWO'] : [ticker];
+            let r = null;
+            for (const c of cands) { try { r = await simFetchIntraday(c, p1, p2, kMeta.interval); } catch (e) { if (kMeta.useAlpaca) throw e; } if (r) { ticker = c; break; } }
+            if (!r) throw new Error(`查無此代號的 ${kMeta.label} 資料`);
+            const P = { ...rp.P, kMeta, ticker, offMode: !simIsTW(ticker) };
+            const off = (r.meta && r.meta.gmtoffset) || 0, q = r.indicators.quote[0] || {};
+            const dm = new Map();
+            r.timestamp.forEach((t, i) => {
+                if (q.open[i] == null || q.close[i] == null) return;
+                const d = new Date((t + off) * 1000), key = d.toISOString().slice(0, 10);
+                if (!dm.has(key)) dm.set(key, []);
+                dm.get(key).push({ m: d.getUTCHours() * 60 + d.getUTCMinutes(), o: q.open[i], c: q.close[i] });
+            });
+            const keys = [...dm.keys()].sort(), all = [];
+            for (let i = 1; i < keys.length; i++) {
+                const key = keys[i], ms = Date.parse(key + 'T00:00:00Z');
+                if (ms < pinMs || ms > toMs) continue;
+                const bars = dm.get(key).sort((a, b) => a.m - b.m), prev = dm.get(keys[i - 1]), prevClose = prev[prev.length - 1].c;
+                if (prevClose > 0 && bars.length > 1) all.push({ key, bars, prevClose });
+            }
+            const testDays = all.filter(d => Date.parse(d.key + 'T00:00:00Z') >= fromMs);
+            if (!testDays.length) throw new Error('回測區間內沒有交易日資料');
+            const trades = [], log = []; let noSol = 0, tooFew = 0;
+            const sigSet = new Set();
+            for (let n = 0; n < testDays.length; n++) {
+                const td = testDays[n], train = all.filter(d => d.key < td.key);
+                btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 滾動回溯 ${n + 1} / ${testDays.length}（${td.key}）`;
+                await new Promise(rs => setTimeout(rs, 0));
+                if (train.length < minTrain) { tooFew++; log.push({ key: td.key, note: `訓練資料僅 ${train.length} 天，略過` }); continue; }
+                const top = simOptCore(train, P)[0];
+                if (!top) { noSol++; log.push({ key: td.key, note: `訓練 ${train.length} 天找不到合規解，當天空手` }); continue; }
+                const fmtChain = (c) => c.on && c.waves.length ? c.waves.map(w => `${simFormatGridMin(w.buyMin, P.offMode, false)}→${simFormatGridMin(w.sellMin, P.offMode, w.isLate)}`).join('+') : '空手';
+                const desc = `漲 ${fmtChain(top.up)}｜跌 ${fmtChain(top.down)}｜判定${top.nDecide}根${top.extraBls.length ? '｜' + top.blLabel : ''}`;
+                sigSet.add(desc);
+                const day = simEvalSolutionOnDay(top, td, P);
+                trades.push(...day);
+                log.push({ key: td.key, train: train.length, desc, ret: day.length ? day.reduce((a, t) => a * (1 + t.ret), 1) - 1 : null });
+            }
+            if (!trades.length) throw new Error('滾動回溯期間沒有產生任何交易（可能全部略過、空手或無合規解）');
+            const holdRet = testDays.length ? testDays[testDays.length - 1].bars[testDays[testDays.length - 1].bars.length - 1].c / testDays[0].prevClose - 1 : null;
+            if (typeof window.simExportSnap === 'function') window.simExportSnap('gap');
+            renderOpenSimulator(`${ticker} [${kMeta.label}] 滾動回溯`, trades, {}, P.feeOn, { hold: P.hold, nShares: 0, nDecide: P.baseNDecide, blSkipped: 0, holdRet });
+            const pct = (x) => (x >= 0 ? '+' : '') + (x * 100).toFixed(2) + '%';
+            const col = (x) => x >= 0 ? 'var(--color-up)' : 'var(--color-down)';
+            sumEl.innerHTML = `
+                <div>釘選起點 <b style="color:#fff;">${pin}</b>・回測 <b style="color:#fff;">${testDays.length}</b> 個交易日・共 <b style="color:#fff;">${sigSet.size}</b> 種不同的 TOP 1 方案${noSol ? `・無合規解 ${noSol} 天` : ''}${tooFew ? `・訓練不足 ${tooFew} 天` : ''}。完整成交紀錄與績效已顯示於上方模擬結果區。</div>
+                <details><summary style="cursor:pointer; color:var(--color-acc);">每日採用的 TOP 1 方案</summary>
+                    <div style="max-height:260px; overflow:auto; margin-top:6px; font-family:monospace; font-size:10.5px; line-height:1.6;">
+                        ${log.map(l => `<div style="border-top:1px solid rgba(255,255,255,0.05); padding:3px 0;"><b>${l.key.slice(5)}</b> ${l.desc ? `<span style="color:#888;">(訓練${l.train}天)</span> ${escapeHtml(l.desc)} <b style="color:${l.ret === null ? '#888' : col(l.ret)}">${l.ret === null ? '未成交' : pct(l.ret)}</b>` : `<span style="color:#888;">${escapeHtml(l.note)}</span>`}</div>`).join('')}
+                    </div>
+                </details>`;
+            sumEl.style.display = 'flex';
+            const res = $('sim-result'); if (res && res.scrollIntoView) res.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } catch (e) { fail(e.message || '滾動回溯失敗'); }
+        finally { btn.disabled = false; btn.innerHTML = idleLabel; }
+    }
+    window.simRunWalkForward = simRunWalkForward;
+    (function wfPrefill() {
+        const d = document.getElementById('sim-wf-panel'); if (!d) return;
+        d.addEventListener('toggle', () => {
+            if (!d.open) return;
+            const sv = document.getElementById('sim-start').value, ev = document.getElementById('sim-end').value;
+            const pin = document.getElementById('sim-wf-pin'), fr = document.getElementById('sim-wf-from'), to = document.getElementById('sim-wf-to');
+            if (!pin.value && sv) pin.value = sv;
+            if (!to.value && ev) to.value = ev;
+            if (!fr.value && pin.value && to.value) {
+                const a = Date.parse(pin.value + 'T00:00:00Z'), b = Date.parse(to.value + 'T00:00:00Z');
+                fr.value = new Date(a + Math.round((b - a) * 0.5 / 86400e3) * 86400e3).toISOString().slice(0, 10);
+            }
+        });
+    })();
 
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -8270,6 +8754,7 @@
             return r;
         };
     }
+    window.simExportSnap = (kind) => { snap[kind] = collectSettings(panelOf(kind)); };
     wrap('runOpenSimulator', 'gap'); wrap('simApplyOptSolution', 'gap', true);
     wrap('runMultiStockRelayOptimizer', 'relay');
     wrap('runSwingSimulator', 'swing'); wrap('swgApplyOptSolution', 'swing', true);
@@ -16887,6 +17372,7 @@ ${summaryText}
     function wrap(name, tab) {
       const o = window[name]; if (typeof o !== 'function' || o._ai) return;
       const f = async function () {
+        if (Array.isArray(arguments[0])) return o.apply(this, arguments);
         const t = Date.now(); showAI(tab);
         try { return await o.apply(this, arguments); }
         finally {
