@@ -5517,7 +5517,10 @@
         `;
         outEl.style.display = 'flex';
         window.msrLastCtx = ctx; // 供「匯出純文字」使用
-        window.msrSelectSchedule = (idx) => renderSelectedScheduleDetail(idx, ctx);
+        window.msrSelectSchedule = (idx) => {
+            renderSelectedScheduleDetail(idx, ctx);
+            if (!ctx.manual && typeof window.msrLoadScheduleToManual === 'function') window.msrLoadScheduleToManual(idx, true);
+        };
         renderSelectedScheduleDetail(0, ctx);
     }
 
@@ -5859,7 +5862,7 @@
             return window.runMultiStockRelayOptimizer(r.legs);
         };
         // 把排行榜上的方案複製成手動棒次
-        window.msrLoadScheduleToManual = function (idx) {
+        window.msrLoadScheduleToManual = function (idx, quiet) {
             const sch = msrLastSchedules[idx]; if (!sch) return;
             const strip = (t) => String(t || '').replace(/\.(TWO?)$/i, '');
             window.msrManClear();
@@ -5872,7 +5875,7 @@
                 }
                 addLeg(d);
             });
-            const det = $('msr-manual'); if (det) { det.open = true; det.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+            const det = $('msr-manual'); if (det && !quiet) { det.open = true; det.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
         };
         // 配置存檔
         const loadAll = () => { try { return JSON.parse(localStorage.getItem(PRESET_KEY) || '{}') || {}; } catch (e) { return {}; } };
