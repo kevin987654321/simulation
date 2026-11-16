@@ -7554,9 +7554,19 @@
 
                 <div class="sim-card" style="background:rgba(0,0,0,0.35); margin-bottom:10px; border-color:rgba(0,212,255,0.25);">
                     <div style="font-size:11.5px; font-weight:bold; color:var(--color-acc); margin-bottom:6px;">
-                        <i class="fa-solid fa-shield-halved"></i> 分類交易之動態 OR-ATR 停利／停損保護設定（以當日觀察期高低波幅 R_obs 為基準）
+                        <i class="fa-solid fa-shield-halved"></i> 分類交易之動態 OR-ATR 停利／停損 ＆ 全域時間窗限制
                     </div>
                     <div style="display:flex; flex-direction:column; gap:8px;">
+                        <div class="sim-grid2">
+                            <div>
+                                <div class="sim-lbl">開盤後最早開始進場（分鐘）>=</div>
+                                <input type="text" id="sim-reg-man-min-start" class="sim-in mobile-num" data-maxlen="3" onfocus="this.select()" value="" placeholder="不限（例填 15）" inputmode="numeric">
+                            </div>
+                            <div>
+                                <div class="sim-lbl">開盤後最晚完畢出場（分鐘）<=</div>
+                                <input type="text" id="sim-reg-man-max-finish" class="sim-in mobile-num" data-maxlen="3" onfocus="this.select()" value="" placeholder="不限（例填 100＝1時40分內）" inputmode="numeric">
+                            </div>
+                        </div>
                         <label style="font-size:11px; color:#ccc; display:flex; align-items:center; gap:6px;">
                             <input type="checkbox" id="sim-reg-man-atr-on" checked>
                             啟用 OR-ATR 動態停利與停損（若取消勾選，則純粹依各分類設定的持倉根數或指定時間出場）
@@ -7743,8 +7753,12 @@
             };
         });
 
+        const minStartRaw = (document.getElementById('sim-reg-man-min-start')?.value ?? document.getElementById('sim-opt-min-start')?.value ?? '').trim();
+        const maxFinishRaw = (document.getElementById('sim-reg-man-max-finish')?.value ?? document.getElementById('sim-opt-max-finish')?.value ?? '').trim();
         return {
             enabled: !!document.getElementById('sim-reg-man-enable')?.checked,
+            minStartMin: minStartRaw === '' ? null : parseInt(minStartRaw, 10),
+            maxFinishMin: maxFinishRaw === '' ? null : parseInt(maxFinishRaw, 10),
             atrOn: document.getElementById('sim-reg-man-atr-on') ? document.getElementById('sim-reg-man-atr-on').checked : true,
             tpMult: Math.max(0.2, parseFloat(document.getElementById('sim-reg-man-tp')?.value) || 1.8),
             slMult: Math.max(0.2, parseFloat(document.getElementById('sim-reg-man-sl')?.value) || 1.0),
@@ -7757,6 +7771,12 @@
         if (!cfg) return;
         injectAllRegimePanels();
         if (cfg.enabled !== undefined) document.getElementById('sim-reg-man-enable').checked = !!cfg.enabled;
+        if (cfg.minStartMin !== undefined && document.getElementById('sim-reg-man-min-start')) {
+            document.getElementById('sim-reg-man-min-start').value = cfg.minStartMin === null ? '' : String(cfg.minStartMin);
+        }
+        if (cfg.maxFinishMin !== undefined && document.getElementById('sim-reg-man-max-finish')) {
+            document.getElementById('sim-reg-man-max-finish').value = cfg.maxFinishMin === null ? '' : String(cfg.maxFinishMin);
+        }
         if (cfg.atrOn !== undefined) document.getElementById('sim-reg-man-atr-on').checked = !!cfg.atrOn;
         if (cfg.tpMult !== undefined) document.getElementById('sim-reg-man-tp').value = String(cfg.tpMult);
         if (cfg.slMult !== undefined) document.getElementById('sim-reg-man-sl').value = String(cfg.slMult);
@@ -7893,13 +7913,44 @@
         const len = bars.length;
         if (realBi < 0 || realBi >= len - 1) return null;
 
-        const targetLastIdx = (isLateTarget || targetSi < 0 || targetSi >= len)
+        const dayOpenMin = opts.offMode ? bars[0].m : Math.min(540, bars[0].m);
+        const minStartMin = (opts.minStartMin !== undefined && opts.minStartMin !== null && !isNaN(opts.minStartMin)) ? opts.minStartMin : null;
+        const maxFinishMin = (opts.maxFinishMin !== undefined && opts.maxFinishMin !== null && !isNaN(opts.maxFinishMin)) ? opts.maxFinishMin : null;
+
+        let effBi = realBi;
+        if (minStartMin !== null) {
+            while (effBi < len - 1 && (bars[effBi].m - dayOpenMin) < minStartMin) {
+                effBi++;
+            }
+        }
+        if (effBi >= len - 1) return null;
+        if (maxFinishMin !== null && (bars[effBi].m - dayOpenMin) >= maxFinishMin) return null;
+
+        let targetLastIdx = (isLateTarget || targetSi < 0 || targetSi >= len)
             ? (len - 1)
             : targetSi;
-        if (opts.noLateExit && targetLastIdx >= len - 1 && isLateTarget) return null;
-        if (targetLastIdx <= realBi) return null;
 
-        const ep = bars[realBi].o;
+        let clampedByMaxFinish = false;
+        if (maxFinishMin !== null) {
+            let maxAllowedIdx = -1;
+            for (let k = effBi + 1; k < len; k++) {
+                if ((bars[k].m - dayOpenMin) <= maxFinishMin) {
+                    maxAllowedIdx = k;
+                } else {
+                    break;
+                }
+            }
+            if (maxAllowedIdx <= effBi) return null;
+            if (targetLastIdx >= maxAllowedIdx) {
+                targetLastIdx = maxAllowedIdx;
+                clampedByMaxFinish = true;
+            }
+        } else if (opts.noLateExit && targetLastIdx >= len - 1 && isLateTarget) {
+            return null;
+        }
+        if (targetLastIdx <= effBi) return null;
+
+        const ep = bars[effBi].o;
         const atrOn = opts.atrOn !== false;
         const tpDist = (opts.regTpMult || 1.8) * obsRange;
         const slDist = (opts.regSlMult || 1.0) * obsRange;
@@ -7909,20 +7960,20 @@
         const fixedTp = opts.tp;
 
         let exitIdx = targetLastIdx;
-        let exitP = exitIdx < len - 1 ? bars[exitIdx].o : bars[len - 1].c;
-        let isLate = (exitIdx === len - 1 && isLateTarget);
-        let exitTag = isLate ? '尾盤' : (opts.timeExitLabel || '到時');
+        let exitP = (exitIdx < len - 1 || clampedByMaxFinish) ? bars[exitIdx].o : bars[len - 1].c;
+        let isLate = (!clampedByMaxFinish && exitIdx === len - 1 && isLateTarget);
+        let exitTag = isLate ? '尾盤' : (clampedByMaxFinish ? `限時${maxFinishMin}分` : (opts.timeExitLabel || '到時'));
 
         let peak = ep, trough = ep;
-        const buyMinVal = bars[realBi].m;
+        const buyMinVal = bars[effBi].m;
 
-        for (let k = realBi; k < targetLastIdx; k++) {
+        for (let k = effBi; k < targetLastIdx; k++) {
             const c = bars[k].c;
             if (fixedTp && (bars[k].m - buyMinVal) <= fixedTp.min) {
                 const hitFixed = act === 'long' ? (c >= ep * (1 + fixedTp.pct)) : (c <= ep * (1 - fixedTp.pct));
                 if (hitFixed) {
-                    exitIdx = Math.min(len - 1, k + 1);
-                    exitP = k + 1 < len ? bars[k + 1].o : c;
+                    exitIdx = Math.min(targetLastIdx, k + 1);
+                    exitP = exitIdx < len - 1 ? bars[exitIdx].o : c;
                     isLate = false;
                     exitTag = '固定停利';
                     break;
@@ -7935,8 +7986,8 @@
                     const hitSl = (ep - c) >= slDist;
                     const hitTr = useTrail && ((peak - ep) >= trActDist) && ((peak - c) >= trDropDist);
                     if (hitTp || hitSl || hitTr) {
-                        exitIdx = Math.min(len - 1, k + 1);
-                        exitP = k + 1 < len ? bars[k + 1].o : c;
+                        exitIdx = Math.min(targetLastIdx, k + 1);
+                        exitP = exitIdx < len - 1 ? bars[exitIdx].o : c;
                         isLate = false;
                         exitTag = hitTp ? 'OR停利' : (hitTr ? 'OR移動鎖利' : 'OR停損');
                         break;
@@ -7947,8 +7998,8 @@
                     const hitSl = (c - ep) >= slDist;
                     const hitTr = useTrail && ((ep - trough) >= trActDist) && ((c - trough) >= trDropDist);
                     if (hitTp || hitSl || hitTr) {
-                        exitIdx = Math.min(len - 1, k + 1);
-                        exitP = k + 1 < len ? bars[k + 1].o : c;
+                        exitIdx = Math.min(targetLastIdx, k + 1);
+                        exitP = exitIdx < len - 1 ? bars[exitIdx].o : c;
                         isLate = false;
                         exitTag = hitTp ? 'OR停利' : (hitTr ? 'OR移動鎖利' : 'OR停損');
                         break;
@@ -7994,7 +8045,7 @@
             }
         }
 
-        return { realBi, exitIdx, buyP: ep, sellP: exitP, ret, amt, isLate, exitTag };
+        return { realBi: effBi, exitIdx, buyP: ep, sellP: exitP, ret, amt, isLate, exitTag };
     }
 
     // 8. 讀取歷史 K 線並確保包含 high (h) 與 low (l) 欄位
@@ -8162,6 +8213,9 @@
                 }
 
                 const tr = simExecRegimeTrade(bars, realBi, targetSi, isLateTarget, rl.act, info.obsRange, {
+                    offMode,
+                    minStartMin: manCfg.minStartMin,
+                    maxFinishMin: manCfg.maxFinishMin,
                     atrOn: manCfg.atrOn,
                     regTpMult: manCfg.tpMult,
                     regSlMult: manCfg.slMult,
@@ -8230,10 +8284,16 @@
             return { idx, key: d.key, ...info };
         });
 
-        const holdHorizons = P.kMeta.is60m
+        const baseHorizons = P.kMeta.is60m
             ? [1, 2, 3, 9999]
-            : (P.kMeta.is1m ? [30, 60, 120, 9999] : [10, 18, 28, 9999]);
-        const entryOffsets = [0, 1];
+            : (P.kMeta.is1m ? [15, 30, 60, 120, 9999] : [6, 10, 18, 28, 9999]);
+
+        const obsMin = nd * stepMin;
+        const minReqDIn = (P.minStartMin !== null && P.minStartMin !== undefined && P.minStartMin > obsMin)
+            ? Math.ceil((P.minStartMin - obsMin) / stepMin)
+            : 0;
+        const maxFin = (P.maxFinishMin !== undefined) ? P.maxFinishMin : null;
+        const entryOffsets = [minReqDIn, minReqDIn + 1];
 
         const primaryAct = P.hold ? 'short' : 'long';
         const actions = [primaryAct];
@@ -8242,14 +8302,36 @@
         const structConfigs = [];
         for (const act of actions) {
             for (const dIn of entryOffsets) {
-                for (const hBars of holdHorizons) {
+                const buyElapsedMin = (nd + dIn) * stepMin;
+                if (maxFin !== null && (buyElapsedMin + P.minHoldMin > maxFin)) {
+                    continue;
+                }
+
+                let validHorizons = [];
+                if (maxFin !== null) {
+                    const maxAllowedBars = Math.floor((maxFin - buyElapsedMin) / stepMin);
+                    if (maxAllowedBars < 1) continue;
+                    const clampedSet = new Set();
+                    for (const h of baseHorizons) {
+                        if (h < 999 && h <= maxAllowedBars) clampedSet.add(h);
+                    }
+                    clampedSet.add(maxAllowedBars);
+                    validHorizons = [...clampedSet].sort((a, b) => a - b);
+                } else {
+                    validHorizons = baseHorizons;
+                }
+
+                for (const hBars of validHorizons) {
                     const holdMin = hBars >= 999 ? 9999 : hBars * stepMin;
                     if (hBars < 999 && holdMin < P.minHoldMin) continue;
-                    const hLabel = hBars >= 999 ? '尾盤收盤' : `+${hBars}根(${holdMin}分)`;
+                    const endElapsedMin = buyElapsedMin + holdMin;
+                    const hLabel = hBars >= 999
+                        ? '尾盤收盤'
+                        : `+${hBars}根(開盤+${endElapsedMin}分內)`;
                     structConfigs.push({
                         cfgId: `${act}_in${dIn}_h${hBars}`,
                         act, dIn, hBars,
-                        label: `${dIn === 0 ? '觀察完立即' : '觀察+1根確認'}${act === 'long' ? '做多' : '做空'}➔${hLabel}`
+                        label: `${dIn === 0 ? '觀察完立即' : `觀察+${dIn}根`}(+${buyElapsedMin}分)${act === 'long' ? '做多' : '做空'}➔${hLabel}`
                     });
                 }
             }
@@ -8264,9 +8346,12 @@
             for (let c = 0; c < C; c++) {
                 const sc = structConfigs[c];
                 const realBi = realBaseBi + sc.dIn;
-                const isLateTarget = sc.hBars >= 999;
+                const isLateTarget = sc.hBars >= 999 && maxFin === null;
                 const targetSi = isLateTarget ? (bars.length - 1) : Math.min(bars.length - 1, realBi + sc.hBars);
                 evalTable[d][c] = simExecRegimeTrade(bars, realBi, targetSi, isLateTarget, sc.act, dm.obsRange, {
+                    offMode: P.offMode,
+                    minStartMin: P.minStartMin,
+                    maxFinishMin: P.maxFinishMin,
                     atrOn: true,
                     regTpMult: P.regTpMult,
                     regSlMult: P.regSlMult,
@@ -8682,17 +8767,25 @@
             document.getElementById('sim-bl').open = true;
         }
 
-        // 將各分類規則寫入手動面板，並換算對應參考時間
+        const optMinStart = sol.P_snapshot?.minStartMin ?? null;
+        const optMaxFinish = sol.P_snapshot?.maxFinishMin ?? null;
         const rulesToWrite = {};
         REGIME_ORDER.forEach(rKey => {
             const rl = sol.regimeRules[rKey];
             const isOn = !!(rl && rl.on && rl.sc);
             const act = isOn ? rl.sc.act : REGIME_META[rKey].defAct;
             const dIn = isOn ? rl.sc.dIn : 0;
-            const hBars = isOn ? rl.sc.hBars : 18;
+            let hBars = isOn ? rl.sc.hBars : 18;
 
-            const buyElapsedMin = (sol.nDecide + dIn) * stepMin;
-            const sellElapsedMin = hBars >= 999 ? (sol.offMode ? 385 : 265) : (buyElapsedMin + hBars * stepMin);
+            const buyElapsedMin = Math.max(optMinStart || 0, (sol.nDecide + dIn) * stepMin);
+            if (optMaxFinish !== null) {
+                const maxAllowedBars = Math.max(1, Math.floor((optMaxFinish - buyElapsedMin) / stepMin));
+                if (hBars > maxAllowedBars) hBars = maxAllowedBars;
+            }
+            let sellElapsedMin = hBars >= 999 ? (sol.offMode ? 385 : 265) : (buyElapsedMin + hBars * stepMin);
+            if (optMaxFinish !== null && sellElapsedMin > optMaxFinish) {
+                sellElapsedMin = optMaxFinish;
+            }
             const clockBuy = baseOpenMin + buyElapsedMin;
             const clockSell = baseOpenMin + sellElapsedMin;
 
@@ -8717,6 +8810,8 @@
 
         simWriteRegimeManualConfig({
             enabled: true,
+            minStartMin: optMinStart,
+            maxFinishMin: optMaxFinish,
             atrOn: true,
             tpMult: sol.P_snapshot?.regTpMult || 1.8,
             slMult: sol.P_snapshot?.regSlMult || 1.0,
@@ -8862,9 +8957,12 @@
                 let dayTrade = null;
                 if (rule && rule.on && rule.sc) {
                     const realBi = info.nObs + rule.sc.dIn;
-                    const isLateTarget = rule.sc.hBars >= 999;
+                    const isLateTarget = rule.sc.hBars >= 999 && P.maxFinishMin === null;
                     const targetSi = isLateTarget ? (td.bars.length - 1) : Math.min(td.bars.length - 1, realBi + rule.sc.hBars);
                     const tr = simExecRegimeTrade(td.bars, realBi, targetSi, isLateTarget, rule.sc.act, info.obsRange, {
+                        offMode: P.offMode,
+                        minStartMin: P.minStartMin,
+                        maxFinishMin: P.maxFinishMin,
                         atrOn: true,
                         regTpMult: P.regTpMult,
                         regSlMult: P.regSlMult,
