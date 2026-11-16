@@ -6390,6 +6390,7 @@
         return await simFetchYahooIntraday(symbol, p1, p2, intv);
     }
     window.simFetchIntraday = simFetchIntraday;
+    window.simFetchYahooIntraday = simFetchYahooIntraday;
 
     // 覆寫主模擬器：支援 1分K / 5分K / 60分K 與 Alpaca 10 年歷史區間
     async function runOpenSimulator() {
@@ -19437,11 +19438,14 @@ ${summaryText}
             const kMode = cfg.klineMode || document.getElementById('sim-kline-mode')?.value || '5m';
             const stepMin = kMode === '1m' ? 1 : (kMode === '60m' ? 60 : 5);
             const nowSec = Math.floor(Date.now() / 1000);
-            const p1 = nowSec - 25 * 86400, p2 = nowSec + 86400;
+            const p1 = nowSec - (kMode === '1m' ? 8 : 25) * 86400, p2 = nowSec + 86400;
             const cands = /^\d{4,6}[A-Z]?$/.test(ticker) ? [ticker + '.TW', ticker + '.TWO'] : [ticker];
             let r = null, resolved = ticker;
             for (const c of cands) {
-                try { r = await simFetchIntraday(c, p1, p2, kMode); } catch (e) {}
+                try { r = await window.simFetchYahooIntraday(c, p1, p2, kMode); } catch (e) { r = null; }
+                if (!(r && (r.timestamp || []).length)) {
+                    try { r = await simFetchIntraday(c, p1, p2, kMode); } catch (e) { r = null; }
+                }
                 if (r && (r.timestamp || []).length) { resolved = c; break; }
             }
             if (!r) throw new Error(`無法取得 ${ticker} (${kMode}) 即時 K 線`);
@@ -19473,7 +19477,7 @@ ${summaryText}
             liveCache = { resolved, kMode, stepMin, rawDays };
             const now = new Date();
             document.getElementById('live-last-ts').innerText =
-                `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+                `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}・K棒至 ${rawDays[rawDays.length - 1].key.slice(5)} ${fmtClock(rawDays[rawDays.length - 1].bars[rawDays[rawDays.length - 1].bars.length - 1].m)}`;
             window.liveRecomputeFromCache();
         } catch (e) {
             errEl.style.display = 'block';
