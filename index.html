@@ -7378,6 +7378,1567 @@
         });
     })();
 
+/* ============================================================================
+ * [M4 Complete Upgrade] 開盤 8 大走勢分類 (含精確判定說明 + 手動編輯面板 + 模擬/儲存整合 + 貝氏尋優)
+ * ============================================================================ */
+(function initRegimeClassificationEngineV2() {
+
+    // 1. 定義 8 大開盤走勢分類字典與精確判定公式說明
+    const REGIME_META = {
+        R1_OD_BULL: {
+            code: 'R1', name: 'R1:強勢推進(多)', full: 'R1 開盤強勢推進・多 (Open-Drive Bull)',
+            color: 'var(--color-up)', defAct: 'long', tradeable: true,
+            ruleDesc: '實體漲幅 B_obs >= +0.25%*S 且 CLV >= +0.45 且 路徑效率 ER >= 0.60（開盤單邊連續紅K直衝、幾無上影線與回檔）'
+        },
+        R2_OTD_BULL: {
+            code: 'R2', name: 'R2:回測有守(多)', full: 'R2 開盤回測有守・多 (Open-Test-Drive Bull)',
+            color: 'var(--color-up)', defAct: 'long', tradeable: true,
+            ruleDesc: '未達 R1 直衝標準，但收盤偏高 CLV >= +0.20 且 (下影線佔比 W_dn >= 0.25 或 B_obs > 0)（開盤先回測支撐有守後拉升）'
+        },
+        R3_ORR_BEAR: {
+            code: 'R3', name: 'R3:開高反轉(空)', full: 'R3 開高受阻反轉・空 (Open-Rejection Bear)',
+            color: 'var(--color-down)', defAct: 'short', tradeable: true,
+            ruleDesc: '跳空開高 G >= +0.50% 且 (實體收黑 B_obs <= -0.20%*S 或 [上影線 W_up >= 0.40 且 CLV <= -0.25])（開高誘多遭主力倒貨）'
+        },
+        R4_OD_BEAR: {
+            code: 'R4', name: 'R4:弱勢殺盤(空)', full: 'R4 開盤弱勢殺盤・空 (Open-Drive Bear)',
+            color: 'var(--color-down)', defAct: 'short', tradeable: true,
+            ruleDesc: '實體跌幅 B_obs <= -0.25%*S 且 CLV <= -0.45 且 路徑效率 ER >= 0.60（開盤單邊連續黑K貫殺、收在最低點附近）'
+        },
+        R5_OTD_BEAR: {
+            code: 'R5', name: 'R5:拉高受阻(空)', full: 'R5 開盤拉高受阻・空 (Open-Test-Drive Bear)',
+            color: 'var(--color-down)', defAct: 'short', tradeable: true,
+            ruleDesc: '未達 R4 直殺標準，但收盤偏低 CLV <= -0.20 且 (上影線佔比 W_up >= 0.25 或 B_obs < 0)（開盤先拉高測壓不過後轉弱）'
+        },
+        R6_ORR_BULL: {
+            code: 'R6', name: 'R6:開低破底翻(多)', full: 'R6 開低破底翻承接・多 (Open-Rejection Bull)',
+            color: 'var(--color-up)', defAct: 'long', tradeable: true,
+            ruleDesc: '跳空開低 G <= -0.50% 且 (實體收紅 B_obs >= +0.20%*S 或 [下影線 W_dn >= 0.40 且 CLV >= +0.25])（開低恐慌被承接破底翻）'
+        },
+        R7_OA_IN: {
+            code: 'R7', name: 'R7:區間拍賣(空手)', full: 'R7 區間內雙向拍賣 (Open-Auction In-Range)',
+            color: '#999', defAct: 'long', tradeable: false,
+            ruleDesc: '跳空 |G| < 0.60% 且 (總波幅 A_obs < 0.42%*S 或 [ER < 0.38 且 |CLV| < 0.30 且 |B_obs| < 0.22%*S])（窄幅死魚盤或紅黑互刷）'
+        },
+        R8_OA_OUT: {
+            code: 'R8', name: 'R8:跳空鈍化(空手)', full: 'R8 跳空後鈍化拍賣 (Open-Auction Out-of-Range)',
+            color: '#999', defAct: 'long', tradeable: false,
+            ruleDesc: '跳空 |G| >= 0.60% 且 (總波幅 A_obs < 0.42%*S 或 [ER < 0.38 且 |CLV| < 0.30])（大幅跳空後買賣力竭、原地十字震盪）'
+        }
+    };
+
+    const REGIME_ORDER = [
+        'R1_OD_BULL', 'R2_OTD_BULL', 'R6_ORR_BULL',
+        'R3_ORR_BEAR', 'R4_OD_BEAR', 'R5_OTD_BEAR',
+        'R7_OA_IN', 'R8_OA_OUT'
+    ];
+
+    // 2. 建構手動分類設定面板之單一分類卡片 HTML
+    function buildManualRegimeCardHTML(rKey) {
+        const m = REGIME_META[rKey];
+        const p = `sim-rm-${rKey}`;
+        const defOn = m.tradeable ? 'checked' : '';
+        const defAct = m.defAct === 'short' ? 'short' : 'long';
+        return `
+        <div class="sim-card" id="${p}-card" style="background:rgba(0,0,0,0.38); border-color:rgba(255,255,255,0.1); padding:10px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:4px;">
+                <div style="font-size:12px; font-weight:bold; color:${m.color};">
+                    <span style="background:rgba(255,255,255,0.1); padding:1px 6px; border-radius:4px; font-family:monospace; margin-right:4px;">${m.code}</span>${m.full}
+                </div>
+                <label style="font-size:11px; color:#ddd; display:flex; align-items:center; gap:5px; cursor:pointer;">
+                    <input type="checkbox" id="${p}-on" ${defOn} onchange="simUpdateRegimeManualCount()"> 此分類要交易
+                </label>
+            </div>
+            <div style="font-size:10.5px; color:#888; font-family:monospace; line-height:1.45; margin-bottom:8px; background:rgba(255,255,255,0.03); padding:4px 7px; border-radius:5px;">
+                📐 判定條件：${m.ruleDesc}
+            </div>
+            <div class="sim-grid2" style="margin-bottom:8px;">
+                <div>
+                    <div class="sim-lbl">進場操作方向</div>
+                    <select id="${p}-act" class="sim-in" style="padding:0 6px; font-size:12px;">
+                        <option value="long" ${defAct === 'long' ? 'selected' : ''}>做多（先買進、後賣出）</option>
+                        <option value="short" ${defAct === 'short' ? 'selected' : ''}>做空／反手（先賣出、後買回）</option>
+                    </select>
+                </div>
+                <div>
+                    <div class="sim-lbl">進出場時間設定方式</div>
+                    <select id="${p}-tmode" class="sim-in" onchange="simSyncRegimeCardMode('${rKey}')" style="padding:0 6px; font-size:12px;">
+                        <option value="struct" selected>結構根數錨定（觀察完 +N 根）</option>
+                        <option value="clock">指定時鐘／開盤後時間</option>
+                    </select>
+                </div>
+            </div>
+            <!-- 結構根數錨定輸入區 -->
+            <div class="sim-grid2" id="${p}-struct-box">
+                <div>
+                    <div class="sim-lbl">觀察期結束後延遲幾根進場（0=立即）</div>
+                    <input type="text" id="${p}-din" class="sim-in mobile-num" data-maxlen="2" onfocus="this.select()" value="0" inputmode="numeric">
+                </div>
+                <div>
+                    <div class="sim-lbl">最長持倉 K 棒根數（9999=尾盤收盤）</div>
+                    <input type="text" id="${p}-hbars" class="sim-in mobile-num" data-maxlen="4" onfocus="this.select()" value="18" inputmode="numeric">
+                </div>
+            </div>
+            <!-- 指定時鐘／開盤後時間輸入區 -->
+            <div class="sim-grid2" id="${p}-clock-box" style="display:none;">
+                <div>
+                    <div class="sim-lbl" id="${p}-buy-lbl">第1動時間</div>
+                    <div class="sim-clock" id="${p}-buy-clk">
+                        <input type="text" id="${p}-buy-ch" value="09" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric">
+                        <span>:</span>
+                        <input type="text" id="${p}-buy-cm" value="15" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric">
+                    </div>
+                    <div class="sim-offset" id="${p}-buy-off" style="display:none;">
+                        <input type="text" id="${p}-buy-h" value="0" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric"><span>時</span>
+                        <input type="text" id="${p}-buy-m" value="15" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric"><span>分</span>
+                    </div>
+                </div>
+                <div>
+                    <div class="sim-lbl" id="${p}-sell-lbl">第2動時間</div>
+                    <div class="sim-clock" id="${p}-sell-clk">
+                        <input type="text" id="${p}-sell-ch" value="13" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric">
+                        <span>:</span>
+                        <input type="text" id="${p}-sell-cm" value="20" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric">
+                    </div>
+                    <div class="sim-offset" id="${p}-sell-off" style="display:none;">
+                        <input type="text" id="${p}-sell-h" value="5" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric"><span>時</span>
+                        <input type="text" id="${p}-sell-m" value="30" data-maxlen="2" class="sim-in mobile-num" onfocus="this.select()" inputmode="numeric"><span>分</span>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    }
+
+    // 3. 注入「手動 8 大走勢分類面板」與「智慧尋優 M4 控制盒」
+    function injectAllRegimePanels() {
+        // (A) 注入手動 8 大走勢分類面板（位於區間黑名單 #sim-bl 下方）
+        const blDetails = document.getElementById('sim-bl');
+        if (blDetails && !document.getElementById('sim-reg-manual')) {
+            const manDetails = document.createElement('details');
+            manDetails.id = 'sim-reg-manual';
+            manDetails.className = 'sim-card';
+            manDetails.style.cssText = 'border-color:rgba(0,255,170,0.35); background:rgba(0,255,170,0.02);';
+            manDetails.innerHTML = `
+                <summary style="cursor:pointer; font-size:12px; font-weight:bold; color:var(--color-up);">
+                    <i class="fa-solid fa-compass-drafting"></i> 進階：依「開盤 8 大走勢分類（R1～R8）」套用獨立規則
+                    <span id="sim-reg-man-status" style="color:#888; font-weight:normal;">（未啟用）</span>
+                </summary>
+                <div style="font-size:11px; color:#888; line-height:1.6; margin:8px 0;">
+                    透過上方「漲跌判定：用前幾根 K 棒」（建議設為 <b>3</b> 根，最少會取 1 根）觀察開盤初期的<b>跳空 G、實體漲跌 B_obs、收盤位置 CLV、路徑效率 ER 與上下影線佔比</b>，將當日盤勢精確歸類為 R1～R8 八種結構。您可由下方「智慧尋優」一鍵套用最優分類表至此處，再手動微調任一分類的開關、多空方向、進出場根數或指定時間，並點擊「開始模擬」或「儲存目前配置」。
+                </div>
+                <label style="font-size:12px; font-weight:bold; color:var(--color-acc); display:flex; align-items:center; gap:7px; padding:8px 10px; background:rgba(0,212,255,0.08); border:1px solid rgba(0,212,255,0.3); border-radius:8px; margin-bottom:10px; cursor:pointer;">
+                    <input type="checkbox" id="sim-reg-man-enable" onchange="simUpdateRegimeManualCount()">
+                    啟用「開盤 8 大走勢分類（R1～R8）」規則進行模擬（勾選後將取代最上方單純開漲／開跌基本時間）
+                </label>
+
+                <details class="sim-card" style="background:rgba(0,0,0,0.45); margin-bottom:10px;">
+                    <summary style="cursor:pointer; font-size:11.5px; font-weight:bold; color:var(--color-acc);">
+                        <i class="fa-solid fa-book-open"></i> 點此展開：開盤觀察期 6 大指標公式與 R1～R8 判定優先順序完整說明
+                    </summary>
+                    <div style="font-size:11px; color:#ccc; line-height:1.65; margin-top:8px; font-family:monospace;">
+                        <div style="color:var(--color-up); font-weight:bold; margin-bottom:4px;">【一、觀察期前 N 根 K 棒之 6 大核心指標】</div>
+                        <div>1. <b>隔夜跳空 (G)</b> = (今日開盤價 O_0 - 昨收 C_prev) / C_prev</div>
+                        <div>2. <b>觀察期實體漲跌 (B_obs)</b> = (第 N 根收盤價 C_n - 今日開盤價 O_0) / O_0</div>
+                        <div>3. <b>觀察期總波幅 (A_obs)</b> = (觀察期最高 H_n - 觀察期最低 L_n) / O_0；<b>波動縮放因子 S</b> = clip(近14日平均 A_obs / 0.75%, 0.65, 1.60)</div>
+                        <div>4. <b>收盤位置指標 (CLV)</b> = [(C_n - L_n) - (H_n - C_n)] / (H_n - L_n)，範圍 -1.0（收最低）至 +1.0（收最高）</div>
+                        <div>5. <b>路徑效率比 (ER)</b> = |C_n - O_0| / Σ|每根收盤 - 每根開盤|，範圍 0（原地刷洗）至 1.0（直線單邊推進）</div>
+                        <div>6. <b>上下影線佔比</b>：上影線 W_up = [H_n - max(O_0, C_n)] / (H_n - L_n)；下影線 W_dn = [min(O_0, C_n) - L_n] / (H_n - L_n)</div>
+                        <div style="color:var(--color-warn); font-weight:bold; margin:8px 0 4px 0;">【二、互斥判定決策樹（由 Step 1 至 Step 5 依序判定）】</div>
+                        <div>• <b>Step 1 (先攔截拍賣盤 R7/R8)</b>：若 A_obs &lt; 0.42%*S，或同時滿足 (ER &lt; 0.38 且 |CLV| &lt; 0.30 且 |B_obs| &lt; 0.22%*S) ➔ 若 |G| &gt;= 0.60% 歸為 <b>R8(跳空鈍化)</b>，否則歸為 <b>R7(區間拍賣)</b>。</div>
+                        <div>• <b>Step 2 (跳空反轉 R3/R6)</b>：若 G &gt;= +0.50% 且 (B_obs &lt;= -0.20%*S 或 [W_up &gt;= 0.40 且 CLV &lt;= -0.25]) 且 CLV &lt;= -0.20 ➔ <b>R3(開高反轉空)</b>；反之若 G &lt;= -0.50% 且 (B_obs &gt;= +0.20%*S 或 [W_dn &gt;= 0.40 且 CLV &gt;= +0.25]) 且 CLV &gt;= +0.20 ➔ <b>R6(開低破底翻多)</b>。</div>
+                        <div>• <b>Step 3 (單邊強勢推進 R1/R4)</b>：若 B_obs &gt;= +0.25%*S 且 CLV &gt;= +0.45 且 ER &gt;= 0.60 ➔ <b>R1(強勢推進多)</b>；若 B_obs &lt;= -0.25%*S 且 CLV &lt;= -0.45 且 ER &gt;= 0.60 ➔ <b>R4(弱勢殺盤空)</b>。</div>
+                        <div>• <b>Step 4 (回測／拉高推進 R2/R5)</b>：若 CLV &gt;= +0.20 且 (W_dn &gt;= 0.25 或 B_obs &gt; 0) ➔ <b>R2(回測有守多)</b>；若 CLV &lt;= -0.20 且 (W_up &gt;= 0.25 或 B_obs &lt; 0) ➔ <b>R5(拉高受阻空)</b>。</div>
+                        <div>• <b>Step 5 (其餘中性拉鋸)</b>：歸入 R8（當 |G| &gt;= 0.60%）或 R7。</div>
+                    </div>
+                </details>
+
+                <div class="sim-card" style="background:rgba(0,0,0,0.35); margin-bottom:10px; border-color:rgba(0,212,255,0.25);">
+                    <div style="font-size:11.5px; font-weight:bold; color:var(--color-acc); margin-bottom:6px;">
+                        <i class="fa-solid fa-shield-halved"></i> 分類交易之動態 OR-ATR 停利／停損保護設定（以當日觀察期高低波幅 R_obs 為基準）
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:8px;">
+                        <label style="font-size:11px; color:#ccc; display:flex; align-items:center; gap:6px;">
+                            <input type="checkbox" id="sim-reg-man-atr-on" checked>
+                            啟用 OR-ATR 動態停利與停損（若取消勾選，則純粹依各分類設定的持倉根數或指定時間出場）
+                        </label>
+                        <div class="sim-grid2">
+                            <div>
+                                <div class="sim-lbl">動態停利倍數（×觀察期波幅 R_obs）</div>
+                                <input type="text" id="sim-reg-man-tp" class="sim-in mobile-num" data-decimal="true" onfocus="this.select()" value="1.8" inputmode="decimal">
+                            </div>
+                            <div>
+                                <div class="sim-lbl">動態停損倍數（×觀察期波幅 R_obs）</div>
+                                <input type="text" id="sim-reg-man-sl" class="sim-in mobile-num" data-decimal="true" onfocus="this.select()" value="1.0" inputmode="decimal">
+                            </div>
+                        </div>
+                        <label style="font-size:11px; color:#ccc; display:flex; align-items:center; gap:6px;">
+                            <input type="checkbox" id="sim-reg-man-trail-on" checked>
+                            啟用 OR-ATR 移動鎖利（當盤中順向浮盈達 1.1×R_obs 後，若回吐達 0.45×R_obs 則於下一根開盤鎖利出場）
+                        </label>
+                    </div>
+                </div>
+
+                <div id="sim-reg-man-list" style="display:flex; flex-direction:column; gap:8px;">
+                    ${REGIME_ORDER.map(buildManualRegimeCardHTML).join('')}
+                </div>
+
+                <div class="sim-grid2" style="margin-top:10px;">
+                    <button type="button" onclick="runOpenSimulator()" class="sim-in" style="background:var(--color-up); color:#000; border:none; font-weight:bold; cursor:pointer;">
+                        <i class="fa-solid fa-play"></i> 以目前 8 分類設定開始模擬
+                    </button>
+                    <button type="button" onclick="simSavePreset()" class="sim-in" style="background:rgba(0,212,255,0.18); color:var(--color-acc); border:1px solid var(--color-acc); font-weight:bold; cursor:pointer;">
+                        <i class="fa-solid fa-floppy-disk"></i> 儲存目前配置（含 8 分類）
+                    </button>
+                </div>
+            `;
+            blDetails.insertAdjacentElement('afterend', manDetails);
+            if (window.setupMobileNumInput) manDetails.querySelectorAll('.mobile-num').forEach(window.setupMobileNumInput);
+        }
+
+        // (B) 注入智慧尋優面板內的 M4 貝氏收縮參數控制盒
+        const optPanel = document.getElementById('sim-opt-panel');
+        const targetBtn = document.getElementById('sim-opt-btn');
+        if (optPanel && targetBtn && !document.getElementById('sim-reg-engine-box')) {
+            const box = document.createElement('div');
+            box.id = 'sim-reg-engine-box';
+            box.className = 'sim-card';
+            box.style.cssText = 'border-color:rgba(0,255,170,0.38); background:rgba(0,255,170,0.04); margin:4px 0;';
+            box.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
+                    <div style="font-size:12px; font-weight:bold; color:var(--color-up);">
+                        <i class="fa-solid fa-compass-drafting"></i> 開盤觀察期 8 大走勢分類 ＆ 去時間化貝氏收縮尋優設定
+                    </div>
+                    <span style="background:rgba(0,255,170,0.16); color:var(--color-up); border:1px solid rgba(0,255,170,0.35); font-size:10px; padding:1px 6px; border-radius:4px; font-family:monospace;">M4 Engine</span>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                    <div class="sim-grid2">
+                        <div>
+                            <div class="sim-lbl">尋優 OR-ATR 停利倍數（×R_obs）</div>
+                            <input type="text" id="sim-reg-tp-mult" class="sim-in mobile-num" data-decimal="true" onfocus="this.select()" value="1.8" inputmode="decimal">
+                        </div>
+                        <div>
+                            <div class="sim-lbl">尋優 OR-ATR 停損倍數（×R_obs）</div>
+                            <input type="text" id="sim-reg-sl-mult" class="sim-in mobile-num" data-decimal="true" onfocus="this.select()" value="1.0" inputmode="decimal">
+                        </div>
+                    </div>
+                    <div class="sim-grid2">
+                        <div>
+                            <div class="sim-lbl">貝氏先驗權重 m_0（防小樣本過擬合）</div>
+                            <input type="text" id="sim-reg-bayes-m0" class="sim-in mobile-num" data-decimal="true" onfocus="this.select()" value="8" inputmode="decimal">
+                        </div>
+                        <div>
+                            <div class="sim-lbl">單一分類最低樣本天數 N_min &gt;=</div>
+                            <input type="text" id="sim-reg-min-nk" class="sim-in mobile-num" data-maxlen="2" onfocus="this.select()" value="4" inputmode="numeric">
+                        </div>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:5px; font-size:11px; color:#aaa;">
+                        <label style="display:flex; align-items:center; gap:6px;">
+                            <input type="checkbox" id="sim-reg-split-half" checked>
+                            強制「前後半池一致性檢驗」（該分類前半期平均 m_1 &gt; 0 且後半期平均 m_2 &gt; 0 才允許交易）
+                        </label>
+                        <label style="display:flex; align-items:center; gap:6px;">
+                            <input type="checkbox" id="sim-reg-trail-on" checked>
+                            尋優時啟用 OR-ATR 移動鎖利（浮盈達 1.1×R_obs 後回吐 0.45×R_obs 出場）
+                        </label>
+                    </div>
+                </div>
+            `;
+            targetBtn.parentNode.insertBefore(box, targetBtn);
+            if (window.setupMobileNumInput) box.querySelectorAll('.mobile-num').forEach(window.setupMobileNumInput);
+
+            const minWinEl = document.getElementById('sim-opt-min-win');
+            if (minWinEl && minWinEl.value === '65') minWinEl.value = '55';
+            const nbarsEl = document.getElementById('sim-nbars');
+            if (nbarsEl && (nbarsEl.value === '0' || nbarsEl.value === '')) nbarsEl.value = '3';
+        }
+    }
+
+    // 4. 同步手動分類卡片的「結構根數」vs「指定時鐘」顯示狀態，以及台股/美股時鐘格式
+    window.simSyncRegimeCardMode = function(rKey) {
+        const p = `sim-rm-${rKey}`;
+        const tmode = document.getElementById(`${p}-tmode`)?.value || 'struct';
+        const structBox = document.getElementById(`${p}-struct-box`);
+        const clockBox = document.getElementById(`${p}-clock-box`);
+        if (structBox) structBox.style.display = tmode === 'struct' ? 'grid' : 'none';
+        if (clockBox) clockBox.style.display = tmode === 'clock' ? 'grid' : 'none';
+    };
+
+    window.simUpdateRegimeManualCount = function() {
+        const en = document.getElementById('sim-reg-man-enable')?.checked;
+        let actCnt = 0;
+        REGIME_ORDER.forEach(rKey => {
+            if (document.getElementById(`sim-rm-${rKey}-on`)?.checked) actCnt++;
+        });
+        const stEl = document.getElementById('sim-reg-man-status');
+        if (stEl) {
+            stEl.innerHTML = en
+                ? `<b style="color:var(--color-up);">（已啟用・${actCnt}/8 類交易中）</b>`
+                : `（未啟用・勾選下方開關即可接管模擬，已勾 ${actCnt} 類）`;
+        }
+    };
+
+    function syncManualRegimeMarketClock() {
+        const raw = document.getElementById('sim-ticker')?.value || '';
+        const off = !!raw.trim() && !simIsTW(raw);
+        REGIME_ORDER.forEach(rKey => {
+            const p = `sim-rm-${rKey}`;
+            for (const w of ['buy', 'sell']) {
+                const clk = document.getElementById(`${p}-${w}-clk`);
+                const ofEl = document.getElementById(`${p}-${w}-off`);
+                const lbl = document.getElementById(`${p}-${w}-lbl`);
+                if (clk) clk.style.display = off ? 'none' : 'grid';
+                if (ofEl) ofEl.style.display = off ? 'grid' : 'none';
+                if (lbl) lbl.innerText = (w === 'buy' ? '進場時間' : '出場時間') + (off ? '（開盤後）' : '（當地時間）');
+            }
+        });
+    }
+
+    // 擴充原本的 simSyncMarket，使切換台股/美股代號時一併更新 8 分類時鐘輸入框
+    const origSimSyncMarket = window.simSyncMarket || simSyncMarket;
+    if (typeof origSimSyncMarket === 'function') {
+        window.simSyncMarket = simSyncMarket = function() {
+            origSimSyncMarket();
+            syncManualRegimeMarketClock();
+        };
+    }
+
+    // 5. 讀取與寫入「手動 8 大走勢分類面板」設定（供開始模擬、套用尋優、以及儲存/載入配置共用）
+    function simReadRegimeManualConfig() {
+        injectAllRegimePanels();
+        const rawTicker = document.getElementById('sim-ticker')?.value || '';
+        const offMode = !!rawTicker.trim() && !simIsTW(rawTicker);
+
+        const readClockMin = (idPrefix) => {
+            if (!offMode) {
+                const h = parseInt(document.getElementById(`${idPrefix}-ch`)?.value, 10);
+                const m = parseInt(document.getElementById(`${idPrefix}-cm`)?.value, 10);
+                return (isNaN(h) || isNaN(m) || h > 23 || m > 59) ? 555 : (h * 60 + m);
+            }
+            const h = parseInt(document.getElementById(`${idPrefix}-h`)?.value, 10) || 0;
+            const m = parseInt(document.getElementById(`${idPrefix}-m`)?.value, 10) || 0;
+            return h * 60 + m;
+        };
+
+        const rules = {};
+        REGIME_ORDER.forEach(rKey => {
+            const p = `sim-rm-${rKey}`;
+            rules[rKey] = {
+                on: !!document.getElementById(`${p}-on`)?.checked,
+                act: document.getElementById(`${p}-act`)?.value || 'long',
+                tmode: document.getElementById(`${p}-tmode`)?.value || 'struct',
+                dIn: Math.max(0, parseInt(document.getElementById(`${p}-din`)?.value, 10) || 0),
+                hBars: Math.max(1, parseInt(document.getElementById(`${p}-hbars`)?.value, 10) || 18),
+                buyMin: readClockMin(`${p}-buy`),
+                sellMin: readClockMin(`${p}-sell`),
+                rawClock: {
+                    bch: document.getElementById(`${p}-buy-ch`)?.value || '09',
+                    bcm: document.getElementById(`${p}-buy-cm`)?.value || '15',
+                    bh: document.getElementById(`${p}-buy-h`)?.value || '0',
+                    bm: document.getElementById(`${p}-buy-m`)?.value || '15',
+                    sch: document.getElementById(`${p}-sell-ch`)?.value || '13',
+                    scm: document.getElementById(`${p}-sell-cm`)?.value || '20',
+                    sh: document.getElementById(`${p}-sell-h`)?.value || '5',
+                    sm: document.getElementById(`${p}-sell-m`)?.value || '30'
+                }
+            };
+        });
+
+        return {
+            enabled: !!document.getElementById('sim-reg-man-enable')?.checked,
+            atrOn: document.getElementById('sim-reg-man-atr-on') ? document.getElementById('sim-reg-man-atr-on').checked : true,
+            tpMult: Math.max(0.2, parseFloat(document.getElementById('sim-reg-man-tp')?.value) || 1.8),
+            slMult: Math.max(0.2, parseFloat(document.getElementById('sim-reg-man-sl')?.value) || 1.0),
+            trailOn: document.getElementById('sim-reg-man-trail-on') ? document.getElementById('sim-reg-man-trail-on').checked : true,
+            rules
+        };
+    }
+
+    function simWriteRegimeManualConfig(cfg) {
+        if (!cfg) return;
+        injectAllRegimePanels();
+        if (cfg.enabled !== undefined) document.getElementById('sim-reg-man-enable').checked = !!cfg.enabled;
+        if (cfg.atrOn !== undefined) document.getElementById('sim-reg-man-atr-on').checked = !!cfg.atrOn;
+        if (cfg.tpMult !== undefined) document.getElementById('sim-reg-man-tp').value = String(cfg.tpMult);
+        if (cfg.slMult !== undefined) document.getElementById('sim-reg-man-sl').value = String(cfg.slMult);
+        if (cfg.trailOn !== undefined) document.getElementById('sim-reg-man-trail-on').checked = !!cfg.trailOn;
+
+        if (cfg.rules) {
+            REGIME_ORDER.forEach(rKey => {
+                const r = cfg.rules[rKey];
+                if (!r) return;
+                const p = `sim-rm-${rKey}`;
+                if (r.on !== undefined) document.getElementById(`${p}-on`).checked = !!r.on;
+                if (r.act) document.getElementById(`${p}-act`).value = r.act;
+                if (r.tmode) document.getElementById(`${p}-tmode`).value = r.tmode;
+                if (r.dIn !== undefined) document.getElementById(`${p}-din`).value = String(r.dIn);
+                if (r.hBars !== undefined) document.getElementById(`${p}-hbars`).value = String(r.hBars);
+                if (r.rawClock) {
+                    const rc = r.rawClock;
+                    if (rc.bch !== undefined) document.getElementById(`${p}-buy-ch`).value = rc.bch;
+                    if (rc.bcm !== undefined) document.getElementById(`${p}-buy-cm`).value = rc.bcm;
+                    if (rc.bh !== undefined) document.getElementById(`${p}-buy-h`).value = rc.bh;
+                    if (rc.bm !== undefined) document.getElementById(`${p}-buy-m`).value = rc.bm;
+                    if (rc.sch !== undefined) document.getElementById(`${p}-sell-ch`).value = rc.sch;
+                    if (rc.scm !== undefined) document.getElementById(`${p}-sell-cm`).value = rc.scm;
+                    if (rc.sh !== undefined) document.getElementById(`${p}-sell-h`).value = rc.sh;
+                    if (rc.sm !== undefined) document.getElementById(`${p}-sell-m`).value = rc.sm;
+                }
+                window.simSyncRegimeCardMode(rKey);
+            });
+        }
+        window.simUpdateRegimeManualCount();
+        syncManualRegimeMarketClock();
+        if (cfg.enabled) {
+            const det = document.getElementById('sim-reg-manual');
+            if (det) det.open = true;
+        }
+    }
+
+    // 掛鉤配置儲存 (simGetConfig) 與載入 (simApplyConfig)
+    const prevSimGetConfig = window.simGetConfig || simGetConfig;
+    if (typeof prevSimGetConfig === 'function') {
+        window.simGetConfig = simGetConfig = function() {
+            const c = prevSimGetConfig();
+            c.regimeManual = simReadRegimeManualConfig();
+            return c;
+        };
+    }
+    const prevSimApplyConfig = window.simApplyConfig || simApplyConfig;
+    if (typeof prevSimApplyConfig === 'function') {
+        window.simApplyConfig = simApplyConfig = function(c) {
+            prevSimApplyConfig(c);
+            if (c && c.regimeManual) {
+                simWriteRegimeManualConfig(c.regimeManual);
+            }
+        };
+    }
+
+    // 6. 核心分類器：萃取開盤前 nd 根 K 棒特徵並依 Step 1 ~ Step 5 決策樹歸類至 R1 ~ R8
+    function simClassifyOpeningRegime(day, nd, avgOR14) {
+        const bars = day.bars;
+        const prevC = day.prevClose;
+        const nObs = Math.max(1, Math.min(nd, bars.length - 1));
+
+        const o0 = bars[0].o;
+        const cn = bars[nObs - 1].c;
+        let hn = -Infinity, ln = Infinity, path = 0;
+
+        for (let k = 0; k < nObs; k++) {
+            const b = bars[k];
+            const bh = b.h != null ? b.h : Math.max(b.o, b.c);
+            const bl = b.l != null ? b.l : Math.min(b.o, b.c);
+            if (bh > hn) hn = bh;
+            if (bl < ln) ln = bl;
+            path += Math.abs(b.c - b.o);
+        }
+
+        const rng = Math.max(1e-6, hn - ln);
+        const obsAtrPct = rng / o0;
+        const obsRange = Math.max(0.004 * o0, rng);
+
+        const gap = (o0 - prevC) / prevC;
+        const obsRet = (cn - o0) / o0;
+        const netRet = (cn - prevC) / prevC;
+        const clv = ((cn - ln) - (hn - cn)) / rng;
+        const er = Math.abs(cn - o0) / Math.max(1e-6, path);
+
+        const bodyTop = Math.max(o0, cn);
+        const bodyBot = Math.min(o0, cn);
+        const uw = (hn - bodyTop) / rng;
+        const lw = (bodyBot - ln) / rng;
+
+        const scale = avgOR14 > 1e-6 ? Math.max(0.65, Math.min(1.60, avgOR14 / 0.0075)) : 1.0;
+        const chopAtrTh = 0.0042 * scale;
+        const driveBodyTh = 0.0025 * scale;
+        const revBodyTh = 0.0020 * scale;
+
+        let regime = 'R7_OA_IN';
+        // Step 1: 雙向拍賣震盪過濾
+        if (obsAtrPct < chopAtrTh || (er < 0.38 && Math.abs(clv) < 0.30 && Math.abs(obsRet) < 0.0022 * scale)) {
+            regime = Math.abs(gap) >= 0.006 ? 'R8_OA_OUT' : 'R7_OA_IN';
+        }
+        // Step 2: 跳空反向拒絕 / 破底翻
+        else if (gap >= 0.005 && (obsRet <= -revBodyTh || (clv <= -0.25 && uw >= 0.40)) && clv <= -0.20) {
+            regime = 'R3_ORR_BEAR';
+        } else if (gap <= -0.005 && (obsRet >= revBodyTh || (clv >= 0.25 && lw >= 0.40)) && clv >= 0.20) {
+            regime = 'R6_ORR_BULL';
+        }
+        // Step 3: 單邊高效率推進
+        else if (obsRet >= driveBodyTh && clv >= 0.45 && er >= 0.60 && (gap >= -0.0025 || cn > prevC)) {
+            regime = 'R1_OD_BULL';
+        } else if (obsRet <= -driveBodyTh && clv <= -0.45 && er >= 0.60 && (gap <= 0.0025 || cn < prevC)) {
+            regime = 'R4_OD_BEAR';
+        }
+        // Step 4: 回測有守 / 拉高受阻後推進
+        else if (clv >= 0.20 && (lw >= 0.25 || obsRet > 0)) {
+            regime = 'R2_OTD_BULL';
+        } else if (clv <= -0.20 && (uw >= 0.25 || obsRet < 0)) {
+            regime = 'R5_OTD_BEAR';
+        }
+        // Step 5: 其餘歸入拍賣盤
+        else {
+            regime = Math.abs(gap) >= 0.006 ? 'R8_OA_OUT' : 'R7_OA_IN';
+        }
+
+        return {
+            regime, nObs, o0, cn, hn, ln, obsRange, obsAtrPct,
+            gap, gapAbs: Math.abs(gap) * 100, obsRet, netRet,
+            clv, er, uw, lw, scale,
+            side: cn >= prevC ? 'up' : 'down'
+        };
+    }
+
+    // 7. 單筆交易之三明治出場模擬器（同時支援「結構根數」與「指定時鐘時間」，以及 OR-ATR 停利/停損/移動鎖利）
+    function simExecRegimeTrade(bars, realBi, targetSi, isLateTarget, act, obsRange, opts) {
+        const len = bars.length;
+        if (realBi < 0 || realBi >= len - 1) return null;
+
+        const targetLastIdx = (isLateTarget || targetSi < 0 || targetSi >= len)
+            ? (len - 1)
+            : targetSi;
+        if (opts.noLateExit && targetLastIdx >= len - 1 && isLateTarget) return null;
+        if (targetLastIdx <= realBi) return null;
+
+        const ep = bars[realBi].o;
+        const atrOn = opts.atrOn !== false;
+        const tpDist = (opts.regTpMult || 1.8) * obsRange;
+        const slDist = (opts.regSlMult || 1.0) * obsRange;
+        const trActDist = 1.1 * obsRange;
+        const trDropDist = 0.45 * obsRange;
+        const useTrail = opts.regTrailOn !== false;
+        const fixedTp = opts.tp;
+
+        let exitIdx = targetLastIdx;
+        let exitP = exitIdx < len - 1 ? bars[exitIdx].o : bars[len - 1].c;
+        let isLate = (exitIdx === len - 1 && isLateTarget);
+        let exitTag = isLate ? '尾盤' : (opts.timeExitLabel || '到時');
+
+        let peak = ep, trough = ep;
+        const buyMinVal = bars[realBi].m;
+
+        for (let k = realBi; k < targetLastIdx; k++) {
+            const c = bars[k].c;
+            if (fixedTp && (bars[k].m - buyMinVal) <= fixedTp.min) {
+                const hitFixed = act === 'long' ? (c >= ep * (1 + fixedTp.pct)) : (c <= ep * (1 - fixedTp.pct));
+                if (hitFixed) {
+                    exitIdx = Math.min(len - 1, k + 1);
+                    exitP = k + 1 < len ? bars[k + 1].o : c;
+                    isLate = false;
+                    exitTag = '固定停利';
+                    break;
+                }
+            }
+            if (atrOn) {
+                if (act === 'long') {
+                    if (c > peak) peak = c;
+                    const hitTp = (c - ep) >= tpDist;
+                    const hitSl = (ep - c) >= slDist;
+                    const hitTr = useTrail && ((peak - ep) >= trActDist) && ((peak - c) >= trDropDist);
+                    if (hitTp || hitSl || hitTr) {
+                        exitIdx = Math.min(len - 1, k + 1);
+                        exitP = k + 1 < len ? bars[k + 1].o : c;
+                        isLate = false;
+                        exitTag = hitTp ? 'OR停利' : (hitTr ? 'OR移動鎖利' : 'OR停損');
+                        break;
+                    }
+                } else {
+                    if (c < trough) trough = c;
+                    const hitTp = (ep - c) >= tpDist;
+                    const hitSl = (c - ep) >= slDist;
+                    const hitTr = useTrail && ((ep - trough) >= trActDist) && ((c - trough) >= trDropDist);
+                    if (hitTp || hitSl || hitTr) {
+                        exitIdx = Math.min(len - 1, k + 1);
+                        exitP = k + 1 < len ? bars[k + 1].o : c;
+                        isLate = false;
+                        exitTag = hitTp ? 'OR停利' : (hitTr ? 'OR移動鎖利' : 'OR停損');
+                        break;
+                    }
+                }
+            }
+        }
+
+        const N = 1000;
+        const nShares = opts.nShares || 0;
+        let ret, amt = null;
+        if (act === 'long') {
+            ret = exitP / ep - 1;
+            if (opts.feeOn) {
+                const bc = computeTradeCosts(opts.ticker, ep * N, N, 'BUY');
+                const sc = computeTradeCosts(opts.ticker, exitP * N, N, 'SELL');
+                ret = (exitP * N - sc.fee - sc.tax) / (ep * N + bc.fee + (bc.tax || 0)) - 1;
+            }
+            if (nShares > 0) {
+                let g = nShares * (exitP - ep);
+                if (opts.feeOn) {
+                    const bc = computeTradeCosts(opts.ticker, ep * nShares, nShares, 'BUY');
+                    const sc = computeTradeCosts(opts.ticker, exitP * nShares, nShares, 'SELL');
+                    g -= bc.fee + (bc.tax || 0) + sc.fee + sc.tax;
+                }
+                amt = g;
+            }
+        } else {
+            ret = ep / exitP - 1;
+            if (opts.feeOn) {
+                const sc = computeTradeCosts(opts.ticker, ep * N, N, 'SELL');
+                const bc = computeTradeCosts(opts.ticker, exitP * N, N, 'BUY');
+                ret = (ep * N - sc.fee - sc.tax) / (exitP * N + bc.fee + (bc.tax || 0)) - 1;
+            }
+            if (nShares > 0) {
+                let g = nShares * (ep - exitP);
+                if (opts.feeOn) {
+                    const sc = computeTradeCosts(opts.ticker, ep * nShares, nShares, 'SELL');
+                    const bc = computeTradeCosts(opts.ticker, exitP * nShares, nShares, 'BUY');
+                    g -= sc.fee + sc.tax + bc.fee + (bc.tax || 0);
+                }
+                amt = g;
+            }
+        }
+
+        return { realBi, exitIdx, buyP: ep, sellP: exitP, ret, amt, isLate, exitTag };
+    }
+
+    // 8. 讀取歷史 K 線並確保包含 high (h) 與 low (l) 欄位
+    async function simFetchRawDaysWithHL(ticker, startMs, endMs, kMeta) {
+        const p1 = Math.floor(startMs / 1000) - 8 * 86400;
+        const p2 = Math.floor(endMs / 1000) + 2 * 86400;
+        const cands = /^\d{4,6}[A-Z]?$/.test(ticker) ? [ticker + '.TW', ticker + '.TWO'] : [ticker];
+        let r = null, resolvedTicker = ticker;
+        for (const c of cands) {
+            try { r = await simFetchIntraday(c, p1, p2, kMeta.interval); }
+            catch (e) { if (kMeta.useAlpaca) throw e; }
+            if (r) { resolvedTicker = c; break; }
+        }
+        if (!r) throw new Error(`查無此代號的 ${kMeta.label} 資料`);
+
+        const off = (r.meta && r.meta.gmtoffset) || 0;
+        const q = r.indicators.quote[0] || {};
+        const days = new Map();
+        r.timestamp.forEach((t, i) => {
+            if (q.open[i] == null || q.close[i] == null) return;
+            const d = new Date((t + off) * 1000), key = d.toISOString().slice(0, 10);
+            if (!days.has(key)) days.set(key, []);
+            const hi = (q.high && q.high[i] != null) ? q.high[i] : Math.max(q.open[i], q.close[i]);
+            const lo = (q.low && q.low[i] != null) ? q.low[i] : Math.min(q.open[i], q.close[i]);
+            days.get(key).push({
+                m: d.getUTCHours() * 60 + d.getUTCMinutes(),
+                o: q.open[i], h: hi, l: lo, c: q.close[i]
+            });
+        });
+
+        const keys = [...days.keys()].sort();
+        const rawDays = [];
+        for (let i = 1; i < keys.length; i++) {
+            const key = keys[i];
+            const ms = Date.parse(key + 'T00:00:00Z');
+            if (ms < startMs || ms > endMs) continue;
+            const bars = days.get(key).sort((a, b) => a.m - b.m);
+            const prevBars = days.get(keys[i - 1]);
+            const prevClose = prevBars[prevBars.length - 1].c;
+            if (prevClose > 0 && bars.length > 2) rawDays.push({ key, bars, prevClose });
+        }
+        return { rawDays, resolvedTicker };
+    }
+
+    // 9. 升級版 runOpenSimulator：當勾選「啟用 8 大走勢分類」時，直接依手動分類面板執行回測
+    const origRunOpenSimulator = window.runOpenSimulator;
+    window.runOpenSimulator = async function() {
+        injectAllRegimePanels();
+        const manCfg = simReadRegimeManualConfig();
+        if (!manCfg.enabled) {
+            return origRunOpenSimulator();
+        }
+
+        const errEl = document.getElementById('sim-error');
+        const out = document.getElementById('sim-result');
+        const btn = document.getElementById('sim-run-btn');
+        const fail = (m) => { errEl.style.display = 'block'; errEl.innerText = m; out.style.display = 'none'; };
+        errEl.style.display = 'none';
+
+        let ticker = (document.getElementById('sim-ticker').value || '').trim().toUpperCase();
+        const sv = document.getElementById('sim-start').value, ev = document.getElementById('sim-end').value;
+        if (!ticker) return fail('請輸入股票代號');
+        if (!sv || !ev) return fail('請選擇日期區間');
+        const startMs = Date.parse(sv + 'T00:00:00Z'), endMs = Date.parse(ev + 'T00:00:00Z');
+        if (endMs < startMs) return fail('結束日期不能早於起始日期');
+
+        const kMeta = simGetKlineMeta('sim', ticker);
+        if (Date.now() - startMs > kMeta.maxDays * 86400e3) {
+            return fail(kMeta.useAlpaca
+                ? `Alpaca 歷史資料支援自 2016 年起（約 ${kMeta.maxDays} 天內），請將起始日期設於 2016 年之後`
+                : `目前使用 Yahoo 資料源，${kMeta.label} 最多提供最近 ${kMeta.maxDays} 天資料`);
+        }
+
+        if (!REGIME_ORDER.some(rKey => manCfg.rules[rKey]?.on)) {
+            return fail('開盤 8 大走勢分類中，請至少勾選一類「此分類要交易」');
+        }
+
+        for (const rKey of REGIME_ORDER) {
+            const rl = manCfg.rules[rKey];
+            if (rl.on && rl.tmode === 'clock' && rl.sellMin <= rl.buyMin) {
+                return fail(`${REGIME_META[rKey].name} 的指定出場時間必須晚於進場時間`);
+            }
+        }
+
+        const blacklist = [];
+        for (const id of simBlIds) {
+            const th = parseFloat(document.getElementById(`sim-${id}-th`).value);
+            const toRaw = (document.getElementById(`sim-${id}-to`).value || '').trim();
+            const to = toRaw === '' ? null : parseFloat(toRaw);
+            if (!(th >= 0)) return fail('黑名單的下限（%）請填入有效數字');
+            if (to !== null && !(to > th)) return fail('黑名單的上限必須大於下限');
+            blacklist.push({ th, to, dir: document.getElementById(`sim-${id}-dir`).value });
+        }
+
+        if (typeof simTpInvalid === 'function' && simTpInvalid()) {
+            return fail('停利參數請填入大於 0 的「分鐘數」與「百分比」');
+        }
+        const fixedTp = typeof simGetTpParams === 'function' ? simGetTpParams() : null;
+        const feeOn = document.getElementById('sim-fee-on').checked;
+        const hold = document.getElementById('sim-mode').value === 'holding';
+        const nShares = hold ? (parseFloat(document.getElementById('sim-shares').value) || 0) : 0;
+        const rawNbars = parseInt(document.getElementById('sim-nbars').value, 10) || 0;
+        const nDecide = Math.max(1, Math.min(60, rawNbars || (kMeta.is60m ? 1 : 3)));
+        if (rawNbars === 0) document.getElementById('sim-nbars').value = String(nDecide);
+
+        btn.disabled = true;
+        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 讀取 ${kMeta.label} 並執行 8 大走勢分類模擬...`;
+
+        try {
+            const { rawDays, resolvedTicker } = await simFetchRawDaysWithHL(ticker, startMs, endMs, kMeta);
+            ticker = resolvedTicker;
+            if (!rawDays.length) throw new Error('此區間無有效交易日資料');
+
+            const offMode = !simIsTW(ticker);
+            const rawAtrList = rawDays.map(d => {
+                const nObs = Math.max(1, Math.min(nDecide, d.bars.length - 1));
+                let hn = -Infinity, ln = Infinity;
+                for (let k = 0; k < nObs; k++) {
+                    const b = d.bars[k];
+                    if (b.h > hn) hn = b.h;
+                    if (b.l < ln) ln = b.l;
+                }
+                return Math.max(1e-6, hn - ln) / d.bars[0].o;
+            });
+
+            const trades = [];
+            let blSkipped = 0;
+            const baseFirst = rawDays[0]?.prevClose || null;
+            const lastDayBars = rawDays[rawDays.length - 1]?.bars;
+            const baseLast = lastDayBars ? lastDayBars[lastDayBars.length - 1].c : null;
+
+            for (let d = 0; d < rawDays.length; d++) {
+                const day = rawDays[d];
+                const bars = day.bars;
+                let sumAtr = 0, cnt = 0;
+                for (let j = Math.max(0, d - 14); j < d; j++) { sumAtr += rawAtrList[j]; cnt++; }
+                const avgOR14 = cnt >= 3 ? (sumAtr / cnt) : rawAtrList[d];
+
+                const info = simClassifyOpeningRegime(day, nDecide, avgOR14);
+                const inBl = blacklist.some(r => info.gapAbs >= r.th && (r.to === null || info.gapAbs < r.to) && (r.dir === 'both' || r.dir === info.side));
+                if (inBl) { blSkipped++; continue; }
+
+                const rl = manCfg.rules[info.regime];
+                if (!rl || !rl.on) continue;
+
+                let realBi = -1, targetSi = -1, isLateTarget = false, timeExitLabel = '';
+                if (rl.tmode === 'struct') {
+                    realBi = info.nObs + rl.dIn;
+                    isLateTarget = rl.hBars >= 999;
+                    targetSi = isLateTarget ? (bars.length - 1) : Math.min(bars.length - 1, realBi + rl.hBars);
+                    timeExitLabel = isLateTarget ? '尾盤' : `持倉${rl.hBars}根`;
+                } else {
+                    const t0 = offMode ? bars[0].m : 0;
+                    realBi = bars.findIndex((b, k) => k >= info.nObs && (b.m - t0) >= rl.buyMin);
+                    if (realBi < 0) continue;
+                    const foundSi = bars.findIndex((b, k) => k > realBi && (b.m - t0) >= rl.sellMin);
+                    if (foundSi < 0) {
+                        isLateTarget = true;
+                        targetSi = bars.length - 1;
+                    } else {
+                        isLateTarget = false;
+                        targetSi = foundSi;
+                    }
+                    timeExitLabel = '指定時間';
+                }
+
+                const tr = simExecRegimeTrade(bars, realBi, targetSi, isLateTarget, rl.act, info.obsRange, {
+                    atrOn: manCfg.atrOn,
+                    regTpMult: manCfg.tpMult,
+                    regSlMult: manCfg.slMult,
+                    regTrailOn: manCfg.trailOn,
+                    tp: fixedTp,
+                    feeOn,
+                    ticker,
+                    nShares,
+                    noLateExit: false,
+                    timeExitLabel
+                });
+                if (!tr) continue;
+
+                const rMeta = REGIME_META[info.regime];
+                const actTag = rl.act === 'long' ? '多' : '空';
+                trades.push({
+                    key: day.key,
+                    side: info.side,
+                    gap: info.netRet,
+                    buyP: tr.buyP,
+                    sellP: tr.sellP,
+                    ret: tr.ret,
+                    amt: tr.amt,
+                    exitLate: tr.isLate,
+                    rule: `${rMeta.name}[${actTag}]·${tr.exitTag}`
+                });
+            }
+
+            if (!trades.length) {
+                throw new Error('這段期間沒有符合已勾選走勢分類的交易日（可能皆落入未勾選的拍賣盤 R7/R8 或進場時間超過收盤）');
+            }
+
+            renderOpenSimulator(`${ticker} [${kMeta.label}・8大走勢分類]`, trades, {}, feeOn, {
+                hold, nShares, nDecide, blSkipped,
+                holdRet: (baseFirst && baseLast) ? (baseLast / baseFirst - 1) : null
+            });
+        } catch (e) {
+            fail(e.message || '模擬失敗');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-play"></i> 開始模擬';
+        }
+    };
+
+    // 10. 建立單一觀察期 nd 下之結構化候選動作空間 (供智慧尋優使用)
+    function simBuildRegimeStructSpace(rawDays, nd, P) {
+        const D = rawDays.length;
+        const stepMin = P.kMeta.stepMin || 5;
+
+        const rawAtrList = rawDays.map(d => {
+            const nObs = Math.max(1, Math.min(nd, d.bars.length - 1));
+            let hn = -Infinity, ln = Infinity;
+            for (let k = 0; k < nObs; k++) {
+                const b = d.bars[k];
+                if (b.h > hn) hn = b.h;
+                if (b.l < ln) ln = b.l;
+            }
+            return Math.max(1e-6, hn - ln) / d.bars[0].o;
+        });
+
+        const dayMeta = rawDays.map((d, idx) => {
+            let sumAtr = 0, cnt = 0;
+            for (let j = Math.max(0, idx - 14); j < idx; j++) { sumAtr += rawAtrList[j]; cnt++; }
+            const avgOR14 = cnt >= 3 ? (sumAtr / cnt) : rawAtrList[idx];
+            const info = simClassifyOpeningRegime(d, nd, avgOR14);
+            return { idx, key: d.key, ...info };
+        });
+
+        const holdHorizons = P.kMeta.is60m
+            ? [1, 2, 3, 9999]
+            : (P.kMeta.is1m ? [30, 60, 120, 9999] : [10, 18, 28, 9999]);
+        const entryOffsets = [0, 1];
+
+        const primaryAct = P.hold ? 'short' : 'long';
+        const actions = [primaryAct];
+        if (P.allowRev) actions.push(P.hold ? 'long' : 'short');
+
+        const structConfigs = [];
+        for (const act of actions) {
+            for (const dIn of entryOffsets) {
+                for (const hBars of holdHorizons) {
+                    const holdMin = hBars >= 999 ? 9999 : hBars * stepMin;
+                    if (hBars < 999 && holdMin < P.minHoldMin) continue;
+                    const hLabel = hBars >= 999 ? '尾盤收盤' : `+${hBars}根(${holdMin}分)`;
+                    structConfigs.push({
+                        cfgId: `${act}_in${dIn}_h${hBars}`,
+                        act, dIn, hBars,
+                        label: `${dIn === 0 ? '觀察完立即' : '觀察+1根確認'}${act === 'long' ? '做多' : '做空'}➔${hLabel}`
+                    });
+                }
+            }
+        }
+
+        const C = structConfigs.length;
+        const evalTable = Array.from({ length: D }, () => new Array(C).fill(null));
+        for (let d = 0; d < D; d++) {
+            const bars = rawDays[d].bars;
+            const dm = dayMeta[d];
+            const realBaseBi = dm.nObs;
+            for (let c = 0; c < C; c++) {
+                const sc = structConfigs[c];
+                const realBi = realBaseBi + sc.dIn;
+                const isLateTarget = sc.hBars >= 999;
+                const targetSi = isLateTarget ? (bars.length - 1) : Math.min(bars.length - 1, realBi + sc.hBars);
+                evalTable[d][c] = simExecRegimeTrade(bars, realBi, targetSi, isLateTarget, sc.act, dm.obsRange, {
+                    atrOn: true,
+                    regTpMult: P.regTpMult,
+                    regSlMult: P.regSlMult,
+                    regTrailOn: P.regTrailOn,
+                    tp: P.tp,
+                    feeOn: P.feeOn,
+                    ticker: P.ticker,
+                    nShares: 0,
+                    noLateExit: P.noLateExit,
+                    timeExitLabel: isLateTarget ? '尾盤' : `持倉${sc.hBars}根`
+                });
+            }
+        }
+
+        return { dayMeta, structConfigs, evalTable, D, C };
+    }
+
+    // 11. 針對各分類獨立執行「經驗貝氏收縮」與「前後半池一致性檢驗」
+    function simSolveRegimePoliciesForNd(rawDays, nd, blTpl, P, policyVariant) {
+        const space = simBuildRegimeStructSpace(rawDays, nd, P);
+        const { dayMeta, structConfigs, evalTable, D, C } = space;
+
+        const combinedBls = [...P.userBls, ...blTpl.rules];
+        const inBl = (m) => combinedBls.some(r => m.gapAbs >= r.th && (r.to === null || m.gapAbs < r.to) && (r.dir === 'both' || r.dir === m.side));
+
+        const buckets = {};
+        REGIME_ORDER.forEach(r => { buckets[r] = []; });
+        let blSkipped = 0;
+
+        dayMeta.forEach(m => {
+            if (inBl(m)) { blSkipped++; return; }
+            buckets[m.regime].push(m.idx);
+        });
+
+        const m0 = P.regBayesM0 != null ? P.regBayesM0 : 8.0;
+        const mu0 = -0.0003;
+        const minNk = P.regMinNk != null ? P.regMinNk : 4;
+        const checkSplit = P.regSplitHalf !== false;
+        const minSubWin = Math.max(0.50, Math.min(0.60, (P.minWinPct / 100) - 0.05));
+
+        const regimeRules = {};
+        let totalActiveRegimes = 0;
+
+        for (const rKey of REGIME_ORDER) {
+            const rMeta = REGIME_META[rKey];
+            const idxs = buckets[rKey];
+            const nk = idxs.length;
+
+            if (!rMeta.tradeable) {
+                regimeRules[rKey] = { on: false, regime: rKey, nk, reason: '雙向拍賣震盪強制空手' };
+                continue;
+            }
+            if (policyVariant === 'trend_only' && (rKey === 'R3_ORR_BEAR' || rKey === 'R6_ORR_BULL')) {
+                regimeRules[rKey] = { on: false, regime: rKey, nk, reason: '純推進模式略過反轉類' };
+                continue;
+            }
+            if (nk < minNk) {
+                regimeRules[rKey] = { on: false, regime: rKey, nk, reason: `樣本不足(${nk}<${minNk}天)` };
+                continue;
+            }
+
+            const half = Math.floor(nk / 2);
+            const idxH1 = idxs.slice(0, half);
+            const idxH2 = idxs.slice(half);
+
+            const candidates = [];
+            for (let c = 0; c < C; c++) {
+                const sc = structConfigs[c];
+                if (policyVariant === 'strict_dir' && P.allowRev && sc.act !== rMeta.defAct) continue;
+
+                let wins = 0, sumRet = 0, logCum = 0, posSum = 0, negSum = 0, worst = 0;
+                let validAll = true;
+                for (let i = 0; i < nk; i++) {
+                    const tr = evalTable[idxs[i]][c];
+                    if (!tr || isNaN(tr.ret)) { validAll = false; break; }
+                    if (P.maxLossDec !== null && tr.ret < -P.maxLossDec) { validAll = false; break; }
+                    if (tr.ret > 0) { wins++; posSum += tr.ret; }
+                    else if (tr.ret < 0) negSum += (-tr.ret);
+                    if (tr.ret < worst) worst = tr.ret;
+                    sumRet += tr.ret;
+                    logCum += Math.log(Math.max(1e-6, 1 + tr.ret));
+                }
+                if (!validAll) continue;
+
+                const winRate = wins / nk;
+                if (winRate < minSubWin) continue;
+                if (P.winMode === 'strict' && (winRate * 100) < P.minWinPct) continue;
+
+                const meanRet = sumRet / nk;
+                const cumRet = Math.exp(logCum) - 1;
+                if (meanRet <= 0 || cumRet <= 0) continue;
+
+                let m1 = meanRet, m2 = meanRet;
+                if (half >= 2) {
+                    m1 = idxH1.reduce((acc, dIdx) => acc + evalTable[dIdx][c].ret, 0) / idxH1.length;
+                    m2 = idxH2.reduce((acc, dIdx) => acc + evalTable[dIdx][c].ret, 0) / idxH2.length;
+                    if (checkSplit && (m1 <= 0 || m2 <= 0)) continue;
+                }
+
+                const shrunkMu = (nk / (nk + m0)) * meanRet + (m0 / (nk + m0)) * mu0;
+                if (shrunkMu <= 0) continue;
+
+                const splitDiff = Math.abs(m1 - m2);
+                const consistencyScore = 1 / (1 + splitDiff * 80);
+                const bayesScore = shrunkMu - 0.35 * splitDiff;
+                if (bayesScore <= 0) continue;
+
+                candidates.push({
+                    on: true, regime: rKey, cIdx: c, sc, nk,
+                    wins, winRate, meanRet, cumRet, shrunkMu,
+                    m1, m2, consistencyScore, bayesScore,
+                    posSum, negSum, worst
+                });
+            }
+
+            if (!candidates.length) {
+                regimeRules[rKey] = { on: false, regime: rKey, nk, reason: '無通過貝氏收縮之規則' };
+                continue;
+            }
+
+            if (policyVariant === 'high_win') {
+                candidates.sort((a, b) => b.winRate - a.winRate || b.bayesScore - a.bayesScore);
+            } else if (policyVariant === 'raw_cum') {
+                candidates.sort((a, b) => b.cumRet - a.cumRet || b.bayesScore - a.bayesScore);
+            } else {
+                candidates.sort((a, b) => b.bayesScore - a.bayesScore || b.winRate - a.winRate);
+            }
+
+            regimeRules[rKey] = candidates[0];
+            totalActiveRegimes++;
+        }
+
+        if (totalActiveRegimes === 0) return null;
+
+        let totTrades = 0, totWins = 0, logTotCum = 0, totSumRet = 0;
+        let totPos = 0, totNeg = 0, worstTrade = 0, stabWeighted = 0;
+        const executedTrades = [];
+
+        for (let d = 0; d < D; d++) {
+            const dm = dayMeta[d];
+            if (inBl(dm)) continue;
+            const rule = regimeRules[dm.regime];
+            if (!rule || !rule.on) continue;
+
+            const tr = evalTable[d][rule.cIdx];
+            if (!tr) continue;
+
+            totTrades++;
+            if (tr.ret > 0) { totWins++; totPos += tr.ret; }
+            else if (tr.ret < 0) totNeg += (-tr.ret);
+            if (tr.ret < worstTrade) worstTrade = tr.ret;
+            totSumRet += tr.ret;
+            logTotCum += Math.log(Math.max(1e-6, 1 + tr.ret));
+            stabWeighted += rule.consistencyScore;
+
+            const rMeta = REGIME_META[dm.regime];
+            const actTag = rule.sc.act === 'long' ? '多' : '空';
+            executedTrades.push({
+                key: dm.key,
+                side: dm.side,
+                gap: dm.netRet,
+                buyP: tr.buyP,
+                sellP: tr.sellP,
+                ret: tr.ret,
+                amt: null,
+                exitLate: tr.isLate,
+                rule: `${rMeta.name}[${actTag}]·${tr.exitTag}`,
+                regime: dm.regime
+            });
+        }
+
+        if (totTrades < P.minDays) return null;
+        const totWinRate = (totWins / totTrades) * 100;
+        if (totWinRate + 1e-9 < P.minWinPct) return null;
+
+        const totCum = Math.exp(logTotCum) - 1;
+        const totAvg = totSumRet / totTrades;
+        const pf = totNeg > 1e-6 ? (totPos / totNeg) : (totPos > 0 ? 99.9 : 0);
+        const stability = stabWeighted / totTrades;
+
+        const variantNames = {
+            bayes_opt: '貝氏收縮最優',
+            strict_dir: '結構順向鎖定',
+            trend_only: '純推進型態',
+            high_win: '高勝率優先',
+            raw_cum: '積極報酬型'
+        };
+
+        return {
+            isRegimeM4: true,
+            variantTag: variantNames[policyVariant] || '貝氏收縮最優',
+            ticker: P.ticker, offMode: P.offMode, hold: P.hold, feeOn: P.feeOn,
+            tp: P.tp, nDecide: nd, klineLabel: P.kMeta.label,
+            blLabel: blTpl.label, extraBls: blTpl.rules, blSkipped,
+            regimeRules, buckets,
+            nDays: totTrades, nTrades: totTrades, wins: totWins, winRate: totWinRate,
+            cum: totCum, avg: totAvg, pf, worst: worstTrade, stability,
+            executedTrades, rawDays, dayMeta, P_snapshot: P
+        };
+    }
+
+    // 12. 讀取智慧尋優參數與執行 M4 尋優核心
+    function simReadOptParamsM4(kMeta, ticker) {
+        if (typeof simTpInvalid === 'function' && simTpInvalid()) {
+            return { err: '停利參數請填入大於 0 的「分鐘數」與「百分比」' };
+        }
+        const regTpMult = Math.max(0.3, parseFloat(document.getElementById('sim-reg-tp-mult')?.value) || 1.8);
+        const regSlMult = Math.max(0.2, parseFloat(document.getElementById('sim-reg-sl-mult')?.value) || 1.0);
+        const regBayesM0 = Math.max(0, parseFloat(document.getElementById('sim-reg-bayes-m0')?.value) ?? 8.0);
+        const regMinNk = Math.max(2, parseInt(document.getElementById('sim-reg-min-nk')?.value, 10) || 4);
+        const regSplitHalf = document.getElementById('sim-reg-split-half') ? document.getElementById('sim-reg-split-half').checked : true;
+        const regTrailOn = document.getElementById('sim-reg-trail-on') ? document.getElementById('sim-reg-trail-on').checked : true;
+
+        const minWinPct = parseFloat(document.getElementById('sim-opt-min-win').value) || 0;
+        const winMode = document.getElementById('sim-opt-win-mode').value;
+        const maxWaves = parseInt(document.getElementById('sim-opt-max-waves').value, 10) || 1;
+        const splitHurdleDec = Math.max(0, (parseFloat(document.getElementById('sim-opt-split-hurdle').value) || 0) / 100.0);
+        const minDays = Math.max(1, parseInt(document.getElementById('sim-opt-min-days').value, 10) || 1);
+        const maxLossRaw = (document.getElementById('sim-opt-max-loss').value || '').trim();
+        const maxLossDec = maxLossRaw === '' ? null : Math.abs(parseFloat(maxLossRaw)) / 100;
+        const minHoldMin = Math.max(kMeta.stepMin, parseInt(document.getElementById('sim-opt-min-hold').value, 10) || kMeta.stepMin);
+        const waveBufMin = Math.max(0, parseInt(document.getElementById('sim-opt-wave-buf').value, 10) || 0);
+
+        const minStartRaw = (document.getElementById('sim-opt-min-start').value || '').trim();
+        const minStartMin = minStartRaw === '' ? null : parseInt(minStartRaw, 10);
+        const maxFinishRaw = (document.getElementById('sim-opt-max-finish').value || '').trim();
+        const maxFinishMin = maxFinishRaw === '' ? null : parseInt(maxFinishRaw, 10);
+
+        const effectiveStart = minStartMin || 0;
+        if (maxFinishMin !== null && (effectiveStart + minHoldMin > maxFinishMin)) {
+            return { err: `時間窗衝突：「最早開始（${effectiveStart} 分）」＋「最短持倉（${minHoldMin} 分）」已超過「最晚完畢時間（${maxFinishMin} 分）」` };
+        }
+
+        const sortBy = document.getElementById('sim-opt-sort').value;
+        const autoBl = document.getElementById('sim-opt-auto-bl').checked;
+        const allowRev = document.getElementById('sim-opt-allow-rev').checked;
+        const autoNbars = document.getElementById('sim-opt-auto-nbars').checked;
+        const noLateExit = document.getElementById('sim-opt-no-late').checked;
+
+        const offMode = !simIsTW(ticker);
+        const hold = document.getElementById('sim-mode').value === 'holding';
+        const feeOn = document.getElementById('sim-fee-on').checked;
+        const baseNDecide = Math.max(0, Math.min(60, parseInt(document.getElementById('sim-nbars').value, 10) || 0));
+
+        const userBls = [];
+        for (const id of simBlIds) {
+            const th = parseFloat(document.getElementById(`sim-${id}-th`).value);
+            const toRaw = (document.getElementById(`sim-${id}-to`).value || '').trim();
+            const to = toRaw === '' ? null : parseFloat(toRaw);
+            if (th >= 0 && (to === null || to > th)) {
+                userBls.push({ th, to, dir: document.getElementById(`sim-${id}-dir`).value });
+            }
+        }
+
+        const tp = typeof simGetTpParams === 'function' ? simGetTpParams() : null;
+        return {
+            P: {
+                regTpMult, regSlMult, regBayesM0, regMinNk, regSplitHalf, regTrailOn,
+                minWinPct, winMode, maxWaves, splitHurdleDec, minDays, maxLossDec,
+                minHoldMin, waveBufMin, minStartMin, maxFinishMin, effectiveStart,
+                sortBy, autoBl, allowRev, autoNbars, noLateExit,
+                offMode, hold, feeOn, baseNDecide, userBls, tp
+            }
+        };
+    }
+
+    function simOptCoreM4(rawDays, P) {
+        const { kMeta, baseNDecide, autoNbars, autoBl, sortBy } = P;
+        const minValidNd = kMeta.is60m ? 1 : (kMeta.is1m ? 5 : 2);
+        const effBaseNd = Math.max(minValidNd, baseNDecide || (kMeta.is60m ? 1 : (kMeta.is1m ? 10 : 3)));
+        const candNbars = kMeta.is60m
+            ? [effBaseNd, 1, 2]
+            : (kMeta.is1m ? [effBaseNd, 5, 10, 15, 20] : [effBaseNd, 2, 3, 4, 6]);
+        const nDecideList = autoNbars ? [...new Set(candNbars)] : [...new Set([effBaseNd, (kMeta.is60m ? 1 : 3), (kMeta.is60m ? 2 : 6)])];
+
+        const blTemplates = [{ label: 'R7/R8拍賣自動空手', rules: [] }];
+        if (autoBl) {
+            [3.0, 4.5].forEach(th => {
+                blTemplates.push({ label: `極端跳空>=${th}%空手`, rules: [{ th, to: null, dir: 'both' }] });
+            });
+        }
+
+        const variants = ['bayes_opt', 'strict_dir', 'trend_only', 'high_win', 'raw_cum'];
+        const allSolutions = [];
+
+        for (const nd of nDecideList) {
+            for (const blTpl of blTemplates) {
+                for (const vMode of variants) {
+                    const sol = simSolveRegimePoliciesForNd(rawDays, nd, blTpl, P, vMode);
+                    if (sol) allSolutions.push(sol);
+                }
+            }
+        }
+
+        if (!allSolutions.length) return [];
+
+        const maxCum = Math.max(0.01, ...allSolutions.map(s => s.cum));
+        allSolutions.forEach(s => {
+            const normCum = Math.max(-0.5, Math.min(1.2, s.cum / maxCum));
+            const normWin = s.winRate / 100;
+            const normPf = Math.min(1, s.pf / 4);
+            const normTail = Math.max(0, 1 - Math.abs(s.worst) * 15);
+            s.score = (normCum * 35 + normWin * 25 + s.stability * 25 + normPf * 8 + normTail * 7);
+        });
+
+        const uniqueMap = new Map();
+        allSolutions.forEach(s => {
+            const regSig = REGIME_ORDER.map(r => {
+                const rl = s.regimeRules[r];
+                return (rl && rl.on) ? `${r}:${rl.sc.cfgId}` : `${r}:off`;
+            }).join('|');
+            const sig = `${s.nDecide}|${regSig}|${s.nTrades}`;
+            if (!uniqueMap.has(sig) || uniqueMap.get(sig).score < s.score) {
+                uniqueMap.set(sig, s);
+            }
+        });
+
+        const deduped = [...uniqueMap.values()];
+        const sorters = {
+            cum: (a, b) => b.cum - a.cum || b.score - a.score,
+            score: (a, b) => b.score - a.score || b.cum - a.cum,
+            win: (a, b) => b.winRate - a.winRate || b.score - a.score,
+            pf: (a, b) => b.pf - a.pf || b.score - a.score,
+            stability: (a, b) => b.stability - a.stability || b.cum - a.cum
+        };
+        deduped.sort(sorters[sortBy] || sorters.score);
+        return deduped;
+    }
+
+    // 13. 渲染排行榜並支援「一鍵帶入手動分類面板 + 立即模擬」
+    function simRenderRegimeLeaderboard(list, totalValid, elapsedMs) {
+        const boardEl = document.getElementById('sim-opt-board');
+        const pct = (x) => (x >= 0 ? '+' : '') + (x * 100).toFixed(2) + '%';
+        const col = (x) => x >= 0 ? 'var(--color-up)' : 'var(--color-down)';
+        const kLbl = list[0]?.klineLabel || simGetKlineMeta('sim').label;
+
+        const renderRegimeRows = (s) => {
+            return REGIME_ORDER.map(rKey => {
+                const meta = REGIME_META[rKey];
+                const rl = s.regimeRules[rKey];
+                if (!rl || !rl.on) {
+                    return `<div style="display:flex; justify-content:space-between; color:#666; font-size:10.5px; border-top:1px dashed rgba(255,255,255,0.04); padding:2px 0;">
+                        <span>${meta.name} (${rl ? rl.nk : 0}天)</span>
+                        <span>🛑 空手 (${escapeHtml(rl?.reason || '不交易')})</span>
+                    </div>`;
+                }
+                return `<div style="display:flex; justify-content:space-between; font-size:10.5px; border-top:1px dashed rgba(255,255,255,0.06); padding:2px 0; gap:6px; flex-wrap:wrap;">
+                    <span style="color:${meta.color}; font-weight:bold;">${meta.name} (${rl.wins}/${rl.nk}天・勝率${(rl.winRate * 100).toFixed(0)}%)</span>
+                    <span style="color:#ddd;">${escapeHtml(rl.sc.label)}｜收縮均值 <b style="color:${col(rl.shrunkMu)}">${pct(rl.shrunkMu)}</b>｜累計 <b style="color:${col(rl.cumRet)}">${pct(rl.cumRet)}</b></span>
+                </div>`;
+            }).join('');
+        };
+
+        boardEl.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; color:#aaa; padding:4px 2px;">
+                <span>[${escapeHtml(kLbl)}・M4 走勢分類引擎] 共合成 <b style="color:#fff;">${totalValid.toLocaleString()}</b> 組去時間化分類策略表</span>
+                <span style="font-family:monospace; color:var(--color-up);">⚡ 耗時 ${elapsedMs} ms</span>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:8px; max-height:480px; overflow-y:auto; padding-right:2px;">
+                ${list.map((s, idx) => {
+                    const stabScore = Math.round(s.stability * 100);
+                    const stabColor = stabScore >= 75 ? 'var(--color-buy)' : (stabScore >= 55 ? 'var(--color-warn)' : 'var(--color-sell)');
+                    const obsMin = s.nDecide * (s.P_snapshot?.kMeta?.stepMin || 5);
+                    return `
+                    <div class="sim-card" style="background:rgba(0,0,0,0.52); border-color:${idx === 0 ? 'var(--color-up)' : 'rgba(255,255,255,0.12)'}; display:flex; flex-direction:column; gap:6px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap;">
+                            <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                                <span style="background:${idx === 0 ? 'var(--color-up)' : 'rgba(255,255,255,0.15)'}; color:${idx === 0 ? '#000' : '#fff'}; font-weight:bold; font-size:11px; padding:2px 7px; border-radius:4px; font-family:monospace;">#${idx + 1}</span>
+                                <span style="background:rgba(0,212,255,0.15); color:var(--color-acc); border:1px solid rgba(0,212,255,0.3); font-size:10px; padding:1px 6px; border-radius:4px; font-family:monospace;">${escapeHtml(s.variantTag)}｜觀察前${s.nDecide}根(${obsMin}分)</span>
+                                <span style="font-size:12.5px; font-weight:bold; font-family:monospace; color:${col(s.cum)};">累計 ${pct(s.cum)}</span>
+                                <span style="font-size:11px; font-family:monospace; color:#fff;">總勝率 ${s.winRate.toFixed(1)}% <span style="color:#888;">(${s.wins}/${s.nTrades}天)</span></span>
+                            </div>
+                            <button type="button" onclick="simApplyOptSolution(${idx})" style="background:var(--color-up); color:#000; border:none; border-radius:6px; padding:4px 10px; font-size:11px; font-weight:bold; cursor:pointer;">
+                                <i class="fa-solid fa-sliders"></i> 帶入手動面板並繪圖
+                            </button>
+                        </div>
+                        <div style="display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:4px; font-size:10.5px; font-family:monospace; color:#aaa; background:rgba(255,255,255,0.03); padding:5px 8px; border-radius:6px;">
+                            <div>平均單筆: <span style="color:${col(s.avg)}">${pct(s.avg)}</span></div>
+                            <div>最差單筆: <span style="color:${col(s.worst)}">${pct(s.worst)}</span></div>
+                            <div>跨期一致度: <span style="color:${stabColor}">${stabScore}分</span> / PF ${s.pf >= 99 ? '∞' : s.pf.toFixed(2)}</div>
+                        </div>
+                        <div style="font-family:monospace; line-height:1.45; background:rgba(0,0,0,0.35); padding:6px 8px; border-radius:6px;">
+                            ${renderRegimeRows(s)}
+                        </div>
+                    </div>`;
+                }).join('')}
+            </div>`;
+        boardEl.style.display = 'flex';
+    }
+
+    // 14. 套用最優解至「手動 8 大走勢分類面板」並觸發模擬
+    window.simApplyOptSolution = function(idx) {
+        const sol = simOptCacheResults[idx];
+        if (!sol) return;
+        injectAllRegimePanels();
+
+        document.getElementById('sim-nbars').value = String(sol.nDecide);
+        const stepMin = sol.P_snapshot?.kMeta?.stepMin || 5;
+        const baseOpenMin = sol.offMode ? 0 : 540;
+
+        // 同步新增的黑名單
+        if (sol.extraBls && sol.extraBls.length) {
+            sol.extraBls.forEach(b => {
+                const exists = simBlIds.some(id => {
+                    const th = parseFloat(document.getElementById(`sim-${id}-th`).value);
+                    const toRaw = (document.getElementById(`sim-${id}-to`).value || '').trim();
+                    const to = toRaw === '' ? null : parseFloat(toRaw);
+                    const dir = document.getElementById(`sim-${id}-dir`).value;
+                    return th === b.th && to === b.to && dir === b.dir;
+                });
+                if (!exists) simAddBl({ th: b.th, to: b.to ?? '', dir: b.dir });
+            });
+            document.getElementById('sim-bl').open = true;
+        }
+
+        // 將各分類規則寫入手動面板，並換算對應參考時間
+        const rulesToWrite = {};
+        REGIME_ORDER.forEach(rKey => {
+            const rl = sol.regimeRules[rKey];
+            const isOn = !!(rl && rl.on && rl.sc);
+            const act = isOn ? rl.sc.act : REGIME_META[rKey].defAct;
+            const dIn = isOn ? rl.sc.dIn : 0;
+            const hBars = isOn ? rl.sc.hBars : 18;
+
+            const buyElapsedMin = (sol.nDecide + dIn) * stepMin;
+            const sellElapsedMin = hBars >= 999 ? (sol.offMode ? 385 : 265) : (buyElapsedMin + hBars * stepMin);
+            const clockBuy = baseOpenMin + buyElapsedMin;
+            const clockSell = baseOpenMin + sellElapsedMin;
+
+            rulesToWrite[rKey] = {
+                on: isOn,
+                act: act === 'short' ? 'short' : 'long',
+                tmode: 'struct',
+                dIn,
+                hBars,
+                rawClock: {
+                    bch: String(Math.floor(clockBuy / 60)).padStart(2, '0'),
+                    bcm: String(clockBuy % 60).padStart(2, '0'),
+                    bh: String(Math.floor(buyElapsedMin / 60)),
+                    bm: String(buyElapsedMin % 60),
+                    sch: String(Math.floor(clockSell / 60)).padStart(2, '0'),
+                    scm: String(clockSell % 60).padStart(2, '0'),
+                    sh: String(Math.floor(sellElapsedMin / 60)),
+                    sm: String(sellElapsedMin % 60)
+                }
+            };
+        });
+
+        simWriteRegimeManualConfig({
+            enabled: true,
+            atrOn: true,
+            tpMult: sol.P_snapshot?.regTpMult || 1.8,
+            slMult: sol.P_snapshot?.regSlMult || 1.0,
+            trailOn: sol.P_snapshot?.regTrailOn !== false,
+            rules: rulesToWrite
+        });
+
+        // 直接執行主模擬器，確保結果與手動面板完全一致
+        window.runOpenSimulator();
+    };
+
+    // 15. 接管 runOpenOptimizer 與 simRunWalkForward
+    window.runOpenOptimizer = async function() {
+        injectAllRegimePanels();
+        const errEl = document.getElementById('sim-error');
+        const boardEl = document.getElementById('sim-opt-board');
+        const btn = document.getElementById('sim-opt-btn');
+        const fail = (m) => { errEl.style.display = 'block'; errEl.innerText = m; boardEl.style.display = 'none'; };
+        errEl.style.display = 'none';
+
+        let ticker = (document.getElementById('sim-ticker').value || '').trim().toUpperCase();
+        const sv = document.getElementById('sim-start').value, ev = document.getElementById('sim-end').value;
+        if (!ticker) return fail('請先在上方輸入股票代號');
+        if (!sv || !ev) return fail('請選擇日期區間');
+        const startMs = Date.parse(sv + 'T00:00:00Z'), endMs = Date.parse(ev + 'T00:00:00Z');
+        if (endMs < startMs) return fail('結束日期不能早於起始日期');
+
+        const kMeta = simGetKlineMeta('sim', ticker);
+        if (Date.now() - startMs > kMeta.maxDays * 86400e3) {
+            return fail(kMeta.useAlpaca
+                ? `Alpaca 歷史資料支援自 2016 年起（約 ${kMeta.maxDays} 天內），請將起始日期設於 2016 年之後`
+                : `目前使用 Yahoo 資料源，${kMeta.label} 最多提供最近 ${kMeta.maxDays} 天資料`);
+        }
+
+        const rp = simReadOptParamsM4(kMeta, ticker);
+        if (rp.err) return fail(rp.err);
+
+        btn.disabled = true;
+        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 正在萃取 ${kMeta.label} 開盤 8 大走勢分類並進行貝氏收縮尋優...`;
+
+        try {
+            const tStart = performance.now();
+            const { rawDays, resolvedTicker } = await simFetchRawDaysWithHL(ticker, startMs, endMs, kMeta);
+            ticker = resolvedTicker;
+            if (rawDays.length < 5) throw new Error('有效交易日過少（需至少 5 天），請拉長日期區間');
+
+            const P = { ...rp.P, kMeta, ticker, offMode: !simIsTW(ticker) };
+            const deduped = simOptCoreM4(rawDays, P);
+            if (!deduped.length) {
+                throw new Error(`在目前條件下（最低樣本 N_min=${P.regMinNk}、勝率 >= ${P.minWinPct}%）找不到通過貝氏收縮的分類方案。建議將 N_min 調降至 3，或取消勾選「強制前後半池一致性檢驗」。`);
+            }
+
+            const topList = deduped.slice(0, 10);
+            simOptCacheResults = topList;
+            const elapsedMs = (performance.now() - tStart).toFixed(1);
+            simRenderRegimeLeaderboard(topList, deduped.length, elapsedMs);
+            window.simApplyOptSolution(0);
+        } catch (err) {
+            fail(err.message || '走勢分類尋優運算失敗');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-ranking-star"></i> 計算開盤 8 大走勢分類最優解排行';
+        }
+    };
+
+    window.simRunWalkForward = async function() {
+        injectAllRegimePanels();
+        const $ = (id) => document.getElementById(id);
+        const errEl = $('sim-wf-error'), sumEl = $('sim-wf-summary'), btn = $('sim-wf-btn');
+        const fail = (m) => { errEl.style.display = 'block'; errEl.innerText = m; sumEl.style.display = 'none'; };
+        errEl.style.display = 'none';
+
+        let ticker = ($('sim-ticker').value || '').trim().toUpperCase();
+        const pin = $('sim-wf-pin').value, from = $('sim-wf-from').value, to = $('sim-wf-to').value;
+        const minTrain = Math.max(10, parseInt($('sim-wf-mintrain').value, 10) || 15);
+        if (!ticker) return fail('請先在上方輸入股票代號');
+        if (!pin || !from || !to) return fail('請設定「釘選起點」與「回測起日／迄日」');
+
+        const pinMs = Date.parse(pin + 'T00:00:00Z'), fromMs = Date.parse(from + 'T00:00:00Z'), toMs = Date.parse(to + 'T00:00:00Z');
+        if (!(fromMs > pinMs)) return fail('回測起日必須晚於釘選起點');
+        if (toMs < fromMs) return fail('回測迄日不能早於回測起日');
+
+        const kMeta = simGetKlineMeta('sim', ticker);
+        if (Date.now() - pinMs > kMeta.maxDays * 86400e3) {
+            return fail(`目前資料源最多提供最近 ${kMeta.maxDays} 天資料，釘選起點太早`);
+        }
+
+        const rp = simReadOptParamsM4(kMeta, ticker);
+        if (rp.err) return fail(rp.err);
+
+        const idleLabel = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 讀取 ${kMeta.label} 歷史資料中...`;
+
+        try {
+            const { rawDays: all, resolvedTicker } = await simFetchRawDaysWithHL(ticker, pinMs, toMs, kMeta);
+            ticker = resolvedTicker;
+            const P = { ...rp.P, kMeta, ticker, offMode: !simIsTW(ticker) };
+
+            const testDays = all.filter(d => Date.parse(d.key + 'T00:00:00Z') >= fromMs);
+            if (!testDays.length) throw new Error('回測區間內沒有交易日資料');
+
+            const trades = [], log = [];
+            let noSol = 0, tooFew = 0, chopSkipped = 0;
+
+            for (let n = 0; n < testDays.length; n++) {
+                const td = testDays[n];
+                const train = all.filter(d => d.key < td.key);
+                btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> M4 分類滾動回溯 ${n + 1} / ${testDays.length}（${td.key}）`;
+                await new Promise(rs => setTimeout(rs, 0));
+
+                if (train.length < minTrain) {
+                    tooFew++;
+                    log.push({ key: td.key, note: `訓練資料僅 ${train.length} 天 (<${minTrain}天)，略過` });
+                    continue;
+                }
+
+                const top = simOptCoreM4(train, P)[0];
+                if (!top) {
+                    noSol++;
+                    log.push({ key: td.key, note: `訓練 ${train.length} 天無合規分類表，當天空手` });
+                    continue;
+                }
+
+                // 計算前 14 日觀察期波幅基準
+                let sumAtr = 0, cnt = 0;
+                train.slice(-14).forEach(hd => {
+                    const nObs = Math.max(1, Math.min(top.nDecide, hd.bars.length - 1));
+                    let hn = -Infinity, ln = Infinity;
+                    for (let k = 0; k < nObs; k++) {
+                        const b = hd.bars[k];
+                        if (b.h > hn) hn = b.h;
+                        if (b.l < ln) ln = b.l;
+                    }
+                    sumAtr += Math.max(1e-6, hn - ln) / hd.bars[0].o;
+                    cnt++;
+                });
+                const avgOR14 = cnt > 0 ? (sumAtr / cnt) : 0.0075;
+                const info = simClassifyOpeningRegime(td, top.nDecide, avgOR14);
+                const rMeta = REGIME_META[info.regime];
+                const rule = top.regimeRules[info.regime];
+
+                let dayTrade = null;
+                if (rule && rule.on && rule.sc) {
+                    const realBi = info.nObs + rule.sc.dIn;
+                    const isLateTarget = rule.sc.hBars >= 999;
+                    const targetSi = isLateTarget ? (td.bars.length - 1) : Math.min(td.bars.length - 1, realBi + rule.sc.hBars);
+                    const tr = simExecRegimeTrade(td.bars, realBi, targetSi, isLateTarget, rule.sc.act, info.obsRange, {
+                        atrOn: true,
+                        regTpMult: P.regTpMult,
+                        regSlMult: P.regSlMult,
+                        regTrailOn: P.regTrailOn,
+                        tp: P.tp,
+                        feeOn: P.feeOn,
+                        ticker: P.ticker,
+                        nShares: 0,
+                        noLateExit: P.noLateExit,
+                        timeExitLabel: isLateTarget ? '尾盤' : `持倉${rule.sc.hBars}根`
+                    });
+                    if (tr) {
+                        const actTag = rule.sc.act === 'long' ? '多' : '空';
+                        dayTrade = {
+                            key: td.key, side: info.side, gap: info.netRet,
+                            buyP: tr.buyP, sellP: tr.sellP, ret: tr.ret, amt: null,
+                            exitLate: tr.isLate, rule: `${rMeta.name}[${actTag}]·${tr.exitTag}`
+                        };
+                    }
+                }
+
+                if (!dayTrade) {
+                    chopSkipped++;
+                    log.push({
+                        key: td.key,
+                        train: train.length,
+                        desc: `當日判定【${rMeta.name}】(跳空${(info.gap * 100).toFixed(2)}%, 實體${(info.obsRet * 100).toFixed(2)}%, CLV ${info.clv.toFixed(2)}, ER ${info.er.toFixed(2)}) ➔ 空手避險`,
+                        ret: null
+                    });
+                } else {
+                    trades.push(dayTrade);
+                    log.push({
+                        key: td.key,
+                        train: train.length,
+                        desc: `當日判定【${dayTrade.rule}】｜進場 ${dayTrade.buyP.toFixed(2)} ➔ 出場 ${dayTrade.sellP.toFixed(2)}`,
+                        ret: dayTrade.ret
+                    });
+                }
+            }
+
+            if (!trades.length) throw new Error('滾動回溯期間沒有產生任何交易');
+            const holdRet = testDays.length ? testDays[testDays.length - 1].bars[testDays[testDays.length - 1].bars.length - 1].c / testDays[0].prevClose - 1 : null;
+            if (typeof window.simExportSnap === 'function') window.simExportSnap('gap');
+
+            renderOpenSimulator(`${ticker} [${kMeta.label}] M4 分類滾動回溯`, trades, {}, P.feeOn, {
+                hold: P.hold, nShares: 0, nDecide: P.baseNDecide, blSkipped: chopSkipped, holdRet
+            });
+
+            const pct = (x) => (x >= 0 ? '+' : '') + (x * 100).toFixed(2) + '%';
+            const col = (x) => x >= 0 ? 'var(--color-up)' : 'var(--color-down)';
+            sumEl.innerHTML = `
+                <div>釘選起點 <b style="color:#fff;">${pin}</b>・回測 <b style="color:#fff;">${testDays.length}</b> 天・實際進場 <b style="color:var(--color-up);">${trades.length}</b> 天・拍賣震盪/無訊號空手 <b style="color:var(--color-acc);">${chopSkipped}</b> 天。</div>
+                <details open><summary style="cursor:pointer; color:var(--color-acc);">逐日開盤走勢分類判定與執行明細</summary>
+                    <div style="max-height:260px; overflow:auto; margin-top:6px; font-family:monospace; font-size:10.5px; line-height:1.6;">
+                        ${log.map(l => `<div style="border-top:1px solid rgba(255,255,255,0.05); padding:3px 0;"><b>${l.key.slice(5)}</b> ${l.desc ? `<span style="color:#888;">(池${l.train}天)</span> ${escapeHtml(l.desc)} <b style="color:${l.ret === null ? '#888' : col(l.ret)}">${l.ret === null ? '[空手]' : pct(l.ret)}</b>` : `<span style="color:#888;">${escapeHtml(l.note)}</span>`}</div>`).join('')}
+                    </div>
+                </details>`;
+            sumEl.style.display = 'flex';
+            const res = $('sim-result');
+            if (res && res.scrollIntoView) res.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } catch (e) {
+            fail(e.message || '滾動回溯失敗');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = idleLabel;
+        }
+    };
+
+    // 初始化注入所有面板並同步時鐘狀態
+    injectAllRegimePanels();
+    syncManualRegimeMarketClock();
+    window.simUpdateRegimeManualCount();
+})();
+
 
 // ════════════════════════════════════════════════════════════════════════════
 // ⑥ 正常中線（長週期箱體與波段規律推演）策略模擬與最佳化引擎
