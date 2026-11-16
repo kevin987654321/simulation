@@ -1224,6 +1224,7 @@
             <div class="menu-item sub-item" id="menu-item-sim-gap" data-view="view-sim-hub" onclick="openSimHub('gap', this)"><span class="nav-line"></span> 開盤方向策略模擬器</div>
             <div class="menu-item sub-item" id="menu-item-sim-relay" data-view="view-sim-hub" onclick="openSimHub('relay', this)"><span class="nav-line"></span> 多檔股票日內資金接力與運用順序尋優器</div>
             <div class="menu-item sub-item" id="menu-item-sim-swing" data-view="view-sim-hub" onclick="openSimHub('swing', this)"><span class="nav-line"></span> 正常中線波段規律推演</div>
+            <div class="menu-item sub-item" id="menu-item-sim-live" data-view="view-sim-live" onclick="switchView('view-sim-live', this)"><span class="nav-line"></span> 開盤／盤中即時買賣判斷</div>
         </div>
     </div>
     <div class="menu-item" id="menu-item-settings" data-view="view-settings" style="margin-top: auto;" onclick="switchView('view-settings', this)"><i class="fa-solid fa-sliders"></i></div>
@@ -2200,6 +2201,10 @@
     </main>
 
     <!-- 🧪 模擬：開盤方向策略模擬器／多檔股票日內資金接力尋優器（由側邊選單「模擬」群組進入） -->
+    <main id="view-sim-live" class="view-section sim-view">
+        <div class="fx-wrap" id="live-wrap"></div>
+    </main>
+
     <main id="view-sim-hub" class="view-section sim-view">
         <div class="hub-tabs" id="hub-tabs">
             <div class="hub-ind" id="hub-ind"></div>
@@ -9032,6 +9037,8 @@
     };
 
     // 初始化注入所有面板並同步時鐘狀態
+    window.simClassifyOpeningRegime = simClassifyOpeningRegime;
+    window.simReadRegimeManualConfig = simReadRegimeManualConfig;
     injectAllRegimePanels();
     syncManualRegimeMarketClock();
     window.simUpdateRegimeManualCount();
@@ -19234,6 +19241,519 @@ ${summaryText}
     };
 
     refreshAlpacaUI();
+})();
+
+/* ============================================================================
+ * [Live Intraday Monitor] 開盤與盤中即時分類判定・買賣價位與訊號計算器
+ * ============================================================================ */
+(function initLiveIntradayMonitor() {
+    if (document.getElementById('live-monitor-panel')) return;
+
+    const REGIME_DICT = {
+        R1_OD_BULL:  { code: 'R1', name: 'R1 強勢推進(多)', color: 'var(--color-up)',   defAct: 'long',  tradeable: true  },
+        R2_OTD_BULL: { code: 'R2', name: 'R2 回測有守(多)', color: 'var(--color-up)',   defAct: 'long',  tradeable: true  },
+        R3_ORR_BEAR: { code: 'R3', name: 'R3 開高反轉(空)', color: 'var(--color-down)', defAct: 'short', tradeable: true  },
+        R4_OD_BEAR:  { code: 'R4', name: 'R4 弱勢殺盤(空)', color: 'var(--color-down)', defAct: 'short', tradeable: true  },
+        R5_OTD_BEAR: { code: 'R5', name: 'R5 拉高受阻(空)', color: 'var(--color-down)', defAct: 'short', tradeable: true  },
+        R6_ORR_BULL: { code: 'R6', name: 'R6 破底翻(多)',   color: 'var(--color-up)',   defAct: 'long',  tradeable: true  },
+        R7_OA_IN:    { code: 'R7', name: 'R7 區間拍賣(空手)', color: '#888',            defAct: 'flat',  tradeable: false },
+        R8_OA_OUT:   { code: 'R8', name: 'R8 跳空鈍化(空手)', color: '#888',            defAct: 'flat',  tradeable: false }
+    };
+
+    const wrap = document.getElementById('live-wrap') || document.querySelector('.wrap');
+    if (!wrap) return;
+
+    const panel = document.createElement('div');
+    panel.id = 'live-monitor-panel';
+    panel.className = 'glass-panel';
+    panel.style.cssText = 'padding:14px; margin-bottom:16px; border:1px solid rgba(0,255,170,0.35);';
+    panel.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+            <div style="font-weight:bold; font-size:13.5px; color:var(--color-up);">
+                <i class="fa-solid fa-satellite-dish"></i> 開盤／盤中即時買賣判斷儀表板
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+                <label style="font-size:11px; color:#aaa; display:flex; align-items:center; gap:4px; cursor:pointer;">
+                    <input type="checkbox" id="live-auto-poll" onchange="liveToggleAutoPoll()"> 每15秒自動刷新
+                </label>
+                <span id="live-last-ts" style="font-size:10.5px; font-family:monospace; color:#777;">尚未更新</span>
+            </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr) auto; gap:6px; margin-bottom:10px;">
+            <div>
+                <div class="sim-lbl">載入已存策略配置</div>
+                <select id="live-preset-sel" class="sim-in" onchange="liveOnSelectPreset()" style="text-align:left; padding:0 8px;"></select>
+            </div>
+            <div>
+                <div class="sim-lbl">監控代號</div>
+                <input type="text" id="live-ticker" class="sim-in" placeholder="代號" style="font-family:monospace; font-weight:bold; text-transform:uppercase;">
+            </div>
+            <div>
+                <div class="sim-lbl">實際成交價（選填鎖定）</div>
+                <input type="text" id="live-fill-price" class="sim-in mobile-num" data-decimal="true" onfocus="this.select()" placeholder="自動取K棒價" inputmode="decimal" oninput="liveRecomputeFromCache()">
+            </div>
+            <div style="display:flex; align-items:flex-end;">
+                <button type="button" id="live-refresh-btn" onclick="liveFetchAndEvaluate()" class="sim-in" style="width:auto; padding:0 14px; background:var(--color-up); color:#000; border:none; font-weight:bold; cursor:pointer;">
+                    <i class="fa-solid fa-rotate"></i> 即時計算
+                </button>
+            </div>
+        </div>
+
+        <div id="live-err" style="display:none; color:var(--color-sell); font-size:11px; margin-bottom:8px;"></div>
+        <div id="live-body" style="display:none; flex-direction:column; gap:8px;"></div>
+    `;
+    wrap.insertBefore(panel, wrap.firstChild);
+    if (window.setupMobileNumInput) panel.querySelectorAll('.mobile-num').forEach(window.setupMobileNumInput);
+
+    let livePollTimer = null;
+    let liveCache = null;
+
+    function fmtClock(minOfDay) {
+        const m = ((Math.round(minOfDay) % 1440) + 1440) % 1440;
+        return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+    }
+
+    function pctStr(x) {
+        return (x >= 0 ? '+' : '') + (x * 100).toFixed(2) + '%';
+    }
+
+    function classifyDay(day, nd, avgOR14) {
+        if (typeof window.simClassifyOpeningRegime === 'function') {
+            return window.simClassifyOpeningRegime(day, nd, avgOR14);
+        }
+        const bars = day.bars, prevC = day.prevClose;
+        const nObs = Math.max(1, Math.min(nd, bars.length));
+        const o0 = bars[0].o, cn = bars[nObs - 1].c;
+        let hn = -Infinity, ln = Infinity, path = 0;
+        for (let k = 0; k < nObs; k++) {
+            const b = bars[k];
+            const bh = b.h != null ? b.h : Math.max(b.o, b.c);
+            const bl = b.l != null ? b.l : Math.min(b.o, b.c);
+            if (bh > hn) hn = bh;
+            if (bl < ln) ln = bl;
+            path += Math.abs(b.c - b.o);
+        }
+        const rng = Math.max(1e-6, hn - ln);
+        const obsAtrPct = rng / o0;
+        const obsRange = Math.max(0.004 * o0, rng);
+        const gap = (o0 - prevC) / prevC;
+        const obsRet = (cn - o0) / o0;
+        const clv = ((cn - ln) - (hn - cn)) / rng;
+        const er = Math.abs(cn - o0) / Math.max(1e-6, path);
+        const uw = (hn - Math.max(o0, cn)) / rng;
+        const lw = (Math.min(o0, cn) - ln) / rng;
+        const scale = avgOR14 > 1e-6 ? Math.max(0.65, Math.min(1.6, avgOR14 / 0.0075)) : 1.0;
+
+        let regime = 'R7_OA_IN';
+        if (obsAtrPct < 0.0042 * scale || (er < 0.38 && Math.abs(clv) < 0.30 && Math.abs(obsRet) < 0.0022 * scale)) {
+            regime = Math.abs(gap) >= 0.006 ? 'R8_OA_OUT' : 'R7_OA_IN';
+        } else if (gap >= 0.005 && (obsRet <= -0.0020 * scale || (clv <= -0.25 && uw >= 0.40)) && clv <= -0.20) {
+            regime = 'R3_ORR_BEAR';
+        } else if (gap <= -0.005 && (obsRet >= 0.0020 * scale || (clv >= 0.25 && lw >= 0.40)) && clv >= 0.20) {
+            regime = 'R6_ORR_BULL';
+        } else if (obsRet >= 0.0025 * scale && clv >= 0.45 && er >= 0.60 && (gap >= -0.0025 || cn > prevC)) {
+            regime = 'R1_OD_BULL';
+        } else if (obsRet <= -0.0025 * scale && clv <= -0.45 && er >= 0.60 && (gap <= 0.0025 || cn < prevC)) {
+            regime = 'R4_OD_BEAR';
+        } else if (clv >= 0.20 && (lw >= 0.25 || obsRet > 0)) {
+            regime = 'R2_OTD_BULL';
+        } else if (clv <= -0.20 && (uw >= 0.25 || obsRet < 0)) {
+            regime = 'R5_OTD_BEAR';
+        } else {
+            regime = Math.abs(gap) >= 0.006 ? 'R8_OA_OUT' : 'R7_OA_IN';
+        }
+        return { regime, nObs, o0, cn, hn, ln, obsRange, obsAtrPct, gap, gapAbs: Math.abs(gap) * 100, obsRet, clv, er, uw, lw, side: cn >= prevC ? 'up' : 'down' };
+    }
+
+    function refreshPresetDropdown() {
+        const sel = document.getElementById('live-preset-sel');
+        if (!sel) return;
+        const curVal = sel.value;
+        let all = {};
+        try { all = JSON.parse(localStorage.getItem('SIM_STRATEGY_PRESETS') || '{}') || {}; } catch (e) {}
+        const names = Object.keys(all);
+        sel.innerHTML = `<option value="__CURRENT__">📌 使用目前表單設定</option>` +
+            names.map(n => `<option value="${escapeHtml(n)}">💾 ${escapeHtml(n)}</option>`).join('');
+        if (curVal && (curVal === '__CURRENT__' || names.includes(curVal))) sel.value = curVal;
+        const tkInp = document.getElementById('live-ticker');
+        if (tkInp && !tkInp.value) tkInp.value = (document.getElementById('sim-ticker')?.value || '2330.TW').trim().toUpperCase();
+    }
+
+    // 攔截儲存與刪除配置，自動同步下拉選單
+    ['simSavePreset', 'simDeletePreset'].forEach(fn => {
+        const orig = window[fn];
+        if (typeof orig === 'function') {
+            window[fn] = function() {
+                const r = orig.apply(this, arguments);
+                refreshPresetDropdown();
+                return r;
+            };
+        }
+    });
+
+    function getActiveConfig() {
+        const selVal = document.getElementById('live-preset-sel')?.value || '__CURRENT__';
+        if (selVal !== '__CURRENT__') {
+            try {
+                const all = JSON.parse(localStorage.getItem('SIM_STRATEGY_PRESETS') || '{}') || {};
+                if (all[selVal]) return all[selVal];
+            } catch (e) {}
+        }
+        return typeof simGetConfig === 'function' ? simGetConfig() : {};
+    }
+
+    window.liveOnSelectPreset = function() {
+        const cfg = getActiveConfig();
+        if (cfg.ticker) document.getElementById('live-ticker').value = cfg.ticker.trim().toUpperCase();
+        if (document.getElementById('live-preset-sel').value !== '__CURRENT__' && typeof simApplyConfig === 'function') {
+            simApplyConfig(cfg);
+        }
+        if (liveCache) window.liveFetchAndEvaluate();
+    };
+
+    window.liveToggleAutoPoll = function() {
+        if (livePollTimer) { clearInterval(livePollTimer); livePollTimer = null; }
+        if (document.getElementById('live-auto-poll')?.checked) {
+            window.liveFetchAndEvaluate();
+            livePollTimer = setInterval(() => window.liveFetchAndEvaluate(true), 15000);
+        }
+    };
+
+    window.liveFetchAndEvaluate = async function(silent) {
+        const errEl = document.getElementById('live-err');
+        const btn = document.getElementById('live-refresh-btn');
+        const cfg = getActiveConfig();
+        let ticker = (document.getElementById('live-ticker').value || cfg.ticker || '').trim().toUpperCase();
+        if (!ticker) {
+            errEl.style.display = 'block';
+            errEl.innerText = '請輸入股票代號';
+            return;
+        }
+        errEl.style.display = 'none';
+        if (!silent) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; }
+
+        try {
+            const kMode = cfg.klineMode || document.getElementById('sim-kline-mode')?.value || '5m';
+            const stepMin = kMode === '1m' ? 1 : (kMode === '60m' ? 60 : 5);
+            const nowSec = Math.floor(Date.now() / 1000);
+            const p1 = nowSec - 25 * 86400, p2 = nowSec + 86400;
+            const cands = /^\d{4,6}[A-Z]?$/.test(ticker) ? [ticker + '.TW', ticker + '.TWO'] : [ticker];
+            let r = null, resolved = ticker;
+            for (const c of cands) {
+                try { r = await simFetchIntraday(c, p1, p2, kMode); } catch (e) {}
+                if (r && (r.timestamp || []).length) { resolved = c; break; }
+            }
+            if (!r) throw new Error(`無法取得 ${ticker} (${kMode}) 即時 K 線`);
+
+            const off = (r.meta && r.meta.gmtoffset) || 0;
+            const q = r.indicators.quote[0] || {};
+            const days = new Map();
+            r.timestamp.forEach((t, i) => {
+                if (q.open[i] == null || q.close[i] == null) return;
+                const d = new Date((t + off) * 1000), key = d.toISOString().slice(0, 10);
+                if (!days.has(key)) days.set(key, []);
+                const hi = (q.high && q.high[i] != null) ? q.high[i] : Math.max(q.open[i], q.close[i]);
+                const lo = (q.low && q.low[i] != null) ? q.low[i] : Math.min(q.open[i], q.close[i]);
+                days.get(key).push({ m: d.getUTCHours() * 60 + d.getUTCMinutes(), o: q.open[i], h: hi, l: lo, c: q.close[i] });
+            });
+
+            const keys = [...days.keys()].sort();
+            if (keys.length < 2) throw new Error('歷史天數不足，無法取得昨收價');
+
+            const rawDays = [];
+            for (let i = 1; i < keys.length; i++) {
+                const k = keys[i];
+                const bars = days.get(k).sort((a, b) => a.m - b.m);
+                const prevBars = days.get(keys[i - 1]);
+                const prevClose = prevBars[prevBars.length - 1].c;
+                if (prevClose > 0 && bars.length > 0) rawDays.push({ key: k, bars, prevClose });
+            }
+
+            liveCache = { resolved, kMode, stepMin, rawDays };
+            const now = new Date();
+            document.getElementById('live-last-ts').innerText =
+                `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+            window.liveRecomputeFromCache();
+        } catch (e) {
+            errEl.style.display = 'block';
+            errEl.innerText = e.message || '抓取失敗';
+        } finally {
+            if (!silent) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-rotate"></i> 即時計算'; }
+        }
+    };
+
+    window.liveRecomputeFromCache = function() {
+        if (!liveCache) return;
+        const { resolved, kMode, stepMin, rawDays } = liveCache;
+        const cfg = getActiveConfig();
+        const offMode = !simIsTW(resolved);
+        const today = rawDays[rawDays.length - 1];
+        const bars = today.bars;
+        const prevC = today.prevClose;
+        const lastBar = bars[bars.length - 1];
+        const curPrice = lastBar.c;
+        const dayOpenMin = offMode ? bars[0].m : Math.min(540, bars[0].m);
+
+        const regMan = cfg.regimeManual || (typeof window.simReadRegimeManualConfig === 'function' ? window.simReadRegimeManualConfig() : null);
+        const useM4 = !!(regMan && regMan.enabled);
+        const rawNbars = Math.max(0, parseInt(cfg.nbars, 10) || 0);
+        const nd = useM4 ? Math.max(1, rawNbars || (kMode === '60m' ? 1 : (kMode === '1m' ? 10 : 3))) : rawNbars;
+
+        // 計算前 14 日觀察期波幅基準 avgOR14
+        let sumAtr = 0, cnt = 0;
+        const histSlice = rawDays.slice(Math.max(0, rawDays.length - 15), rawDays.length - 1);
+        histSlice.forEach(hd => {
+            const nObs = Math.max(1, Math.min(nd || 1, hd.bars.length));
+            let hn = -Infinity, ln = Infinity;
+            for (let k = 0; k < nObs; k++) {
+                if (hd.bars[k].h > hn) hn = hd.bars[k].h;
+                if (hd.bars[k].l < ln) ln = hd.bars[k].l;
+            }
+            sumAtr += Math.max(1e-6, hn - ln) / hd.bars[0].o;
+            cnt++;
+        });
+        const avgOR14 = cnt > 0 ? (sumAtr / cnt) : 0.0075;
+        const info = classifyDay(today, Math.max(1, nd), avgOR14);
+        const obsDone = bars.length >= Math.max(1, nd);
+
+        // 1. 黑名單檢查
+        const bls = cfg.blacklist || [];
+        const hitBl = bls.find(r => {
+            const th = parseFloat(r.th), to = (r.to === '' || r.to == null) ? null : parseFloat(r.to);
+            return info.gapAbs >= th && (to === null || info.gapAbs < to) && (r.dir === 'both' || r.dir === info.side);
+        });
+
+        // 2. 解析當日適用規則與買賣時點
+        let ruleOn = false, act = 'long', ruleTitle = '', buyTargetMin = null, sellTargetMin = null, realBi = -1, targetSi = -1;
+        let atrOn = false, tpMult = 1.8, slMult = 1.0, trailOn = false;
+        const minStartMin = (useM4 && regMan.minStartMin != null) ? regMan.minStartMin : null;
+        const maxFinishMin = (useM4 && regMan.maxFinishMin != null) ? regMan.maxFinishMin : null;
+
+        if (hitBl) {
+            ruleOn = false;
+            ruleTitle = `🚫 觸發黑名單區間 (幅度 ${info.gapAbs.toFixed(2)}%)・今日空手`;
+        } else if (useM4) {
+            const rMeta = REGIME_DICT[info.regime] || REGIME_DICT.R7_OA_IN;
+            const rl = regMan.rules ? regMan.rules[info.regime] : null;
+            atrOn = regMan.atrOn !== false;
+            tpMult = regMan.tpMult || 1.8;
+            slMult = regMan.slMult || 1.0;
+            trailOn = regMan.trailOn !== false;
+
+            if (!rl || !rl.on) {
+                ruleOn = false;
+                ruleTitle = `🛑 【${rMeta.name}】設定為不交易・今日空手`;
+            } else {
+                ruleOn = true;
+                act = rl.act === 'short' ? 'short' : 'long';
+                ruleTitle = `${rMeta.name} ➔ ${act === 'long' ? '做多 (先買後賣)' : '做空 (先賣後買)'}`;
+                if (rl.tmode === 'clock') {
+                    const rc = rl.rawClock || {};
+                    const bVal = !offMode ? (parseInt(rc.bch, 10) * 60 + parseInt(rc.bcm, 10)) : (parseInt(rc.bh, 10) * 60 + parseInt(rc.bm, 10));
+                    const sVal = !offMode ? (parseInt(rc.sch, 10) * 60 + parseInt(rc.scm, 10)) : (parseInt(rc.sh, 10) * 60 + parseInt(rc.sm, 10));
+                    buyTargetMin = !offMode ? bVal : (dayOpenMin + bVal);
+                    sellTargetMin = !offMode ? sVal : (dayOpenMin + sVal);
+                } else {
+                    const dIn = rl.dIn || 0;
+                    const hBars = rl.hBars || 18;
+                    const buyElapsed = Math.max(minStartMin || 0, (nd + dIn) * stepMin);
+                    let sellElapsed = hBars >= 999 ? (offMode ? 390 : 270) : (buyElapsed + hBars * stepMin);
+                    if (maxFinishMin !== null && sellElapsed > maxFinishMin) sellElapsed = maxFinishMin;
+                    buyTargetMin = dayOpenMin + buyElapsed;
+                    sellTargetMin = dayOpenMin + sellElapsed;
+                }
+            }
+        } else {
+            // 傳統開高/開低或幅度規則
+            const hold = cfg.mode === 'holding';
+            act = hold ? 'short' : 'long';
+            const openRef = nd > 0 ? info.cn : info.o0;
+            const side = openRef >= prevC ? 'up' : 'down';
+            const tiers = (cfg.tiers || []).map(t => ({
+                ...t, th: parseFloat(t.th), to: (t.to === '' || t.to == null) ? null : parseFloat(t.to)
+            })).sort((a, b) => b.th - a.th);
+            const hitTier = tiers.find(t => info.gapAbs >= t.th && (t.to === null || info.gapAbs < t.to) && (t.dir === 'both' || t.dir === side));
+            const chosen = hitTier || cfg[side] || {};
+            ruleOn = !!chosen.on;
+            ruleTitle = `${side === 'up' ? '▲ 開盤漲' : '▼ 開盤跌'}${hitTier ? ` (幅度≥${hitTier.th}%)` : ' (基本規則)'} ➔ ${ruleOn ? (act === 'long' ? '先買後賣' : '先賣後買') : '不交易'}`;
+            if (ruleOn) {
+                const bVal = !offMode ? (parseInt(chosen['buy-ch'], 10) * 60 + parseInt(chosen['buy-cm'], 10)) : (parseInt(chosen['buy-h'] || 0, 10) * 60 + parseInt(chosen['buy-m'] || 0, 10));
+                const sVal = !offMode ? (parseInt(chosen['sell-ch'], 10) * 60 + parseInt(chosen['sell-cm'], 10)) : (parseInt(chosen['sell-h'] || 0, 10) * 60 + parseInt(chosen['sell-m'] || 0, 10));
+                buyTargetMin = !offMode ? bVal : (dayOpenMin + bVal);
+                sellTargetMin = !offMode ? sVal : (dayOpenMin + sVal);
+            }
+        }
+
+        if (ruleOn && minStartMin !== null && buyTargetMin < dayOpenMin + minStartMin) {
+            buyTargetMin = dayOpenMin + minStartMin;
+        }
+        if (ruleOn && maxFinishMin !== null && sellTargetMin > dayOpenMin + maxFinishMin) {
+            sellTargetMin = dayOpenMin + maxFinishMin;
+        }
+
+        // 3. 定位進場 K 棒與計算所有目標價位
+        if (ruleOn && obsDone && buyTargetMin !== null) {
+            realBi = bars.findIndex((b, idx) => idx >= nd && b.m >= buyTargetMin);
+        }
+        const manualFill = parseFloat(document.getElementById('live-fill-price')?.value);
+        const refEntryP = (!isNaN(manualFill) && manualFill > 0)
+            ? manualFill
+            : (realBi >= 0 ? bars[realBi].o : curPrice);
+
+        const R = info.obsRange;
+        const sgn = act === 'long' ? 1 : -1;
+        const tpPrice = refEntryP + sgn * tpMult * R;
+        const slPrice = refEntryP - sgn * slMult * R;
+        const trailActPrice = refEntryP + sgn * 1.1 * R;
+
+        const fixedTpOn = !!(cfg.tp && cfg.tp.on && parseFloat(cfg.tp.pct) > 0);
+        const fixedTpPct = fixedTpOn ? parseFloat(cfg.tp.pct) / 100 : 0;
+        const fixedTpMin = fixedTpOn ? parseFloat(cfg.tp.min) || 30 : 0;
+        const fixedTpPrice = fixedTpOn ? refEntryP * (1 + sgn * fixedTpPct) : null;
+
+        // 4. 掃描進場後 K 棒是否已觸發停利 / 停損 / 時間出場
+        let peakAfterEntry = refEntryP, troughAfterEntry = refEntryP;
+        let triggeredExit = null;
+        if (ruleOn && obsDone && realBi >= 0) {
+            for (let k = realBi; k < bars.length; k++) {
+                const b = bars[k];
+                if (b.h > peakAfterEntry) peakAfterEntry = b.h;
+                if (b.l < troughAfterEntry) troughAfterEntry = b.l;
+                if (k > realBi && sellTargetMin !== null && b.m >= sellTargetMin) {
+                    triggeredExit = { reason: '⏰ 已達出場時間', price: b.o, time: fmtClock(b.m), color: 'var(--color-warn)' };
+                    break;
+                }
+                const c = b.c;
+                if (fixedTpOn && (b.m - bars[realBi].m) <= fixedTpMin) {
+                    if ((act === 'long' && c >= fixedTpPrice) || (act === 'short' && c <= fixedTpPrice)) {
+                        const nextP = k + 1 < bars.length ? bars[k + 1].o : c;
+                        triggeredExit = { reason: '🎯 已觸發固定%停利', price: nextP, time: fmtClock(b.m), color: 'var(--color-up)' };
+                        break;
+                    }
+                }
+                if (atrOn) {
+                    const hitTp = act === 'long' ? (c >= tpPrice) : (c <= tpPrice);
+                    const hitSl = act === 'long' ? (c <= slPrice) : (c >= slPrice);
+                    const hitTr = trailOn && (act === 'long'
+                        ? (peakAfterEntry >= trailActPrice && (peakAfterEntry - c) >= 0.45 * R)
+                        : (troughAfterEntry <= trailActPrice && (c - troughAfterEntry) >= 0.45 * R));
+                    if (hitTp || hitSl || hitTr) {
+                        const nextP = k + 1 < bars.length ? bars[k + 1].o : c;
+                        const tag = hitTp ? '🎯 已觸發 OR-ATR 停利' : (hitTr ? '🛡️ 已觸發 OR 移動鎖利' : '🛑 已觸發 OR-ATR 停損');
+                        triggeredExit = { reason: tag, price: nextP, time: fmtClock(b.m), color: hitSl ? 'var(--color-sell)' : 'var(--color-up)' };
+                        break;
+                    }
+                }
+            }
+        }
+
+        const activeEvalPrice = triggeredExit ? triggeredExit.price : curPrice;
+        const feeOn = cfg.fee !== false;
+        const N = 1000;
+        let netRet = act === 'long' ? (activeEvalPrice / refEntryP - 1) : (refEntryP / activeEvalPrice - 1);
+        if (feeOn && typeof computeTradeCosts === 'function') {
+            if (act === 'long') {
+                const bc = computeTradeCosts(resolved, refEntryP * N, N, 'BUY');
+                const sc = computeTradeCosts(resolved, activeEvalPrice * N, N, 'SELL');
+                netRet = (activeEvalPrice * N - sc.fee - sc.tax) / (refEntryP * N + bc.fee + (bc.tax || 0)) - 1;
+            } else {
+                const sc = computeTradeCosts(resolved, refEntryP * N, N, 'SELL');
+                const bc = computeTradeCosts(resolved, activeEvalPrice * N, N, 'BUY');
+                netRet = (refEntryP * N - sc.fee - sc.tax) / (activeEvalPrice * N + bc.fee + (bc.tax || 0)) - 1;
+            }
+        }
+
+        // 5. 決定頂部主狀態橫幅
+        let statusBanner = '';
+        if (!obsDone) {
+            statusBanner = `<div style="background:rgba(254,176,25,0.15); border:1px solid var(--color-warn); color:var(--color-warn); padding:8px 10px; border-radius:8px; font-weight:bold; font-size:12.5px;">
+                ⏳ 觀察期進行中（目前已收 ${bars.length} / 需 ${nd} 根 ${kMode} K 棒）｜暫定分類：${REGIME_DICT[info.regime]?.name || info.regime}
+            </div>`;
+        } else if (!ruleOn) {
+            statusBanner = `<div style="background:rgba(255,69,96,0.12); border:1px solid rgba(255,69,96,0.4); color:#ff8a9a; padding:8px 10px; border-radius:8px; font-weight:bold; font-size:12.5px;">
+                ${escapeHtml(ruleTitle)}
+            </div>`;
+        } else if (triggeredExit) {
+            statusBanner = `<div style="background:rgba(0,212,255,0.14); border:1px solid ${triggeredExit.color}; color:${triggeredExit.color}; padding:8px 10px; border-radius:8px; font-weight:bold; font-size:12.5px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px;">
+                <span>${triggeredExit.reason}（於 ${triggeredExit.time} 觸發，出場參考價 ${triggeredExit.price.toFixed(2)}）</span>
+                <span style="font-family:monospace;">淨損益 ${pctStr(netRet)}</span>
+            </div>`;
+        } else if (realBi < 0) {
+            statusBanner = `<div style="background:rgba(0,212,255,0.12); border:1px solid var(--color-acc); color:var(--color-acc); padding:8px 10px; border-radius:8px; font-weight:bold; font-size:12.5px;">
+                ⏳ 符合條件（${escapeHtml(ruleTitle)}）｜等待進場時點：${fmtClock(buyTargetMin)}
+            </div>`;
+        } else {
+            statusBanner = `<div style="background:rgba(0,255,170,0.14); border:1px solid var(--color-up); color:var(--color-up); padding:8px 10px; border-radius:8px; font-weight:bold; font-size:12.5px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px;">
+                <span>🟢 部位進行中｜${escapeHtml(ruleTitle)}（進場基準 ${refEntryP.toFixed(2)} @ ${fmtClock(bars[realBi].m)}）</span>
+                <span style="font-family:monospace; color:${netRet >= 0 ? 'var(--color-up)' : 'var(--color-sell)'};">即時淨損益 ${pctStr(netRet)}</span>
+            </div>`;
+        }
+
+        const trailStopLine = act === 'long' ? (peakAfterEntry - 0.45 * R) : (troughAfterEntry + 0.45 * R);
+        const trailArmed = act === 'long' ? (peakAfterEntry >= trailActPrice) : (troughAfterEntry <= trailActPrice);
+
+        const bodyEl = document.getElementById('live-body');
+        bodyEl.innerHTML = `
+            ${statusBanner}
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(135px, 1fr)); gap:6px; font-family:monospace; font-size:11.5px;">
+                <div class="sim-card" style="padding:7px 9px;">
+                    <div class="sim-lbl">交易日 / 現價</div>
+                    <div style="font-weight:bold; color:#fff;">${today.key.slice(5)} ｜ <span style="color:var(--color-acc);">${curPrice.toFixed(2)}</span></div>
+                    <div style="font-size:10px; color:#888;">昨收 ${prevC.toFixed(2)} / 開盤 ${info.o0.toFixed(2)}</div>
+                </div>
+                <div class="sim-card" style="padding:7px 9px;">
+                    <div class="sim-lbl">開盤觀察判定 (前${nd}根)</div>
+                    <div style="font-weight:bold; color:${REGIME_DICT[info.regime]?.color || '#fff'};">${REGIME_DICT[info.regime]?.name || info.regime}</div>
+                    <div style="font-size:10px; color:#888;">波幅 R_obs=${R.toFixed(2)} (${(info.obsAtrPct * 100).toFixed(2)}%)</div>
+                </div>
+                <div class="sim-card" style="padding:7px 9px;">
+                    <div class="sim-lbl">5維度特徵指標</div>
+                    <div style="font-size:10.5px; color:#ccc;">跳空 ${pctStr(info.gap)}｜實體 ${pctStr(info.obsRet)}</div>
+                    <div style="font-size:10px; color:#888;">CLV ${info.clv.toFixed(2)}｜ER ${info.er.toFixed(2)}</div>
+                </div>
+                ${ruleOn ? `
+                <div class="sim-card" style="padding:7px 9px; border-color:rgba(0,212,255,0.3);">
+                    <div class="sim-lbl">進出場時間窗</div>
+                    <div style="font-weight:bold; color:#fff;">${fmtClock(buyTargetMin)} ➔ ${fmtClock(sellTargetMin)}</div>
+                    <div style="font-size:10px; color:#888;">進場基準價：${refEntryP.toFixed(2)}</div>
+                </div>
+                ` : ''}
+            </div>
+
+            ${ruleOn ? `
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:6px; font-family:monospace; font-size:11.5px;">
+                <div class="sim-card" style="padding:7px 9px; border-color:rgba(0,255,170,0.35); background:rgba(0,255,170,0.04);">
+                    <div class="sim-lbl" style="color:var(--color-up);">🎯 OR-ATR 停利價 (${tpMult}×R)</div>
+                    <div style="font-size:14px; font-weight:bold; color:var(--color-up);">${atrOn ? tpPrice.toFixed(2) : '未啟用'}</div>
+                    <div style="font-size:10px; color:#888;">${atrOn ? `距現價 ${pctStr((tpPrice - curPrice) / curPrice)}` : '僅依時間出場'}</div>
+                </div>
+                <div class="sim-card" style="padding:7px 9px; border-color:rgba(255,69,96,0.35); background:rgba(255,69,96,0.04);">
+                    <div class="sim-lbl" style="color:var(--color-sell);">🛑 OR-ATR 停損價 (${slMult}×R)</div>
+                    <div style="font-size:14px; font-weight:bold; color:var(--color-sell);">${atrOn ? slPrice.toFixed(2) : '未啟用'}</div>
+                    <div style="font-size:10px; color:#888;">${atrOn ? `距現價 ${pctStr((slPrice - curPrice) / curPrice)}` : '無OR停損'}</div>
+                </div>
+                <div class="sim-card" style="padding:7px 9px; border-color:rgba(254,176,25,0.35);">
+                    <div class="sim-lbl" style="color:var(--color-warn);">🛡️ 移動鎖利 (1.1R啟動/0.45R回吐)</div>
+                    <div style="font-size:13px; font-weight:bold; color:${trailArmed ? 'var(--color-up)' : '#aaa'};">
+                        ${atrOn && trailOn ? (trailArmed ? `已啟動・鎖利線 ${trailStopLine.toFixed(2)}` : `啟動價 ${trailActPrice.toFixed(2)}`) : '未啟用'}
+                    </div>
+                    <div style="font-size:10px; color:#888;">進場後極值：${(act === 'long' ? peakAfterEntry : troughAfterEntry).toFixed(2)}</div>
+                </div>
+                ${fixedTpOn ? `
+                <div class="sim-card" style="padding:7px 9px; border-color:rgba(0,212,255,0.35);">
+                    <div class="sim-lbl" style="color:var(--color-acc);">⚡ 固定%停利 (${fixedTpMin}分內)</div>
+                    <div style="font-size:14px; font-weight:bold; color:var(--color-acc);">${fixedTpPrice.toFixed(2)}</div>
+                    <div style="font-size:10px; color:#888;">門檻 ${(fixedTpPct * 100).toFixed(2)}%</div>
+                </div>
+                ` : ''}
+            </div>
+            ` : ''}
+        `;
+        bodyEl.style.display = 'flex';
+    };
+
+    refreshPresetDropdown();
 })();
 </script>
 
